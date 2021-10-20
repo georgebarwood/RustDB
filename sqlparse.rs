@@ -344,7 +344,11 @@ impl <'a> Parser <'a>
         }
         b'(' => token = Token::LBra,
         b')' => token = Token::RBra,
-        b'|' => token = Token::VBar,
+        b'|' => 
+        {
+          token = Token::VBar;
+          if cc == b'=' { token =  Token::VBarEqual; self.read_char(); }
+        }
         b',' => token = Token::Comma,
         b'.' => token = Token::Dot,
         b'=' => token = Token::Equal,
@@ -862,8 +866,14 @@ impl <'a> Parser <'a>
       if set_or_for
       {
         let local = self.local();
-        self.read( Token::Equal ); 
-        assigns.push( local );
+        let op = match self.token
+        {
+          Token::Equal => { AssignOp::Assign }
+          Token::VBarEqual => { AssignOp::Append }
+          _ => panic!( "= or |= expected" )
+        };
+        self.read_token(); 
+        assigns.push( (local,op) );
       }
       let exp = self.exp_or_agg();
       if self.test_id( b"AS" ) 

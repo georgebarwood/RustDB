@@ -1,5 +1,5 @@
-use crate::{ Value, util, sys, table, page::PAGE_SIZE, Query, DB, 
-  sql::{DK, DataType,NONE,data_kind}, 
+use crate::{ Value, util, sys, table, Query, DB, 
+  sql::{DK, DataType, NONE, data_kind, AssignOp, Assigns }, 
   compile::CExpPtr, table::{Zero,TablePtr,Row}, run::* };
 
 
@@ -197,15 +197,15 @@ impl <'r> EvalEnv <'r>
       if let Some( ( p, off ) ) = next
       {
         let p = p.borrow();
-        let data = &p.data[off..PAGE_SIZE];
+        let data = &p.data[off..];
 
         // Check WHERE condition, eval expressions and assign to locals.
         if if let Some(w) = &info.wher { w.eval( self, data ) } else { true }
         {
-          for i in 0..info.assigns.len()
+          for (i,a) in info.assigns.iter().enumerate()
           {
             let val = info.exps[i].eval( self, data );
-            self.stack[ self.bp + info.assigns[i] ] = val;
+            self.assign_local( a, val );
           }
           return true;
         }
@@ -221,7 +221,7 @@ impl <'r> EvalEnv <'r>
   }
 
   /// Execute ForSortNext instruction. Assigns locals from current row, moves to next row.
-  fn for_sort_next( &mut self, info: &(usize,usize,Vec<usize>) ) -> bool
+  fn for_sort_next( &mut self, info: &(usize,usize,Assigns) ) -> bool
   {
     let ( for_id, orderbylen, assigns ) = info;
     if let Value::ForSort(fs) = &self.stack[ self.bp + for_id ]
@@ -238,7 +238,8 @@ impl <'r> EvalEnv <'r>
         let row = &fs.rows[ fs.ix - 1 ];
         for (cn,a) in assigns.iter().enumerate()
         {
-          self.stack[ self.bp + a ] = row[ orderbylen + cn ].clone();
+          let val = row[ orderbylen + cn ].clone();
+          self.assign_local( a, val );
         }
         true
       }
@@ -297,7 +298,7 @@ impl <'r> EvalEnv <'r>
     for ( p, off ) in t.file.asc( &self.db, Box::new(table::Zero{}) )
     {
       let p = p.borrow();
-      let data = &p.data[off..PAGE_SIZE];
+      let data = &p.data[off..];
       if w.eval( self, data )
       {
         idlist.push( util::get64( data, 0 ) );
@@ -331,10 +332,10 @@ impl <'r> EvalEnv <'r>
       if let Some( ( p, off ) ) = t.file.get( &self.db, &row )
       {
         let p = p.borrow_mut();
-        // Need to delete any codes no longer in use.
-        for i in 0..t.info.types.len()
+        // Delete any codes no longer in use.
+        for (i,typ) in t.info.types.iter().enumerate()
         {
-          match data_kind( t.info.types[i] )
+          match data_kind( *typ )
           {
             DK::String | DK::Binary =>
             {
@@ -362,7 +363,7 @@ impl <'r> EvalEnv <'r>
       {
         let mut p = p.borrow_mut();
         p.dirty = true;
-        let data = &mut p.data[off..PAGE_SIZE];
+        let data = &mut p.data[off..];
         for ( col, exp ) in assigns // Maybe should calculate all the values before doing any updates.
         {
           let col = *col;
@@ -407,7 +408,7 @@ impl <'r> EvalEnv <'r>
           for ( p, off ) in t.file.asc( &self.db, start )
           {
             let p = p.borrow();
-            let data = &p.data[off..PAGE_SIZE];
+            let data = &p.data[off..];
             if if let Some(w) = &cse.wher { w.eval( self, data ) } else { true }
             {
               let mut values = Vec::new();
@@ -473,7 +474,7 @@ impl <'r> EvalEnv <'r>
           for ( p, off ) in t.file.asc( &self.db, start )
           {
             let p = p.borrow();
-            let data = &p.data[off..PAGE_SIZE];
+            let data = &p.data[off..];
 
             let ok = if let Some(w) = &cse.wher
             {
@@ -485,7 +486,7 @@ impl <'r> EvalEnv <'r>
               for (i,ce) in cse.exps.iter().enumerate()
               {
                 let val = ce.eval( self, data );
-                self.stack[ self.bp + cse.assigns[i] ] = val;
+                self.assign_local( &cse.assigns[i], val );
               }
               break; // Only one row is used for SET.
             }
@@ -499,8 +500,18 @@ impl <'r> EvalEnv <'r>
       for (i,ce) in cse.exps.iter().enumerate()
       {
         let val = ce.eval( self, &[0] );
-        self.stack[ self.bp + cse.assigns[i] ] = val;
+        self.assign_local( &cse.assigns[i], val );
       }
+    }
+  }
+
+  fn assign_local( &mut self, a: &(usize,AssignOp), val: Value )
+  {
+    let var = &mut self.stack[ self.bp + a.0 ];
+    match a.1
+    { 
+      AssignOp::Assign => { *var = val; }
+      AssignOp::Append => { var.append( val ); }
     }
   }
 
@@ -546,7 +557,7 @@ impl <'r> EvalEnv <'r>
           for ( p, off ) in t.file.asc( &self.db, start )
           {
             let p = p.borrow();
-            let data = &p.data[off..PAGE_SIZE];
+            let data = &p.data[off..];
             if if let Some(w) = &cse.wher { w.eval( self, data ) } else { true }
             {
               let mut values = Vec::new();
@@ -577,3 +588,4 @@ impl <'r> EvalEnv <'r>
   }
 
 } // impl EvalEnv
+

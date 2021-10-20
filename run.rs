@@ -3,7 +3,7 @@ use core::fmt::Debug;
 use crate::
 {  
   Value, sf::Asc, 
-  sql::{DK,DataType,ObjRef,data_kind,IndexInfo}, 
+  sql::{DK,DataType,ObjRef,data_kind,IndexInfo,Assigns}, 
   compile::CExpPtr, 
   table::{TablePtr,TableInfo} 
 };
@@ -20,7 +20,7 @@ pub enum Inst
   ForInit(usize,Box<CTableExpression>),
   ForNext(usize,Box<ForNextInfo>),
   ForSortInit(usize,Box<CSelectExpression>),
-  ForSortNext(usize,Box<(usize,usize,Vec<usize>)>),
+  ForSortNext(usize,Box<(usize,usize,Assigns)>),
   DataOp(Box<DO>),
   PushValue(CExpPtr<Value>),
   Call(RoutinePtr),
@@ -72,7 +72,7 @@ impl Debug for ForSortState
 pub struct ForNextInfo
 {
   pub for_id: usize,
-  pub assigns: Vec<usize>,
+  pub assigns: Assigns,
   pub exps: Vec<CExpPtr<Value>>,
   pub wher: Option<CExpPtr<bool>>
 }
@@ -178,7 +178,7 @@ pub enum CTableExpression
 pub struct CSelectExpression
 {
   pub colnames: Vec<String>,
-  pub assigns: Vec<usize>, 
+  pub assigns: Assigns, 
   pub exps: Vec<CExpPtr<Value>>, 
   pub from: Option<CTableExpression>,
   pub wher: Option<CExpPtr<bool>>,

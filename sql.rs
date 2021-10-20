@@ -25,11 +25,18 @@ pub enum TableExpression
   Values( Vec<Vec<Expr>> )
 }
 
+/// Assign or Append.
+#[derive(Clone,Copy)]
+pub enum AssignOp { Assign, Append }
+
+/// Vector of local variable numbers and AssignOp( assign or append ).
+pub type Assigns = Vec<(usize,AssignOp)>;
+
 /// Select Expression ( not yet compiled ).
 pub struct SelectExpression
 {
   pub colnames: Vec<String>,
-  pub assigns: Vec<usize>, 
+  pub assigns: Assigns, 
   pub exps: Vec<Expr>, 
   pub from: Option<Box<TableExpression>>,
   pub wher: Option<Expr>,
@@ -40,7 +47,7 @@ pub struct SelectExpression
 #[derive(Debug,PartialEq,PartialOrd,Clone,Copy)]
 pub enum Token { /* Note: order is significant */
   Less, LessEqual, GreaterEqual, Greater, Equal, NotEqual, In,
-  Plus, Minus, Times, Divide, Percent, VBar, And, Or,
+  Plus, Minus, Times, Divide, Percent, VBar, And, Or, VBarEqual,
   Id, Number, Decimal, Hex, String, LBra, RBra, Comma, Colon, Dot, Exclamation, Unknown, EndOfFile
 }
 
@@ -116,11 +123,10 @@ pub(crate) const BOOL : DataType = DK::Bool as usize + ( 1 << KBITS );
 pub(crate) const DECIMAL : DataType = DK::Decimal as usize;
 
 
-const DKLOOK : [DK;7] = [ DK::None, DK::Binary, DK::String, DK::Int, DK::Float, DK::Bool, DK::Decimal ];
-
 /// Compute the DataKind(DK) of a DataType.
 pub fn data_kind( x: DataType ) -> DK
 {
+  const DKLOOK : [DK;7] = [ DK::None, DK::Binary, DK::String, DK::Int, DK::Float, DK::Bool, DK::Decimal ];
   DKLOOK[ x % ( 1 << KBITS ) ]
 }
 

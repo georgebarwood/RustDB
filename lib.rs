@@ -32,21 +32,20 @@
 //!
 //!(2) Database Table storage. Each record has a 64-bit Id.
 //!
-//!(3) Index storage ( an index record refers back to the main table ). This is ToDo.
+//!(3) Index storage ( an index record refers back to the main table ). (ToDo)
 //!
 //!Write transactions ( which modify the database ) are expected to be short.
 //!
 //!Only one write transaction runs at a time.
 //!
-//!Read transactions may be much longer, but they do not block write transactions.
+//!Read transactions may be much longer, but they do not block. (ToDo)
 
-/* 
-Next: EditRoutine and ALTER ROUTINE/ALTER FUNCTION.
-Next: get floating point and decimal working.
-Next: get EditRow, AddRow working.
-Next: implement multipart requests ( for file upload )
+/* ToDo List:
 
-Implement Dump()?
+Floating point and decimal types.
+EditRow, AddRow working.
+multipart requests ( for file upload ).
+Dump()?
 
 Store short strings inline ( say up to 15 bytes ).
   First byte has string length ( 255 means unknown, more than 254 bytes ).
@@ -399,7 +398,30 @@ impl Value
     {
       Value::String(s) => s.clone(),
       Value::Int(x) => Rc::new(x.to_string()),
-      _ => Rc::new(format!("unexpected {:?}", self )),
+      _ => panic!()
+    }
+  }
+
+  pub fn append( &mut self, val: Value )
+  {
+    match self
+    {
+      Value::String(s) =>
+      {
+        let val = val.str();
+        if let Some(m) = Rc::get_mut(s)
+        {
+          m.push_str( &val );
+        }
+        else
+        {
+          let mut ns = String::with_capacity( s.len() + val.len() );
+          ns.push_str( s );
+          ns.push_str( &val );
+          *self = Value::String( Rc::new( ns ) );
+        }
+      }
+      _ => panic!()
     }
   }
 }

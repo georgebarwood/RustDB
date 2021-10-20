@@ -52,12 +52,21 @@ impl CExp<Value> for Concat
 {
   fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> Value
   {
-    let s1 = self.c1.eval( e, d ).str();
-    let s2 = self.c2.eval( e, d ).str();
-    let mut s = String::with_capacity( s1.len() + s2.len() );
-    s.push_str( &s1 );
-    s.push_str( &s2 );
-    Value::String( Rc::new( s ) )
+    let mut s1 : Rc<String> = self.c1.eval( e, d ).str();
+    let s2 : Rc<String> = self.c2.eval( e, d ).str();
+
+    if let Some( ms1 ) = Rc::get_mut( &mut s1 )
+    {
+      ms1.push_str( &s2 );
+      Value::String( s1 )
+    }
+    else
+    {
+      let mut s = String::with_capacity( s1.len() + s2.len() );
+      s.push_str( &s1 );
+      s.push_str( &s2 );
+      Value::String( Rc::new(s) )
+    }
   }
 }
 
