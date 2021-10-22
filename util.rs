@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 /// Wrap a type in Rc + RefCell.
 pub fn new<T>( x: T )-> std::rc::Rc<std::cell::RefCell<T>>
 {
@@ -7,10 +5,25 @@ pub fn new<T>( x: T )-> std::rc::Rc<std::cell::RefCell<T>>
 }
 
 /// Extract u64 from byte data.
-pub fn get64( data: &[u8], off: usize ) -> u64
+pub fn getu64( data: &[u8], off: usize ) -> u64
 {
   let data = &data[off..off+8];
   u64::from_le_bytes( data.try_into().unwrap() )
+}
+
+
+/// Extract f64 from byte data.
+pub fn getf64( data: &[u8], off: usize ) -> f64
+{
+  let data = &data[off..off+8];
+  f64::from_le_bytes( data.try_into().unwrap() )
+}
+
+/// Extract f32 from byte data.
+pub fn getf32( data: &[u8], off: usize ) -> f32
+{
+  let data = &data[off..off+4];
+  f32::from_le_bytes( data.try_into().unwrap() )
 }
 
 /// Extract unsigned value of n bytes from data.

@@ -1,6 +1,6 @@
 use std::mem;
 use crate::{ Value, sqlparse::Parser, cexp, sql::*, 
-  run::{Inst,RoutinePtr,CSelectExpression,CTableExpression}, 
+  run::{Inst,FunctionPtr,CSelectExpression,CTableExpression}, 
   eval::EvalEnv, table::TablePtr 
 };
 
@@ -17,7 +17,8 @@ pub type CExpPtr <T> = Box< dyn CExp<T> >;
 pub enum CompileFunc
 {
   Value( fn(&Parser,&[Expr]) -> CExpPtr<Value> ),
-  Int( fn(&Parser,&[Expr]) -> CExpPtr<i64> )
+  Int( fn(&Parser,&[Expr]) -> CExpPtr<i64> ),
+  Float( fn(&Parser,&[Expr]) -> CExpPtr<f64> ),
 }
 
 /// Calculate DataType of an expression.
@@ -96,23 +97,38 @@ fn compile_builtin_int( p: &Parser, name: &str, args: &[Expr] ) -> CExpPtr<i64>
   panic!()
 }
 
+/// Compile a call to a builtin function that returns a float.
+fn compile_builtin_float( p: &Parser, name: &str, args: &[Expr] ) -> CExpPtr<f64>
+{
+  if let Some( (_dk,CompileFunc::Float(cf)) ) = p.db.builtins.borrow().get( name )
+  {
+    return cf(p,args);
+  }
+  panic!()
+}
+
 /// Compile an expression.
 pub fn cexp_value( p: &Parser, e: &Expr ) -> CExpPtr<Value>
 {   
   let typ = calc_type( p, e );
   match data_kind( typ )
   {
-    DK::Bool => 
+    DataKind::Bool => 
     {
       let ce = cexp_bool( p, e );
       Box::new( cexp::BoolToVal{ ce } )
     }      
-    DK::Int => 
+    DataKind::Int => 
     {
       let ce = cexp_int( p, e );
       Box::new( cexp::IntToVal{ ce } )
     }
-    DK::Decimal =>
+    DataKind::Float => 
+    {
+      let ce = cexp_float( p, e );
+      Box::new( cexp::FloatToVal{ ce } )
+    }
+    DataKind::Decimal =>
     {
       let ce = cexp_decimal( p, e );
       Box::new( cexp::IntToVal{ ce } )
@@ -154,7 +170,7 @@ pub fn cexp_value( p: &Parser, e: &Expr ) -> CExpPtr<Value>
 /// Compile decimal expression.
 pub fn cexp_decimal( p: &Parser, e: &Expr ) -> CExpPtr<i64>
 {   
-  if data_kind( calc_type( p, e ) ) != DK::Decimal { p.err( "Decimal type expected" ); }
+  if data_kind( calc_type( p, e ) ) != DataKind::Decimal { p.err( "Decimal type expected" ); }
   match e 
   {
     Expr::Name( x ) => 
@@ -176,7 +192,7 @@ pub fn cexp_decimal( p: &Parser, e: &Expr ) -> CExpPtr<i64>
         Token::Times => Box::new( cexp::Mul::<i64>{ c1, c2 } ),
         Token::Divide => Box::new( cexp::Div::<i64>{ c1, c2 } ), 
         Token::Percent => Box::new( cexp::Rem::<i64>{ c1, c2 } ),
-        _ => { println!("op={:?}", op); panic!( "ToDo cexp_int unknown op" ) }
+        _ => panic!( "ToDo cexp_int unknown op {:?}", op )
       }
     }   
     Expr::Minus( u ) => 
@@ -193,7 +209,7 @@ pub fn cexp_decimal( p: &Parser, e: &Expr ) -> CExpPtr<i64>
 /// Compile int expression.
 pub fn cexp_int( p: &Parser, e: &Expr ) -> CExpPtr<i64>
 {   
-  if data_kind( calc_type( p, e ) ) != DK::Int { p.err( "Integer type expected" ); }
+  if data_kind( calc_type( p, e ) ) != DataKind::Int { p.err( "Integer type expected" ); }
   match e 
   {
     Expr::Name( x ) => 
@@ -239,10 +255,56 @@ pub fn cexp_int( p: &Parser, e: &Expr ) -> CExpPtr<i64>
   }
 }
 
+/// Compile float expression.
+pub fn cexp_float( p: &Parser, e: &Expr ) -> CExpPtr<f64>
+{   
+  if data_kind( calc_type( p, e ) ) != DataKind::Float { p.err( "Float type expected" ); }
+  match e 
+  {
+    Expr::Name( x ) => 
+    {
+      let (off,typ) = name_to_col( p, x );
+      match data_size(typ)
+      {
+        8 => Box::new( cexp::ColumnF64{ off } ),
+        4 => Box::new( cexp::ColumnF32{ off } ),
+        _ => panic!()
+      }
+    }
+    Expr::Local( x ) => Box::new( cexp::Local{ num: *x } ),
+    Expr::Binary( ( op, b1, b2 ) ) =>
+    {
+      let c1 = cexp_float( p, b1 );
+      let c2 = cexp_float( p, b2 );
+      match op
+      {        
+        Token::Plus => Box::new( cexp::Add::<f64>{ c1, c2 } ),
+        Token::Minus => Box::new( cexp::Sub::<f64>{ c1, c2 } ),
+        Token::Times => Box::new( cexp::Mul::<f64>{ c1, c2 } ),
+        Token::Divide => Box::new( cexp::Div::<f64>{ c1, c2 } ), 
+        Token::Percent => Box::new( cexp::Rem::<f64>{ c1, c2 } ),
+        _ => { println!("op={:?}", op); panic!( "ToDo cexp_int unknown op" ) }
+      }
+    }   
+    Expr::Minus( u ) => 
+    {
+      let ce = cexp_float( p, u );
+      Box::new( cexp::Minus::<f64>{ ce } )
+    }
+    Expr::FuncCall( x ) => Box::new( cexp::ValToFloat{ ce: compile_call(p,x) } ),  
+    Expr::Case( (list, def) ) => { compile_case( p, list, def, cexp_float ) },
+    Expr::BuiltinCall( name, parms ) => 
+    { 
+      compile_builtin_float( p, name, parms )
+    }
+    _ => { panic!("ToDo") }
+  }
+}
+
 /// Compile bool expression.
 pub fn cexp_bool( p: &Parser, e: &Expr ) -> CExpPtr<bool>
 {   
-  if data_kind( calc_type( p, e ) ) != DK::Bool { p.err( "Bool type expected" ); }
+  if data_kind( calc_type( p, e ) ) != DataKind::Bool { p.err( "Bool type expected" ); }
   match e 
   {
     Expr::Name( x ) => 
@@ -265,7 +327,7 @@ pub fn cexp_bool( p: &Parser, e: &Expr ) -> CExpPtr<bool>
     Expr::Binary( ( op, b1, b2 ) ) =>
     {
       let t = data_kind( calc_type( p, b1 ) );
-      if t == DK::Bool
+      if t == DataKind::Bool
       {
         let c1 = cexp_bool( p, b1 );
         let c2 = cexp_bool( p, b2 );
@@ -282,7 +344,7 @@ pub fn cexp_bool( p: &Parser, e: &Expr ) -> CExpPtr<bool>
           _ => { p.err( "ToDo cexp_bool unknown bool op" ); }
         }          
       }
-      else if t == DK::Int
+      else if t == DataKind::Int
       {
         let c1 = cexp_int( p, b1 );
         let c2 = cexp_int( p, b2 );
@@ -295,6 +357,21 @@ pub fn cexp_bool( p: &Parser, e: &Expr ) -> CExpPtr<bool>
           Token::LessEqual => Box::new( cexp::LessEqual::<i64>{ c1, c2 } ),
           Token::GreaterEqual => Box::new( cexp::GreaterEqual::<i64>{ c1, c2 } ),
           _ => { p.err( "ToDo cexp_bool unknown int op" ); }
+        } 
+      }
+      else if t == DataKind::Float
+      {
+        let c1 = cexp_float( p, b1 );
+        let c2 = cexp_float( p, b2 );
+        match op
+        {        
+          Token::Equal => Box::new( cexp::Equal::<f64>{ c1, c2 } ),
+          Token::NotEqual => Box::new( cexp::NotEqual::<f64>{ c1, c2 } ),
+          Token::Less => Box::new( cexp::Less::<f64>{ c1, c2 } ),
+          Token::Greater => Box::new( cexp::Greater::<f64>{ c1, c2 } ),
+          Token::LessEqual => Box::new( cexp::LessEqual::<f64>{ c1, c2 } ),
+          Token::GreaterEqual => Box::new( cexp::GreaterEqual::<f64>{ c1, c2 } ),
+          _ => { p.err( "ToDo cexp_bool unknown float op" ); }
         } 
       }
       else
@@ -437,10 +514,10 @@ pub(crate) fn tlook( p: &Parser, name: &ObjRef ) -> TablePtr
   else { panic!( "table {} not found", name.to_str() ) }
 }
 
-/// Look for named routine in database and compile it if not already compiled.
-pub(crate) fn rlook( p: &Parser, name: &ObjRef ) -> RoutinePtr
+/// Look for named function in database and compile it if not already compiled.
+pub(crate) fn rlook( p: &Parser, name: &ObjRef ) -> FunctionPtr
 {
-  if let Some( r ) = p.db.load_routine( name ) 
+  if let Some( r ) = p.db.load_function( name ) 
   { 
     let (compiled,src) =
     {
@@ -451,10 +528,10 @@ pub(crate) fn rlook( p: &Parser, name: &ObjRef ) -> RoutinePtr
     {
       r.compiled.set( true );
       let mut p = Parser::new( &src, &p.db );
-      p.routine_name = Some(name);
+      p.function_name = Some(name);
       let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe( || 
       { 
-        p.parse_routine( 0 );
+        p.parse_function();
       }));
       if let Err(x) = result
       {
@@ -483,7 +560,7 @@ pub(crate) fn rlook( p: &Parser, name: &ObjRef ) -> RoutinePtr
     }
     r
   }
-  else { panic!( "routine {} not found", name.to_str() ) }
+  else { panic!( "function {} not found", name.to_str() ) }
 }
 
 /// Lookup the column offset and DataType of a named column.
@@ -505,7 +582,7 @@ pub(crate) fn name_to_col( p: &Parser, name: &str ) -> (usize,DataType)
 /// Compile ExprCall to CExpPtr<Value>, checking parameter types.
 pub(crate) fn compile_call( p: &Parser, x: &ExprCall ) -> CExpPtr<Value>
 {
-  let rp : RoutinePtr = rlook( p, &x.name ); 
+  let rp : FunctionPtr = rlook( p, &x.name ); 
 
   let mut pv : Vec<CExpPtr<Value>> = Vec::new();
   let mut pt : Vec<DataType> = Vec::new();
@@ -515,8 +592,8 @@ pub(crate) fn compile_call( p: &Parser, x: &ExprCall ) -> CExpPtr<Value>
     pt.push( t );
     let ce = match data_kind( t )
     {
-      DK::Int => int_to_val( p, e ),
-      DK::Bool => bool_to_val( p, e ),
+      DataKind::Int => int_to_val( p, e ),
+      DataKind::Bool => bool_to_val( p, e ),
       _ => cexp_value( p, e )
     };
     pv.push( ce );
@@ -552,12 +629,12 @@ pub(crate) fn push( p: &mut Parser, e: &Expr ) -> DataType
     {
       match data_kind( t )
       {
-        DK::Int => 
+        DataKind::Int => 
         {
           let ce = cexp_int( p, e ); 
           p.add( Inst::PushInt( ce ) ); 
         }
-        DK::Bool => 
+        DataKind::Bool => 
         { 
           let ce = cexp_bool( p, e ); 
           p.add( Inst::PushBool( ce ) ); 

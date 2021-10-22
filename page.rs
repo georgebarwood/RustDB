@@ -4,18 +4,31 @@ use crate::{sf::Record,DB,util};
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
 
-const NODE_OVERHEAD : usize = 3; // Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
-const NODE_BASE : usize = 6; // 45 bits ( 1 + 4 x 11 ) needs 6 bytes.
-const PAGE_ID_SIZE : usize = 6; // Number of bytes used to store a page number.
+/// = 3. Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
+const NODE_OVERHEAD : usize = 3;
 
-const LEFT_HIGHER : u8 = 0;
+/// = 6. 45 bits ( 1 + 4 x 11 ) needs 6 bytes.
+const NODE_BASE : usize = 6; 
+
+/// = 6. Number of bytes used to store a page number.
+const PAGE_ID_SIZE : usize = 6; 
+
+/// = 0. The left sub-tree is higher than the right.  
+const BAL_LEFT_HIGHER : u8 = 0;
+
+/// = 1. The left and right sub-trees have equal height.
 const BALANCED : u8 = 1;
-const RIGHT_HIGHER : u8 = 2;
 
-const NODE_ID_BITS : usize = 11; // Node ids are 11 bits.
+/// = 2. The right sub-tree is higher than the left. 
+const BAL_RIGHT_HIGHER : u8 = 2;
+
+/// = 11. Node ids are 11 bits.
+const NODE_ID_BITS : usize = 11;
+
+/// = 2047. Largest Node id.
 const MAX_NODE : usize = bitmask!( 0, NODE_ID_BITS );
 
-/// The maximum size in bytes of each page.
+/// = 0x4000. The maximum size in bytes of each page.
 pub const PAGE_SIZE : usize = 0x4000;
 
 /// A page in a SortedFile.
@@ -345,10 +358,10 @@ impl Page
           let bx = self.balance( x );
           if bx == BALANCED
           {
-            self.set_balance( x, LEFT_HIGHER );
+            self.set_balance( x, BAL_LEFT_HIGHER );
           } else {
             height_increased = false;
-            if bx == LEFT_HIGHER
+            if bx == BAL_LEFT_HIGHER
             {
               return ( self.rotate_right( x ).0, false );
             }
@@ -364,9 +377,9 @@ impl Page
           let bx = self.balance( x );
           if bx == BALANCED
           {
-            self.set_balance( x, RIGHT_HIGHER );
+            self.set_balance( x, BAL_RIGHT_HIGHER );
           } else {
-            if bx == RIGHT_HIGHER
+            if bx == BAL_RIGHT_HIGHER
             {
               return ( self.rotate_left( x ).0, false );
             }
@@ -388,16 +401,16 @@ impl Page
     let z = self.left( x );
     let y = self.right( z );
     let zb = self.balance( z );
-    if zb != RIGHT_HIGHER // Single rotation.
+    if zb != BAL_RIGHT_HIGHER // Single rotation.
     {
       self.set_right( z, x );
       self.set_left( x, y );
       if zb == BALANCED // Can only occur when deleting Records.
       {
-        self.set_balance( x, LEFT_HIGHER );
-        self.set_balance( z, RIGHT_HIGHER );
+        self.set_balance( x, BAL_LEFT_HIGHER );
+        self.set_balance( z, BAL_RIGHT_HIGHER );
         height_decreased = false;
-      } else { // zb = LEFT_HIGHER
+      } else { // zb = BAL_LEFT_HIGHER
         self.set_balance( x, BALANCED );
         self.set_balance( z, BALANCED );
       }
@@ -408,16 +421,16 @@ impl Page
       self.set_right( y, x );
       self.set_left( y, z );
       let yb = self.balance( y );
-      if yb == LEFT_HIGHER
+      if yb == BAL_LEFT_HIGHER
       {
-        self.set_balance( x, RIGHT_HIGHER );
+        self.set_balance( x, BAL_RIGHT_HIGHER );
         self.set_balance( z, BALANCED );
       } else if yb == BALANCED {
         self.set_balance( x, BALANCED );
         self.set_balance( z, BALANCED );
-      } else { // yb == RIGHT_HIGHER
+      } else { // yb == BAL_RIGHT_HIGHER
         self.set_balance( x, BALANCED );
-        self.set_balance( z, LEFT_HIGHER );
+        self.set_balance( z, BAL_LEFT_HIGHER );
       }
       self.set_balance( y, BALANCED );
       ( y, height_decreased )
@@ -431,16 +444,16 @@ impl Page
     let z = self.right( x );
     let y = self.left( z );
     let zb = self.balance( z );
-    if zb != LEFT_HIGHER // Single rotation.
+    if zb != BAL_LEFT_HIGHER // Single rotation.
     {
       self.set_left( z, x );
       self.set_right( x, y );
       if zb == BALANCED // Can only occur when deleting Records.
       {
-        self.set_balance( x, RIGHT_HIGHER );
-        self.set_balance( z, LEFT_HIGHER );
+        self.set_balance( x, BAL_RIGHT_HIGHER );
+        self.set_balance( z, BAL_LEFT_HIGHER );
         height_decreased = false;
-      } else { // zb = RIGHT_HIGHER
+      } else { // zb = BAL_RIGHT_HIGHER
         self.set_balance( x, BALANCED );
         self.set_balance( z, BALANCED );
       }
@@ -451,16 +464,16 @@ impl Page
       self.set_left( y, x );
       self.set_right( y, z );
       let yb = self.balance( y );
-      if yb == RIGHT_HIGHER
+      if yb == BAL_RIGHT_HIGHER
       {
-        self.set_balance( x, LEFT_HIGHER );
+        self.set_balance( x, BAL_LEFT_HIGHER );
         self.set_balance( z, BALANCED );
       } else if yb == BALANCED {
         self.set_balance( x, BALANCED );
         self.set_balance( z, BALANCED );
-      } else { // yb == LEFT_HIGHER
+      } else { // yb == BAL_LEFT_HIGHER
         self.set_balance( x, BALANCED );
-        self.set_balance( z, RIGHT_HIGHER );
+        self.set_balance( z, BAL_RIGHT_HIGHER );
       }
       self.set_balance( y, BALANCED );
       ( y, height_decreased )
@@ -495,15 +508,15 @@ impl Page
         self.set_balance( x, self.balance( deleted ) );
         if height_decreased
         {
-          if self.balance( x ) == LEFT_HIGHER
+          if self.balance( x ) == BAL_LEFT_HIGHER
           {
             let rr = self.rotate_right( x );
             x = rr.0;
             height_decreased = rr.1;
-          } else if self.balance( x ) == RIGHT_HIGHER {
+          } else if self.balance( x ) == BAL_RIGHT_HIGHER {
             self.set_balance( x, BALANCED );
           } else {
-            self.set_balance( x, LEFT_HIGHER );
+            self.set_balance( x, BAL_LEFT_HIGHER );
             height_decreased = false;
           }
         }
@@ -516,15 +529,15 @@ impl Page
       if height_decreased
       {
         let xb = self.balance( x );
-        if xb == RIGHT_HIGHER
+        if xb == BAL_RIGHT_HIGHER
         {
           return self.rotate_left( x );
         }
-        if xb == LEFT_HIGHER
+        if xb == BAL_LEFT_HIGHER
         {
           self.set_balance( x, BALANCED );
         } else {
-          self.set_balance( x, RIGHT_HIGHER );
+          self.set_balance( x, BAL_RIGHT_HIGHER );
           height_decreased = false;
         }
       }
@@ -535,15 +548,15 @@ impl Page
       if height_decreased
       { 
         let xb = self.balance( x );
-        if xb == LEFT_HIGHER
+        if xb == BAL_LEFT_HIGHER
         {
           return self.rotate_right( x );
         }
-        if self.balance( x ) == RIGHT_HIGHER
+        if self.balance( x ) == BAL_RIGHT_HIGHER
         {
           self.set_balance( x, BALANCED );
         } else {
-          self.set_balance( x, LEFT_HIGHER );
+          self.set_balance( x, BAL_LEFT_HIGHER );
           height_decreased = false;
         }
       }
@@ -565,16 +578,16 @@ impl Page
       if height_decreased
       {
         let xb = self.balance( x );
-        if xb == RIGHT_HIGHER
+        if xb == BAL_RIGHT_HIGHER
         {
           let rl = self.rotate_left( x );
           return ( rl.0, least, rl.1 );
         }
-        if xb == LEFT_HIGHER
+        if xb == BAL_LEFT_HIGHER
         {
           self.set_balance( x, BALANCED );
         } else {
-          self.set_balance( x, RIGHT_HIGHER );
+          self.set_balance( x, BAL_RIGHT_HIGHER );
           height_decreased = false;
         }
       }

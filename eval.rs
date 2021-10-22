@@ -1,5 +1,5 @@
 use crate::{ Value, util, sys, table, Query, DB, 
-  sql::{DK, DataType, NONE, data_kind, AssignOp, Assigns }, 
+  sql::{DataKind, DataType, NONE, data_kind, AssignOp, Assigns }, 
   compile::CExpPtr, table::{Zero,TablePtr,Row}, run::* };
 
 
@@ -15,7 +15,7 @@ pub struct EvalEnv <'r>
 
 impl <'r> EvalEnv <'r>
 {
-  /// Construction a new EvalEnv.
+  /// Construct a new EvalEnv.
   pub(crate) fn new( db: DB, qy: &'r mut dyn Query ) -> Self
   {
     EvalEnv{ stack: Vec::new(), bp:0, db, qy, call_depth:0 }
@@ -96,8 +96,8 @@ impl <'r> EvalEnv <'r>
     while n > 0 { self.stack.pop(); n-=1; }
   }
 
-  /// Call a routine.
-  pub(crate) fn call( &mut self, r: &Routine )
+  /// Call a function.
+  pub(crate) fn call( &mut self, r: &Function )
   {
     self.call_depth += 1;
 /*
@@ -259,9 +259,9 @@ impl <'r> EvalEnv <'r>
   {
     match dop
     {
-      DO::CreateRoutine( name, source, alter ) =>
+      DO::CreateFunction( name, source, alter ) =>
       {
-        sys::create_routine( &self.db, name, source.clone(), *alter );
+        sys::create_function( &self.db, name, source.clone(), *alter );
       }
       DO::CreateSchema( name ) =>
       {
@@ -301,7 +301,7 @@ impl <'r> EvalEnv <'r>
       let data = &p.data[off..];
       if w.eval( self, data )
       {
-        idlist.push( util::get64( data, 0 ) );
+        idlist.push( util::getu64( data, 0 ) );
       }
     }
     idlist
@@ -337,9 +337,9 @@ impl <'r> EvalEnv <'r>
         {
           match data_kind( *typ )
           {
-            DK::String | DK::Binary =>
+            DataKind::String | DataKind::Binary =>
             {
-              let u = util::get64( &p.data, off + t.info.off[i] );
+              let u = util::getu64( &p.data, off + t.info.off[i] );
               self.db.delcode( u );
             }
             _ => {}
@@ -374,17 +374,25 @@ impl <'r> EvalEnv <'r>
             Value::Int(val) => { util::set( data, off, val as u64, t.info.sizes[ col ] ); }
             Value::String(val) => 
             { 
-              let id = util::get64( data, off );
-              self.db.delcode( id );
-              let id = self.db.encode( val.as_bytes() );
-              util::set( data, off, id, 8 ); 
+              let old_id = util::getu64( data, off );
+              let old_str = String::from_utf8( self.db.decode( old_id ) ).unwrap();
+              if old_str != *val
+              {
+                self.db.delcode( id );
+                let id = self.db.encode( val.as_bytes() );
+                util::set( data, off, id, 8 );
+              } 
             }
             Value::Binary(val) => 
             { 
-              let id = util::get64( data, off );
-              self.db.delcode( id );
-              let id = self.db.encode( &val );
-              util::set( data, off, id, 8 ); 
+              let old_id = util::getu64( data, off );
+              let old_bin = self.db.decode( old_id );
+              if old_bin != *val 
+              {
+                self.db.delcode( id );
+                let id = self.db.encode( &val );
+                util::set( data, off, id, 8 );
+              } 
             }
             _ => panic!()
           }
@@ -505,6 +513,7 @@ impl <'r> EvalEnv <'r>
     }
   }
 
+  /// Assign or append to a local variable.
   fn assign_local( &mut self, a: &(usize,AssignOp), val: Value )
   {
     let var = &mut self.stack[ self.bp + a.0 ];
@@ -515,6 +524,7 @@ impl <'r> EvalEnv <'r>
     }
   }
 
+  /// Insert evaluated values into a table.
   fn insert_values( &mut self, table:TablePtr, ci: &[usize], vals: &[Vec<CExpPtr<Value>>] )
   {
     let mut row = Row::new( table.info.clone() );
@@ -537,7 +547,15 @@ impl <'r> EvalEnv <'r>
           row.values[ cn ] = val;
         }
       }
-      if row.id == 0 { row.id = table.alloc_id(); }
+      if row.id == 0
+      { 
+        row.id = table.alloc_id();
+      }
+      else
+      {
+        table.id_allocated( row.id );
+      }
+      self.db.lastid.set( row.id ); 
       table.file.insert( &self.db, &row );
       // println!( "insert_values row inserted id={} values={:?}", row.id, row.values );
     }

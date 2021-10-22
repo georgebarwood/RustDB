@@ -10,7 +10,7 @@ use crate::{Value,Query,util,DB,sql::*,table::*,run::*,eval::EvalEnv,compile::*}
 /// exp_ parses an expression.
 pub struct Parser <'a>
 {
-  pub (crate) routine_name: Option<&'a ObjRef>,
+  pub (crate) function_name: Option<&'a ObjRef>,
   source: &'a [u8], // Source SQL.
   source_ix: usize, // Index into source.
   cc: u8, // Current input char.
@@ -40,7 +40,7 @@ impl <'a> Parser <'a>
     { 
       source,
       db: db.clone(),
-      routine_name: None,
+      function_name: None,
       source_ix: 0,
       cc: 0,
       token_start: 0,
@@ -148,9 +148,8 @@ impl <'a> Parser <'a>
     }    
   }
 
-  /// Parse the definition of a function or procedure.
-  /// is_func has three values, 0 = unknown, 1 = function, 2 = routine.
-  pub(crate) fn parse_routine( &mut self, is_func: i8 ) 
+  /// Parse the definition of a function.
+  pub(crate) fn parse_function( &mut self ) 
   {
     self.read( Token::LBra );
     while self.token == Token::Id
@@ -164,7 +163,7 @@ impl <'a> Parser <'a>
       self.read_token();
     }
     self.read( Token::RBra );
-    self.b.return_type = if is_func == 1 || is_func == 0 && self.cs == b"RETURNS"
+    self.b.return_type = if /*is_func == 1 || is_func == 0 &&*/ self.cs == b"RETURNS"
     { 
       self.read_id( b"RETURNS" );
       self.read_data_type()
@@ -408,7 +407,7 @@ impl <'a> Parser <'a>
     }
   }
 
-  pub(crate) fn check_types( &self, r: &RoutinePtr, ptypes: &[DataType] )
+  pub(crate) fn check_types( &self, r: &FunctionPtr, ptypes: &[DataType] )
   {
     if ptypes.len() != r.param_count 
     {
@@ -442,7 +441,7 @@ impl <'a> Parser <'a>
       }
       else { return (t,-1); }
     }
-    ( t, PRECEDENCE[ t as usize ] )
+    ( t, t.precedence() )
   }
 
   fn id( &mut self ) -> String
@@ -551,10 +550,10 @@ impl <'a> Parser <'a>
 
   // Error handling.
 
-  /// Get the routine name or "batch" if no routine.
+  /// Get the function name or "batch" if no function.
   fn rname( &self ) -> String
   {
-    if let Some(r) = self.routine_name { r.schema.to_string() + "." + &r.name }
+    if let Some(r) = self.function_name { r.schema.to_string() + "." + &r.name }
     else { "batch".to_string() }
   }
 
@@ -931,10 +930,6 @@ impl <'a> Parser <'a>
 
   fn s_insert( &mut self ) 
   {
-    if self.b.return_type != NONE 
-    {
-      self.err("Cannot INSERT in function");
-    }
     self.read_id( b"INTO" );
     let tr = self.obj_ref();
     self.read( Token::LBra );
@@ -972,11 +967,6 @@ impl <'a> Parser <'a>
 
   fn s_update( &mut self ) 
   {
-    if self.b.return_type != NONE
-    {
-      self.err("Cannot UPDATE in function");
-    }
-
     let t = self.obj_ref();
     self.read_id( b"SET" );
     let mut s = Vec::new();
@@ -1015,11 +1005,6 @@ impl <'a> Parser <'a>
 
   fn s_delete( &mut self ) 
   {
-    if self.b.return_type != NONE 
-    {
-      self.err("Cannot DELETE in function");
-    }
-
     self.read_id( b"FROM" );
     let tname = self.obj_ref();
     if !self.test_id( b"WHERE" ) { self.err( "DELETE must have a WHERE" ); }
@@ -1039,10 +1024,6 @@ impl <'a> Parser <'a>
  
   fn s_execute( &mut self ) 
   {
-    if self.b.return_type != NONE 
-    {
-      self.err("Cannot EXECUTE in function");
-    }
     self.read( Token::LBra );
     let exp = self.exp();
     self.read( Token::RBra );
@@ -1055,11 +1036,6 @@ impl <'a> Parser <'a>
 
   fn s_exec( & mut self ) 
   {
-    if self.b.return_type != NONE 
-    {
-      self.err("Cannot EXEC in function")
-    }
-
     let mut pname = self.id();
     let mut sname = "".to_string();
     if self.test( Token::Dot )
@@ -1189,36 +1165,30 @@ impl <'a> Parser <'a>
     }    
   }
 
-  fn create_routine( &mut self, is_func: i8, alter: bool ) 
+  fn create_function( &mut self, alter: bool ) 
   {
     let rref : ObjRef = self.obj_ref();
     let source_start : usize = self.source_ix-2;
     let save : Block = mem::replace( &mut self.b, Block::new() );
     let save2 : bool = self.parse_only;
     self.parse_only = true;
-    self.parse_routine( is_func );
+    self.parse_function();
     let _cb : Block = mem::replace( &mut self.b, save );
     self.parse_only = save2;
 
     if !self.parse_only 
     { 
       let source : String = self.source_from( source_start, self.token_start );
-      self.dop( DO::CreateRoutine(rref,Rc::new(source),alter) );
+      self.dop( DO::CreateFunction(rref,Rc::new(source),alter) );
     }
   }
 
   fn s_create( &mut self ) 
   {
-    if self.b.return_type != NONE 
-    {
-      self.err("Cannot CREATE in function");
-    }
     match self.id_ref()
     {
       b"FUNCTION" =>  
-        self.create_routine( 1, false ),
-      b"PROCEDURE" =>
-        self.create_routine( 2, false ),
+        self.create_function( false ),
       b"TABLE" => 
         self.create_table(),
       b"VIEW" => 
@@ -1234,16 +1204,10 @@ impl <'a> Parser <'a>
 
   fn s_alter( &mut self ) 
   {
-    if self.b.return_type != NONE 
-    {
-      self.err("Cannot ALTER in function");
-    }
     match self.id_ref()
     {
       b"FUNCTION" =>
-        self.create_routine( 0, true ),     
-      b"PROCEDURE" =>
-        self.create_routine( 0, true ),
+        self.create_function( true ),     
       b"TABLE" => 
         self.s_alter_table(),
       b"VIEW" => 

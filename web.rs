@@ -13,6 +13,8 @@ pub struct WebQuery
 
   pub err: String,
   pub result: String,
+  pub status_code: String,
+  pub headers: String,
   pub now: i64, // Micro-seconds since January 1, 1970 0:00:00 UTC 
 }
 
@@ -23,7 +25,7 @@ impl WebQuery
   {
     let mut hp = HttpRequestParser::new( s );
     let ( method, path, query, _version ) = hp.read_request();
-    let _headers = hp.read_headers();
+    let _input_headers = hp.read_headers();
 
     let mut form = HashMap::new();
     if hp.content_type == "application/x-www-form-urlencoded"
@@ -37,8 +39,11 @@ impl WebQuery
 
     let now = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap();
     let now = now.as_micros() as i64;
-
-    Self{ result: String::with_capacity(10000), method, path, query, form, err: String::new(), now }
+    let result = String::with_capacity(10000);
+    let headers = String::with_capacity(1000);
+    let status_code = "200 OK".to_string();
+ 
+    Self{ status_code, result, headers, method, path, query, form, err: String::new(), now }
   }
 
   pub fn trace( &self )
@@ -50,14 +55,18 @@ impl WebQuery
   pub fn write( &mut self, tcps: &mut TcpStream )
   {
     let contents = &self.result;
-    let status_line = "HTTP/1.1 200 OK";
+    let status_line = "HTTP/1.1 ".to_string() + &self.status_code;
 
     let response = format!(
-      "{}\r\nContent-Length: {}\r\n\r\n{}",
+      "{}\r\n{}Content-Length: {}\r\n\r\n{}",
       status_line,
+      self.headers,
       contents.len(),
       contents
     );
+
+    // println!( "status line={}", status_line );
+    // println!( "response={}", response );
 
     tcps.write_all( response.as_bytes() ).unwrap();
     tcps.flush().unwrap();
@@ -66,14 +75,21 @@ impl WebQuery
 
 impl Query for WebQuery
 {
-  fn arg( &self, kind: i64, name: &str ) -> Rc<String>
+  fn arg( &mut self, kind: i64, s: &str ) -> Rc<String>
   {
     match kind
     {
       99 => self.method.clone(),
       0 => self.path.clone(),
-      1 => if let Some(s) = self.query.get( name ) {s.clone()} else {Rc::new(String::new())},
-      2 => if let Some(s) = self.form.get( name ) {s.clone()} else {Rc::new(String::new())},
+      1 => if let Some(s) = self.query.get( s ) {s.clone()} else {Rc::new(String::new())},
+      2 => if let Some(s) = self.form.get( s ) {s.clone()} else {Rc::new(String::new())},
+      10 => 
+      { 
+        self.headers.push_str( s );
+        self.headers.push_str( "\r\n" ); 
+        Rc::new( String::new() ) 
+      }
+      11 => { self.status_code = s.to_string(); Rc::new( String::new() ) }
       _ => panic!()
     }
   }
@@ -96,7 +112,8 @@ impl Query for WebQuery
       {
         Value::String(s) => { self.result.push_str( s ); }
         Value::Int(x) => { self.result.push_str( &x.to_string() ); }
-        _ => { /* panic!("push bad value={:?}", v )n */ }
+        Value::Float(x) => { self.result.push_str( &x.to_string() ); }
+        _ => {panic!("push bad value={:?}", v ) }
       }
     }
   }

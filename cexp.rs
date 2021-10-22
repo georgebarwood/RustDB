@@ -1,9 +1,9 @@
 use std::rc::Rc;
-use crate::{Value,util,eval::EvalEnv,run::RoutinePtr,compile::{CExp,CExpPtr}};
+use crate::{Value,util,eval::EvalEnv,run::FunctionPtr,compile::{CExp,CExpPtr}};
 
 pub(crate) struct Call
 {
-  pub rp: RoutinePtr,
+  pub rp: FunctionPtr,
   pub pv: Vec<CExpPtr<Value>>,
 }
 
@@ -52,21 +52,24 @@ impl CExp<Value> for Concat
 {
   fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> Value
   {
-    let mut s1 : Rc<String> = self.c1.eval( e, d ).str();
+    let mut s1 : Value = self.c1.eval( e, d );
     let s2 : Rc<String> = self.c2.eval( e, d ).str();
 
-    if let Some( ms1 ) = Rc::get_mut( &mut s1 )
+    // Append to existing string if not shared.
+    if let Value::String( s ) = &mut s1
     {
-      ms1.push_str( &s2 );
-      Value::String( s1 )
+      if let Some( ms ) = Rc::get_mut( s )
+      {
+        ms.push_str( &s2 );
+        return s1;
+      }
     }
-    else
-    {
-      let mut s = String::with_capacity( s1.len() + s2.len() );
-      s.push_str( &s1 );
-      s.push_str( &s2 );
-      Value::String( Rc::new(s) )
-    }
+    
+    let s1 = s1.str();
+    let mut s = String::with_capacity( s1.len() + s2.len() );
+    s.push_str( &s1 );
+    s.push_str( &s2 );
+    Value::String( Rc::new(s) )
   }
 }
 
@@ -201,7 +204,7 @@ pub(crate) struct Equal<T>
   pub c2: CExpPtr<T>
 }
 
-impl <T> CExp<bool> for Equal<T> where T: std::cmp::Ord
+impl <T> CExp<bool> for Equal<T> where T: std::cmp::PartialOrd
 {
   fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> bool
   {
@@ -215,7 +218,7 @@ pub(crate) struct NotEqual<T>
   pub c2: CExpPtr<T>
 }
 
-impl <T> CExp<bool> for NotEqual<T> where T: std::cmp::Ord
+impl <T> CExp<bool> for NotEqual<T> where T: std::cmp::PartialOrd
 {
   fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> bool
   {
@@ -229,7 +232,7 @@ pub(crate) struct Less<T>
   pub c2: CExpPtr<T>
 }
 
-impl <T> CExp<bool> for Less<T> where T: std::cmp::Ord
+impl <T> CExp<bool> for Less<T> where T: std::cmp::PartialOrd
 {
   fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> bool
   {
@@ -243,7 +246,7 @@ pub(crate) struct Greater<T>
   pub c2: CExpPtr<T>
 }
 
-impl <T> CExp<bool> for Greater<T> where T: std::cmp::Ord
+impl <T> CExp<bool> for Greater<T> where T: std::cmp::PartialOrd
 {
   fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> bool
   {
@@ -257,7 +260,7 @@ pub(crate) struct LessEqual<T>
   pub c2: CExpPtr<T>
 }
 
-impl <T> CExp<bool> for LessEqual<T> where T: std::cmp::Ord
+impl <T> CExp<bool> for LessEqual<T> where T: std::cmp::PartialOrd
 {
   fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> bool
   {
@@ -271,7 +274,7 @@ pub(crate) struct GreaterEqual<T>
   pub c2: CExpPtr<T>
 }
 
-impl <T> CExp<bool> for GreaterEqual<T> where T: std::cmp::Ord
+impl <T> CExp<bool> for GreaterEqual<T> where T: std::cmp::PartialOrd
 {
   fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> bool
   {
@@ -288,7 +291,7 @@ impl CExp<i64> for ColumnI64
 {
   fn eval( &self, _e: &mut EvalEnv, data: &[u8] ) -> i64
   {
-    util::get64( data, self.off ) as i64
+    util::getu64( data, self.off ) as i64
   }
 }
 
@@ -331,6 +334,32 @@ impl CExp<i64> for ColumnI8
   }
 }
 
+pub(crate) struct ColumnF64
+{ 
+  pub off: usize
+}
+
+impl CExp<f64> for ColumnF64
+{
+  fn eval( &self, _e: &mut EvalEnv, data: &[u8] ) -> f64
+  {
+    util::getf64( data, self.off ) as f64
+  }
+}
+
+pub(crate) struct ColumnF32
+{ 
+  pub off: usize
+}
+
+impl CExp<f64> for ColumnF32
+{
+  fn eval( &self, _e: &mut EvalEnv, data: &[u8] ) -> f64
+  {
+    util::getf32( data, self.off ) as f64
+  }
+}
+
 pub(crate) struct ColumnDecimal
 { 
   pub off: usize,
@@ -368,7 +397,7 @@ impl CExp<Value> for ColumnString
 {
   fn eval( &self, ee: &mut EvalEnv, data: &[u8] ) -> Value
   {
-    let sid = util::get64( data, self.off ); 
+    let sid = util::getu64( data, self.off ); 
     let bytes = ee.db.decode( sid );
     let str = String::from_utf8( bytes ).unwrap();
     Value::String( Rc::new( str ) )
@@ -442,6 +471,20 @@ impl CExp<i64> for ValToInt
   }
 }
 
+pub(crate) struct ValToFloat
+{
+  pub ce: CExpPtr<Value>
+}
+ 
+impl CExp<f64> for ValToFloat
+{
+  fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> f64
+  {
+    if let Value::Float(x) = self.ce.eval( e, d ) { return x; }
+    panic!();
+  }
+}
+
 pub(crate) struct ValToBool
 {
   pub ce: CExpPtr<Value>
@@ -466,6 +509,19 @@ impl CExp<Value> for IntToVal
   fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> Value
   {
     Value::Int( self.ce.eval( e, d ) )
+  }
+}
+
+pub(crate) struct FloatToVal
+{
+  pub ce: CExpPtr<f64>
+}
+ 
+impl CExp<Value> for FloatToVal
+{
+  fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> Value
+  {
+    Value::Float( self.ce.eval( e, d ) )
   }
 }
 

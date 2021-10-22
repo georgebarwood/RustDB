@@ -40,6 +40,15 @@ impl Table
     self.id_alloc_dirty.set( true );
     result
   }
+
+  pub fn id_allocated( &self, id: i64 )
+  {
+    if id >= self.id_alloc.get()
+    {
+      self.id_alloc.set( id + 1 );
+      self.id_alloc_dirty.set( true );
+    }
+  }
  
   pub(crate) fn save( &self, db: &DB )
   {
@@ -102,7 +111,7 @@ impl Record for Id
 {
   fn compare( &self, _db: &DB, data: &[u8], off: usize ) -> std::cmp::Ordering
   {
-    let x = util::get64( data, off ) as i64;
+    let x = util::getu64( data, off ) as i64;
     self.id.cmp( &x )
   }
   fn key( &self, _db: &DB, _data: &[u8], _off: usize ) -> Box<dyn Record>
@@ -137,7 +146,7 @@ impl <'d,'i> Access <'d,'i>
   /// Extract Id from byte data.
   pub fn id( &self ) -> i64
   {
-    util::get64( self.data, 0 ) as i64
+    util::getu64( self.data, 0 ) as i64
   }
 }  
 
@@ -285,7 +294,7 @@ impl Record for Row
 
   fn load( &mut self, db: &DB, data: &[u8], mut off: usize, both: bool )
   {
-    self.id = util::get64( data, off ) as i64;
+    self.id = util::getu64( data, off ) as i64;
     off += 8;
     let t = &self.info;
     if both
@@ -296,17 +305,17 @@ impl Record for Row
         let typ = t.types[i];
         self.values[ i ] = match data_kind( typ )
         {
-          DK::Bool => Value::Bool( data[off] != 0 ),
-          DK::String =>
+          DataKind::Bool => Value::Bool( data[off] != 0 ),
+          DataKind::String =>
           {
-            let u = util::get64( data, off ); 
+            let u = util::getu64( data, off ); 
             let bytes = db.decode( u );
             let str = String::from_utf8( bytes ).unwrap();
             Value::String( Rc::new( str ) )
           }
-          DK::Binary => 
+          DataKind::Binary => 
           { 
-            let u = util::get64( data, off ); 
+            let u = util::getu64( data, off ); 
             Value::Binary( Rc::new( db.decode( u ) ) )
           }
           _ => Value::Int( util::get( data, off, size ) as i64  )
@@ -318,7 +327,7 @@ impl Record for Row
 
   fn compare( &self, _db: &DB, data: &[u8], off:usize ) -> std::cmp::Ordering
   {
-    let id = util::get64( data, off ) as i64;
+    let id = util::getu64( data, off ) as i64;
     self.id.cmp( &id )
   }
 

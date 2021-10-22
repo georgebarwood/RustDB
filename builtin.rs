@@ -1,5 +1,5 @@
 use std::{ rc::Rc };
-use crate::{ DB, Value, sql::{DK,Expr,data_kind}, 
+use crate::{ DB, Value, sql::{DataKind,Expr,data_kind}, 
   sqlparse::{Parser}, compile::{CExp,CExpPtr}, eval::EvalEnv,
   compile::{calc_type,cexp_value,cexp_int,CompileFunc} };
 
@@ -8,13 +8,15 @@ pub fn register_builtins( db: &DB )
 {
   let list = 
   [ 
-    ( "ARG", DK::String, CompileFunc::Value( c_arg ) ),
-    ( "GLOBAL", DK::Int, CompileFunc::Int( c_global ) ),
-    ( "REPLACE", DK::String, CompileFunc::Value( c_replace ) ),
-    ( "SUBSTRING", DK::String, CompileFunc::Value( c_substring ) ),
-    ( "LEN", DK::Int, CompileFunc::Int( c_len ) ),
-    ( "PARSEINT", DK::Int, CompileFunc::Int( c_parse_int ) ),
-    ( "EXCEPTION", DK::String, CompileFunc::Value( c_exception ) ) 
+    ( "ARG", DataKind::String, CompileFunc::Value( c_arg ) ),
+    ( "GLOBAL", DataKind::Int, CompileFunc::Int( c_global ) ),
+    ( "REPLACE", DataKind::String, CompileFunc::Value( c_replace ) ),
+    ( "SUBSTRING", DataKind::String, CompileFunc::Value( c_substring ) ),
+    ( "LEN", DataKind::Int, CompileFunc::Int( c_len ) ),
+    ( "PARSEINT", DataKind::Int, CompileFunc::Int( c_parse_int ) ),
+    ( "PARSEFLOAT", DataKind::Float, CompileFunc::Float( c_parse_float ) ),
+    ( "EXCEPTION", DataKind::String, CompileFunc::Value( c_exception ) ),
+    ( "LASTID", DataKind::Int, CompileFunc::Int( c_lastid ) ),
   ];
 
   for ( name, typ, cf ) in list
@@ -24,7 +26,7 @@ pub fn register_builtins( db: &DB )
 }
 
 /// Check number and kinds of arguments.
-fn check_types( p: &Parser, args: &[Expr], dk: &[DK] )
+fn check_types( p: &Parser, args: &[Expr], dk: &[DataKind] )
 {
   if args.len() != dk.len() { panic!( "Wrong number of args" ); }
   for (i,e) in args.iter().enumerate()
@@ -62,7 +64,7 @@ impl CExp<Value> for Exception
 /// Compile call to LEN.
 fn c_len( p: &Parser, args: &[Expr] ) -> CExpPtr<i64>
 {
-  check_types( p, args, &[ DK::String ] );
+  check_types( p, args, &[ DataKind::String ] );
   let s = cexp_value( p, &args[0] );
   Box::new( Len{ s } ) 
 } 
@@ -83,10 +85,31 @@ impl CExp<i64> for Len
 
 /////////////////////////////
 
+/// Compile call to LASTID.
+fn c_lastid( p: &Parser, args: &[Expr] ) -> CExpPtr<i64>
+{
+  check_types( p, args, &[] );
+  Box::new( LastId{} ) 
+} 
+
+struct LastId
+{
+}
+
+impl CExp<i64> for LastId
+{
+  fn eval( &self, ee: &mut EvalEnv, _d: &[u8] ) -> i64
+  {
+    ee.db.lastid.get()
+  }
+}
+
+/////////////////////////////
+
 /// Compile call to GLOBAL.
 fn c_global( p: &Parser, args: &[Expr] ) -> CExpPtr<i64>
 {
-  check_types( p, args, &[ DK::Int ] );
+  check_types( p, args, &[ DataKind::Int ] );
   let x = cexp_int( p, &args[0] );
   Box::new( Global{ x } ) 
 } 
@@ -110,7 +133,7 @@ impl CExp<i64> for Global
 /// Compile call to PARSEINT.
 fn c_parse_int( p: &Parser, args: &[Expr] ) -> CExpPtr<i64>
 {
-  check_types( p, args, &[ DK::String ] );
+  check_types( p, args, &[ DataKind::String ] );
   let s = cexp_value( p, &args[0] );
   Box::new( ParseInt{ s } ) 
 } 
@@ -129,6 +152,30 @@ impl CExp<i64> for ParseInt
   }
 }
 
+/////////////////////////////
+
+/// Compile call to PARSEFLOAT.
+fn c_parse_float( p: &Parser, args: &[Expr] ) -> CExpPtr<f64>
+{
+  check_types( p, args, &[ DataKind::String ] );
+  let s = cexp_value( p, &args[0] );
+  Box::new( ParseFloat{ s } ) 
+} 
+
+struct ParseFloat
+{
+  s: CExpPtr<Value>,
+}
+
+impl CExp<f64> for ParseFloat
+{
+  fn eval( &self, e: &mut EvalEnv, d: &[u8] ) -> f64
+  {
+    let s = self.s.eval( e, d ).str();
+    s.parse().unwrap()
+  }
+}
+
 
 
 /////////////////////////////
@@ -136,7 +183,7 @@ impl CExp<i64> for ParseInt
 /// Compile call to REPLACE.
 fn c_replace( p: &Parser, args: &[Expr] ) -> CExpPtr<Value>
 {
-  check_types( p, args, &[ DK::String, DK::String, DK::String ] );
+  check_types( p, args, &[ DataKind::String, DataKind::String, DataKind::String ] );
   let s = cexp_value( p, &args[0] );
   let pat = cexp_value( p, &args[1] );
   let sub = cexp_value( p, &args[2] );
@@ -167,7 +214,7 @@ impl CExp<Value> for Replace
 /// Compile call to SUBSTRING.
 fn c_substring( p: &Parser, args: &[Expr] ) -> CExpPtr<Value>
 {
-  check_types( p, args, &[ DK::String, DK::Int, DK::Int ] );
+  check_types( p, args, &[ DataKind::String, DataKind::Int, DataKind::Int ] );
   let s = cexp_value( p, &args[0] );
   let f = cexp_int( p, &args[1] );
   let n = cexp_int( p, &args[2] );
@@ -200,7 +247,7 @@ impl CExp<Value> for Substring
 /// Compile call to ARG.
 fn c_arg( p: &Parser, args: &[Expr] ) -> CExpPtr<Value>
 {
-  check_types( p, args, &[ DK::Int, DK::String ] );
+  check_types( p, args, &[ DataKind::Int, DataKind::String ] );
   let k = cexp_int( p, &args[0] );
   let s = cexp_value( p, &args[1] );
   Box::new( Arg{ k, s } ) 

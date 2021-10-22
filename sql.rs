@@ -1,7 +1,7 @@
 use std::{ collections::HashMap };
 use crate::{ sqlparse, run::Inst, Value };
 
-/// Holds routine name, line, column and message.
+/// Holds function name, line, column and message.
 pub struct SqlError
 {
   pub rname: String,
@@ -51,7 +51,14 @@ pub enum Token { /* Note: order is significant */
   Id, Number, Decimal, Hex, String, LBra, RBra, Comma, Colon, Dot, Exclamation, Unknown, EndOfFile
 }
 
-pub(crate) const PRECEDENCE : [i8;15 ] = [ 10, 10, 10, 10, 10, 10, 10, 20, 20, 30, 30, 30, 15, 8, 5 ];
+impl Token
+{
+  pub fn precedence( self ) -> i8
+  {
+    const PA : [i8;15 ] = [ 10, 10, 10, 10, 10, 10, 10, 20, 20, 30, 30, 30, 15, 8, 5 ];
+    PA[ self as usize ]
+  }
+}
 
 /// Scalar Expression ( uncompiled ).
 pub enum Expr 
@@ -101,44 +108,43 @@ pub struct IndexInfo
   pub cols: Vec<String>
 }
 
-/// Binary, String, Int, Float, Bool, Decimal.
+/// Binary=1, String=2, Int=3, Float=4, Bool=5, Decimal=6.
 #[derive(Debug,PartialEq,PartialOrd,Clone,Copy)]
-pub enum DK { None=0, Binary=1, String=2, Int=3, Float=4, Bool=5, Decimal=6 }
+pub enum DataKind { None=0, Binary=1, String=2, Int=3, Float=4, Bool=5, Decimal=6 }
 
-/// Low 3 bits are DK, next 5 bits are size in bytes, or p ( for DECIMAL ).
+/// Low 3 (=KBITS) bits are DataKind, next 5 bits are size in bytes, or p ( for DECIMAL ).
 pub type DataType = usize;
 
 const KBITS : usize = 3;
 
-pub(crate) const NONE : DataType = DK::None as usize;
-pub(crate) const BINARY : DataType = DK::Binary as usize + ( 8 << KBITS );
-pub(crate) const STRING : DataType = DK::String as usize + ( 8 << KBITS );
-pub(crate) const BIGINT : DataType = DK::Int as usize + ( 8 << KBITS );
-pub(crate) const INT    : DataType = DK::Int as usize + ( 4 << KBITS );
-pub(crate) const SMALLINT : DataType = DK::Int as usize + ( 2 << KBITS );
-pub(crate) const TINYINT : DataType = DK::Int as usize + ( 1 << KBITS );
-pub(crate) const FLOAT : DataType = DK::Float as usize + ( 4 << KBITS );
-pub(crate) const DOUBLE : DataType = DK::Float as usize + ( 8 << KBITS );
-pub(crate) const BOOL : DataType = DK::Bool as usize + ( 1 << KBITS );
-pub(crate) const DECIMAL : DataType = DK::Decimal as usize;
+pub(crate) const NONE : DataType = DataKind::None as usize;
+pub(crate) const BINARY : DataType = DataKind::Binary as usize + ( 8 << KBITS );
+pub(crate) const STRING : DataType = DataKind::String as usize + ( 8 << KBITS );
+pub(crate) const BIGINT : DataType = DataKind::Int as usize + ( 8 << KBITS );
+pub(crate) const INT    : DataType = DataKind::Int as usize + ( 4 << KBITS );
+pub(crate) const SMALLINT : DataType = DataKind::Int as usize + ( 2 << KBITS );
+pub(crate) const TINYINT : DataType = DataKind::Int as usize + ( 1 << KBITS );
+pub(crate) const FLOAT : DataType = DataKind::Float as usize + ( 4 << KBITS );
+pub(crate) const DOUBLE : DataType = DataKind::Float as usize + ( 8 << KBITS );
+pub(crate) const BOOL : DataType = DataKind::Bool as usize + ( 1 << KBITS );
+pub(crate) const DECIMAL : DataType = DataKind::Decimal as usize;
 
 
-/// Compute the DataKind(DK) of a DataType.
-pub fn data_kind( x: DataType ) -> DK
+/// Compute the DataKind of a DataType.
+pub fn data_kind( x: DataType ) -> DataKind
 {
-  const DKLOOK : [DK;7] = [ DK::None, DK::Binary, DK::String, DK::Int, DK::Float, DK::Bool, DK::Decimal ];
+  const DKLOOK : [DataKind;7] = [ DataKind::None, DataKind::Binary, DataKind::String, DataKind::Int, DataKind::Float, DataKind::Bool, DataKind::Decimal ];
   DKLOOK[ x % ( 1 << KBITS ) ]
 }
-
-/// Number of bytes needed to store a Decimal of index digits.
-const DECSIZE : [u8;19] = [ 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 8, 8 ];
 
 /// Compute the number of bytes required to store a value of the specified DataType.
 pub fn data_size( x:DataType ) -> usize
 {
   let p = ( x >> KBITS ) & 31;
-  if data_kind( x ) == DK::Decimal
+  if data_kind( x ) == DataKind::Decimal
   {
+    /// Number of bytes needed to store a Decimal of index digits.
+    const DECSIZE : [u8;19] = [ 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 8, 8 ];
     DECSIZE[p] as usize
   }
   else
@@ -147,7 +153,7 @@ pub fn data_size( x:DataType ) -> usize
   }    
 }
 
-/// Compilation block ( body of routine or batch section ).
+/// Compilation block ( body of function or batch section ).
 pub(crate) struct Block <'a>
 {
   pub param_count: usize,

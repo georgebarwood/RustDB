@@ -3,7 +3,7 @@ use core::fmt::Debug;
 use crate::
 {  
   Value, sf::Asc, 
-  sql::{DK,DataType,ObjRef,data_kind,IndexInfo,Assigns}, 
+  sql::{DataKind,DataType,ObjRef,data_kind,IndexInfo,Assigns}, 
   compile::CExpPtr, 
   table::{TablePtr,TableInfo} 
 };
@@ -23,7 +23,7 @@ pub enum Inst
   ForSortNext(usize,Box<(usize,usize,Assigns)>),
   DataOp(Box<DO>),
   PushValue(CExpPtr<Value>),
-  Call(RoutinePtr),
+  Call(FunctionPtr),
   Select( Box<CSelectExpression> ),
   Set( Box<CSelectExpression> ),
   // Special push instructions ( optimisations )
@@ -82,10 +82,10 @@ pub fn default( t: DataType ) -> Value
 {
   match data_kind(t)
   {
-    DK::Bool => Value::Bool( false ),
-    DK::Float => Value::Float(0.0),
-    DK::String => Value::String( Rc::new( String::new() ) ),
-    DK::Binary => Value::Binary( Rc::new( Vec::new() ) ),
+    DataKind::Bool => Value::Bool( false ),
+    DataKind::Float => Value::Float(0.0),
+    DataKind::String => Value::String( Rc::new( String::new() ) ),
+    DataKind::Binary => Value::Binary( Rc::new( Vec::new() ) ),
     _ => Value::Int(0)
   }    
 }
@@ -192,7 +192,7 @@ pub enum DO
   CreateTable( Rc<TableInfo> ),
   CreateIndex( IndexInfo ),
   CreateSchema( String ),
-  CreateRoutine( ObjRef, Rc<String>, bool ),
+  CreateFunction( ObjRef, Rc<String>, bool ),
   CreateView( ObjRef, bool, String ),
   AlterTable( ObjRef, Vec<AlterAction> ),
   RenameSchema( String, String ),
@@ -220,14 +220,14 @@ pub enum AlterAction
   Modify( String, DataType )
 }
 
-/// Function or Procedure body.
+/// Compiled Function.
 ///
-/// When a CREATE FUNCTION or CREATE ROUTINE statement is executed,
-/// the Routine is inserted into the database, but the ilist is not 
+/// When a CREATE FUNCTION statement is executed,
+/// the Function is inserted into the database, but the ilist is not 
 /// created. The source has been parsed and checked for syntax correctness
-/// but type checking is delayed until the first call to the Routine is compiled.
+/// but type checking is delayed until the first call to the Function is compiled.
 /// At that point type checking is performed and instructions are generated.
-pub struct Routine
+pub struct Function
 {
   pub param_count: usize,
   pub return_type: DataType,
@@ -237,17 +237,17 @@ pub struct Routine
   pub compiled: Cell<bool>,
 }
 
-impl Debug for Routine
+impl Debug for Function
 {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> 
   {
-    f.debug_struct("Routine")
+    f.debug_struct("Function")
       // .field("compiled", &self.compiled)
       // .field("source", &self.source)
       .finish()
   }
 }
 
-/// ```Rc<Routine>```
-pub type RoutinePtr = Rc<Routine>;
+/// ```Rc<Function>```
+pub type FunctionPtr = Rc<Function>;
 

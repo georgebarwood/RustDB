@@ -23,7 +23,7 @@ impl ByteStorage
     if let Some( ( p, off ) ) = self.file.clone().dsc( db, Box::new(start) ).next()
     {
       let p = p.borrow();
-      self.id_alloc.set( 1 + util::get64( &p.data, off ) );
+      self.id_alloc.set( 1 + util::getu64( &p.data, off ) );
       // println!( "self.id_alloc={}", self.id_alloc );
     }
   }
@@ -61,7 +61,7 @@ impl ByteStorage
     for ( p, off ) in self.file.asc( db, Box::new(start) )
     {
       let p = p.borrow();
-      let xid = util::get64( &p.data, off );
+      let xid = util::getu64( &p.data, off );
       if xid != id { break; }
       id += 1;
       let len = p.data[ off + 8 ] as usize;
@@ -81,7 +81,7 @@ impl ByteStorage
     for ( p, off ) in self.file.asc( db, Box::new(start) )
     {
       let p = p.borrow();
-      let xid = util::get64( &p.data, off );
+      let xid = util::getu64( &p.data, off );
       if xid != id + n { break; }
       n += 1;
       let len = &p.data[ off + 8 ];
@@ -130,7 +130,7 @@ impl Record for Fragment
 
   fn load( &mut self, _db: &DB, data: &[u8], off:usize, _both: bool )
   {
-    self.id = util::get64( data, off );
+    self.id = util::getu64( data, off );
 /* both is not used...
     if both 
     { 
@@ -142,7 +142,7 @@ impl Record for Fragment
 
   fn compare( &self, _db: &DB, data: &[u8], off: usize ) -> std::cmp::Ordering
   {
-    let val = util::get64( data, off );
+    let val = util::getu64( data, off );
     self.id.cmp( &val )
   }
 

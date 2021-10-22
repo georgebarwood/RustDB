@@ -14,12 +14,20 @@ pub trait Record
   fn key( &self, db: &DB, data: &[u8], off: usize ) -> Box<dyn Record>;
 }
 
-/// Sorted Record storage.
+/// Sorted Record storage. 
+///
+/// SortedFile is a tree of pages. 
+///
+/// Each page is either a parent page with links to child pages, or a leaf page.
 pub struct SortedFile
 {
+  /// Cached pages.
   pub pages: RefCell<HashMap<u64,PagePtr>>,
+  /// Size of a record.
   pub rec_size: usize,
+  /// Size of a key.
   pub key_size: usize,
+  /// The root page.
   pub root_page: u64,
 }
 
@@ -129,6 +137,7 @@ impl SortedFile
     }
   }
 
+  /// Insert a record into a leaf page.
   fn insert_leaf( &self, db: &DB, pnum: u64, r: &dyn Record, pi: Option<&ParentInfo> ) -> bool
   {
     let p = self.load_page( db, pnum );
@@ -226,11 +235,13 @@ impl SortedFile
     p.append_child( db, k, pnum );
   }
 
+  /// Construct a new empty page.
   fn new_page( &self, parent:bool ) -> Page
   {
     Page::new( if parent {self.key_size} else {self.rec_size}, parent, vec![0;PAGE_SIZE] )
   }
 
+  /// Allocate a page number, publish the page in the cache.
   fn alloc_page( &self, db: &DB, p:Page ) -> u64
   {
     let pnum = db.file.alloc_page();
@@ -238,11 +249,13 @@ impl SortedFile
     pnum
   }
 
+  /// Publish a page in the cache.
   fn publish_page( &self, pnum: u64, p:Page )
   {
     self.pages.borrow_mut().insert( pnum, util::new(p) );
   }
 
+  /// Get a page from the cache, or if it is not in the cache, load it from external storage.
   fn load_page( &self, db: &DB, pnum: u64 ) -> PagePtr
   {
     match self.pages.borrow_mut().entry( pnum )
