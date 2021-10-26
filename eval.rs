@@ -1,4 +1,4 @@
-use crate::{ Value, util, sys, Query, DB, 
+use crate::{ value::Value, util, sys, Query, DB, 
   sql::{DataKind, DataType, NONE, data_kind, AssignOp, Assigns }, 
   compile::CExpPtr, table::{TablePtr,Row}, run::* };
 
@@ -351,49 +351,27 @@ impl <'r> EvalEnv <'r>
   fn update( &mut self, t: &TablePtr, assigns:&[(usize,CExpPtr<Value>)], w: &CExpPtr<bool> )
   {
     let idlist = self.get_id_list( t, w );
-    let mut row = t.row();
+    let mut oldrow = t.row();
     for id in idlist
     {
-      row.id = id as i64;
+      oldrow.id = id as i64;
       if let Some( ( p, off ) ) = t.id_get( &self.db, id )
       {
-        let mut p = p.borrow_mut();
-        p.dirty = true;
-        let data = &mut p.data[off..];
-        // ToDo: update indexes. Also this code belongs in table module.
-        for ( col, exp ) in assigns // Maybe should calculate all the values before doing any updates.
+        let mut newrow =
         {
-          let col = *col;
-          let off = t.info.off[ col ];
-          let val = exp.eval( self, data );
-          match val
+          let p = p.borrow();
+          let data = &p.data[off..];
+          oldrow.load( &self.db, data );
+          let mut newrow = oldrow.clone();
+          for ( col, exp ) in assigns
           {
-            Value::Int(val) => { util::set( data, off, val as u64, t.info.sizes[ col ] ); }
-            Value::String(val) => 
-            { 
-              let old_id = util::getu64( data, off );
-              let old_str = String::from_utf8( self.db.decode( old_id ) ).unwrap();
-              if old_str != *val
-              {
-                self.db.delcode( old_id );
-                let new_id = self.db.encode( val.as_bytes() );
-                util::set( data, off, new_id, 8 );
-              } 
-            }
-            Value::Binary(val) => 
-            { 
-              let old_id = util::getu64( data, off );
-              let old_bin = self.db.decode( old_id );
-              if old_bin != *val 
-              {
-                self.db.delcode( id );
-                let id = self.db.encode( &val );
-                util::set( data, off, id, 8 );
-              } 
-            }
-            _ => panic!()
+            newrow.values[ *col ] = exp.eval( self, data );
           }
-        }
+          newrow
+        };
+        // Would be nice to optimise this to minimise re-indexing.
+        t.remove( &self.db, &mut oldrow );
+        t.insert( &self.db, &mut newrow );
       }
     }
   }

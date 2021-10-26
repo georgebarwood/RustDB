@@ -1,6 +1,6 @@
 use std::{mem,ops};
 
-use crate::{ Value, sqlparse::Parser, cexp, sql::*, 
+use crate::{ value::Value, sqlparse::Parser, cexp, sql::*, 
   run::{Inst,FunctionPtr,CSelectExpression,CTableExpression}, 
   eval::EvalEnv, table::TablePtr 
 };

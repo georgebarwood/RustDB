@@ -2,7 +2,7 @@ use std::{rc::Rc, cell::{Cell,RefCell}, cmp::Ordering};
 use core::fmt::Debug;
 use crate::
 {  
-  Value,  compile::CExpPtr, page::PagePtr,
+  value::Value, compile::CExpPtr, page::PagePtr,
   sql::{DataKind,DataType,ObjRef,data_kind,Assigns},   
   table::{TablePtr,TableInfo,IndexInfo},   
 };
@@ -91,64 +91,6 @@ pub fn default( t: DataType ) -> Value
     DataKind::Binary => Value::Binary( Rc::new( Vec::new() ) ),
     _ => Value::Int(0)
   }    
-}
-
-impl std::cmp::Ord for Value 
-{
-  fn cmp(&self, other: &Self) -> std::cmp::Ordering 
-  {
-    let mut result = std::cmp::Ordering::Equal;
-    match self
-    {
-      Value::String(s1) => 
-        if let Value::String(s2) = other
-        {
-          result = s1.cmp(s2);
-        }
-      Value::Int(x1) =>
-        if let Value::Int(x2) = other
-        {
-          result = x1.cmp(x2);
-        }  
-      _ => { panic!() }
-    }
-    result
-  }
-}
-
-impl PartialOrd for Value 
-{
-  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> 
-  {
-    let mut result = std::cmp::Ordering::Equal;
-    if let Value::String(s1) = self
-    {
-      if let Value::String(s2) = other
-      {
-        result = s1.cmp(s2);
-      }
-    }
-    Some(result)
-  }
-}
-
-impl PartialEq for Value 
-{
-  fn eq(&self, other: &Self) -> bool 
-  {
-    if let Some(eq) = self.partial_cmp( other ) 
-    { 
-      eq == std::cmp::Ordering::Equal 
-    }
-    else
-    {
-      false
-    }
-  }
-}
-
-impl Eq for Value
-{
 }
 
 /// Compare table rows.

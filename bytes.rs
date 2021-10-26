@@ -38,6 +38,7 @@ impl ByteStorage
     let mut r = Fragment::new( 0 );
     let n = bytes.len();
     let mut done = 0;
+    let mut _frags = 0;
     loop
     {
       r.id = self.id_alloc.get();
@@ -47,15 +48,17 @@ impl ByteStorage
       // for i in 0..len { r.bytes[ i ] = bytes[ done + i ]; }
       r.bytes[..len].clone_from_slice(&bytes[done..(len + done)]);
       done += len;
+      _frags += 1;
       self.file.insert( db, &r );
       if done == n { break; }
     }
+    // println!( "encode result={} frags={}", &result, &frags );
     result
   }
 
   pub fn decode( &self, db: &DB, mut id: u64 ) -> Vec<u8>
   {
-    let mut result = Vec::new();
+    let mut result = vec![ 0u8; 7 ]; // First 7 bytes will be filled in from inline data.
     let start = Fragment::new( id );
     for ( p, off ) in self.file.asc( db, Box::new(start) )
     {
@@ -86,6 +89,7 @@ impl ByteStorage
       let len = &p.data[ off + 8 ];
       if len & 1 == 1 { break; }
     }
+    // println!( "delcode code={} frags={}", id, n ); 
     let mut r = Fragment::new(0);
     for xid in id..id+n
     {

@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use crate::{Value,util,eval::EvalEnv,run::FunctionPtr,compile::{CExp,CExpPtr}};
+use crate::{value::{Value,get_bytes},util,eval::EvalEnv,run::FunctionPtr,compile::{CExp,CExpPtr}};
 
 pub(crate) struct Call
 {
@@ -397,8 +397,7 @@ impl CExp<Value> for ColumnString
 {
   fn eval( &self, ee: &mut EvalEnv, data: &[u8] ) -> Value
   {
-    let sid = util::getu64( data, self.off ); 
-    let bytes = ee.db.decode( sid );
+    let bytes = get_bytes( &ee.db, &data[self.off..] ).0;
     let str = String::from_utf8( bytes ).unwrap();
     Value::String( Rc::new( str ) )
   }
@@ -413,8 +412,7 @@ impl CExp<Value> for ColumnBinary
 {
   fn eval( &self, ee: &mut EvalEnv, data: &[u8] ) -> Value
   {
-    let sid = util::getu64( data, self.off ); 
-    let bytes = ee.db.decode( sid );
+    let bytes = get_bytes( &ee.db, &data[self.off..] ).0;
     Value::Binary( Rc::new( bytes ) )
   }
 }

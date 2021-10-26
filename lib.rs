@@ -8,14 +8,6 @@
 //!
 //!multipart requests ( for file upload ).
 //!
-//!Store short strings inline ( say up to 15 bytes ).
-//!
-//!--First byte has string length (up to some limit) or chunk type ( small/medium/large ).
-//!
-//!--Next 7 bytes are start of string.
-//!
-//!--Next 8 bytes are either rest of string, or pointer into ByteStorage.
-//!
 //! Database with SQL-like language.
 //! Example program:
 //! ```
@@ -52,8 +44,8 @@
 //!(3) Index storage ( an index record refers back to the main table ).
 
 use std::{ panic, cell::RefCell, rc::Rc, cell::Cell, collections::HashMap };
-use crate::{ util::newmap, bytes::ByteStorage, run::FunctionPtr, compile::CompileFunc,
-  table::{Table,TablePtr,TableInfo}, sql::{DataType,DataKind,data_size,data_kind,ObjRef,STRING,BIGINT,TINYINT,SqlError} };
+use crate::{ value::Value, util::newmap, bytes::ByteStorage, run::FunctionPtr, compile::CompileFunc,
+  table::{Table,TablePtr,TableInfo}, sql::{DataType,DataKind,ObjRef,STRING,BIGINT,TINYINT,SqlError} };
 
 /// WebQuery struct for making a http web server.
 pub mod web;
@@ -66,6 +58,9 @@ pub mod compile;
 
 /// Simple Paged File.
 pub mod spf;
+
+/// Value.
+pub mod value;
 
 // Private modules.
 
@@ -364,7 +359,8 @@ GO
   /// Encode byte slice as u64.
   fn encode( self: &DB, bytes: &[u8] ) -> u64
   {
-    self.bs.encode( self, bytes )
+    if bytes.len() < 16 { return 0; }
+    self.bs.encode( self, &bytes[7..] )
   }
 
   /// Decode u64 to bytes.
@@ -417,111 +413,6 @@ impl TableBuilder
     let table = Table::new( id, root_page, 1, Rc::new(info) );
     self.list.push( table.clone() );
     table
-  }
-}
-
-/// Simple value ( Binary, String, Int, Float, Bool ).
-#[derive(Debug,Clone)]
-pub enum Value
-{
-  None,
-  Binary(Rc<Vec<u8>>),
-  String(Rc<String>),
-  Int(i64),
-  Float(f64),
-  Bool(bool),
-  For(Rc<RefCell<run::ForState>>),
-  ForSort(Rc<RefCell<run::ForSortState>>)
-}
-
-impl Value
-{
-  fn load( db: &DB, typ: DataType, data: &[u8], off: usize ) -> Value
-  {
-    let size = data_size( typ );
-    match data_kind( typ )
-    {
-      DataKind::Bool => Value::Bool( data[off] != 0 ),
-      DataKind::String =>
-      {
-        let u = util::getu64( data, off ); 
-        let bytes = db.decode( u );
-        let str = String::from_utf8( bytes ).unwrap();
-        Value::String( Rc::new( str ) )
-      }
-      DataKind::Binary => 
-      { 
-        let u = util::getu64( data, off ); 
-        Value::Binary( Rc::new( db.decode( u ) ) )
-      }
-      _ => Value::Int( util::get( data, off, size ) as i64  )
-    }
-  }
-
-  fn save( &self, typ: DataType, data: &mut [u8], off: usize, code: u64 )
-  {
-    let size = data_size( typ );
-    match self
-    {
-      Value::Bool(x) => { data[ off ] = if *x {1} else {0}; }
-      Value::Int(x) => util::set( data, off, *x as u64, size ),
-      Value::Float(x) =>
-      {
-        if size == 8
-        {
-          let bytes = (*x).to_le_bytes();
-          // for i in 0..size { data[off+i] = bytes[i]; }
-          data[off..off+8].clone_from_slice(&bytes);
-        } 
-        else
-        {
-          debug_assert!( size == 4 );
-          let val = *x as f32;
-          let bytes = val.to_le_bytes();
-          data[off..off+4].clone_from_slice(&bytes);
-        }
-      }
-      Value::String(_) =>
-      {
-        util::set( data, off, code, 8 );
-      }
-      Value::Binary(_) => 
-      {
-        util::set( data, off, code, 8 );
-      }
-      _ => {}
-    }
-  } 
-
-  fn str( &self ) -> Rc<String>
-  {
-    match self
-    {
-      Value::String(s) => s.clone(),
-      Value::Int(x) => Rc::new(x.to_string()),
-      Value::Float(x) => Rc::new(x.to_string()),  
-      Value::Binary(_x) => Rc::new( "ToDo".to_string()),
-      _ => panic!( "str not implemented" )
-    }
-  }
-
-  fn append( &mut self, val: Value )
-  {
-    if let Value::String(s) = self
-    {
-      let val = val.str();
-      if let Some( ms ) = Rc::get_mut(s)
-      {
-        ms.push_str( &val );
-      }
-      else
-      {
-        let mut ns = String::with_capacity( s.len() + val.len() );
-        ns.push_str( s );
-        ns.push_str( &val );
-        *self = Value::String( Rc::new( ns ) );
-      }
-    } else { panic!() }
   }
 }
 

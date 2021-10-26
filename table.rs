@@ -1,5 +1,5 @@
 use std::{ rc::Rc, cell::{Cell,RefCell}, collections::HashMap, cmp::Ordering };
-use crate::{Value,util,sf::*,DB,sql::*,run::*,page::*,sqlparse::Parser,compile::*};
+use crate::{value::{Value,get_bytes},util,sf::*,DB,sql::*,run::*,page::*,sqlparse::Parser,compile::*};
 
 /// Table Pointer.
 pub type TablePtr = Rc<Table>;
@@ -157,6 +157,7 @@ impl Table
       let ixr = IndexRow::new( self, rowid, cols.clone(), r );
       f.remove( db, &ixr );
     }
+    r.delcodes( db );
   }
 
   /// Add the specified index to the table.
@@ -234,7 +235,7 @@ impl Table
     for ( p, off ) in self.file.asc( db, Box::new(Zero{}) )
     {
       let p = p.borrow();
-      r.load( db, &p.data, off );
+      r.load( db, &p.data[off..] );
       println!( "row id={} value={:?}", r.id, r.values );
     }
   }
@@ -270,8 +271,8 @@ impl <'d,'i> Access <'d,'i>
   /// Extract string from byte data for column number colnum.
   pub fn str( &self, db: &DB, colnum: usize ) -> String
   {
-    let u = util::get( self.data, self.info.off[colnum], self.info.sizes[colnum] );
-    let bytes = db.decode( u );
+    let off = self.info.off[colnum];
+    let bytes = get_bytes( db, &self.data[off..] ).0;
     String::from_utf8( bytes ).unwrap()
   }
 
@@ -380,6 +381,7 @@ pub struct IndexInfo
 }
 
 /// Row of Values, with type information.
+#[derive(Clone)]
 pub struct Row
 {
   pub id: i64,
@@ -415,15 +417,29 @@ impl Row
     }    
   }
 
-  fn load( &mut self, db: &DB, data: &[u8], mut off: usize )
+  pub fn delcodes( &self, db: &DB )
   {
-    self.id = util::getu64( data, off ) as i64;
-    off += 8;
-    let t = &self.info;
-    for i in 0..t.types.len()
+    for u in &self.codes
     {
-      let typ = t.types[i];
-      self.values[ i ] = Value::load( db, typ, data, off );
+      if *u != u64::MAX
+      {
+        db.delcode( *u );
+      }
+    }
+  }
+
+  pub fn load( &mut self, db: &DB, data: &[u8] )
+  {
+    self.codes.clear();
+    self.id = util::getu64( data, 0 ) as i64;
+    let mut off = 8;
+    let info = &self.info;
+    for i in 0..info.types.len()
+    {
+      let typ = info.types[i];
+      let ( val, code ) = Value::load( db, typ, data, off );
+      self.values[ i ]  = val;
+      self.codes.push( code );
       off += data_size( typ );
     }
   }
@@ -481,7 +497,7 @@ impl IndexRow
     for (ix,col) in self.cols.iter().enumerate()
     {
       let typ = self.tinfo.types[ *col ];
-      self.keys[ix] = Value::load( db, typ, data, off );
+      self.keys[ix] = Value::load( db, typ, data, off ).0;
       off += data_size(typ);
     }
     self.rowid = util::getu64( data, off ) as i64;
@@ -510,7 +526,7 @@ impl Record for IndexRow
     loop
     {
       let typ = self.tinfo.types[ self.cols[ ix ] ];
-      let val = Value::load( db, typ, data, off );
+      let val = Value::load( db, typ, data, off ).0;
 
       // println!( "IndexRow comparing {:?} with {:?}", &val, &self.keys[ix] );
 
@@ -520,12 +536,12 @@ impl Record for IndexRow
         return cf;
       }
       ix += 1;
+      off += data_size( typ );
       if ix == self.cols.len() 
       { 
         let id = util::getu64( data, off ) as i64;
         return self.rowid.cmp( &id );
       }  
-      off += data_size( typ );  
     }
   }
 
@@ -573,7 +589,7 @@ impl Record for IndexKey
     loop
     {
       let typ = self.tinfo.types[ self.cols[ ix ] ];
-      let val = Value::load( db, typ, data, off );
+      let val = Value::load( db, typ, data, off ).0;
 
       let cf = val.cmp( &self.key[ix ] );
       if cf != Ordering::Equal
@@ -608,7 +624,7 @@ impl IndexScan
     for (ix,k) in self.keys.iter().enumerate()
     {
       let typ = self.table.info.types[ self.cols[ix] ];
-      let val = Value::load( &self.db, typ, data, off );
+      let val = Value::load( &self.db, typ, data, off ).0;
       let cf = val.cmp( k );
       if cf != Ordering::Equal
       {

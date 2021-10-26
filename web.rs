@@ -1,5 +1,5 @@
 use std::{ net::TcpStream, collections::HashMap, io::Write, io::Read, rc::Rc };
-use crate::{util,Value,Query};
+use crate::{util,value::Value,Query};
 
 /// Response content is accumulated in result.
 ///

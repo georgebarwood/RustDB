@@ -1,5 +1,5 @@
 use std::{ str, mem, rc::Rc };
-use crate::{Value,Query,util,DB,sql::*,table::*,run::*,eval::EvalEnv,compile::*};
+use crate::{value::Value,Query,util,DB,sql::*,table::*,run::*,eval::EvalEnv,compile::*};
 
 /// SQL parser.
 ///

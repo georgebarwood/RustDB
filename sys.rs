@@ -1,5 +1,5 @@
 use std::{ rc::Rc, cell::{Cell,RefCell} };
-use crate::{*,sql::*,run::*,table::{Table,TableInfo,TablePtr,IndexInfo}};
+use crate::{*,value::Value,sql::*,run::*,table::{Table,TableInfo,TablePtr,IndexInfo}};
 
 /// Creates a schema in the database by writing to the system Schema table.
 pub fn create_schema( db: &DB, name: &str )

@@ -1,5 +1,5 @@
 use std::{ collections::HashMap };
-use crate::{ sqlparse, run::Inst, Value };
+use crate::{ sqlparse, run::Inst, value::Value };
 
 /// Holds function name, line, column and message.
 pub struct SqlError
@@ -124,8 +124,8 @@ pub type DataType = usize;
 const KBITS : usize = 3;
 
 pub(crate) const NONE : DataType = DataKind::None as usize;
-pub(crate) const BINARY : DataType = DataKind::Binary as usize + ( 8 << KBITS );
-pub(crate) const STRING : DataType = DataKind::String as usize + ( 8 << KBITS );
+pub(crate) const BINARY : DataType = DataKind::Binary as usize + ( 16 << KBITS );
+pub(crate) const STRING : DataType = DataKind::String as usize + ( 16 << KBITS );
 pub(crate) const BIGINT : DataType = DataKind::Int as usize + ( 8 << KBITS );
 pub(crate) const INT    : DataType = DataKind::Int as usize + ( 4 << KBITS );
 pub(crate) const SMALLINT : DataType = DataKind::Int as usize + ( 2 << KBITS );
