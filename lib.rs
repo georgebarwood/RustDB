@@ -190,7 +190,7 @@ impl Database
     {
       if !is_new 
       { 
-        t.id_alloc.set( sys::get_alloc( &db, t.id ) );
+        t.id_alloc.set( sys::get_alloc( &db, t.id as u64 ) );
       }
       db.publish_table( t.clone() );
     }
@@ -300,7 +300,7 @@ GO
     {
       if  t.id_alloc_dirty.get()
       {
-        sys::save_alloc( self, t.id,  t.id_alloc.get() );
+        sys::save_alloc( self, t.id as u64,  t.id_alloc.get() );
       }
     }
 

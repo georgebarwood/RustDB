@@ -6,12 +6,32 @@ pub trait Record
 {
   /// Save record as bytes( if both is false save only key ).
   fn save( &self, _data: &mut [u8], _off: usize, _both: bool ){}
-  /// Read record from bytes ( if both is false read only key ).
-  fn load( &mut self, _db: &DB, _data: &[u8], _off: usize, _both: bool ){}
   /// Compare record with stored bytes.
   fn compare( &self, db: &DB, data: &[u8], off: usize ) -> std::cmp::Ordering;
-  /// Load key from bytes.
-  fn key( &self, db: &DB, data: &[u8], off: usize ) -> Box<dyn Record>;
+  /// Load key from bytes ( to store in parent page ).
+  fn key( &self, _db: &DB, data: &[u8], off: usize ) -> Box<dyn Record>
+  {
+    Box::new( Id{ id: util::getu64( data, off ) } )
+  }
+}
+
+/// Id record.
+pub struct Id
+{
+  pub id: u64
+}
+
+impl Record for Id
+{
+  fn compare( &self, _db: &DB, data: &[u8], off: usize ) -> std::cmp::Ordering
+  {
+    let id = util::getu64( data, off );
+    self.id.cmp( &id )
+  }
+  fn save( &self, data: &mut [u8], off: usize, _both: bool )
+  {
+    util::set( data, off, self.id, 8 );
+  }
 }
 
 /// Sorted Record storage. 

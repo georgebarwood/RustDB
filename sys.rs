@@ -296,7 +296,7 @@ fn parse_function( db: &DB, source: Rc<String> ) -> FunctionPtr
 }
 
 /// Update the alloc_id field for a table.
-pub(crate) fn save_alloc( db: &DB, id: i64, val: i64 )
+pub(crate) fn save_alloc( db: &DB, id: u64, val: i64 )
 {
   let t = &db.sys_table;
   let ( p, off ) = t.id_get( db, id ).unwrap();
@@ -307,7 +307,7 @@ pub(crate) fn save_alloc( db: &DB, id: i64, val: i64 )
 }
 
 /// This is only needed to initialise system tables.
-pub(crate) fn get_alloc( db: &DB, id: i64 ) -> i64
+pub(crate) fn get_alloc( db: &DB, id: u64 ) -> i64
 {
   let t = &db.sys_table;
   let ( p, off ) = t.id_get( db, id ).unwrap();

@@ -322,7 +322,7 @@ impl <'r> EvalEnv <'r>
     for id in idlist
     {
       row.id = id as i64; 
-      if let Some( ( p, off ) ) = t.id_get( &self.db, id as i64 )
+      if let Some( ( p, off ) ) = t.id_get( &self.db, id )
       {
         let p = p.borrow_mut();
         // Delete any codes no longer in use.
@@ -355,7 +355,7 @@ impl <'r> EvalEnv <'r>
     for id in idlist
     {
       row.id = id as i64;
-      if let Some( ( p, off ) ) = t.id_get( &self.db, id as i64 )
+      if let Some( ( p, off ) ) = t.id_get( &self.db, id )
       {
         let mut p = p.borrow_mut();
         p.dirty = true;

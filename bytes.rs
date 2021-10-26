@@ -119,36 +119,15 @@ impl Record for Fragment
 {
   fn save( &self, data: &mut [u8], off: usize, both: bool )
   {
+    debug_assert!(both);
     util::set( data, off, self.id, 8 );
-    if both 
-    { 
-      data[ off+8 ] = self.len;
-      for i in 0..BPF as usize { data[ off+9+i ] = self.bytes[ i ]; }
-    }
-  }
-
-  fn load( &mut self, _db: &DB, data: &[u8], off:usize, _both: bool )
-  {
-    self.id = util::getu64( data, off );
-/* both is not used...
-    if both 
-    { 
-      self.len = data[ off+8 ];
-      for i in 0..BPF as usize { self.bytes[ i ] = data[ off+9+i ]; }
-    }
-*/
+    data[ off+8 ] = self.len;
+    for i in 0..BPF as usize { data[ off+9+i ] = self.bytes[ i ]; }
   }
 
   fn compare( &self, _db: &DB, data: &[u8], off: usize ) -> std::cmp::Ordering
   {
     let val = util::getu64( data, off );
     self.id.cmp( &val )
-  }
-
-  fn key( &self, db: &DB, data: &[u8], off: usize ) -> Box<dyn Record>
-  {
-    let mut result = Fragment::new(0);
-    result.load( db, data, off, false );
-    Box::new( result )
   }
 }

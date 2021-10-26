@@ -61,7 +61,7 @@ impl Table
   }
 
   /// Get record with specified id.
-  pub fn id_get( &self, db: &DB, id: i64 ) -> Option< ( PagePtr, usize ) >
+  pub fn id_get( &self, db: &DB, id: u64 ) -> Option< ( PagePtr, usize ) >
   {
     self.file.get( db, &Id{id} )
   }
@@ -79,7 +79,7 @@ impl Table
         {
           let p = p.borrow();
           let off = off + p.rec_size() - 8;
-          let id = util::getu64( &p.data, off ) as i64;
+          let id = util::getu64( &p.data, off );
           let row = Id{ id };   
           return self.file.get( db, &row );
         }
@@ -123,7 +123,7 @@ impl Table
         return IndexScan
         { 
           ixa, 
-          id_off: f.key_size, 
+          id_off: f.key_size - 8, 
           table: self.clone(), 
           db: db.clone(),
           cols: c.clone(),
@@ -163,12 +163,8 @@ impl Table
   /// Add the specified index to the table.
   pub fn add_index( &self, root: u64, cols: Vec<usize> )
   {
-    // println!( "add_index table={} ix root={}", self.id, root );
-
-    let key_size = self.info.calc_index_key_size( &cols );
-    let rec_size = key_size + 8;
-
-    let file = Rc::new(SortedFile::new( rec_size, key_size, root ));
+    let key_size = self.info.calc_index_key_size( &cols ) + 8;
+    let file = Rc::new(SortedFile::new( key_size, key_size, root ));
 
     let mut list = self.ixlist.borrow_mut();
     list.push( (file, Rc::new(cols)) );
@@ -239,45 +235,21 @@ impl Table
     for ( p, off ) in self.file.asc( db, Box::new(Zero{}) )
     {
       let p = p.borrow();
-      r.load( db, &p.data, off, true );
+      r.load( db, &p.data, off );
       println!( "row id={} value={:?}", r.id, r.values );
     }
   }
 
 }
 
-struct Zero
-{
-}
+/// Dummy record for iterating over whole table.
+struct Zero{}
 
 impl Record for Zero
 {
   fn compare( &self, _db: &DB, _data: &[u8], _off: usize ) -> std::cmp::Ordering
   {
     std::cmp::Ordering::Less
-  }
-  fn key( &self, _db: &DB, _data: &[u8], _off: usize ) -> Box<dyn Record>
-  {
-    Box::new( Zero{} )
-  }
-}
-
-/// Id key for specifying start of iteration.
-pub struct Id
-{
-  pub id: i64
-}
-
-impl Record for Id
-{
-  fn compare( &self, _db: &DB, data: &[u8], off: usize ) -> std::cmp::Ordering
-  {
-    let x = util::getu64( data, off ) as i64;
-    self.id.cmp( &x )
-  }
-  fn key( &self, _db: &DB, _data: &[u8], _off: usize ) -> Box<dyn Record>
-  {
-    Box::new( Id{ id:self.id } )
   }
 }
 
@@ -446,54 +418,42 @@ impl Row
       self.codes.push( u );
     }    
   }
+
+  fn load( &mut self, db: &DB, data: &[u8], mut off: usize )
+  {
+    self.id = util::getu64( data, off ) as i64;
+    off += 8;
+    let t = &self.info;
+    for i in 0..t.types.len()
+    {
+      let typ = t.types[i];
+      self.values[ i ] = Value::load( db, typ, data, off );
+      off += data_size( typ );
+    }
+  }
 }
 
 impl Record for Row
 {
   fn save( &self, data: &mut [u8], mut off:usize, both: bool )
   {
+    debug_assert!(both);
     util::set( data, off, self.id as u64, 8 );
     let t = &self.info;
     let chk = off + t.size;
     off += 8;
-    if both 
-    { 
-      for (i,typ) in t.types.iter().enumerate()
-      {
-        self.values[i].save( t.types[i], data, off, self.codes[i] );
-        off += data_size(*typ);
-      }
-      debug_assert!( off == chk );
-    }
-  }
-
-  fn load( &mut self, db: &DB, data: &[u8], mut off: usize, both: bool )
-  {
-    self.id = util::getu64( data, off ) as i64;
-    off += 8;
-    let t = &self.info;
-    if both
+    for (i,typ) in t.types.iter().enumerate()
     {
-      for i in 0..t.types.len()
-      {
-        let typ = t.types[i];
-        self.values[ i ] = Value::load( db, typ, data, off );
-        off += data_size( typ );
-      }
+      self.values[i].save( t.types[i], data, off, self.codes[i] );
+      off += data_size(*typ);
     }
+    debug_assert!( off == chk );
   }
 
   fn compare( &self, _db: &DB, data: &[u8], off:usize ) -> std::cmp::Ordering
   {
     let id = util::getu64( data, off ) as i64;
     self.id.cmp( &id )
-  }
-
-  fn key( &self, db: &DB, data: &[u8], off: usize ) -> Box<dyn Record>
-  {
-    let mut result = Box::new( Row::newkey( self.info.clone() ) );
-    result.load( db, data, off, false );
-    result
   }
 }
 
@@ -520,12 +480,23 @@ impl IndexRow
     }
     Self{ tinfo: table.info.clone(), rowid, keys, cols, codes }
   }
+
+  fn load(&mut self, db: &DB, data: &[u8], off: usize )
+  {
+    let mut off = off;
+    for (ix,col) in self.cols.iter().enumerate()
+    {
+      let typ = self.tinfo.types[ *col ];
+      self.keys[ix] = Value::load( db, typ, data, off );
+      off += data_size(typ);
+    }
+    self.rowid = util::getu64( data, off ) as i64;
+  }
 }
 
 impl Record for IndexRow
 {
-
-  fn save(&self, data: &mut [u8], off: usize, both: bool)
+  fn save(&self, data: &mut [u8], off: usize, _both: bool)
   {
     // println!( "IndexRow::save rowid={} keys={:?}", self.rowid, self.keys );
     let mut off = off;
@@ -535,25 +506,7 @@ impl Record for IndexRow
       k.save( typ, data, off, self.codes[ix] );
       off += data_size(typ);
     }
-    if both
-    {
-      util::set( data, off, self.rowid as u64, 8 );
-    }
-  }
-
-  fn load(&mut self, db: &DB, data: &[u8], off: usize, both: bool)
-  {
-    let mut off = off;
-    for (ix,col) in self.cols.iter().enumerate()
-    {
-      let typ = self.tinfo.types[ *col ];
-      self.keys[ix] = Value::load( db, typ, data, off );
-      off += data_size(typ);
-    }
-    if both
-    {
-      self.rowid = util::getu64( data, off ) as i64;
-    }
+    util::set( data, off, self.rowid as u64, 8 );
   }
 
   fn compare( &self, db: &DB, data: &[u8], off: usize ) -> Ordering
@@ -595,7 +548,7 @@ impl Record for IndexRow
         tinfo: self.tinfo.clone(),
       }
     );
-    result.load( db, data, off, false );
+    result.load( db, data, off );
     result
   }
 }
@@ -603,7 +556,7 @@ impl Record for IndexRow
 /// Key for searching index.
 pub struct IndexKey
 {
-  pub tinfo: Rc<TableInfo>, // Could have list of key types instead?
+  pub tinfo: Rc<TableInfo>,
   pub cols: Rc<Vec<usize>>,
   pub key: Vec<Value>,
   pub def: Ordering,
@@ -692,7 +645,7 @@ impl Iterator for IndexScan
       if !self.keys_equal( data ) { return None; }
 
       let id = util::getu64( data, self.id_off );
-      return self.table.id_get( &self.db, id as i64 );
+      return self.table.id_get( &self.db, id );
     }
     None 
   }
@@ -714,6 +667,6 @@ impl Iterator for IdScan
   { 
     if self.done { return None; }
     self.done = true;
-    self.table.id_get( &self.db, self.id )
+    self.table.id_get( &self.db, self.id as u64 )
   }
 }
