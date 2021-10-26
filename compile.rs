@@ -125,10 +125,10 @@ fn check( p: &Parser, e: &mut Expr )
       e.is_constant = x.is_constant;
       e.data_type = x.data_type; 
     } 
-    ExprIs::FuncCall(x) => 
+    ExprIs::FuncCall( name, parms ) => 
     {
-      e.data_type = rlook( p, &x.name ).return_type;
-      for a in &mut x.parms
+      e.data_type = rlook( p, name ).return_type;
+      for a in parms
       {
         check( p, a );
         if !a.is_constant { e.is_constant = false; }
@@ -195,7 +195,7 @@ pub fn cexp_value( p: &Parser, e: &mut Expr ) -> CExpPtr<Value>
             _ => panic!()
           }
         }   
-        ExprIs::FuncCall( x ) => compile_call( p, x ),
+        ExprIs::FuncCall( name, parms ) => compile_call( p, name, parms ),
         ExprIs::Name( x ) =>
         {
           let (off,typ) = name_to_col( p, x );
@@ -236,7 +236,7 @@ pub fn cexp_int( p: &Parser, e: &mut Expr ) -> CExpPtr<i64>
     ExprIs::Local( x ) => Box::new( cexp::Local{ num: *x } ),
     ExprIs::Binary( op, b1, b2 ) => compile_arithmetic( p, *op, b1, b2, cexp_int ),
     ExprIs::Minus( u ) => Box::new( cexp::Minus::<i64>{ ce: cexp_int( p, u ) } ),
-    ExprIs::FuncCall( x ) => Box::new( cexp::ValToInt{ ce: compile_call(p,x) } ),  
+    ExprIs::FuncCall( name, parms ) => Box::new( cexp::ValToInt{ ce: compile_call(p,name,parms) } ),  
     ExprIs::Case( list, els ) => compile_case( p, list, els, cexp_int ),
     ExprIs::BuiltinCall( name, parms ) => compile_builtin_int( p, name, parms ),
     _ => panic!()
@@ -262,7 +262,7 @@ pub fn cexp_float( p: &Parser, e: &mut Expr ) -> CExpPtr<f64>
     ExprIs::Local( x ) => Box::new( cexp::Local{ num: *x } ),
     ExprIs::Binary( op, b1, b2 ) => compile_arithmetic( p, *op, b1, b2, cexp_float ),
     ExprIs::Minus( u ) => Box::new( cexp::Minus::<f64>{ ce: cexp_float( p, u ) } ),
-    ExprIs::FuncCall( x ) => Box::new( cexp::ValToFloat{ ce: compile_call(p,x) } ),  
+    ExprIs::FuncCall( name, parms ) => Box::new( cexp::ValToFloat{ ce: compile_call(p,name,parms) } ),  
     ExprIs::Case( list, els ) => compile_case( p, list, els, cexp_float ),
     ExprIs::BuiltinCall( name, parms ) => compile_builtin_float( p, name, parms ),
     _ => panic!()
@@ -317,7 +317,7 @@ pub fn cexp_bool( p: &Parser, e: &mut Expr ) -> CExpPtr<bool>
       }
     }
     ExprIs::Not( x ) => Box::new( cexp::Not{ ce: cexp_bool(p,x) } ),
-    ExprIs::FuncCall( x ) => Box::new( cexp::ValToBool{ ce: compile_call(p,x) } ),
+    ExprIs::FuncCall( name,parms ) => Box::new( cexp::ValToBool{ ce: compile_call(p,name,parms) } ),
     ExprIs::Case( list, els ) => compile_case( p, list, els, cexp_bool ), 
     _ => panic!()
   }
@@ -356,7 +356,7 @@ pub fn cexp_decimal( p: &Parser, e: &mut Expr ) -> CExpPtr<i64>
       let ce = cexp_decimal( p, u );
       Box::new( cexp::Minus::<i64>{ ce } )
     }
-    ExprIs::FuncCall( x ) => Box::new( cexp::ValToInt{ ce: compile_call(p,x) } ),  
+    ExprIs::FuncCall( name, parms ) => Box::new( cexp::ValToInt{ ce: compile_call(p,name,parms) } ),  
     ExprIs::Case( list, els ) => compile_case( p, list, els, cexp_decimal ),
     _ => panic!()
   }
@@ -624,13 +624,13 @@ pub(crate) fn name_to_colnum( p: &Parser, name: &str ) -> (usize,DataType)
 }
 
 /// Compile ExprCall to CExpPtr<Value>, checking parameter types.
-pub(crate) fn compile_call( p: &Parser, x: &mut ExprCall ) -> CExpPtr<Value>
+pub(crate) fn compile_call( p: &Parser, name: &ObjRef, parms: &mut Vec<Expr> ) -> CExpPtr<Value>
 {
-  let rp : FunctionPtr = rlook( p, &x.name ); 
+  let rp : FunctionPtr = rlook( p, name ); 
 
   let mut pv : Vec<CExpPtr<Value>> = Vec::new();
   let mut pt : Vec<DataType> = Vec::new();
-  for e in &mut x.parms
+  for e in parms
   {
     let t : DataType = get_type( p, e );
     pt.push( t );
@@ -673,12 +673,12 @@ pub(crate) fn push( p: &mut Parser, e: &mut Expr ) -> DataType
         }
       }
     }
-    ExprIs::FuncCall( x ) => 
+    ExprIs::FuncCall( name, parms ) => 
     {
-      let rp = rlook( p, &x.name );
+      let rp = rlook( p, name );
       { 
-        if rp.param_count != x.parms.len() { panic!( "Param count mismatch" ) }
-        for (pnum,e) in x.parms.iter_mut().enumerate()
+        if rp.param_count != parms.len() { panic!( "Param count mismatch" ) }
+        for (pnum,e) in parms.iter_mut().enumerate()
         {
           let et = data_kind( push( p, e ) );
           let ft = data_kind( rp.local_types[ pnum ] );

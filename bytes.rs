@@ -117,12 +117,11 @@ impl Fragment
 
 impl Record for Fragment
 {
-  fn save( &self, data: &mut [u8], off: usize, both: bool )
+  fn save( &self, data: &mut [u8] )
   {
-    debug_assert!(both);
-    util::set( data, off, self.id, 8 );
-    data[ off+8 ] = self.len;
-    for i in 0..BPF as usize { data[ off+9+i ] = self.bytes[ i ]; }
+    util::set( data, 0, self.id, 8 );
+    data[ 8 ] = self.len;
+    for i in 0..BPF as usize { data[ 9+i ] = self.bytes[ i ]; }
   }
 
   fn compare( &self, _db: &DB, data: &[u8], off: usize ) -> std::cmp::Ordering

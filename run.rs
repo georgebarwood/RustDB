@@ -41,7 +41,7 @@ pub enum Inst
 /// State for FOR loop (non-sorted case).
 pub struct ForState
 {
-  pub data_source: DataSource
+  pub(crate) data_source: DataSource
 }
 
 impl Debug for ForState
@@ -57,8 +57,8 @@ impl Debug for ForState
 /// State for FOR loop (sorted case).
 pub struct ForSortState
 {
-  pub ix: usize,
-  pub rows: Vec<Vec<Value>>
+  pub(crate) ix: usize,
+  pub(crate) rows: Vec<Vec<Value>>
 }
 
 impl Debug for ForSortState
@@ -74,10 +74,10 @@ impl Debug for ForSortState
 /// Info for ForNext Inst.
 pub struct ForNextInfo
 {
-  pub for_id: usize,
-  pub assigns: Assigns,
-  pub exps: Vec<CExpPtr<Value>>,
-  pub wher: Option<CExpPtr<bool>>
+  pub(crate) for_id: usize,
+  pub(crate) assigns: Assigns,
+  pub(crate) exps: Vec<CExpPtr<Value>>,
+  pub(crate) wher: Option<CExpPtr<bool>>
 }
 
 /// Get the default Value for a DataType.
@@ -182,12 +182,12 @@ pub enum CTableExpression
 pub struct CSelectExpression
 {
   pub colnames: Vec<String>,
-  pub assigns: Assigns, 
-  pub exps: Vec<CExpPtr<Value>>, 
-  pub from: Option<CTableExpression>,
-  pub wher: Option<CExpPtr<bool>>,
-  pub orderby: Vec<CExpPtr<Value>>,
-  pub desc: Vec<bool>,
+  pub(crate) assigns: Assigns, 
+  pub(crate) exps: Vec<CExpPtr<Value>>, 
+  pub(crate) from: Option<CTableExpression>,
+  pub(crate) wher: Option<CExpPtr<bool>>,
+  pub(crate) orderby: Vec<CExpPtr<Value>>,
+  pub(crate) desc: Vec<bool>,
 }
 
 /// Database Operation

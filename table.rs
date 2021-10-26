@@ -400,10 +400,7 @@ impl Row
     }    
     result
   }
-  pub fn newkey( info: Rc<TableInfo> ) -> Self
-  {
-    Row{ id:0, values: Vec::new(), info, codes: Vec::new() }
-  }
+
   pub fn encode( &mut self, db: &DB )
   {
     self.codes.clear();
@@ -435,19 +432,16 @@ impl Row
 
 impl Record for Row
 {
-  fn save( &self, data: &mut [u8], mut off:usize, both: bool )
+  fn save( &self, data: &mut [u8] )
   {
-    debug_assert!(both);
-    util::set( data, off, self.id as u64, 8 );
+    util::set( data, 0, self.id as u64, 8 );
     let t = &self.info;
-    let chk = off + t.size;
-    off += 8;
+    let mut off = 8;
     for (i,typ) in t.types.iter().enumerate()
     {
       self.values[i].save( t.types[i], data, off, self.codes[i] );
       off += data_size(*typ);
     }
-    debug_assert!( off == chk );
   }
 
   fn compare( &self, _db: &DB, data: &[u8], off:usize ) -> std::cmp::Ordering
@@ -481,9 +475,9 @@ impl IndexRow
     Self{ tinfo: table.info.clone(), rowid, keys, cols, codes }
   }
 
-  fn load(&mut self, db: &DB, data: &[u8], off: usize )
+  fn load(&mut self, db: &DB, data: &[u8] )
   {
-    let mut off = off;
+    let mut off = 0;
     for (ix,col) in self.cols.iter().enumerate()
     {
       let typ = self.tinfo.types[ *col ];
@@ -496,10 +490,9 @@ impl IndexRow
 
 impl Record for IndexRow
 {
-  fn save(&self, data: &mut [u8], off: usize, _both: bool)
+  fn save( &self, data: &mut [u8] )
   {
-    // println!( "IndexRow::save rowid={} keys={:?}", self.rowid, self.keys );
-    let mut off = off;
+    let mut off = 0;
     for (ix,k) in self.keys.iter().enumerate() 
     {
       let typ = self.tinfo.types[ self.cols[ ix ] ];
@@ -535,7 +528,7 @@ impl Record for IndexRow
     }
   }
 
-  fn key( &self, db: &DB, data: &[u8], off: usize ) -> Box<dyn Record>
+  fn key( &self, db: &DB, data: &[u8] ) -> Box<dyn Record>
   {
     let mut result = Box::new
     ( 
@@ -548,7 +541,7 @@ impl Record for IndexRow
         tinfo: self.tinfo.clone(),
       }
     );
-    result.load( db, data, off );
+    result.load( db, data );
     result
   }
 }
@@ -593,11 +586,6 @@ impl Record for IndexKey
       }  
       off += data_size( typ );  
     }
-  }
-
-  fn key( &self, _db: &DB, _data: &[u8], _off: usize ) -> Box<dyn Record>
-  {
-    panic!()
   }
 }
 

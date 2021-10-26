@@ -120,6 +120,12 @@ impl Page
      + if self.parent {PAGE_ID_SIZE} else {0} >= PAGE_SIZE )
   }
 
+  /// The offset of the client data in page data for record number x.
+  pub fn rec_offset( &self, x:usize ) -> usize
+  {
+    NODE_BASE + NODE_OVERHEAD + (x-1) * self.node_size
+  }
+
   /// The record size for this page ( user data ).
   pub fn rec_size( &self ) -> usize
   {
@@ -279,16 +285,11 @@ impl Page
     util::set( &mut self.data, off, pnum as u64, PAGE_ID_SIZE );
   }
 
-  /// The offset of the client data in page data for record number x.
-  pub fn rec_offset( &self, x:usize ) -> usize
-  {
-    NODE_BASE + NODE_OVERHEAD + (x-1) * self.node_size
-  }
-
   fn set_record( &mut self, x:usize, r: &dyn Record )
   {
     let off = self.rec_offset( x );
-    r.save( &mut self.data, off, !self.parent );
+    let size = self.rec_size();
+    r.save( &mut self.data[off..off+size] );
   }
 
   pub fn compare( &self, db: &DB, r: &dyn Record, x:usize ) -> Ordering
@@ -300,7 +301,8 @@ impl Page
   pub fn get_key( &self, db: &DB, x:usize, r: &dyn Record ) -> Box<dyn Record>
   {
     let off = self.rec_offset( x );
-    r.key( db, &self.data, off )
+    let size = self.rec_size();
+    r.key( db, &self.data[off..off+size] )
   }
 
   // Node Id Allocation.

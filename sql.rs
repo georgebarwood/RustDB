@@ -10,14 +10,6 @@ pub struct SqlError
   pub msg: String,
 }
 
-/// Function call ( function name and parameter expressions ).
-// #[derive(Debug)]
-pub struct ExprCall
-{
-  pub name: ObjRef,
-  pub parms: Vec<Expr>
-}
-
 /// Table Expression ( not yet type-checked or compiled against database ).
 // #[derive(Debug)]
 pub enum TableExpression
@@ -82,17 +74,17 @@ impl Expr
   }
 }
 
-/// Scalar Expression (variants).
+/// Scalar Expression variants.
 // #[derive(Debug)]
 pub enum ExprIs
 {
   Local(usize),
-  Number(i64),
+  Number(i64), /// Get rid of this : use Const?
   Const(Value),
   Binary(Token,Box<Expr>,Box<Expr>),
   Not(Box<Expr>),
   Minus(Box<Expr>),  
-  FuncCall(ExprCall),
+  FuncCall(ObjRef,Vec<Expr>),
   List(Vec<Expr>),
   Name(String),
   Case(Vec<(Expr,Expr)>,Box<Expr>),

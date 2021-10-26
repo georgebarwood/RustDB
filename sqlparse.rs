@@ -592,7 +592,8 @@ impl <'a> Parser <'a>
         }
       }
       self.read( Token::RBra );
-      Expr::new( ExprIs::FuncCall( ExprCall{ name:ObjRef{ schema: to_s(name), name: to_s(fname) }, parms } ) )
+      let name = ObjRef{ schema: to_s(name), name: to_s(fname) };
+      Expr::new( ExprIs::FuncCall( name, parms  ) )
     }
     else if self.test( Token::LBra )
     {
