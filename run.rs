@@ -2,11 +2,14 @@ use std::{rc::Rc, cell::{Cell,RefCell}, cmp::Ordering};
 use core::fmt::Debug;
 use crate::
 {  
-  Value, sf::Asc, 
-  sql::{DataKind,DataType,ObjRef,data_kind,IndexInfo,Assigns}, 
-  compile::CExpPtr, 
-  table::{TablePtr,TableInfo} 
+  Value,  compile::CExpPtr, page::PagePtr,
+  sql::{DataKind,DataType,ObjRef,data_kind,Assigns},   
+  table::{TablePtr,TableInfo,IndexInfo},   
 };
+
+/// Iterator that yields references to page data.
+pub type DataSource = Box<dyn Iterator<Item = (PagePtr,usize)>>;
+
 
 /// Instruction.
 pub enum Inst
@@ -38,7 +41,7 @@ pub enum Inst
 /// State for FOR loop (non-sorted case).
 pub struct ForState
 {
-  pub asc: Asc,
+  pub data_source: DataSource
 }
 
 impl Debug for ForState
@@ -109,7 +112,6 @@ impl std::cmp::Ord for Value
         }  
       _ => { panic!() }
     }
-    // println!( "cmp {:?} to {:?} result = {:?}", self, other, result );
     result
   }
 }
@@ -171,6 +173,8 @@ pub enum CTableExpression
 {
   // Select( SelectExpression ),
   Base( TablePtr ),
+  IdGet( TablePtr, CExpPtr<i64> ),
+  IxGet( TablePtr, CExpPtr<Value>, usize ),
   Values( Vec<Vec<CExpPtr<Value>>> )
 }
 
@@ -189,7 +193,7 @@ pub struct CSelectExpression
 /// Database Operation
 pub enum DO
 {
-  CreateTable( Rc<TableInfo> ),
+  CreateTable( TableInfo ),
   CreateIndex( IndexInfo ),
   CreateSchema( String ),
   CreateFunction( ObjRef, Rc<String>, bool ),

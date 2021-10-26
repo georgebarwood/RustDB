@@ -404,6 +404,21 @@ impl CExp<Value> for ColumnString
   }
 }
 
+pub(crate) struct ColumnBinary
+{ 
+  pub off: usize
+}
+
+impl CExp<Value> for ColumnBinary
+{
+  fn eval( &self, ee: &mut EvalEnv, data: &[u8] ) -> Value
+  {
+    let sid = util::getu64( data, self.off ); 
+    let bytes = ee.db.decode( sid );
+    Value::Binary( Rc::new( bytes ) )
+  }
+}
+
 pub(crate) struct Local
 { 
   pub num: usize

@@ -1,7 +1,15 @@
+use std::{ collections::HashMap, cell::RefCell, rc::Rc };
+
 /// Wrap a type in Rc + RefCell.
 pub fn new<T>( x: T )-> std::rc::Rc<std::cell::RefCell<T>>
 {
-  std::rc::Rc::new( std::cell::RefCell::new( x ) )
+  Rc::new( RefCell::new( x ) )
+}
+
+/// Construct a new map wrapped in a RefCell.
+pub fn newmap <K,T>() -> RefCell<HashMap<K,T>>
+{
+  RefCell::new( HashMap::new() )
 }
 
 /// Extract u64 from byte data.

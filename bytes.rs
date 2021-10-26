@@ -24,7 +24,6 @@ impl ByteStorage
     {
       let p = p.borrow();
       self.id_alloc.set( 1 + util::getu64( &p.data, off ) );
-      // println!( "self.id_alloc={}", self.id_alloc );
     }
   }
 
@@ -118,7 +117,7 @@ impl Fragment
 
 impl Record for Fragment
 {
-  fn save( &self, _db: &DB, data: &mut [u8], off: usize, both: bool )
+  fn save( &self, data: &mut [u8], off: usize, both: bool )
   {
     util::set( data, off, self.id, 8 );
     if both 

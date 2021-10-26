@@ -1,7 +1,6 @@
-use crate::{ Value, util, sys, table, Query, DB, 
+use crate::{ Value, util, sys, Query, DB, 
   sql::{DataKind, DataType, NONE, data_kind, AssignOp, Assigns }, 
-  compile::CExpPtr, table::{Zero,TablePtr,Row}, run::* };
-
+  compile::CExpPtr, table::{TablePtr,Row}, run::* };
 
 /// Evaluation environment - stack of Values, references to DB and Query.
 pub struct EvalEnv <'r>
@@ -49,14 +48,14 @@ impl <'r> EvalEnv <'r>
         Inst::Jump( x ) => 
           ip = *x,
         Inst::JumpIfFalse( x, e ) => 
-          if !e.eval( self, &[0] ) 
+          if !e.eval( self, &[] ) 
             { ip = *x; }
         Inst::Return => 
           break,
         Inst::PopToLocal( x ) => 
           self.pop_to_local( *x ),
         Inst::PushValue( e ) => 
-          { let v = e.eval( self, &[0] ); self.stack.push( v ); }
+          { let v = e.eval( self, &[] ); self.stack.push( v ); }
         Inst::ForInit( for_id, cte ) =>
           { self.for_init( *for_id, cte ); }
         Inst::ForNext( break_id, info ) =>
@@ -73,11 +72,11 @@ impl <'r> EvalEnv <'r>
           { self.execute(); }
         // Special push instructions ( optimisations )
         Inst::PushInt( e ) => 
-          { let v = e.eval( self, &[0] ); self.stack.push( Value::Int(v) ); }
+          { let v = e.eval( self, &[] ); self.stack.push( Value::Int(v) ); }
         Inst::_PushFloat( e ) => 
-          { let v = e.eval( self, &[0] ); self.stack.push( Value::Float(v) ); }
+          { let v = e.eval( self, &[] ); self.stack.push( Value::Float(v) ); }
         Inst::PushBool( e ) => 
-          { let v = e.eval( self, &[0] ); self.stack.push( Value::Bool(v) ); }
+          { let v = e.eval( self, &[] ); self.stack.push( Value::Bool(v) ); }
         Inst::PushLocal( x ) => 
           self.push_local( *x ),
         Inst::PushIntConst( x ) => 
@@ -128,7 +127,6 @@ impl <'r> EvalEnv <'r>
         else
         {
           let result = self.stack[  self.bp + r.param_count ].clone();
-          // println!( "EvalEnv::call result={:?}", result );
           self.discard( pop_count );
           self.stack.push( result );
         }
@@ -137,7 +135,6 @@ impl <'r> EvalEnv <'r>
     }
     self.bp = save_bp;
     self.call_depth -= 1;
-    // println!( "stack={:?}", self.stack );
   }
 
   /// Push an integer literal onto the stack.
@@ -171,16 +168,9 @@ impl <'r> EvalEnv <'r>
   /// Execute a ForInit instruction. Constructs For state and assigns it to local variable.
   fn for_init( &mut self, for_id: usize, cte: &CTableExpression )
   {
-    match cte
-    {
-      CTableExpression::Base( t ) => 
-      { 
-        let start = Zero{};
-        let c = util::new( ForState{ asc: t.file.asc( &self.db, Box::new(start) ) } );
-        self.stack[ self.bp + for_id ] = Value::For(c);
-      }
-      _ => panic!()
-    }
+    let data_source = self.data_source( cte );
+    let fs = util:: new( ForState{ data_source } );
+    self.stack[ self.bp + for_id ] = Value::For(fs);
   }
 
   /// Execute a ForNext instruction. Fetches a record from underlying file that satisfies the where condition, 
@@ -189,9 +179,9 @@ impl <'r> EvalEnv <'r>
   {
     loop
     {
-      let next = if let Value::For(f) = &self.stack[ self.bp + info.for_id ]
+      let next = if let Value::For(fs) = &self.stack[ self.bp + info.for_id ]
       {
-        f.borrow_mut().asc.next()
+        fs.borrow_mut().data_source.next()
       } else { panic!( "Jump into FOR loop"); };
 
       if let Some( ( p, off ) ) = next
@@ -199,7 +189,7 @@ impl <'r> EvalEnv <'r>
         let p = p.borrow();
         let data = &p.data[off..];
 
-        // Check WHERE condition, eval expressions and assign to locals.
+        // Eval and check WHERE condition, eval expressions and assign to locals.
         if if let Some(w) = &info.wher { w.eval( self, data ) } else { true }
         {
           for (i,a) in info.assigns.iter().enumerate()
@@ -251,7 +241,7 @@ impl <'r> EvalEnv <'r>
   fn execute( &mut self )
   {
     let s = self.pop_string();
-    self.db.runtimed( &s, self.qy );
+    self.db.run( &s, self.qy );
   }
 
   /// Execute a data operation (DO).
@@ -269,7 +259,11 @@ impl <'r> EvalEnv <'r>
       }
       DO::CreateTable( ti ) => 
       {
-        sys::create_table( &self.db, ti.clone() );
+        sys::create_table( &self.db, ti );
+      }
+      DO::CreateIndex( x ) => 
+      {
+        sys::create_index( &self.db, x );
       }
       DO::Insert( tp, cols, values ) => 
       {
@@ -283,10 +277,9 @@ impl <'r> EvalEnv <'r>
       {
         self.update( tp, assigns, wher )
       }
-      DO::CreateIndex( _x ) => {}
       _ => 
       {
-        panic!();
+        panic!()
       }
     }
   }
@@ -295,7 +288,7 @@ impl <'r> EvalEnv <'r>
   fn get_id_list( &mut self, t: &TablePtr, w: &CExpPtr<bool> ) -> Vec<u64>
   {
     let mut idlist = Vec::new();
-    for ( p, off ) in t.file.asc( &self.db, Box::new(table::Zero{}) )
+    for ( p, off ) in t.scan( &self.db )
     {
       let p = p.borrow();
       let data = &p.data[off..];
@@ -324,12 +317,12 @@ impl <'r> EvalEnv <'r>
   fn delete( &mut self, t: &TablePtr, w: &CExpPtr<bool> )
   {
     let idlist = self.get_id_list( t, w );
-    // println!( "delete idlist={:?}", idlist );
     let mut row = t.row();
+    let mut codes = Vec::new();
     for id in idlist
     {
-      row.id = id as i64;    
-      if let Some( ( p, off ) ) = t.file.get( &self.db, &row )
+      row.id = id as i64; 
+      if let Some( ( p, off ) ) = t.id_get( &self.db, id as i64 )
       {
         let p = p.borrow_mut();
         // Delete any codes no longer in use.
@@ -340,13 +333,17 @@ impl <'r> EvalEnv <'r>
             DataKind::String | DataKind::Binary =>
             {
               let u = util::getu64( &p.data, off + t.info.off[i] );
-              self.db.delcode( u );
+              codes.push( u );
             }
             _ => {}
           }
         }
       }
-      t.file.remove( &self.db, &row );
+      t.remove( &self.db, &row );
+    }
+    for u in codes
+    {
+      self.db.delcode( u );
     }
   }
 
@@ -354,16 +351,16 @@ impl <'r> EvalEnv <'r>
   fn update( &mut self, t: &TablePtr, assigns:&[(usize,CExpPtr<Value>)], w: &CExpPtr<bool> )
   {
     let idlist = self.get_id_list( t, w );
-    // println!( "update idlist={:?}", idlist );
     let mut row = t.row();
     for id in idlist
     {
       row.id = id as i64;
-      if let Some( ( p, off ) ) = t.file.get( &self.db, &row )
+      if let Some( ( p, off ) ) = t.id_get( &self.db, id as i64 )
       {
         let mut p = p.borrow_mut();
         p.dirty = true;
         let data = &mut p.data[off..];
+        // ToDo: update indexes. Also this code belongs in table module.
         for ( col, exp ) in assigns // Maybe should calculate all the values before doing any updates.
         {
           let col = *col;
@@ -401,60 +398,72 @@ impl <'r> EvalEnv <'r>
     }
   }
 
+  /// Get DataSource from CTableExpression.
+  fn data_source( &mut self, te: & CTableExpression ) -> DataSource
+  {
+    match te
+    {
+      CTableExpression::Base( t ) => Box::new( t.scan( &self.db ) ),
+      CTableExpression::IdGet( t, idexp ) => 
+      {
+        let id = idexp.eval( self, &[] );
+        Box::new( t.scan_id( &self.db, id ) )
+      }
+      CTableExpression::IxGet( t, val, col ) =>
+      {
+        let key = val.eval( self, &[] );
+        Box::new( t.scan_key( &self.db, *col, key ) )
+      }
+      _ => panic!()
+    }
+  }
+
   /// Execute a SELECT operation.
   fn select( &mut self, cse: &CSelectExpression )
   {   
-    if let Some( t ) = &cse.from
+    if let Some( te ) = &cse.from
     {
-      match &*t
+      let obl = cse.orderby.len();
+      let mut temp = Vec::new(); // For sorting.
+      for ( p, off ) in self.data_source( te )
       {
-        CTableExpression::Base( t ) => 
+        let p = p.borrow();
+        let data = &p.data[off..];
+        if if let Some(w) = &cse.wher { w.eval( self, data ) } else { true }
         {
-          let obl = cse.orderby.len();
-          let mut temp = Vec::new(); // For sorting.
-          let start = Box::new(table::Zero{});
-          for ( p, off ) in t.file.asc( &self.db, start )
+          let mut values = Vec::new();
+          if obl > 0
           {
-            let p = p.borrow();
-            let data = &p.data[off..];
-            if if let Some(w) = &cse.wher { w.eval( self, data ) } else { true }
+            // Push the sort keys.
+            for ce in &cse.orderby
             {
-              let mut values = Vec::new();
-              if obl > 0
-              {
-                // Push the sort keys.
-                for ce in &cse.orderby
-                {
-                  let val = ce.eval( self, data );
-                  values.push( val );
-                }
-              }
-              for ce in &cse.exps
-              {
-                let val = ce.eval( self, data );
-                values.push( val );
-              }
-              if obl > 0 
-              {
-                temp.push( values ); // Save row for later sorting.
-              }
-              else // Output directly.
-              {
-                self.qy.push( &values ); 
-              }
+              let val = ce.eval( self, data );
+              values.push( val );
             }
+          }
+          for ce in &cse.exps
+          {
+            let val = ce.eval( self, data );
+            values.push( val );
           }
           if obl > 0 
           {
-            // Sort then output the rows.
-            temp.sort_by( |a, b| compare( a, b, &cse.desc ) );
-            for r in &temp
-            {
-              self.qy.push( &r[obl..] );
-            }
+            temp.push( values ); // Save row for later sorting.
+          }
+          else // Output directly.
+          {
+            self.qy.push( &values ); 
           }
         }
-        CTableExpression::Values( _x ) => { panic!() } // Should only occur in INSERT statement.
+      }
+      if obl > 0 
+      {
+        // Sort then output the rows.
+        temp.sort_by( |a, b| compare( a, b, &cse.desc ) );
+        for r in &temp
+        {
+          self.qy.push( &r[obl..] );
+        }
       }
     }
     else
@@ -462,7 +471,7 @@ impl <'r> EvalEnv <'r>
       let mut values = Vec::new();
       for ce in &cse.exps
       {
-        let val = ce.eval( self, &[0] );
+        let val = ce.eval( self, &[] );
         values.push( val );
       }
       self.qy.push( &values );
@@ -472,42 +481,34 @@ impl <'r> EvalEnv <'r>
   /// Execute a SET operation.
   fn set( &mut self, cse: &CSelectExpression )
   {    
-    if let Some( t ) = &cse.from
+    if let Some( te ) = &cse.from
     {
-      match &*t
+      for ( p, off ) in self.data_source( te )
       {
-        CTableExpression::Base( t ) => 
-        {
-          let start = Box::new(table::Zero{});
-          for ( p, off ) in t.file.asc( &self.db, start )
-          {
-            let p = p.borrow();
-            let data = &p.data[off..];
+        let p = p.borrow();
+        let data = &p.data[off..];
 
-            let ok = if let Some(w) = &cse.wher
-            {
-              w.eval( self, data )
-            }
-            else { true };
-            if ok
-            {
-              for (i,ce) in cse.exps.iter().enumerate()
-              {
-                let val = ce.eval( self, data );
-                self.assign_local( &cse.assigns[i], val );
-              }
-              break; // Only one row is used for SET.
-            }
-          }
+        let ok = if let Some(w) = &cse.wher
+        {
+          w.eval( self, data )
         }
-        CTableExpression::Values( _x ) => { todo!() }
+        else { true };
+        if ok
+        {
+          for (i,ce) in cse.exps.iter().enumerate()
+          {
+            let val = ce.eval( self, data );
+            self.assign_local( &cse.assigns[i], val );
+          }
+          break; // Only one row is used for SET.
+        }
       }
     }
     else
     {
       for (i,ce) in cse.exps.iter().enumerate()
       {
-        let val = ce.eval( self, &[0] );
+        let val = ce.eval( self, &[] );
         self.assign_local( &cse.assigns[i], val );
       }
     }
@@ -533,7 +534,7 @@ impl <'r> EvalEnv <'r>
       row.id = 0;
       for (i,ce) in r.iter().enumerate()
       {
-        let val = ce.eval( self, &[0] ); 
+        let val = ce.eval( self, &[] ); 
         let cn = ci [ i ];
         if cn == usize::MAX
         {
@@ -556,48 +557,39 @@ impl <'r> EvalEnv <'r>
         table.id_allocated( row.id );
       }
       self.db.lastid.set( row.id ); 
-      table.file.insert( &self.db, &row );
-      // println!( "insert_values row inserted id={} values={:?}", row.id, row.values );
+      table.insert( &self.db, &mut row );
     }
   }
   
   /// Get sorted temporary table.
   fn get_temp( &mut self, cse: &CSelectExpression ) -> Vec<Vec<Value>>
   {   
-    if let Some( t ) = &cse.from
+    if let Some( te ) = &cse.from
     {
-      match &*t
+      let mut temp = Vec::new(); // For sorting.
+      for ( p, off ) in self.data_source( te )
       {
-        CTableExpression::Base( t ) => 
+        let p = p.borrow();
+        let data = &p.data[off..];
+        if if let Some(w) = &cse.wher { w.eval( self, data ) } else { true }
         {
-          let mut temp = Vec::new(); // For sorting.
-          let start = Box::new(table::Zero{});
-          for ( p, off ) in t.file.asc( &self.db, start )
+          let mut values = Vec::new();
+          for ce in &cse.orderby
           {
-            let p = p.borrow();
-            let data = &p.data[off..];
-            if if let Some(w) = &cse.wher { w.eval( self, data ) } else { true }
-            {
-              let mut values = Vec::new();
-              for ce in &cse.orderby
-              {
-                let val = ce.eval( self, data );
-                values.push( val );
-              }
-              for ce in &cse.exps
-              {
-                let val = ce.eval( self, data );
-                values.push( val );
-              }
-              temp.push( values ); // Save row for later sorting.
-            }
+            let val = ce.eval( self, data );
+            values.push( val );
           }
-          // Sort the rows.
-          temp.sort_by( |a, b| compare( a, b, &cse.desc ) );
-          temp        
+          for ce in &cse.exps
+          {
+            let val = ce.eval( self, data );
+            values.push( val );
+          }
+          temp.push( values ); // Save row for later sorting.
         }
-        CTableExpression::Values( _x ) => { panic!() } // Should only occur in INSERT statement.
       }
+      // Sort the rows.
+      temp.sort_by( |a, b| compare( a, b, &cse.desc ) );
+      temp        
     }
     else
     {

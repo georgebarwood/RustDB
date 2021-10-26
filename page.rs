@@ -175,7 +175,7 @@ impl Page
     if inserted != self.next_alloc()
     {
       self.dirty = true;
-      self.set_record( db, inserted, r );
+      self.set_record( inserted, r );
     }
   }
 
@@ -184,7 +184,7 @@ impl Page
     let inserted = self.next_alloc();
     self.root = self.insert_into( db, self.root, Some(r) ).0;
     self.dirty = true;
-    self.set_record( db, inserted, r );
+    self.set_record( inserted, r );
     self.set_child_page( inserted, cp );    
   }
 
@@ -193,7 +193,7 @@ impl Page
     let inserted = self.next_alloc();
     self.root = self.insert_into( db, self.root, None ).0;
     self.dirty = true;
-    self.set_record( db, inserted, r );
+    self.set_record( inserted, r );
     self.set_child_page( inserted, cp );
   }
 
@@ -285,10 +285,10 @@ impl Page
     NODE_BASE + NODE_OVERHEAD + (x-1) * self.node_size
   }
 
-  fn set_record( &mut self, db: &DB, x:usize, r: &dyn Record )
+  fn set_record( &mut self, x:usize, r: &dyn Record )
   {
     let off = self.rec_offset( x );
-    r.save( db, &mut self.data, off, !self.parent );
+    r.save( &mut self.data, off, !self.parent );
   }
 
   pub fn compare( &self, db: &DB, r: &dyn Record, x:usize ) -> Ordering

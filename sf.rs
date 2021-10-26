@@ -5,7 +5,7 @@ use crate::{DB,util,page::*};
 pub trait Record
 {
   /// Save record as bytes( if both is false save only key ).
-  fn save( &self, _db: &DB, _data: &mut [u8], _off: usize, _both: bool ){}
+  fn save( &self, _data: &mut [u8], _off: usize, _both: bool ){}
   /// Read record from bytes ( if both is false read only key ).
   fn load( &mut self, _db: &DB, _data: &[u8], _off: usize, _both: bool ){}
   /// Compare record with stored bytes.
@@ -48,7 +48,7 @@ impl SortedFile
   {
     SortedFile
     { 
-      pages: RefCell::new(HashMap::new()), 
+      pages: util::newmap(), 
       rec_size, 
       key_size,
       root_page

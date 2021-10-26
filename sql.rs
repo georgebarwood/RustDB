@@ -11,6 +11,7 @@ pub struct SqlError
 }
 
 /// Function call ( function name and parameter expressions ).
+// #[derive(Debug)]
 pub struct ExprCall
 {
   pub name: ObjRef,
@@ -18,6 +19,7 @@ pub struct ExprCall
 }
 
 /// Table Expression ( not yet type-checked or compiled against database ).
+// #[derive(Debug)]
 pub enum TableExpression
 {
   // Select( SelectExpression ),
@@ -26,13 +28,14 @@ pub enum TableExpression
 }
 
 /// Assign or Append.
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Debug)]
 pub enum AssignOp { Assign, Append }
 
 /// Vector of local variable numbers and AssignOp( assign or append ).
 pub type Assigns = Vec<(usize,AssignOp)>;
 
 /// Select Expression ( not yet compiled ).
+// #[derive(Debug)]
 pub struct SelectExpression
 {
   pub colnames: Vec<String>,
@@ -60,26 +63,46 @@ impl Token
   }
 }
 
-/// Scalar Expression ( uncompiled ).
-pub enum Expr 
+/// Scalar Expression (uncompiled).
+// #[derive(Debug)]
+pub struct Expr
 {
-  // cf https://docs.rs/syn/0.15.44/syn/enum.Expr.html
+  pub exp: ExprIs,
+  pub data_type : DataType,
+  pub is_constant : bool, // Doesn't depend on FROM clause
+  pub checked: bool,
+  pub col: usize,
+}
+
+impl Expr
+{
+  pub fn new( exp: ExprIs ) -> Self
+  {
+    Expr{ exp, data_type:NONE, is_constant: false, checked:false, col:0 }
+  }
+}
+
+/// Scalar Expression (variants).
+// #[derive(Debug)]
+pub enum ExprIs
+{
   Local(usize),
   Number(i64),
   Const(Value),
-  Binary( (Token,Box<Expr>,Box<Expr>) ),
+  Binary(Token,Box<Expr>,Box<Expr>),
   Not(Box<Expr>),
   Minus(Box<Expr>),  
   FuncCall(ExprCall),
   List(Vec<Expr>),
   Name(String),
-  Case((Vec<(Expr,Expr)>,Box<Expr>)),
+  Case(Vec<(Expr,Expr)>,Box<Expr>),
   ScalarSelect(Box<SelectExpression>),
   BuiltinCall(String,Vec<Expr>),
 }
 
 /// Object reference ( Schema.Name ).
-#[derive(Debug,PartialEq, PartialOrd,Eq,Hash,Clone)]
+// #[derive(Debug)
+#[derive(PartialEq, PartialOrd,Eq,Hash,Clone)]
 pub struct ObjRef
 {
   pub schema:String,
@@ -95,17 +118,8 @@ impl ObjRef
   /// Used for error messages.
   pub fn to_str( &self ) -> String
   {
-    "[".to_string() + &self.schema + "].[" + &self.name + "]"
+    format!( "[{}].[{}]", &self.schema, &self.name )
   } 
-}
-
-/// Index information ( not yet in use ).
-pub struct IndexInfo
-{
-  pub schema: String,
-  pub tname: String,
-  pub iname: String,
-  pub cols: Vec<String>
 }
 
 /// Binary=1, String=2, Int=3, Float=4, Bool=5, Decimal=6.

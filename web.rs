@@ -12,7 +12,7 @@ pub struct WebQuery
   pub form: HashMap<String,Rc<String>>,
 
   pub err: String,
-  pub result: String,
+  pub output: Vec<u8>,
   pub status_code: String,
   pub headers: String,
   pub now: i64, // Micro-seconds since January 1, 1970 0:00:00 UTC 
@@ -39,11 +39,11 @@ impl WebQuery
 
     let now = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap();
     let now = now.as_micros() as i64;
-    let result = String::with_capacity(10000);
+    let output = Vec::with_capacity(10000);
     let headers = String::with_capacity(1000);
     let status_code = "200 OK".to_string();
  
-    Self{ status_code, result, headers, method, path, query, form, err: String::new(), now }
+    Self{ status_code, output, headers, method, path, query, form, err: String::new(), now }
   }
 
   pub fn trace( &self )
@@ -54,23 +54,30 @@ impl WebQuery
   /// Writes the http response to the TCP stream.
   pub fn write( &mut self, tcps: &mut TcpStream )
   {
-    let contents = &self.result;
+    let contents = &self.output;
     let status_line = "HTTP/1.1 ".to_string() + &self.status_code;
 
     let response = format!(
-      "{}\r\n{}Content-Length: {}\r\n\r\n{}",
+      "{}\r\n{}Content-Length: {}\r\n\r\n",
       status_line,
       self.headers,
-      contents.len(),
-      contents
+      contents.len()
     );
 
     // println!( "status line={}", status_line );
     // println!( "response={}", response );
 
     tcps.write_all( response.as_bytes() ).unwrap();
+    tcps.write_all( contents ).unwrap();
     tcps.flush().unwrap();
   }
+
+  /// Append string to output.
+  fn push_str( &mut self, s: &str )
+  {
+    self.output.extend_from_slice( s.as_bytes() );
+  }
+
 }
 
 impl Query for WebQuery
@@ -105,15 +112,15 @@ impl Query for WebQuery
 
   fn push( &mut self, values: &[Value] )
   {
-    // println!( "push {:?}", values );
     for v in values
     {
       match v
       {
-        Value::String(s) => { self.result.push_str( s ); }
-        Value::Int(x) => { self.result.push_str( &x.to_string() ); }
-        Value::Float(x) => { self.result.push_str( &x.to_string() ); }
-        _ => {panic!("push bad value={:?}", v ) }
+        Value::String(s) => { self.push_str( s ); }
+        Value::Int(x) => { self.push_str( &x.to_string() ); }
+        Value::Float(x) => { self.push_str( &x.to_string() ); }
+        Value::Binary(x) => { self.output.extend_from_slice(x); }
+        _ => { panic!("push bad value={:?}", v ) }
       }
     }
   }
@@ -194,7 +201,6 @@ impl <'a> HttpRequestParser <'a>
       self.base += self.count;
       self.count = self.stream.read( &mut self.buffer ).unwrap();
       self.index = 0;
-      // println!( "Parse request got {} bytes", self.count );
     }
     let result = self.buffer[ self.index ];
     self.index += 1;
@@ -322,7 +328,6 @@ impl <'a> HttpRequestParser <'a>
     let mut result = Vec::new();
     while let Some( pair ) = self.read_header()
     {
-      // println!( "Got header {:?}", pair );
       result.push( pair );
     }
     assert!( self.get_byte() == 13 );

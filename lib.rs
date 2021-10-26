@@ -1,8 +1,10 @@
 //!ToDo List:
 //!
-//!Floating point and decimal types.
+//!Decimal shifting when scales do not match.
 //!
-//!Indexes and optimize WHERE.
+//!Update not yet updating indexes. Multi-column index use from WHERE.
+//!
+//!Issue with IndexCol table, colids.
 //!
 //!multipart requests ( for file upload ).
 //!
@@ -47,17 +49,11 @@
 //!
 //!(2) Database Table storage. Each record has a 64-bit Id.
 //!
-//!(3) Index storage ( an index record refers back to the main table ). (ToDo)
-//!
-//!Write transactions ( which modify the database ) are expected to be short.
-//!
-//!Only one write transaction runs at a time.
-//!
-//!Read transactions may be much longer, but they do not block. (ToDo)
+//!(3) Index storage ( an index record refers back to the main table ).
 
 use std::{ panic, cell::RefCell, rc::Rc, cell::Cell, collections::HashMap };
-use crate::{ bytes::ByteStorage, run::FunctionPtr, compile::CompileFunc,
-  table::{Table,TablePtr}, sql::{DataKind,ObjRef,STRING,BIGINT,TINYINT,SqlError} };
+use crate::{ util::newmap, bytes::ByteStorage, run::FunctionPtr, compile::CompileFunc,
+  table::{Table,TablePtr,TableInfo}, sql::{DataType,DataKind,data_size,data_kind,ObjRef,STRING,BIGINT,TINYINT,SqlError} };
 
 /// WebQuery struct for making a http web server.
 pub mod web;
@@ -79,7 +75,7 @@ mod sqlparse;
 /// Utility functions.
 #[macro_use]mod util;
 
-/// Functions to access systems tables (Schema,Table,Column,Function).
+/// Access system tables (Schema,Table,Column,Index,IndexColumn,Function).
 mod sys;
 
 /// Sorted Record storage : SortedFile.
@@ -92,13 +88,13 @@ mod sf;
 /// Nodes are numbered from 1..2047, with 0 indicating a null ( non-existent ) node.
 /// 
 /// Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids. 
-mod page;
+pub mod page;
 
 /// Table : TableInfo, Row, other Table types.
-mod table;
+pub mod table;
 
 /// SQL execution : Instruction (Inst) and other run time types.
-mod run;
+pub mod run;
 
 /// SQL execution : EvalEnv struct.
 mod eval; 
@@ -124,10 +120,13 @@ pub struct Database
   file: Box<dyn PagedFile>,
   sys_schema: TablePtr, 
   sys_table: TablePtr,
-  sys_col: TablePtr,
+  sys_column: TablePtr,
+  sys_index: TablePtr,
+  sys_index_col: TablePtr,
   /// Database is newly created.
   bs: ByteStorage,
   tables: RefCell<HashMap<ObjRef, TablePtr>>,
+  schemas: RefCell<HashMap<String,i64>>,
   functions: RefCell<HashMap<ObjRef, FunctionPtr>>,
   builtins: RefCell<HashMap<String,(DataKind,CompileFunc)>>,
   functions_dirty: Cell<bool>,
@@ -140,13 +139,13 @@ impl Database
   /// Construct a new DB, based on the specified file.
   pub fn new( file: Box<dyn PagedFile>, initsql: &str ) -> DB
   {
-    let mut crs = ConsoleQuery::new( 0 );
-
+    let mut cq = ConsoleQuery{};
     let is_new = file.is_new();
+    let mut tb = TableBuilder::new();
 
-    // Note: bs (byte storage) uses root page 0.
-    let sys_schema = Table::new0( 0, 1, "sys", "Schema", &[ ( "Name", STRING ) ] );
-    let sys_table = Table::new0( 1, 2, "sys", "Table", &[ 
+    let sys_schema = tb.nt( "sys", "Schema", &[ ( "Name", STRING ) ] );
+    
+    let sys_table = tb.nt( "sys", "Table", &[ 
        ("Root",BIGINT),
        ("Schema",BIGINT), 
        ("Name",STRING),
@@ -155,42 +154,75 @@ impl Database
        ("IdGen",BIGINT)
     ]);
 
-    let sys_col = Table::new0( 2, 3, "sys", "Column", &[ 
+    let sys_column = tb.nt( "sys", "Column", &[ 
        ( "Table", BIGINT ),
        ( "Name", STRING ),
        ( "Type", BIGINT ) 
     ]);
 
+    let sys_index = tb.nt( "sys", "Index", &[ 
+       ( "Root", BIGINT ),
+       ( "Table", BIGINT ),
+       ( "Name", STRING )
+    ]);
+
+    let sys_index_col = tb.nt( "sys", "IndexColumn", &[ 
+       ( "Index", BIGINT ),
+       ( "ColId", BIGINT )
+    ]);
+
+    sys_table.add_index( 6, vec![ 1, 2 ] );
+    sys_column.add_index( 7, vec![ 0 ] );
+    sys_index.add_index( 8, vec![ 1 ] );
+    sys_index_col.add_index( 9, vec![ 0 ] );
+
     let db = Rc::new( Database
-    { file, sys_schema, sys_table, sys_col,
+    { file, sys_schema, sys_table, sys_column, sys_index, sys_index_col,
       bs: ByteStorage::new( 0 ),
-      functions: RefCell::new( HashMap::new() ),
-      tables: RefCell::new( HashMap::new() ),
-      builtins: RefCell::new( HashMap::new() ),  
+      schemas: newmap(), functions: newmap(), tables: newmap(), builtins: newmap(),  
       functions_dirty: Cell::new( false ),
       lastid: Cell::new( 0 ),
     } );
 
-    db.bs.init( &db );    
-
-    db.init( &db.sys_schema, is_new );
-    db.init( &db.sys_table, is_new );
-    db.init( &db.sys_col, is_new );
+    db.bs.init( &db );  
+  
+    for t in &tb.list
+    {
+      if !is_new 
+      { 
+        t.id_alloc.set( sys::get_alloc( &db, t.id ) );
+      }
+      db.publish_table( t.clone() );
+    }
 
     if is_new 
     {
       println!( "New database... initialising" );
+
+      // The creation order has to match the order above ( so root values are as predicted ).
       let sysinit = "
 CREATE SCHEMA sys
 GO
 CREATE TABLE sys.Schema( Name string )
 CREATE TABLE sys.Table( Root bigint, Schema bigint, Name string, IsView tinyint, Def string, IdGen bigint )
 CREATE TABLE sys.Column( Table bigint, Name string, Type bigint )
+CREATE TABLE sys.Index( Root bigint, Table bigint, Name string )
+CREATE TABLE sys.IndexColumn( Index bigint, ColId bigint )
+GO
+CREATE INDEX BySchemaName ON sys.Table(Schema,Name)
+GO
+CREATE INDEX ByTable ON sys.Column(Table)
+CREATE INDEX ByTable ON sys.Index(Table)
+CREATE INDEX ByIndex ON sys.IndexColumn(Index)
+GO
 CREATE TABLE sys.Function( Schema bigint, Name string, Def string )
 GO
+CREATE INDEX BySchemaName ON sys.Function(Schema,Name)
+GO
 ";
-      db.run( sysinit, &mut crs );
-      db.run( initsql, &mut crs );
+      db.run( sysinit, &mut cq );
+      db.run( initsql, &mut cq );
+      db.save();
     }
     builtin::register_builtins( &db );
     db
@@ -214,7 +246,7 @@ GO
   }
 
   /// Run a batch of SQL, printing the execution time.
-  pub fn runtimed( self: &DB, source: &str, qy: &mut dyn Query )
+  pub fn run_timed( self: &DB, source: &str, qy: &mut dyn Query )
   {
     let start = std::time::Instant::now();
     self.run( source, qy );
@@ -266,13 +298,9 @@ GO
     let tm = &*self.tables.borrow();
     for t in tm.values()
     {
-      let (id, alloc, dirty) =
+      if  t.id_alloc_dirty.get()
       {
-        ( t.id, t.id_alloc.get(), t.id_alloc_dirty.get() )
-      };      
-      if dirty
-      {
-        sys::save_alloc( self, id, alloc );
+        sys::save_alloc( self, t.id,  t.id_alloc.get() );
       }
     }
 
@@ -300,72 +328,55 @@ GO
 
     for (n,t) in &*self.tables.borrow()
     {
-      println!( "Dump Table {:?} {:?}", n, t.info.colnames );
+      println!( "Dump Table {} {} {:?}", &n.schema, &n.name, t.info.colnames );
       t._dump( self );
     }  
   }
 
-  /// Initialise and publish system table.
-  fn init( self: &DB, t: &TablePtr, is_new: bool )
+  /// Get the named table.
+  fn get_table( self: &DB, name: &ObjRef ) -> Option< TablePtr >
   {
-    if !is_new 
-    { 
-      t.id_alloc.set( sys::get_alloc( self, t.id ) );
-    }
-    self.publish_table( t.clone() );
-  }
-
-  /// Load the named table.
-  pub(crate) fn load_table( self: &DB, name: &ObjRef ) -> Option< TablePtr >
-  {
-    if let Some(r) = self.tables.borrow().get( name )
+    if let Some( t ) = self.tables.borrow().get( name )
     {
-      return Some( r.clone() );
+      return Some( t.clone() );
     }
     sys::get_table( self, name ) 
   }
 
-  /// Load the named function.
-  pub(crate) fn load_function( self: &DB, name: &ObjRef ) -> Option< FunctionPtr >
+  /// Get the named function.
+  fn get_function( self: &DB, name: &ObjRef ) -> Option< FunctionPtr >
   {
-    if let Some(r) = self.functions.borrow().get( name )
+    if let Some( f ) = self.functions.borrow().get( name )
     {
-      return Some( r.clone() );
+      return Some( f.clone() );
     }
     sys::get_function( self, name )
   }
 
   /// Insert the table into the map of tables.
-  pub(crate) fn publish_table( &self, table: TablePtr )
+  fn publish_table( &self, table: TablePtr )
   {
     let name = table.info.name.clone();
     self.tables.borrow_mut().insert( name, table );
   }
 
-  /// Insert the function into the map of tables.
-  pub(crate) fn publish_function( &self, name: &ObjRef, function: FunctionPtr )
-  {
-    self.functions.borrow_mut().insert( name.clone(), function );
-  }
-
   /// Encode byte slice as u64.
-  pub(crate) fn encode( self: &DB, bytes: &[u8] ) -> u64
+  fn encode( self: &DB, bytes: &[u8] ) -> u64
   {
     self.bs.encode( self, bytes )
   }
 
   /// Decode u64 to bytes.
-  pub(crate) fn decode( self: &DB, code: u64 ) -> Vec<u8>
+  fn decode( self: &DB, code: u64 ) -> Vec<u8>
   {
     self.bs.decode( self, code )
   }
 
   /// Delete encoding.
-  pub(crate) fn delcode( self: &DB, code: u64 )
+  fn delcode( self: &DB, code: u64 )
   {
     self.bs.delcode( self, code );
   }
-
 
 } // end impl Database
 
@@ -378,6 +389,33 @@ impl Drop for Database
     {
       function.ilist.borrow_mut().clear();
     }
+  }
+}
+
+/// For creating system tables.
+struct TableBuilder
+{
+  alloc: i64,
+  list: Vec<TablePtr>,
+}
+
+impl TableBuilder
+{
+  fn new() -> Self
+  {
+    Self{ alloc:1, list: Vec::new() }
+  }
+
+  fn nt( &mut self, schema: &str, name: &str, ct: &[(&str,DataType)] ) -> TablePtr
+  {
+    let id = self.alloc;
+    let root_page = id as u64;
+    self.alloc += 1;
+    let name = ObjRef::new( schema, name );
+    let info = TableInfo::new( name, ct );
+    let table = Table::new( id, root_page, 1, Rc::new(info) );
+    self.list.push( table.clone() );
+    table
   }
 }
 
@@ -397,18 +435,76 @@ pub enum Value
 
 impl Value
 {
-  pub fn str( &self ) -> Rc<String>
+  fn load( db: &DB, typ: DataType, data: &[u8], off: usize ) -> Value
+  {
+    let size = data_size( typ );
+    match data_kind( typ )
+    {
+      DataKind::Bool => Value::Bool( data[off] != 0 ),
+      DataKind::String =>
+      {
+        let u = util::getu64( data, off ); 
+        let bytes = db.decode( u );
+        let str = String::from_utf8( bytes ).unwrap();
+        Value::String( Rc::new( str ) )
+      }
+      DataKind::Binary => 
+      { 
+        let u = util::getu64( data, off ); 
+        Value::Binary( Rc::new( db.decode( u ) ) )
+      }
+      _ => Value::Int( util::get( data, off, size ) as i64  )
+    }
+  }
+
+  fn save( &self, typ: DataType, data: &mut [u8], off: usize, code: u64 )
+  {
+    let size = data_size( typ );
+    match self
+    {
+      Value::Bool(x) => { data[ off ] = if *x {1} else {0}; }
+      Value::Int(x) => util::set( data, off, *x as u64, size ),
+      Value::Float(x) =>
+      {
+        if size == 8
+        {
+          let bytes = (*x).to_le_bytes();
+          // for i in 0..size { data[off+i] = bytes[i]; }
+          data[off..off+8].clone_from_slice(&bytes);
+        } 
+        else
+        {
+          debug_assert!( size == 4 );
+          let val = *x as f32;
+          let bytes = val.to_le_bytes();
+          data[off..off+4].clone_from_slice(&bytes);
+        }
+      }
+      Value::String(_) =>
+      {
+        util::set( data, off, code, 8 );
+      }
+      Value::Binary(_) => 
+      {
+        util::set( data, off, code, 8 );
+      }
+      _ => {}
+    }
+  } 
+
+  fn str( &self ) -> Rc<String>
   {
     match self
     {
       Value::String(s) => s.clone(),
       Value::Int(x) => Rc::new(x.to_string()),
-      Value::Float(x) => Rc::new(x.to_string()),
-      _ => panic!()
+      Value::Float(x) => Rc::new(x.to_string()),  
+      Value::Binary(_x) => Rc::new( "ToDo".to_string()),
+      _ => panic!( "str not implemented" )
     }
   }
 
-  pub fn append( &mut self, val: Value )
+  fn append( &mut self, val: Value )
   {
     if let Value::String(s) = self
     {
@@ -440,7 +536,7 @@ pub trait PagedFile
 /// IO Methods.
 pub trait Query
 {
-  /// Generate output.
+  /// Append SELECT values to output.
   fn push( &mut self, values: &[Value] );
 
   /// ARG builtin function.
@@ -449,26 +545,15 @@ pub trait Query
   /// GLOBAL builtin function.
   fn global( &self, _kind: i64 ) -> i64 { 0 }
 
-  /// Called when a panic ( error ) occurs.
+  /// Set the error string.
   fn set_error( &mut self, err: String );
 
-  /// EXCEPTION builtin function.
+  /// Get the error string.
   fn get_error( &mut self ) -> String{ String::new() }
 }
 
 /// Query where output is printed to console.
-pub struct ConsoleQuery
-{
-  pub mode: i8,
-}
-
-impl ConsoleQuery
-{
-  pub fn new( mode: i8 ) -> Self
-  {
-    Self{ mode }
-  }
-}
+pub struct ConsoleQuery{}
 
 impl Query for ConsoleQuery
 {

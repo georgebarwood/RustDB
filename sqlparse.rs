@@ -58,6 +58,7 @@ impl <'a> Parser <'a>
     };
     result.read_char();
     result.read_token();
+    // println!( "Parsing {}", src );
     result
   }
 
@@ -126,7 +127,6 @@ impl <'a> Parser <'a>
   /// Parse and execute a batch of statements.
   pub(crate) fn batch( &mut self, rs: &mut dyn Query ) 
   {
-    // println!("Parsing batch source len={}", self.source.len() );
     loop
     {
       while self.token != Token::EndOfFile && !self.test_id(b"GO")
@@ -492,7 +492,7 @@ impl <'a> Parser <'a>
   {
     if self.token != t 
     {
-      panic!("Expected token '{:?}' got '{:?}'", t, self.token )
+      panic!("Expected ttoken '{:?}' got '{:?}'", t, self.token )
     } 
     else 
     {
@@ -592,7 +592,7 @@ impl <'a> Parser <'a>
         }
       }
       self.read( Token::RBra );
-      Expr::FuncCall( ExprCall{ name:ObjRef{ schema: to_s(name), name: to_s(fname) }, parms } )
+      Expr::new( ExprIs::FuncCall( ExprCall{ name:ObjRef{ schema: to_s(name), name: to_s(fname) }, parms } ) )
     }
     else if self.test( Token::LBra )
     {
@@ -606,7 +606,7 @@ impl <'a> Parser <'a>
         }
       }
       self.read( Token::RBra );
-      Expr::BuiltinCall( to_s(name), parms )
+      Expr::new( ExprIs::BuiltinCall( to_s(name), parms ) )
 /*
       if agg_allowed && name == "COUNT"
       {
@@ -633,15 +633,15 @@ impl <'a> Parser <'a>
     }
 */
     }
-    else if name == b"true" { Expr::Const(Value::Bool(true)) }
-    else if name == b"false" { Expr::Const(Value::Bool(false)) }
+    else if name == b"true" { Expr::new( ExprIs::Const(Value::Bool(true)) ) }
+    else if name == b"false" { Expr::new( ExprIs::Const(Value::Bool(false)) ) }
     else {
       let look = self.b.local_map.get( &name );
       if let Some(lnum) = look
       {
-        Expr::Local( *lnum )
+        Expr::new( ExprIs::Local( *lnum ) )
       } else {
-        Expr::Name( to_s(name) )
+        Expr::new( ExprIs::Name( to_s(name) ) )
       }
     }
   }
@@ -659,8 +659,8 @@ impl <'a> Parser <'a>
         } 
         else if self.test_id( b"NOT" ) 
         { 
-           let e = self.exp_p( 10 ); // Not sure about precedence here.
-           Expr::Not( Box::new( e ) )
+          let e = self.exp_p( 10 ); // Not sure about precedence here.
+          Expr::new( ExprIs::Not( Box::new( e ) ) )
         } 
         else 
         { 
@@ -684,7 +684,7 @@ impl <'a> Parser <'a>
             list.push( self.exp() );
             if !self.test( Token::Comma ) { break; }
           }
-          result = Expr::List( list);
+          result = Expr::new( ExprIs::List( list) );
         } else {
           result = exp;
         }
@@ -693,7 +693,7 @@ impl <'a> Parser <'a>
     }
     else if self.token == Token::String
     {
-      result = Expr::Const( Value::String( Rc::new( self.ts.clone() ) ) );
+      result = Expr::new( ExprIs::Const( Value::String( Rc::new( self.ts.clone() ) ) ) );
       self.read_token();
     }
     else if self.token == Token::Number || self.token == Token::Decimal
@@ -701,15 +701,15 @@ impl <'a> Parser <'a>
       let value = self.decimal_int;
       // if ( DecimalScale > 0 ) value = value * (long)Util.PowerTen( DecimalScale ) + DecimalFrac;
       // result = new Ok( Constant( value, DecimalScale > 0  DTI.Decimal( 18, DecimalScale ) : DataType.Bigint );
-      result = Expr::Number( value );
+      result = Expr::new( ExprIs::Number( value ) );
       self.read_token();
     } else if self.token == Token::Hex {
       if self.cs.len() % 2 == 1 { self.err( "Hex literal must have even number of characters" ); }
       let hb = &self.source[ self.token_start+2..self.source_ix-1];
-      result = Expr::Const( Value::Binary( Rc::new( util::parse_hex( hb ) ) ) );
+      result = Expr::new( ExprIs::Const( Value::Binary( Rc::new( util::parse_hex( hb ) ) ) ) );
       self.read_token();
     } else if self.test( Token::Minus ) {
-      result = Expr::Minus( Box::new( self.exp_p( 30 ) ) );
+      result = Expr::new( ExprIs::Minus( Box::new( self.exp_p( 30 ) ) ) );
     } else {
       self.err( "Expression expected" )
     }
@@ -748,7 +748,7 @@ impl <'a> Parser <'a>
         rhs = self.exp_lp( rhs, prec_t );
         let z = self.get_operator(); t = z.0; prec_t = z.1;
       }
-      lhs = Expr::Binary( ( op, Box::new(lhs), Box::new(rhs) ) );
+      lhs = Expr::new( ExprIs::Binary( op, Box::new(lhs), Box::new(rhs) ) );
     }
     lhs
   }
@@ -771,14 +771,14 @@ impl <'a> Parser <'a>
     self.read_id( b"ELSE" );
     let els = Box::new(self.exp());
     self.read_id( b"END" );
-    Expr::Case( (list, els) )
+    Expr::new( ExprIs::Case( list, els ) )
   }
 
   fn exp_scalar_select( &mut self ) -> Expr
   {
     let te = self.select_expression( false );
     // if ( te.ColumnCount != 1 ) Error ( "Scalar select must have one column" );
-    Expr::ScalarSelect( Box::new( te ) )  
+    Expr::new( ExprIs::ScalarSelect( Box::new( te ) ) )
   }
 
   // End Expression parsing
@@ -846,10 +846,10 @@ impl <'a> Parser <'a>
 
   fn exp_name( &self, exp: &Expr ) -> String
   {
-    match exp
+    match &exp.exp
     {
-      Expr::Local(num) => to_s(self.b.locals[*num]),
-      Expr::Name(name) => name.to_string(),
+      ExprIs::Local(num) => to_s(self.b.locals[*num]),
+      ExprIs::Name(name) => name.to_string(),
       _ => "".to_string()
     }
   }
@@ -942,7 +942,7 @@ impl <'a> Parser <'a>
       if self.test( Token::RBra ) { break; }
       if !self.test( Token::Comma ) { self.err( "Comma or closing bracket expected" ); }
     }
-    let src = self.insert_expression( cnames.len() );    
+    let mut src = self.insert_expression( cnames.len() );    
     if !self.parse_only 
     { 
       let t = tlook( self, &tr );
@@ -960,7 +960,7 @@ impl <'a> Parser <'a>
           }
         } 
       }
-      let csrc = compile_te( self, &src );
+      let csrc = compile_te( self, &mut src );
       self.dop( DO::Insert( t, cnums, csrc ) );
     }
   }
@@ -980,20 +980,20 @@ impl <'a> Parser <'a>
       
     }
     if !self.test_id( b"WHERE" ) { self.err( "UPDATE must have a WHERE" ); }
-    let w = self.exp();
+    let mut w = self.exp();
     if !self.parse_only 
     { 
       let t = tlook( self, &t );
       let from = CTableExpression::Base( t.clone() );
       let save = mem::replace( &mut self.from, Some(from) );
 
-      let w = cexp_bool( self, &w );
+      let w = cexp_bool( self, &mut w );
       let mut se = Vec::new();
-      for ( name, exp ) in s
+      for ( name, mut exp ) in s
       {
         if let Some(cnum) = t.info.colmap.get( &name )
         {
-          let exp = cexp_value( self, &exp );
+          let exp = cexp_value( self, &mut exp );
           se.push( ( *cnum, exp ) );
         }
         else { panic!( "update column name not found" ); }
@@ -1008,7 +1008,7 @@ impl <'a> Parser <'a>
     self.read_id( b"FROM" );
     let tname = self.obj_ref();
     if !self.test_id( b"WHERE" ) { self.err( "DELETE must have a WHERE" ); }
-    let w = self.exp();
+    let mut w = self.exp();
 
     if !self.parse_only 
     {
@@ -1016,7 +1016,7 @@ impl <'a> Parser <'a>
       let from = CTableExpression::Base( t.clone() );
 
       let save = mem::replace( &mut self.from, Some(from) );
-      let w = cexp_bool( self, &w );
+      let w = cexp_bool( self, &mut w );
       self.from = save;
       self.dop( DO::Delete( t, w ) ); 
     }
@@ -1025,11 +1025,11 @@ impl <'a> Parser <'a>
   fn s_execute( &mut self ) 
   {
     self.read( Token::LBra );
-    let exp = self.exp();
+    let mut exp = self.exp();
     self.read( Token::RBra );
     if !self.parse_only 
     { 
-      push( self, &exp );
+      push( self, &mut exp );
       self.add( Inst::Execute );
     }
   }
@@ -1049,12 +1049,12 @@ impl <'a> Parser <'a>
     let mut ptypes = Vec::new();
     if !self.test( Token::RBra )
     {
-      let e = self.exp();
-      ptypes.push( push( self, &e ) );
+      let mut e = self.exp();
+      ptypes.push( push( self, &mut e ) );
       while self.test( Token::Comma ) 
       { 
-        let e = self.exp();
-        ptypes.push( push( self, &e ) ); 
+        let mut e = self.exp();
+        ptypes.push( push( self, &mut e ) ); 
       }
       self.read( Token::RBra );
     }
@@ -1125,7 +1125,7 @@ impl <'a> Parser <'a>
     if !self.parse_only 
     { 
       let _source = self.source_from( source_start, self.token_start );
-      self.dop( DO::CreateTable( Rc::new(ti) ) );
+      self.dop( DO::CreateTable( ti ) );
     }    
   }
 
@@ -1133,21 +1133,29 @@ impl <'a> Parser <'a>
   { 
     let iname = self.id();
     self.read_id( b"ON" );
-    let schema = self.id();
-    self.read( Token::Dot );
-    let tname = self.id();
+    let tname = self.obj_ref();
     self.read( Token::LBra );
-    let mut cols = Vec::new();
+    let mut cnames = Vec::new();
     loop
     {
-      cols.push( self.id() );
+      cnames.push( self.id() );
       if self.test( Token::RBra ) { break; }
       if self.token != Token::Comma { self.err( "Comma or closing bracket expected" ) };
       self.read_token();
     }
     if !self.parse_only 
     { 
-      self.dop( DO::CreateIndex( IndexInfo{schema, tname, iname, cols} ) );
+      let mut cols = Vec::new();
+      let table = tlook( self, &tname );
+      for cname in &cnames
+      {
+        if let Some(cnum) = table.info.colmap.get( cname )
+        {
+          cols.push( *cnum );
+        }
+        else { panic!("index column name not found {}", cname ); }
+      }
+      self.dop( DO::CreateIndex( IndexInfo{tname, iname, cols} ) );
     }    
   }
 
@@ -1419,12 +1427,12 @@ impl <'a> Parser <'a>
 
   fn s_while( &mut self ) 
   {
-    let exp = self.exp();
+    let mut exp = self.exp();
     let start_id = self.get_loop_id();
     let break_id = self.get_jump_id();
     if !self.parse_only
     {
-      let exp = cexp_bool( self, &exp );
+      let exp = cexp_bool( self, &mut exp );
       self.add( Inst::JumpIfFalse( break_id, exp ) );
       let save = self.b.break_id;
       self.b.break_id = break_id;
@@ -1437,11 +1445,11 @@ impl <'a> Parser <'a>
 
   fn s_if( &mut self ) 
   {
-    let exp = self.exp();
+    let mut exp = self.exp();
     let false_id = self.get_jump_id();
     if !self.parse_only
     {
-      let exp = cexp_bool( self, &exp );
+      let exp = cexp_bool( self, &mut exp );
       self.add( Inst::JumpIfFalse( false_id, exp ) );
     }
     self.statement();
@@ -1480,10 +1488,10 @@ impl <'a> Parser <'a>
   {
     if self.b.return_type != NONE
     {
-      let e = self.exp();
+      let mut e = self.exp();
       if !self.parse_only 
       { 
-        let t = data_kind( push( self, &e ) );
+        let t = data_kind( push( self, &mut e ) );
         let rt = data_kind( self.b.return_type );
         if t != rt
         {
@@ -1497,10 +1505,10 @@ impl <'a> Parser <'a>
 
   fn s_throw( & mut self ) 
   {
-    let msg = self.exp();
+    let mut msg = self.exp();
     if !self.parse_only
     {
-      push( self, &msg );
+      push( self, &mut msg );
       self.add( Inst::Throw );
     }    
   } 
