@@ -123,7 +123,6 @@ impl Table
         return IndexScan
         { 
           ixa, 
-          id_off: f.key_size - 8, 
           table: self.clone(), 
           db: db.clone(),
           cols: c.clone(),
@@ -247,7 +246,7 @@ struct Zero{}
 
 impl Record for Zero
 {
-  fn compare( &self, _db: &DB, _data: &[u8], _off: usize ) -> std::cmp::Ordering
+  fn compare( &self, _db: &DB, _data: &[u8] ) -> std::cmp::Ordering
   {
     std::cmp::Ordering::Less
   }
@@ -442,11 +441,12 @@ impl Record for Row
       self.values[i].save( t.types[i], data, off, self.codes[i] );
       off += data_size(*typ);
     }
+    debug_assert!( off == data.len() );
   }
 
-  fn compare( &self, _db: &DB, data: &[u8], off:usize ) -> std::cmp::Ordering
+  fn compare( &self, _db: &DB, data: &[u8] ) -> std::cmp::Ordering
   {
-    let id = util::getu64( data, off ) as i64;
+    let id = util::getu64( data, 0 ) as i64;
     self.id.cmp( &id )
   }
 }
@@ -500,12 +500,13 @@ impl Record for IndexRow
       off += data_size(typ);
     }
     util::set( data, off, self.rowid as u64, 8 );
+    debug_assert!( off+8 == data.len() );
   }
 
-  fn compare( &self, db: &DB, data: &[u8], off: usize ) -> Ordering
+  fn compare( &self, db: &DB, data: &[u8] ) -> Ordering
   {
     let mut ix = 0;
-    let mut off = off;
+    let mut off = 0;
     loop
     {
       let typ = self.tinfo.types[ self.cols[ ix ] ];
@@ -565,10 +566,10 @@ impl IndexKey
 
 impl Record for IndexKey
 {
-  fn compare( &self, db: &DB, data: &[u8], off: usize ) -> Ordering
+  fn compare( &self, db: &DB, data: &[u8] ) -> Ordering
   {
     let mut ix = 0;
-    let mut off = off;
+    let mut off = 0;
     loop
     {
       let typ = self.tinfo.types[ self.cols[ ix ] ];
@@ -593,7 +594,6 @@ impl Record for IndexKey
 pub struct IndexScan
 {
   ixa: Asc,
-  id_off: usize,
   table: TablePtr,
   db: DB,
   cols: Rc<Vec<usize>>,
@@ -632,7 +632,8 @@ impl Iterator for IndexScan
 
       if !self.keys_equal( data ) { return None; }
 
-      let id = util::getu64( data, self.id_off );
+      let id_off = p.rec_size() - 8;      
+      let id = util::getu64( data, id_off );
       return self.table.id_get( &self.db, id );
     }
     None 

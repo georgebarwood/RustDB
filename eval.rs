@@ -375,9 +375,9 @@ impl <'r> EvalEnv <'r>
               let old_str = String::from_utf8( self.db.decode( old_id ) ).unwrap();
               if old_str != *val
               {
-                self.db.delcode( id );
-                let id = self.db.encode( val.as_bytes() );
-                util::set( data, off, id, 8 );
+                self.db.delcode( old_id );
+                let new_id = self.db.encode( val.as_bytes() );
+                util::set( data, off, new_id, 8 );
               } 
             }
             Value::Binary(val) => 

@@ -4,10 +4,12 @@ use crate::{DB,util,page::*};
 /// A record to be stored in a SortedFile.
 pub trait Record
 {
-  /// Save record as bytes( if both is false save only key ).
+  /// Save record as bytes.
   fn save( &self, _data: &mut [u8] ){}
+
   /// Compare record with stored bytes.
-  fn compare( &self, db: &DB, data: &[u8], off: usize ) -> std::cmp::Ordering;
+  fn compare( &self, db: &DB, data: &[u8] ) -> std::cmp::Ordering;
+
   /// Load key from bytes ( to store in parent page ).
   fn key( &self, _db: &DB, data: &[u8]) -> Box<dyn Record>
   {
@@ -23,9 +25,9 @@ pub struct Id
 
 impl Record for Id
 {
-  fn compare( &self, _db: &DB, data: &[u8], off: usize ) -> std::cmp::Ordering
+  fn compare( &self, _db: &DB, data: &[u8] ) -> std::cmp::Ordering
   {
-    let id = util::getu64( data, off );
+    let id = util::getu64( data, 0 );
     self.id.cmp( &id )
   }
   fn save( &self, data: &mut [u8] )
@@ -150,7 +152,7 @@ impl SortedFile
       let mut p = ptr.borrow_mut();
       if p.dirty
       {
-        println!( "Saving page {} root {}", pnum, self.root_page );
+        println!( "Saving page {} root={} count={}", pnum, self.root_page, p.count );
         p.write_header();
         p.dirty = false;
         db.file.write_page( *pnum, &p.data);

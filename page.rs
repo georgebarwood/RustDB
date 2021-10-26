@@ -295,7 +295,8 @@ impl Page
   pub fn compare( &self, db: &DB, r: &dyn Record, x:usize ) -> Ordering
   {
     let off = self.rec_offset( x );
-    r.compare( db, &self.data, off )
+    let size = self.rec_size();
+    r.compare( db, &self.data[off..off+size] )
   }
 
   pub fn get_key( &self, db: &DB, x:usize, r: &dyn Record ) -> Box<dyn Record>

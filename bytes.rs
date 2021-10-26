@@ -95,7 +95,7 @@ impl ByteStorage
   }
 }
 
-/// Number of bytes stored in each fragment.
+/// = 63. Number of bytes stored in each fragment.
 const BPF : usize = 63; // Bytes per fragment.
 
 /// Values are split into BPF size fragments.
@@ -119,14 +119,15 @@ impl Record for Fragment
 {
   fn save( &self, data: &mut [u8] )
   {
+    debug_assert!( data.len() == 9+BPF );    
     util::set( data, 0, self.id, 8 );
     data[ 8 ] = self.len;
-    for i in 0..BPF as usize { data[ 9+i ] = self.bytes[ i ]; }
+    data[9..9 + BPF].clone_from_slice(&self.bytes[..BPF]);
   }
 
-  fn compare( &self, _db: &DB, data: &[u8], off: usize ) -> std::cmp::Ordering
+  fn compare( &self, _db: &DB, data: &[u8] ) -> std::cmp::Ordering
   {
-    let val = util::getu64( data, off );
+    let val = util::getu64( data, 0 );
     self.id.cmp( &val )
   }
 }
