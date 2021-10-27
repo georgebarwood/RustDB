@@ -1,5 +1,5 @@
-use std::{ fs, fs::OpenOptions, io::SeekFrom, io::Seek, io::Read, io::Write };
 use crate::*;
+use std::{ fs, fs::OpenOptions, io::SeekFrom, io::Seek, io::Read, io::Write };
 
 /// Simple implementation of PageFile based directly on system file.
 pub struct SimplePagedFile

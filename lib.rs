@@ -45,7 +45,7 @@
 use std::{ panic, cell::RefCell, rc::Rc, cell::Cell, collections::HashMap, cmp::Ordering };
 use crate::
 { 
-  util::*, bytes::*, run::*, compile::*, eval::*, 
+  util::newmap, bytes::*, run::*, compile::*, eval::*, 
   value::*, table::*, sql::*, sf::*, sqlparse::*, page::*
 };
 

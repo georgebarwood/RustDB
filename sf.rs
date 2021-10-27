@@ -1,5 +1,5 @@
-use std::collections::hash_map::Entry;
 use crate::*;
+use std::collections::hash_map::Entry;
 
 /// A record to be stored in a SortedFile.
 pub trait Record
