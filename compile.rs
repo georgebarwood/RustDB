@@ -88,10 +88,6 @@ fn check( p: &Parser, e: &mut Expr )
         _ => NONE,
       }
     }
-    ExprIs::Number(_) =>
-    {
-      e.data_type = BIGINT;
-    }
     ExprIs::Case( x,els ) => 
     {
       check( p, els );
@@ -130,7 +126,7 @@ fn check( p: &Parser, e: &mut Expr )
         if !a.is_constant { e.is_constant = false; }
       }
     }
-    ExprIs::Name(x) => 
+    ExprIs::ColName(x) => 
     {
       e.is_constant = false;
       let ( col, data_type ) = name_to_colnum( p, x );
@@ -192,7 +188,7 @@ pub fn cexp_value( p: &Parser, e: &mut Expr ) -> CExpPtr<Value>
           }
         }   
         ExprIs::FuncCall( name, parms ) => compile_call( p, name, parms ),
-        ExprIs::Name( x ) =>
+        ExprIs::ColName( x ) =>
         {
           let (off,typ) = name_to_col( p, x );
           match typ
@@ -216,7 +212,7 @@ pub fn cexp_int( p: &Parser, e: &mut Expr ) -> CExpPtr<i64>
   if get_kind( p, e ) != DataKind::Int { panic!( "Integer type expected" ) }
   match &mut e.exp 
   {
-    ExprIs::Name( x ) => 
+    ExprIs::ColName( x ) => 
     {
       let (off,typ) = name_to_col( p, x );
       match data_size(typ)
@@ -228,7 +224,17 @@ pub fn cexp_int( p: &Parser, e: &mut Expr ) -> CExpPtr<i64>
         _ => panic!()
       }
     }
-    ExprIs::Number( x ) => Box::new( cexp::Const{ value: *x } ),
+    ExprIs::Const( x ) => 
+    { 
+      if let Value::Int(b) = *x
+      {
+        Box::new( cexp::Const::<i64>{ value: b } )
+      }
+      else 
+      {
+        panic!()
+      }
+    }
     ExprIs::Local( x ) => Box::new( cexp::Local{ num: *x } ),
     ExprIs::Binary( op, b1, b2 ) => compile_arithmetic( p, *op, b1, b2, cexp_int ),
     ExprIs::Minus( u ) => Box::new( cexp::Minus::<i64>{ ce: cexp_int( p, u ) } ),
@@ -245,7 +251,7 @@ pub fn cexp_float( p: &Parser, e: &mut Expr ) -> CExpPtr<f64>
   if get_kind( p, e ) != DataKind::Float { panic!( "Float type expected" ) }
   match &mut e.exp 
   {
-    ExprIs::Name( x ) => 
+    ExprIs::ColName( x ) => 
     {
       let (off,typ) = name_to_col( p, x );
       match data_size(typ)
@@ -271,7 +277,7 @@ pub fn cexp_bool( p: &Parser, e: &mut Expr ) -> CExpPtr<bool>
   if get_kind( p, e ) != DataKind::Bool { panic!( "Bool type expected" ) }
   match &mut e.exp 
   {
-    ExprIs::Name( x ) => 
+    ExprIs::ColName( x ) => 
     {
       let (off,_typ) = name_to_col( p, x );
       Box::new( cexp::ColumnBool{ off } )
@@ -325,13 +331,12 @@ pub fn cexp_decimal( p: &Parser, e: &mut Expr ) -> CExpPtr<i64>
   if get_kind( p, e ) != DataKind::Decimal { panic!( "Decimal type expected" ) }
   match &mut e.exp 
   {
-    ExprIs::Name( x ) => 
+    ExprIs::ColName( x ) => 
     {
       let (off,typ) = name_to_col( p, x );
       let n = data_size(typ);
       Box::new( cexp::ColumnDecimal{ off, n } )
     }
-    ExprIs::Number( x ) => Box::new( cexp::Const{ value: *x } ),
     ExprIs::Local( x ) => Box::new( cexp::Local{ num: *x } ),
     ExprIs::Binary( op, b1, b2 ) =>
     {
@@ -646,7 +651,6 @@ pub(crate) fn push( p: &mut Parser, e: &mut Expr ) -> DataType
   let t = get_type( p, e );
   match &mut e.exp 
   {
-    ExprIs::Number( x ) => { p.add( Inst::PushIntConst( *x ) ); }
     ExprIs::Const( x ) => { p.add( Inst::PushConst( (*x).clone() ) ); }
     ExprIs::Binary( _,_,_ ) => 
     {
@@ -656,6 +660,11 @@ pub(crate) fn push( p: &mut Parser, e: &mut Expr ) -> DataType
         {
           let ce = cexp_int( p, e ); 
           p.add( Inst::PushInt( ce ) ); 
+        }
+        DataKind::Float => 
+        {
+          let ce = cexp_float( p, e ); 
+          p.add( Inst::PushFloat( ce ) ); 
         }
         DataKind::Bool => 
         { 

@@ -642,7 +642,7 @@ impl <'a> Parser <'a>
       {
         Expr::new( ExprIs::Local( *lnum ) )
       } else {
-        Expr::new( ExprIs::Name( to_s(name) ) )
+        Expr::new( ExprIs::ColName( to_s(name) ) )
       }
     }
   }
@@ -702,7 +702,7 @@ impl <'a> Parser <'a>
       let value = self.decimal_int;
       // if ( DecimalScale > 0 ) value = value * (long)Util.PowerTen( DecimalScale ) + DecimalFrac;
       // result = new Ok( Constant( value, DecimalScale > 0  DTI.Decimal( 18, DecimalScale ) : DataType.Bigint );
-      result = Expr::new( ExprIs::Number( value ) );
+      result = Expr::new( ExprIs::Const( Value::Int(value) ) );
       self.read_token();
     } else if self.token == Token::Hex {
       if self.cs.len() % 2 == 1 { self.err( "Hex literal must have even number of characters" ); }
@@ -850,7 +850,7 @@ impl <'a> Parser <'a>
     match &exp.exp
     {
       ExprIs::Local(num) => to_s(self.b.locals[*num]),
-      ExprIs::Name(name) => name.to_string(),
+      ExprIs::ColName(name) => name.to_string(),
       _ => "".to_string()
     }
   }

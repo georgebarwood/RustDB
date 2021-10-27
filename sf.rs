@@ -11,7 +11,7 @@ pub trait Record
   fn compare( &self, db: &DB, data: &[u8] ) -> std::cmp::Ordering;
 
   /// Load key from bytes ( to store in parent page ).
-  fn key( &self, _db: &DB, data: &[u8]) -> Box<dyn Record>
+  fn key( &self, _db: &DB, data: &[u8] ) -> Box<dyn Record>
   {
     Box::new( Id{ id: util::getu64( data, 0 ) } )
   }
@@ -156,7 +156,7 @@ impl SortedFile
       let mut p = ptr.borrow_mut();
       if p.dirty
       {
-        // println!( "Saving page {} root={} count={} node_size={}", pnum, self.root_page, p.count, p.node_size );
+        println!( "Saving page {} root={} count={} node_size={}", pnum, self.root_page, p.count, p.node_size );
         p.write_header();
         p.dirty = false;
         db.file.write_page( *pnum, &p.data);

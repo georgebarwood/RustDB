@@ -63,13 +63,11 @@ impl ByteStorage
     {
       let p = p.borrow();
       let xid = util::getu64( &p.data, off );
-      if xid != id { break; } // Maybe this shoould be a panic?
+      debug_assert!( xid == id );
       id += 1;
       let len = p.data[ off + 8 ] as usize;
-      //for i in 0..(len>>1) { result.push( p.data[ rr.off + 9 + i ] ); }
       let off = off + 9;
-      result.extend_from_slice( &p.data[ off..off+(len>>1) ] );
-      
+      result.extend_from_slice( &p.data[ off..off+(len>>1) ] );      
       if len & 1 == 1 { break; }
     }
     result
@@ -83,7 +81,7 @@ impl ByteStorage
     {
       let p = p.borrow();
       let xid = util::getu64( &p.data, off );
-      if xid != id + n { break; } // Maybe this shoould be a panic?
+      debug_assert!( xid == id + n );
       n += 1;
       let len = &p.data[ off + 8 ];
       if len & 1 == 1 { break; }
@@ -99,6 +97,8 @@ impl ByteStorage
 }
 
 /// = 52. Number of bytes stored in each fragment.
+///
+/// Chosen so that node size is 64 bytes = 52 + 8 (id) + 1 (len) + 3 (node overhead).
 const BPF : usize = 52;
 
 /// Values are split into BPF size fragments.

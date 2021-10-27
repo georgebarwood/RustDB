@@ -7,28 +7,27 @@ pub type DataSource = Box<dyn Iterator<Item = (PagePtr,usize)>>;
 /// Instruction.
 pub enum Inst
 {
+  PushConst(Value),
+  PushValue(CExpPtr<Value>),
+  PushLocal(usize),
+  PopToLocal(usize),
   Jump(usize),
   JumpIfFalse(usize,CExpPtr<bool>),
+  Call(FunctionPtr),
   Return,
   Throw,
   Execute,
-  PopToLocal(usize),
   ForInit(usize,Box<CTableExpression>),
   ForNext(usize,Box<ForNextInfo>),
   ForSortInit(usize,Box<CSelectExpression>),
   ForSortNext(usize,Box<(usize,usize,Assigns)>),
   DataOp(Box<DO>),
-  PushValue(CExpPtr<Value>),
-  Call(FunctionPtr),
   Select( Box<CSelectExpression> ),
   Set( Box<CSelectExpression> ),
   // Special push instructions ( optimisations )
   PushInt(CExpPtr<i64>),
-  _PushFloat(CExpPtr<f64>),
+  PushFloat(CExpPtr<f64>),
   PushBool(CExpPtr<bool>),
-  PushIntConst(i64),
-  PushConst(Value),
-  PushLocal(usize),
 }
 
 /// State for FOR loop (non-sorted case).

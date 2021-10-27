@@ -35,6 +35,8 @@
 //!
 //!ToDo List:
 //!
+//!Optimise WHERE condition for UPDATE and DELETE.
+//!
 //!Decimal shifting when scales do not match.
 //!
 //!Multi-column index use from WHERE.
@@ -67,16 +69,16 @@ pub mod value;
 // Private modules ( in principle, currently public ).
 
 /// SQL parser.
-pub mod sqlparse;
+mod sqlparse;
 
 /// Utility functions.
 #[macro_use]mod util;
 
 /// Access system tables (Schema,Table,Column,Index,IndexColumn,Function).
-pub mod sys;
+mod sys;
 
 /// Sorted Record storage : SortedFile.
-pub mod sf;
+mod sf;
 
 /// Page for SortedFile.
 ///
@@ -85,30 +87,30 @@ pub mod sf;
 /// Nodes are numbered from 1..2047, with 0 indicating a null ( non-existent ) node.
 /// 
 /// Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids. 
-pub mod page;
+mod page;
 
 /// Table : ColInfo, Row, other Table types.
 pub mod table;
 
 /// SQL execution : Instruction (Inst) and other run time types.
-pub mod run;
+mod run;
 
 /// SQL execution : EvalEnv struct.
-pub mod eval; 
+mod eval; 
 
 /// CExp implementations for basic expressions.
-pub mod cexp;
+mod cexp;
 
 /// Storage of variable length values : ByteStorage.
-pub mod bytes;
+mod bytes;
 
 /// Compilation of SQL builtin functions.
-pub mod builtin;
+mod builtin;
+
+// End of modules.
 
 /// ```Rc<Database>```
 pub type DB = Rc<Database>;
-
-// End of modules.
 
 /// Database with SQL-like interface.
 pub struct Database

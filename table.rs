@@ -37,7 +37,7 @@ impl Table
     {
       if *op == Token::Equal && e2.is_constant
       {
-        if let ExprIs::Name( name ) = &e1.exp
+        if let ExprIs::ColName( name ) = &e1.exp
         {
           if name == "Id"
           {
@@ -134,28 +134,26 @@ impl Table
   /// Insert specified row into the table.
   pub fn insert( &self, db: &DB, row: &mut Row )
   {
-    let rowid = row.id;
     row.encode( db ); // Calculate codes for Binary and String values.
     self.file.insert( db, row );
     // Update any indexes.
     for ( f, cols ) in &*self.ixlist.borrow()
     {
-      let ixr = IndexRow::new( self, rowid, cols.clone(), row );
+      let ixr = IndexRow::new( self, cols.clone(), row );
       f.insert( db, &ixr );
     }
   }
 
-  /// Remove specified row from the table.
-  pub fn remove( &self, db: &DB, r: &Row )
+  /// Remove specified loaded row from the table.
+  pub fn remove( &self, db: &DB, row: &Row )
   {
-    let rowid = r.id;
-    self.file.remove( db, r );
-    for (f,cols) in &*self.ixlist.borrow()
+    self.file.remove( db, row );
+    for ( f, cols ) in &*self.ixlist.borrow()
     {
-      let ixr = IndexRow::new( self, rowid, cols.clone(), r );
+      let ixr = IndexRow::new( self, cols.clone(), row );
       f.remove( db, &ixr );
     }
-    r.delcodes( db );
+    row.delcodes( db ); // Deletes codes for Binary and String values.
   }
 
   /// Add the specified index to the table.
@@ -480,7 +478,7 @@ struct IndexRow
 impl IndexRow
 {
   // Construct IndexRow from Row.
-  fn new( table: &Table, rowid: i64, cols: Rc<Vec<usize>>, row: &Row ) -> Self
+  fn new( table: &Table, cols: Rc<Vec<usize>>, row: &Row ) -> Self
   {
     let mut keys = Vec::new();
     let mut codes = Vec::new();
@@ -489,7 +487,7 @@ impl IndexRow
       keys.push( row.values[*c].clone() );
       codes.push( row.codes[*c] );
     }
-    Self{ tinfo: table.info.clone(), cols, rowid, keys, codes }
+    Self{ tinfo: table.info.clone(), cols, rowid: row.id, keys, codes }
   }
 
   // Load IndexRow from data ( note: new codes are computed, as old codes may be deleted ).

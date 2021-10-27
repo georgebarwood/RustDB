@@ -77,18 +77,17 @@ impl Expr
 // #[derive(Debug)]
 pub enum ExprIs
 {
-  Local(usize),
-  Number(i64), /// Get rid of this : use Const?
   Const(Value),
+  Local(usize),
+  ColName(String),
   Binary(Token,Box<Expr>,Box<Expr>),
   Not(Box<Expr>),
   Minus(Box<Expr>),  
-  FuncCall(ObjRef,Vec<Expr>),
-  List(Vec<Expr>),
-  Name(String),
   Case(Vec<(Expr,Expr)>,Box<Expr>),
-  ScalarSelect(Box<SelectExpression>),
+  FuncCall(ObjRef,Vec<Expr>),
   BuiltinCall(String,Vec<Expr>),
+  ScalarSelect(Box<SelectExpression>),
+  List(Vec<Expr>),
 }
 
 /// Object reference ( Schema.Name ).

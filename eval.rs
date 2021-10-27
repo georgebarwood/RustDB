@@ -39,21 +39,33 @@ impl <'r> EvalEnv <'r>
       ip += 1;
       match i
       {
-        Inst::DataOp( x ) =>
-          self.exec_do( x ),
-        Inst::Call( x ) => 
-          self.call( &*( *x ) ),
+        Inst::PushConst( x ) => 
+          self.stack.push( (*x).clone() ),
+        Inst::PushValue( e ) => 
+          { let v = e.eval( self, &[] ); self.stack.push( v ); },
+        Inst::PushLocal( x ) => 
+          self.push_local( *x ),
+        Inst::PopToLocal( x ) => 
+          self.pop_to_local( *x ),
         Inst::Jump( x ) => 
           ip = *x,
         Inst::JumpIfFalse( x, e ) => 
           if !e.eval( self, &[] ) 
             { ip = *x; }
+        Inst::Call( x ) => 
+          self.call( &*( *x ) ),
         Inst::Return => 
           break,
-        Inst::PopToLocal( x ) => 
-          self.pop_to_local( *x ),
-        Inst::PushValue( e ) => 
-          { let v = e.eval( self, &[] ); self.stack.push( v ); }
+        Inst::Throw => 
+          { let s = self.pop_string(); panic!( "{}", s ); }
+        Inst::Execute => 
+          { self.execute(); }
+        Inst::DataOp( x ) =>
+          self.exec_do( x ),
+        Inst::Select( cse ) =>
+          { self.select( cse ); }
+        Inst::Set( cse ) =>
+          { self.set( cse ); }
         Inst::ForInit( for_id, cte ) =>
           { self.for_init( *for_id, cte ); }
         Inst::ForNext( break_id, info ) =>
@@ -62,27 +74,13 @@ impl <'r> EvalEnv <'r>
           { self.for_sort_init( *for_id, cte ); }
         Inst::ForSortNext( break_id, info ) =>
           { if !self.for_sort_next( info ) { ip = *break_id; } }     
-        Inst::Select( cse ) =>
-          { self.select( cse ); }
-        Inst::Set( cse ) =>
-          { self.set( cse ); }
-        Inst::Execute => 
-          { self.execute(); }
         // Special push instructions ( optimisations )
         Inst::PushInt( e ) => 
           { let v = e.eval( self, &[] ); self.stack.push( Value::Int(v) ); }
-        Inst::_PushFloat( e ) => 
+        Inst::PushFloat( e ) => 
           { let v = e.eval( self, &[] ); self.stack.push( Value::Float(v) ); }
         Inst::PushBool( e ) => 
           { let v = e.eval( self, &[] ); self.stack.push( Value::Bool(v) ); }
-        Inst::PushLocal( x ) => 
-          self.push_local( *x ),
-        Inst::PushIntConst( x ) => 
-          self.push_int( *x ),
-        Inst::PushConst( x ) => 
-          self.stack.push( (*x).clone() ),
-        Inst::Throw => 
-          { let s = self.pop_string(); panic!( "{}", s ); }
       }
     }
   } // end fn go
@@ -133,12 +131,6 @@ impl <'r> EvalEnv <'r>
     }
     self.bp = save_bp;
     self.call_depth -= 1;
-  }
-
-  /// Push an integer literal onto the stack.
-  fn push_int( &mut self, x: i64 )
-  {
-    self.stack.push( Value::Int( x ) );
   }
 
   /// Pop a value from the stack and assign it to a local varaiable.
