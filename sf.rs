@@ -156,7 +156,7 @@ impl SortedFile
       let mut p = ptr.borrow_mut();
       if p.dirty
       {
-        println!( "Saving page {} root={} count={} size={}", pnum, self.root_page, p.count, p.size() );
+        println!( "Saving page {} root={} count={} node_size={}", pnum, self.root_page, p.count, p.node_size );
         p.write_header();
         p.dirty = false;
         db.file.write_page( *pnum, &p.data);

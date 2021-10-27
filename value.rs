@@ -59,14 +59,14 @@ impl Value
         if size == 8
         {
           let bytes = (*x).to_le_bytes();
-          data[off..off+8].clone_from_slice(&bytes);
+          data[off..off+8].copy_from_slice(&bytes);
         } 
         else
         {
           debug_assert!( size == 4 );
           let val = *x as f32;
           let bytes = val.to_le_bytes();
-          data[off..off+4].clone_from_slice(&bytes);
+          data[off..off+4].copy_from_slice(&bytes);
         }
       }
       Value::String(s) =>
@@ -178,14 +178,14 @@ pub fn get_bytes( db: &DB, data: &[u8] ) -> ( Vec<u8>, u64 )
   if n <= 15
   {
     let mut bytes = vec![ 0u8; n ];
-    bytes[0..n].clone_from_slice( &data[1..1+n] );
+    bytes[0..n].copy_from_slice( &data[1..1+n] );
     ( bytes, u64::MAX )
   }
   else
   {
     let code = util::getu64( data, 8 );
     let mut bytes = db.decode( code );
-    bytes[0..7].clone_from_slice( &data[1..8] );
+    bytes[0..7].copy_from_slice( &data[1..8] );
     ( bytes, code )
   }
 }
@@ -197,12 +197,12 @@ pub fn save_bytes( bytes: &[u8], data: &mut[u8], code: u64  )
   if n <= 15
   {
     data[ 0 ] = n as u8;
-    data[ 1..1+n].clone_from_slice(&bytes[0..n]);
+    data[ 1..1+n].copy_from_slice(&bytes[0..n]);
   }
   else // Store first 7 bytes and code.
   {
     data[ 0 ] = 255;
-    data[ 1..8 ].clone_from_slice(&bytes[0..7]);
+    data[ 1..8 ].copy_from_slice(&bytes[0..7]);
     util::set( data, 8, code, 8 );
   }
 }

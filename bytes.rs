@@ -46,7 +46,7 @@ impl ByteStorage
       let mut len = n - done;
       if len > BPF { r.len = (BPF << 1) as u8; len = BPF } else { r.len = 1 + ( ( len as u8 ) << 1 ); }
       // for i in 0..len { r.bytes[ i ] = bytes[ done + i ]; }
-      r.bytes[..len].clone_from_slice(&bytes[done..(len + done)]);
+      r.bytes[..len].copy_from_slice(&bytes[done..(len + done)]);
       done += len;
       _frags += 1;
       self.file.insert( db, &r );
@@ -125,7 +125,7 @@ impl Record for Fragment
   {
     util::set( data, 0, self.id, 8 );
     data[ 8 ] = self.len;
-    data[9..9 + BPF].clone_from_slice(&self.bytes[..BPF]);
+    data[9..9 + BPF].copy_from_slice(&self.bytes[..BPF]);
   }
 
   fn compare( &self, _db: &DB, data: &[u8] ) -> std::cmp::Ordering

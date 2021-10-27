@@ -43,7 +43,7 @@ pub struct Page
   /// Is page a parent page? 
   pub parent: bool, 
   /// Number of bytes required for each node.
-  node_size: usize, 
+  pub node_size: usize, 
   /// Root node for the page.
   pub root: usize,
   /// First Free node.
@@ -205,11 +205,8 @@ impl Page
       let dest_off = self.rec_offset( inserted );
       let src_off = from.rec_offset( x );
       let n = self.node_size - NODE_OVERHEAD;
-      for i in 0..n
-      {
-        // Could use clone_from_slice?
-        self.data[ dest_off + i ] = from.data[ src_off + i ];
-      }
+      // for i in 0..n {  self.data[ dest_off + i ] = from.data[ src_off + i ]; }
+      self.data[dest_off..dest_off+n].copy_from_slice( &from.data[src_off..src_off+n] );
     }
     self.dirty = true;
   }
