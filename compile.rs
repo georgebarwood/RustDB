@@ -78,7 +78,7 @@ fn check( p: &Parser, e: &mut Expr )
     }
     ExprIs::Local( x ) => 
     {
-      e.data_type = p.b.local_types[ *x ];
+      e.data_type = p.b.local_typ[ *x ];
     }
     ExprIs::Const( x ) =>  
     {
@@ -601,7 +601,7 @@ pub(crate) fn name_to_col( p: &Parser, name: &str ) -> (usize,DataType)
     { 
       let colnum = *num;
       if colnum == usize::MAX { return ( 0, BIGINT ); }
-      return ( info.off[colnum], info.types[colnum] ); 
+      return ( info.off[colnum], info.typ[colnum] ); 
     }
   }
   panic!( "Name '{}' not found", name )
@@ -617,7 +617,7 @@ pub(crate) fn name_to_colnum( p: &Parser, name: &str ) -> (usize,DataType)
     { 
       let colnum = *num;
       if colnum == usize::MAX { return ( 0, BIGINT ); }
-      return ( colnum, info.types[colnum] ); 
+      return ( colnum, info.typ[colnum] ); 
     }
   }
   panic!( "Name '{}' not found", name )
@@ -681,7 +681,7 @@ pub(crate) fn push( p: &mut Parser, e: &mut Expr ) -> DataType
         for (pnum,e) in parms.iter_mut().enumerate()
         {
           let et = data_kind( push( p, e ) );
-          let ft = data_kind( rp.local_types[ pnum ] );
+          let ft = data_kind( rp.local_typ[ pnum ] );
           if  ft != et { panic!( "Param type mismatch expected {:?} got {:?}", ft, et ); }
         }
       }

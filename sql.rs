@@ -164,7 +164,7 @@ pub(crate) struct Block <'a>
 {
   pub param_count: usize,
   pub return_type: DataType,
-  pub local_types: Vec<DataType>,
+  pub local_typ: Vec<DataType>,
   pub ilist: Vec<Inst>,
 
   pub jumps: Vec<usize>,
@@ -186,7 +186,7 @@ impl <'a> Block <'a>
       labels: HashMap::new(),
       local_map: HashMap::new(),
       locals: Vec::new(),
-      local_types: Vec::new(),
+      local_typ: Vec::new(),
       break_id: 0,
       param_count: 0,
       return_type: NONE,

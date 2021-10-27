@@ -11,7 +11,7 @@ pub struct Table
   file: Rc<SortedFile>,
 
   /// Type information about the columns.
-  pub(crate) info: Rc<TableInfo>,
+  pub(crate) info: Rc<ColInfo>,
 
   /// List of indexes.
   ixlist: RefCell<IxList>,
@@ -26,6 +26,7 @@ pub struct Table
   pub(crate) id_alloc_dirty: Cell<bool>,
 }
 
+/// List of indexes. Each index has a file and a list of column numbers.
 pub type IxList = Vec<(Rc<SortedFile>,Rc<Vec<usize>>)>;
 
 impl Table
@@ -66,7 +67,7 @@ impl Table
     self.file.get( db, &Id{id} )
   }
 
-  /// Get record with specified key, using an index.
+  /// Get record with matching key, using an index.
   pub fn ix_get( &self, db: &DB, keycols: &[usize], key: Vec<Value> ) -> Option<( PagePtr, usize )>
   {
     let list = self.ixlist.borrow();
@@ -78,7 +79,6 @@ impl Table
         if let Some( ( p, off ) ) = f.get( db, &key )
         {
           let p = p.borrow();
-          let off = off + p.rec_size() - 8;
           let id = util::getu64( &p.data, off );
           let row = Id{ id };   
           return self.file.get( db, &row );
@@ -109,7 +109,7 @@ impl Table
     self.scan_keys( db, &keycols, keys )
   }
 
-  /// Get records matching the specified keys.
+  /// Get records with matching keys.
   pub fn scan_keys( self: &TablePtr, db: &DB, keycols: &[usize], keys: Vec<Value> ) -> IndexScan
   {
     let list = self.ixlist.borrow();
@@ -117,7 +117,6 @@ impl Table
     {
       if c.len() >= keycols.len() && keycols == &c[0..keycols.len()]
       {
-        // println!("found scan_from keys={:?}", &keys);
         let ikey = IndexKey::new( self, c.clone(), keys.clone(), Ordering::Less );
         let ixa = f.asc( db, Box::new(ikey) );
         return IndexScan
@@ -218,9 +217,9 @@ impl Table
   }
 
   /// Construct a new table with specified info.
-  pub(crate) fn new( id: i64, root_page: u64, id_alloc:i64, info: Rc<TableInfo> ) -> TablePtr
+  pub(crate) fn new( id: i64, root_page: u64, id_alloc:i64, info: Rc<ColInfo> ) -> TablePtr
   {
-    let rec_size = info.size;
+    let rec_size = info.total;
     let key_size = 8;
     let file = Rc::new(SortedFile::new( rec_size, key_size, root_page ));
     let ixlist = RefCell::new(Vec::new());
@@ -253,11 +252,11 @@ impl Record for Zero
   }
 }
 
-/// Helper class to read byte data using TableInfo.
+/// Helper class to read byte data using ColInfo.
 pub struct Access <'d,'i>
 {
   data: &'d [u8],
-  info: &'i TableInfo
+  info: &'i ColInfo
 }
 
 impl <'d,'i> Access <'d,'i>
@@ -265,7 +264,7 @@ impl <'d,'i> Access <'d,'i>
   /// Extract int from byte data for column number colnum.
   pub fn int( &self, colnum: usize ) -> i64
   {
-    util::get( self.data, self.info.off[colnum], self.info.sizes[colnum] ) as i64
+    util::get( self.data, self.info.off[colnum], self.info.siz[colnum] ) as i64
   }
 
   /// Extract string from byte data for column number colnum.
@@ -283,11 +282,11 @@ impl <'d,'i> Access <'d,'i>
   }
 }  
 
-/// Helper class to write byte data using TableInfo.
+/// Helper class to write byte data using ColInfo.
 pub struct WriteAccess <'d,'i>
 {
   data: &'d mut[u8],
-  info: &'i TableInfo
+  info: &'i ColInfo
 }
 
 impl <'d,'i> WriteAccess <'d,'i>
@@ -295,36 +294,43 @@ impl <'d,'i> WriteAccess <'d,'i>
   /// Save int to byte data.
   pub fn set_int( &mut self, colnum: usize, val: i64 )
   {
-    util::set( self.data, self.info.off[colnum], val as u64, self.info.sizes[colnum] );
+    util::set( self.data, self.info.off[colnum], val as u64, self.info.siz[colnum] );
   }
 }
 
-/// Holds column names and types for a table.
-pub struct TableInfo
+/// Table name and column names/types and other calculated values for a table.
+pub struct ColInfo
 {
+  /// Table name.
   pub name: ObjRef,
+  /// Map from column name to column number.
   pub colmap: HashMap<String,usize>,
+  /// Column names.
   pub colnames: Vec<String>,
-  pub types: Vec<DataType>,
-  pub sizes: Vec<usize>,
+  /// Column types.
+  pub typ: Vec<DataType>,
+  /// Column sizes.
+  pub siz: Vec<usize>,
+  /// Column offsets.
   pub off: Vec<usize>,
-  pub size: usize,
+  /// Total data size, including Id.
+  pub total: usize,
 }
 
-impl TableInfo
+impl ColInfo
 {
-  /// Construct a new TableInfo struct with no columns.
+  /// Construct a new ColInfo struct with no columns.
   pub fn empty( name:ObjRef ) -> Self
   {
-    TableInfo
+    ColInfo
     { 
       name, 
       colmap: HashMap::new(),
-      types: Vec::new(), 
+      typ: Vec::new(), 
       colnames: Vec::new(),
-      sizes: Vec::new(), 
+      siz: Vec::new(), 
       off: Vec::new(), 
-      size:8
+      total:8
     }
   }
 
@@ -342,13 +348,14 @@ impl TableInfo
   pub fn add( &mut self, name: String, typ: DataType ) -> bool
   {
     if self.colmap.contains_key( &name ) { return true; }
-    let cn = self.types.len();
-    self.types.push( typ );
-    self.colnames.push( name.clone() );
+
+    let cn = self.typ.len();
+    self.typ.push( typ );
     let size = data_size( typ );
-    self.off.push( self.size );
-    self.sizes.push( size );
-    self.size += size;
+    self.siz.push( size );
+    self.off.push( self.total );
+    self.total += size;
+    self.colnames.push( name.clone() );
     self.colmap.insert( name, cn );
     false
   }
@@ -366,7 +373,7 @@ impl TableInfo
     let mut total = 0;
     for cnum in cols
     {
-      total += data_size( self.types[ *cnum ] );
+      total += data_size( self.typ[ *cnum ] );
     }
     total
   }
@@ -386,16 +393,16 @@ pub struct Row
 {
   pub id: i64,
   pub values: Vec<Value>,
-  pub info: Rc<TableInfo>,
+  pub info: Rc<ColInfo>,
   pub codes: Vec<u64>
 }
 
 impl Row
 {
-  pub fn new( info: Rc<TableInfo> ) -> Self
+  pub fn new( info: Rc<ColInfo> ) -> Self
   {
     let mut result = Row{ id:0, values: Vec::new(), info, codes: Vec::new() };
-    for t in &result.info.types
+    for t in &result.info.typ
     {
       result.values.push( default( *t ) );
     }    
@@ -407,12 +414,7 @@ impl Row
     self.codes.clear();
     for val in &self.values
     {
-      let u = match val
-      {
-        Value::Binary(x) => db.encode( x ),
-        Value::String(x) => db.encode( x.as_bytes() ),
-        _ => 0
-      };
+      let u = db.encode( val );
       self.codes.push( u );
     }    
   }
@@ -434,9 +436,9 @@ impl Row
     self.id = util::getu64( data, 0 ) as i64;
     let mut off = 8;
     let info = &self.info;
-    for i in 0..info.types.len()
+    for i in 0..info.typ.len()
     {
-      let typ = info.types[i];
+      let typ = info.typ[i];
       let ( val, code ) = Value::load( db, typ, data, off );
       self.values[ i ]  = val;
       self.codes.push( code );
@@ -452,12 +454,11 @@ impl Record for Row
     util::set( data, 0, self.id as u64, 8 );
     let t = &self.info;
     let mut off = 8;
-    for (i,typ) in t.types.iter().enumerate()
+    for (i,typ) in t.typ.iter().enumerate()
     {
-      self.values[i].save( t.types[i], data, off, self.codes[i] );
+      self.values[i].save( t.typ[i], data, off, self.codes[i] );
       off += data_size(*typ);
     }
-    debug_assert!( off == data.len() );
   }
 
   fn compare( &self, _db: &DB, data: &[u8] ) -> std::cmp::Ordering
@@ -470,7 +471,7 @@ impl Record for Row
 /// Row for inserting into an index.
 struct IndexRow
 {
-  pub tinfo: Rc<TableInfo>,
+  pub tinfo: Rc<ColInfo>,
   pub cols: Rc<Vec<usize>>,
   pub keys: Vec<Value>,
   pub codes: Vec<u64>,
@@ -479,6 +480,7 @@ struct IndexRow
 
 impl IndexRow
 {
+  // Construct IndexRow from Row.
   fn new( table: &Table, rowid: i64, cols: Rc<Vec<usize>>, row: &Row ) -> Self
   {
     let mut keys = Vec::new();
@@ -488,19 +490,24 @@ impl IndexRow
       keys.push( row.values[*c].clone() );
       codes.push( row.codes[*c] );
     }
-    Self{ tinfo: table.info.clone(), rowid, keys, cols, codes }
+    Self{ tinfo: table.info.clone(), cols, rowid, keys, codes }
   }
 
+  // Load IndexRow from data ( note: new codes are computed, as old codes may be deleted ).
+  // Since it's unusual for long strings to be keys, code computation should be rare.
   fn load(&mut self, db: &DB, data: &[u8] )
   {
-    let mut off = 0;
-    for (ix,col) in self.cols.iter().enumerate()
+    self.rowid = util::getu64( data, 0 ) as i64;
+    let mut off = 8;
+    for col in &*self.cols
     {
-      let typ = self.tinfo.types[ *col ];
-      self.keys[ix] = Value::load( db, typ, data, off ).0;
+      let typ = self.tinfo.typ[ *col ];
+      let val = Value::load( db, typ, data, off ).0;
+      let code = db.encode( &val );
+      self.keys.push( val );
+      self.codes.push( code );
       off += data_size(typ);
     }
-    self.rowid = util::getu64( data, off ) as i64;
   }
 }
 
@@ -508,28 +515,24 @@ impl Record for IndexRow
 {
   fn save( &self, data: &mut [u8] )
   {
-    let mut off = 0;
+    util::set( data, 0, self.rowid as u64, 8 );
+    let mut off = 8;
     for (ix,k) in self.keys.iter().enumerate() 
     {
-      let typ = self.tinfo.types[ self.cols[ ix ] ];
+      let typ = self.tinfo.typ[ self.cols[ ix ] ];
       k.save( typ, data, off, self.codes[ix] );
       off += data_size(typ);
     }
-    util::set( data, off, self.rowid as u64, 8 );
-    debug_assert!( off+8 == data.len() );
   }
 
   fn compare( &self, db: &DB, data: &[u8] ) -> Ordering
   {
     let mut ix = 0;
-    let mut off = 0;
+    let mut off = 8;
     loop
     {
-      let typ = self.tinfo.types[ self.cols[ ix ] ];
+      let typ = self.tinfo.typ[ self.cols[ ix ] ];
       let val = Value::load( db, typ, data, off ).0;
-
-      // println!( "IndexRow comparing {:?} with {:?}", &val, &self.keys[ix] );
-
       let cf = val.cmp( &self.keys[ix ] );
       if cf != Ordering::Equal
       {
@@ -539,8 +542,8 @@ impl Record for IndexRow
       off += data_size( typ );
       if ix == self.cols.len() 
       { 
-        let id = util::getu64( data, off ) as i64;
-        return self.rowid.cmp( &id );
+        let rowid = util::getu64( data, 0 ) as i64;
+        return self.rowid.cmp( &rowid );
       }  
     }
   }
@@ -551,22 +554,37 @@ impl Record for IndexRow
     ( 
       IndexRow
       { 
+        cols: self.cols.clone(),
+        tinfo: self.tinfo.clone(),
         rowid: 0,
         keys: Vec::new(),
         codes: Vec::new(),
-        cols: self.cols.clone(),
-        tinfo: self.tinfo.clone(),
       }
     );
     result.load( db, data );
     result
+  }
+
+  fn dropkey( &self, db: &DB, data: &[u8] )
+  {  
+    let mut off = 8;
+    for col in &*self.cols
+    {
+      let typ = self.tinfo.typ[ *col ];
+      let code = Value::load( db, typ, data, off ).1;
+      if code != u64::MAX
+      {
+        db.delcode( code );
+      }
+      off += data_size(typ);
+    }
   }
 }
 
 /// Key for searching index.
 pub struct IndexKey
 {
-  pub tinfo: Rc<TableInfo>,
+  pub tinfo: Rc<ColInfo>,
   pub cols: Rc<Vec<usize>>,
   pub key: Vec<Value>,
   pub def: Ordering,
@@ -585,10 +603,10 @@ impl Record for IndexKey
   fn compare( &self, db: &DB, data: &[u8] ) -> Ordering
   {
     let mut ix = 0;
-    let mut off = 0;
+    let mut off = 8;
     loop
     {
-      let typ = self.tinfo.types[ self.cols[ ix ] ];
+      let typ = self.tinfo.typ[ self.cols[ ix ] ];
       let val = Value::load( db, typ, data, off ).0;
 
       let cf = val.cmp( &self.key[ix ] );
@@ -620,10 +638,10 @@ impl IndexScan
 {
   fn keys_equal( &self, data: &[u8] ) -> bool
   {
-    let mut off = 0;
+    let mut off = 8;
     for (ix,k) in self.keys.iter().enumerate()
     {
-      let typ = self.table.info.types[ self.cols[ix] ];
+      let typ = self.table.info.typ[ self.cols[ix] ];
       let val = Value::load( &self.db, typ, data, off ).0;
       let cf = val.cmp( k );
       if cf != Ordering::Equal
@@ -645,11 +663,11 @@ impl Iterator for IndexScan
     {
       let p = p.borrow();
       let data = &p.data[off..];
-
-      if !self.keys_equal( data ) { return None; }
-
-      let id_off = p.rec_size() - 8;      
-      let id = util::getu64( data, id_off );
+      if !self.keys_equal( data ) 
+      {
+        return None; 
+      }
+      let id = util::getu64( data, 0 );
       return self.table.id_get( &self.db, id );
     }
     None 

@@ -4,7 +4,7 @@ use crate::
 {  
   value::Value, compile::CExpPtr, page::PagePtr,
   sql::{DataKind,DataType,ObjRef,data_kind,Assigns},   
-  table::{TablePtr,TableInfo,IndexInfo},   
+  table::{TablePtr,ColInfo,IndexInfo},   
 };
 
 /// Iterator that yields references to page data.
@@ -135,7 +135,7 @@ pub struct CSelectExpression
 /// Database Operation
 pub enum DO
 {
-  CreateTable( TableInfo ),
+  CreateTable( ColInfo ),
   CreateIndex( IndexInfo ),
   CreateSchema( String ),
   CreateFunction( ObjRef, Rc<String>, bool ),
@@ -177,7 +177,7 @@ pub struct Function
 {
   pub param_count: usize,
   pub return_type: DataType,
-  pub local_types: Vec<DataType>,
+  pub local_typ: Vec<DataType>,
   pub source: Rc<String>,
   pub ilist: RefCell<Vec<Inst>>, // Valid when compiled is true.
   pub compiled: Cell<bool>,

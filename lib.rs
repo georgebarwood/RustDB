@@ -2,9 +2,7 @@
 //!
 //!Decimal shifting when scales do not match.
 //!
-//!Update not yet updating indexes. Multi-column index use from WHERE.
-//!
-//!Issue with IndexCol table, colids.
+//!Multi-column index use from WHERE.
 //!
 //!multipart requests ( for file upload ).
 //!
@@ -45,7 +43,7 @@
 
 use std::{ panic, cell::RefCell, rc::Rc, cell::Cell, collections::HashMap };
 use crate::{ value::Value, util::newmap, bytes::ByteStorage, run::FunctionPtr, compile::CompileFunc,
-  table::{Table,TablePtr,TableInfo}, sql::{DataType,DataKind,ObjRef,STRING,BIGINT,TINYINT,SqlError} };
+  table::{Table,TablePtr,ColInfo}, sql::{DataType,DataKind,ObjRef,STRING,BIGINT,TINYINT,SqlError} };
 
 /// WebQuery struct for making a http web server.
 pub mod web;
@@ -85,7 +83,7 @@ mod sf;
 /// Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids. 
 mod page;
 
-/// Table : TableInfo, Row, other Table types.
+/// Table : ColInfo, Row, other Table types.
 mod table;
 
 /// SQL execution : Instruction (Inst) and other run time types.
@@ -356,10 +354,17 @@ GO
     self.tables.borrow_mut().insert( name, table );
   }
 
-  /// Encode byte slice as u64.
-  fn encode( self: &DB, bytes: &[u8] ) -> u64
+  /// Get code for value.
+  fn encode( self: &DB, val: &Value ) -> u64
   {
-    if bytes.len() < 16 { return 0; }
+    let bytes =
+    match val
+    {
+      Value::Binary(x) => x,
+      Value::String(x) => x.as_bytes(),
+      _ => { return u64::MAX; }
+    };
+    if bytes.len() < 16 { return u64::MAX; }
     self.bs.encode( self, &bytes[7..] )
   }
 
@@ -409,7 +414,7 @@ impl TableBuilder
     let root_page = id as u64;
     self.alloc += 1;
     let name = ObjRef::new( schema, name );
-    let info = TableInfo::new( name, ct );
+    let info = ColInfo::new( name, ct );
     let table = Table::new( id, root_page, 1, Rc::new(info) );
     self.list.push( table.clone() );
     table

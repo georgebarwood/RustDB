@@ -15,6 +15,10 @@ pub trait Record
   {
     Box::new( Id{ id: util::getu64( data, 0 ) } )
   }
+
+  /// Drop parent key ( may need to delete codes ).
+  /// Only used when pages are being merged ( not yet implemented ).
+  fn dropkey( &self, _db: &DB, _data: &[u8]){}
 }
 
 /// Id record.
@@ -152,7 +156,7 @@ impl SortedFile
       let mut p = ptr.borrow_mut();
       if p.dirty
       {
-        println!( "Saving page {} root={} count={}", pnum, self.root_page, p.count );
+        println!( "Saving page {} root={} count={} size={}", pnum, self.root_page, p.count, p.size() );
         p.write_header();
         p.dirty = false;
         db.file.write_page( *pnum, &p.data);

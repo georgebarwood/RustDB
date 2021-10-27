@@ -65,7 +65,10 @@ impl Page
   /// Construct a new page.
   pub fn new( rec_size:usize, parent:bool, data: Vec<u8> ) -> Page
   {
-    let node_size = NODE_OVERHEAD + rec_size + if parent {PAGE_ID_SIZE} else {0};
+    let node_size = rec_size + if parent {PAGE_ID_SIZE} else {0} + NODE_OVERHEAD;
+    // Round up to multiple of 8 bytes.
+    // node_size = node_size + 7;
+    // node_size = node_size - node_size % 8;
 
     let u = util::get( &data, 0, NODE_BASE );
     let root  = getbits!( u, 1               , NODE_ID_BITS ) as usize;
@@ -118,18 +121,6 @@ impl Page
     self.free == 0 && ( self.alloc == MAX_NODE ||
      NODE_BASE + ( self.alloc + 1 ) * self.node_size
      + if self.parent {PAGE_ID_SIZE} else {0} >= PAGE_SIZE )
-  }
-
-  /// The offset of the client data in page data for record number x.
-  pub fn rec_offset( &self, x:usize ) -> usize
-  {
-    NODE_BASE + NODE_OVERHEAD + (x-1) * self.node_size
-  }
-
-  /// The record size for this page ( user data ).
-  pub fn rec_size( &self ) -> usize
-  {
-    self.node_size - NODE_OVERHEAD - if self.parent { PAGE_ID_SIZE } else { 0 }
   }
 
   /// Construct a new empty page inheriting record size and parent from self.
@@ -216,6 +207,7 @@ impl Page
       let n = self.node_size - NODE_OVERHEAD;
       for i in 0..n
       {
+        // Could use clone_from_slice?
         self.data[ dest_off + i ] = from.data[ src_off + i ];
       }
     }
@@ -229,36 +221,59 @@ impl Page
   }
 
   // Node access functions.
+  // Layout of a Node is
+  // Client data
+  // Padding ( so that total node size is multiple of 8 bytes )
+  // Child page number ( if parent page ) ( 6 bytes )
+  // Node overhead ( 3 bytes )
+
+  /// Offset of the 3 byte node overhead  for record number x.
+  fn over_off( &self, x: usize ) -> usize
+  {
+    ( NODE_BASE - NODE_OVERHEAD ) + x * self.node_size
+  }
+
+  /// Offset of the client data for record number x.
+  pub fn rec_offset( &self, x:usize ) -> usize
+  {
+    NODE_BASE + (x-1) * self.node_size
+  }
+
+  /// The client data size.
+  pub fn rec_size( &self ) -> usize
+  {
+    self.node_size - NODE_OVERHEAD - if self.parent { PAGE_ID_SIZE } else { 0 }
+  }
 
   fn balance( &self, x: usize ) -> u8
   {
-    let off = NODE_BASE + (x-1) * self.node_size;
+    let off = self.over_off( x );
     getbits!( self.data[ off ], 0, 2 )
   }
 
   fn set_balance( &mut self, x: usize, balance: u8 )
   {
-    let off = NODE_BASE + (x-1) * self.node_size;
+    let off = self.over_off( x );
     setbits!( self.data[ off ], 0, 2, balance );
   } 
  
   /// Get the left child node for a node. Result is zero if there is no child.
   pub fn left( &self, x: usize ) -> usize
   {
-    let off = NODE_BASE + (x-1) * self.node_size;
+    let off = self.over_off( x );
     self.data[ off + 1 ] as usize | ( getbits!( self.data[ off ] as usize, 2, NODE_ID_BITS-8 ) << 8 )
   }
 
   /// Get the right child node for a node. Result is zero if there is no child.
   pub fn right( &self, x: usize ) -> usize
   { 
-    let off = NODE_BASE + (x-1) * self.node_size;
+    let off = self.over_off( x );
     self.data[ off + 2 ] as usize | ( getbits!( self.data[ off ] as usize, 2+NODE_ID_BITS-8, NODE_ID_BITS-8 ) << 8 )
   }
 
   fn set_left( &mut self, x: usize, y: usize )
   {
-    let off : usize = NODE_BASE + (x-1) * self.node_size;
+    let off = self.over_off( x );
     self.data[ off + 1 ] = ( y & 255 ) as u8;
     setbits!( self.data[ off ], 2, NODE_ID_BITS-8, ( y >> 8 ) as u8 );
     debug_assert!( self.left( x ) == y );
@@ -266,7 +281,7 @@ impl Page
 
   fn set_right( &mut self, x: usize, y: usize )
   {
-    let off : usize = NODE_BASE + (x-1) * self.node_size;
+    let off = self.over_off( x );
     self.data[ off + 2 ] = ( y & 255 ) as u8;
     setbits!( self.data[ off ], 2+NODE_ID_BITS-8, NODE_ID_BITS-8, ( y >> 8 ) as u8 );
     debug_assert!( self.right( x ) == y );
@@ -275,13 +290,13 @@ impl Page
   /// Get the child page number for a node in a parent page.
   pub fn child_page( &self, x: usize ) -> u64
   {
-    let off = NODE_BASE + x * self.node_size - PAGE_ID_SIZE;
+    let off = self.over_off( x ) - PAGE_ID_SIZE;
     util::get( &self.data, off, PAGE_ID_SIZE )
   }
 
   fn set_child_page( &mut self, x: usize, pnum: u64 )
   {
-    let off = NODE_BASE + x * self.node_size - PAGE_ID_SIZE;
+    let off = self.over_off( x ) - PAGE_ID_SIZE;
     util::set( &mut self.data, off, pnum as u64, PAGE_ID_SIZE );
   }
 

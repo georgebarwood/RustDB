@@ -113,9 +113,9 @@ impl <'r> EvalEnv <'r>
 
     let save_bp = self.bp;
     self.bp = self.stack.len() - r.param_count;          
-    self.alloc_locals( &r.local_types, r.param_count );          
+    self.alloc_locals( &r.local_typ, r.param_count );          
     self.go( &r.ilist.borrow() );
-    let pop_count = r.local_types.len();
+    let pop_count = r.local_typ.len();
     if pop_count > 0
     {
       if r.return_type != NONE
@@ -326,7 +326,7 @@ impl <'r> EvalEnv <'r>
       {
         let p = p.borrow_mut();
         // Delete any codes no longer in use.
-        for (i,typ) in t.info.types.iter().enumerate()
+        for (i,typ) in t.info.typ.iter().enumerate()
         {
           match data_kind( *typ )
           {

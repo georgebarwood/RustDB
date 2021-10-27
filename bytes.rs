@@ -44,7 +44,7 @@ impl ByteStorage
       r.id = self.id_alloc.get();
       self.id_alloc.set( r.id + 1 );
       let mut len = n - done;
-      if len > 63 { r.len = 63 << 1; len = 63 } else { r.len = 1 + ( ( len as u8 ) << 1 ); }
+      if len > BPF { r.len = (BPF << 1) as u8; len = BPF } else { r.len = 1 + ( ( len as u8 ) << 1 ); }
       // for i in 0..len { r.bytes[ i ] = bytes[ done + i ]; }
       r.bytes[..len].clone_from_slice(&bytes[done..(len + done)]);
       done += len;
@@ -64,7 +64,7 @@ impl ByteStorage
     {
       let p = p.borrow();
       let xid = util::getu64( &p.data, off );
-      if xid != id { break; }
+      if xid != id { break; } // Maybe this shoould be a panic?
       id += 1;
       let len = p.data[ off + 8 ] as usize;
       //for i in 0..(len>>1) { result.push( p.data[ rr.off + 9 + i ] ); }
@@ -84,7 +84,7 @@ impl ByteStorage
     {
       let p = p.borrow();
       let xid = util::getu64( &p.data, off );
-      if xid != id + n { break; }
+      if xid != id + n { break; } // Maybe this shoould be a panic?
       n += 1;
       let len = &p.data[ off + 8 ];
       if len & 1 == 1 { break; }
@@ -99,8 +99,8 @@ impl ByteStorage
   }
 }
 
-/// = 63. Number of bytes stored in each fragment.
-const BPF : usize = 63; // Bytes per fragment.
+/// = 52. Number of bytes stored in each fragment.
+const BPF : usize = 52;
 
 /// Values are split into BPF size fragments.
 struct Fragment 
@@ -123,7 +123,6 @@ impl Record for Fragment
 {
   fn save( &self, data: &mut [u8] )
   {
-    debug_assert!( data.len() == 9+BPF );    
     util::set( data, 0, self.id, 8 );
     data[ 8 ] = self.len;
     data[9..9 + BPF].clone_from_slice(&self.bytes[..BPF]);

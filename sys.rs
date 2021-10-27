@@ -1,5 +1,5 @@
 use std::{ rc::Rc, cell::{Cell,RefCell} };
-use crate::{*,value::Value,sql::*,run::*,table::{Table,TableInfo,TablePtr,IndexInfo}};
+use crate::{*,value::Value,sql::*,run::*,table::{Table,ColInfo,TablePtr,IndexInfo}};
 
 /// Creates a schema in the database by writing to the system Schema table.
 pub fn create_schema( db: &DB, name: &str )
@@ -16,7 +16,7 @@ pub fn create_schema( db: &DB, name: &str )
 }
 
 /// Create a new table in the database by writing to the system Table and Column tables.
-pub fn create_table( db: &DB, info: &TableInfo )
+pub fn create_table( db: &DB, info: &ColInfo )
 {
   if let Some(_t) = get_table( db, &info.name )
   {
@@ -50,7 +50,7 @@ pub fn create_table( db: &DB, info: &TableInfo )
     let t = &db.sys_column;
     let mut row = t.row();
     row.values[0] = Value::Int( tid );
-    for (num,typ) in info.types.iter().enumerate()
+    for (num,typ) in info.typ.iter().enumerate()
     {
       // Columns are Table, Name, Type
       row.id = t.alloc_id();
@@ -122,15 +122,17 @@ pub fn create_function( db: &DB, name: &ObjRef, source: Rc<String>, alter: bool 
       if let Some( (p,off) ) = t.ix_get( db, &[0,1], keys )
       {
         let mut p = p.borrow_mut();
-        let a = t.access( &p, off );
-        let oldid = a.int( 2 );
-        db.delcode( oldid as u64 );
-        let newid = db.encode( source.as_bytes() );
-        drop( a );
-        let mut w = t.write_access( &mut p, off );
-        w.set_int( 2, newid as i64 );
-        p.dirty = true;
-        db.functions_dirty.set( true );
+        let off = off + t.info.off[2];
+        let (val,oldcode) = Value::load( db, STRING, &p.data, off );
+        if val.str() != source
+        {
+          db.delcode(oldcode);
+          let val = Value::String( source.clone() );
+          let newcode = db.encode( &val );
+          val.save( STRING, &mut p.data, off, newcode );
+          p.dirty = true;
+          db.functions_dirty.set( true );
+        }
         return;
       }
       panic!( "function {} not found", &name.to_str() );
@@ -203,7 +205,7 @@ pub(crate) fn get_table( db: &DB, name: &ObjRef ) -> Option< TablePtr >
 { 
   if let Some( ( table_id, root, id_alloc ) ) = get_table0( db, name )
   {
-    let mut info = TableInfo::empty( name.clone() );
+    let mut info = ColInfo::empty( name.clone() );
 
     // Load columns. Columns are Table, Name, Type
     let t = &db.sys_column;
@@ -288,7 +290,7 @@ fn parse_function( db: &DB, source: Rc<String> ) -> FunctionPtr
   {
     compiled: Cell::new(false),
     ilist: RefCell::new( Vec::new() ),
-    local_types: p.b.local_types,
+    local_typ: p.b.local_typ,
     return_type: p.b.return_type,
     param_count: p.b.param_count,
     source,

@@ -138,7 +138,7 @@ impl <'a> Parser <'a>
 
       // let start = std::time::Instant::now();
 
-      ee.alloc_locals( &self.b.local_types, 0 );
+      ee.alloc_locals( &self.b.local_typ, 0 );
       ee.go( &self.b.ilist );
 
       // println!( "EvalEnv::exec Time elapsed={} micro sec.", start.elapsed().as_micros() );
@@ -415,7 +415,7 @@ impl <'a> Parser <'a>
     }
     for ( i, pt ) in ptypes.iter().enumerate()
     {
-      let ft = data_kind( r.local_types[i] );
+      let ft = data_kind( r.local_typ[i] );
       let et = data_kind( *pt );
       if ft != et
       {
@@ -1072,8 +1072,8 @@ impl <'a> Parser <'a>
   {
     let se : SelectExpression = self.select_expression( true );
 
-    let for_id = self.b.local_types.len();
-    self.b.local_types.push( NONE );
+    let for_id = self.b.local_typ.len();
+    self.b.local_typ.push( NONE );
  
     if !self.parse_only 
     { 
@@ -1113,7 +1113,7 @@ impl <'a> Parser <'a>
     let name = self.obj_ref();
     let source_start = self.source_ix-2;
     self.read( Token::LBra );
-    let mut ti = TableInfo::empty( name );
+    let mut ti = ColInfo::empty( name );
     loop
     {
       let cname = self.id();
@@ -1345,8 +1345,8 @@ impl <'a> Parser <'a>
   /// Define a local variable ( parameter or declared ).
   fn def_local( &mut self, name: &'a [u8], dt: DataType ) 
   {
-    let local_id = self.b.local_types.len();
-    self.b.local_types.push( dt );
+    let local_id = self.b.local_typ.len();
+    self.b.local_typ.push( dt );
     self.b.locals.push( name );
     if self.b.local_map.contains_key( name )
     {
