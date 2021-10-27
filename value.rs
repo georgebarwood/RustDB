@@ -5,7 +5,7 @@ use crate::*;
 /// Binary and String values are allocated 16 bytes.
 /// If the value is more than 15 bytes, the first 7 bytes are stored inline, and the rest are coded.
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum Value
 {
   None,
@@ -15,129 +15,143 @@ pub enum Value
   Float(f64),
   Bool(bool),
   For(Rc<RefCell<run::ForState>>),
-  ForSort(Rc<RefCell<run::ForSortState>>)
+  ForSort(Rc<RefCell<run::ForSortState>>),
 }
 
 impl Value
 {
-  pub fn load( db: &DB, typ: DataType, data: &[u8], off: usize ) -> ( Value, u64 )
+  pub fn load(db: &DB, typ: DataType, data: &[u8], off: usize) -> (Value, u64)
   {
-    let size = data_size( typ );
+    let size = data_size(typ);
     let mut code = u64::MAX;
-    let val = match data_kind( typ )
+    let val = match data_kind(typ)
     {
-      DataKind::Bool => Value::Bool( data[off] != 0 ),
+      DataKind::Bool => Value::Bool(data[off] != 0),
       DataKind::String =>
       {
-        let ( bytes,u ) = get_bytes( db, &data[off..] );
+        let (bytes, u) = get_bytes(db, &data[off..]);
         code = u;
-        let str = String::from_utf8( bytes ).unwrap();
-        Value::String( Rc::new( str ) )
+        let str = String::from_utf8(bytes).unwrap();
+        Value::String(Rc::new(str))
       }
-      DataKind::Binary => 
-      { 
-        
-        let ( bytes,u ) = get_bytes( db, &data[off..] );
+      DataKind::Binary =>
+      {
+        let (bytes, u) = get_bytes(db, &data[off..]);
         code = u;
-        Value::Binary( Rc::new( bytes ) )
+        Value::Binary(Rc::new(bytes))
       }
-      _ => Value::Int( util::get( data, off, size ) as i64  )
+      _ => Value::Int(util::get(data, off, size) as i64),
     };
-    ( val, code )
+    (val, code)
   }
 
-  pub fn save( &self, typ: DataType, data: &mut [u8], off: usize, code: u64 )
+  pub fn save(&self, typ: DataType, data: &mut [u8], off: usize, code: u64)
   {
-    let size = data_size( typ );
+    let size = data_size(typ);
     match self
     {
-      Value::Bool(x) => { data[ off ] = if *x {1} else {0}; }
-      Value::Int(x) => util::set( data, off, *x as u64, size ),
+      Value::Bool(x) =>
+      {
+        data[off] = if *x { 1 } else { 0 };
+      }
+      Value::Int(x) => util::set(data, off, *x as u64, size),
       Value::Float(x) =>
       {
         if size == 8
         {
           let bytes = (*x).to_le_bytes();
-          data[off..off+8].copy_from_slice(&bytes);
-        } 
+          data[off..off + 8].copy_from_slice(&bytes);
+        }
         else
         {
-          debug_assert!( size == 4 );
+          debug_assert!(size == 4);
           let val = *x as f32;
           let bytes = val.to_le_bytes();
-          data[off..off+4].copy_from_slice(&bytes);
+          data[off..off + 4].copy_from_slice(&bytes);
         }
       }
       Value::String(s) =>
       {
-        save_bytes( s.as_bytes(), &mut data[off..], code );
+        save_bytes(s.as_bytes(), &mut data[off..], code);
       }
-      Value::Binary(b) => 
+      Value::Binary(b) =>
       {
-        save_bytes( b, &mut data[off..], code );
+        save_bytes(b, &mut data[off..], code);
       }
-      _ => {}
+      _ =>
+      {}
     }
-  } 
+  }
 
-  pub fn str( &self ) -> Rc<String>
+  pub fn str(&self) -> Rc<String>
   {
     match self
     {
       Value::String(s) => s.clone(),
       Value::Int(x) => Rc::new(x.to_string()),
-      Value::Float(x) => Rc::new(x.to_string()),  
-      Value::Binary(_x) => Rc::new( "ToDo".to_string()),
-      _ => panic!( "str not implemented" )
+      Value::Float(x) => Rc::new(x.to_string()),
+      Value::Binary(_x) => Rc::new("ToDo".to_string()),
+      _ => panic!("str not implemented"),
     }
   }
 
-  pub fn append( &mut self, val: Value )
+  pub fn append(&mut self, val: Value)
   {
     if let Value::String(s) = self
     {
       let val = val.str();
-      if let Some( ms ) = Rc::get_mut(s)
+      if let Some(ms) = Rc::get_mut(s)
       {
-        ms.push_str( &val );
+        ms.push_str(&val);
       }
       else
       {
-        let mut ns = String::with_capacity( s.len() + val.len() );
-        ns.push_str( s );
-        ns.push_str( &val );
-        *self = Value::String( Rc::new( ns ) );
+        let mut ns = String::with_capacity(s.len() + val.len());
+        ns.push_str(s);
+        ns.push_str(&val);
+        *self = Value::String(Rc::new(ns));
       }
-    } else { panic!() }
+    }
+    else
+    {
+      panic!()
+    }
   }
 }
 
-impl std::cmp::Ord for Value 
+impl std::cmp::Ord for Value
 {
-  fn cmp(&self, other: &Self) -> std::cmp::Ordering 
+  fn cmp(&self, other: &Self) -> std::cmp::Ordering
   {
     let mut result = std::cmp::Ordering::Equal;
     match self
     {
-      Value::String(s1) => 
+      Value::String(s1) =>
+      {
         if let Value::String(s2) = other
         {
           result = s1.cmp(s2);
         }
+      }
       Value::Int(x1) =>
+      {
         if let Value::Int(x2) = other
         {
           result = x1.cmp(x2);
-        }  
-      _ => { panic!() }
+        }
+      }
+      _ =>
+      {
+        panic!()
+      }
     }
     result
   }
 }
 
-impl PartialOrd for Value 
+impl PartialOrd for Value
 {
-  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> 
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering>
   {
     let mut result = std::cmp::Ordering::Equal;
     if let Value::String(s1) = self
@@ -151,13 +165,13 @@ impl PartialOrd for Value
   }
 }
 
-impl PartialEq for Value 
+impl PartialEq for Value
 {
-  fn eq(&self, other: &Self) -> bool 
+  fn eq(&self, other: &Self) -> bool
   {
-    if let Some(eq) = self.partial_cmp( other ) 
-    { 
-      eq == std::cmp::Ordering::Equal 
+    if let Some(eq) = self.partial_cmp(other)
+    {
+      eq == std::cmp::Ordering::Equal
     }
     else
     {
@@ -166,42 +180,41 @@ impl PartialEq for Value
   }
 }
 
-impl Eq for Value
-{
-}
+impl Eq for Value {}
 
 /// Decode bytes. Result is bytes and code ( or u64::MAX if no code ).
-pub fn get_bytes( db: &DB, data: &[u8] ) -> ( Vec<u8>, u64 )
+pub fn get_bytes(db: &DB, data: &[u8]) -> (Vec<u8>, u64)
 {
   let n = data[0] as usize;
   if n <= 15
   {
-    let mut bytes = vec![ 0u8; n ];
-    bytes[0..n].copy_from_slice( &data[1..1+n] );
-    ( bytes, u64::MAX )
+    let mut bytes = vec![0u8; n];
+    bytes[0..n].copy_from_slice(&data[1..1 + n]);
+    (bytes, u64::MAX)
   }
   else
   {
-    let code = util::getu64( data, 8 );
-    let mut bytes = db.decode( code );
-    bytes[0..7].copy_from_slice( &data[1..8] );
-    ( bytes, code )
+    let code = util::getu64(data, 8);
+    let mut bytes = db.decode(code);
+    bytes[0..7].copy_from_slice(&data[1..8]);
+    (bytes, code)
   }
 }
 
 /// Save bytes. If more than 15 bytes, a code is needed.
-pub fn save_bytes( bytes: &[u8], data: &mut[u8], code: u64  )
+pub fn save_bytes(bytes: &[u8], data: &mut [u8], code: u64)
 {
   let n = bytes.len();
   if n <= 15
   {
-    data[ 0 ] = n as u8;
-    data[ 1..1+n].copy_from_slice(&bytes[0..n]);
+    data[0] = n as u8;
+    data[1..1 + n].copy_from_slice(&bytes[0..n]);
   }
-  else // Store first 7 bytes and code.
+  else
   {
-    data[ 0 ] = 255;
-    data[ 1..8 ].copy_from_slice(&bytes[0..7]);
-    util::set( data, 8, code, 8 );
+    // Store first 7 bytes and code.
+    data[0] = 255;
+    data[1..8].copy_from_slice(&bytes[0..7]);
+    util::setu64(&mut data[8..], code);
   }
 }
