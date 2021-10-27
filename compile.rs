@@ -1,9 +1,5 @@
+use crate::*; 
 use std::{mem,ops};
-
-use crate::{ value::Value, sqlparse::Parser, cexp, sql::*, 
-  run::{Inst,FunctionPtr,CSelectExpression,CTableExpression}, 
-  eval::EvalEnv, table::TablePtr 
-};
 
 /// Compiled expression which yields type T when evaluated.
 pub trait CExp<T>

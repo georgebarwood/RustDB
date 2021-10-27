@@ -1,5 +1,4 @@
-use std::{ rc::Rc, cell::{Cell,RefCell} };
-use crate::{*,value::Value,sql::*,run::*,table::{Table,ColInfo,TablePtr,IndexInfo}};
+use crate::*;
 
 /// Creates a schema in the database by writing to the system Schema table.
 pub fn create_schema( db: &DB, name: &str )
@@ -127,7 +126,7 @@ pub fn create_function( db: &DB, name: &ObjRef, source: Rc<String>, alter: bool 
         if val.str() != source
         {
           db.delcode(oldcode);
-          let val = Value::String( source.clone() );
+          let val = Value::String( source );
           let newcode = db.encode( &val );
           val.save( STRING, &mut p.data, off, newcode );
           p.dirty = true;

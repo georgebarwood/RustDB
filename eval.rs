@@ -1,6 +1,4 @@
-use crate::{ value::Value, util, sys, Query, DB, 
-  sql::{DataKind, DataType, NONE, data_kind, AssignOp, Assigns }, 
-  compile::CExpPtr, table::{TablePtr,Row}, run::* };
+use crate::*;
 
 /// Evaluation environment - stack of Values, references to DB and Query.
 pub struct EvalEnv <'r>
@@ -317,33 +315,17 @@ impl <'r> EvalEnv <'r>
   fn delete( &mut self, t: &TablePtr, w: &CExpPtr<bool> )
   {
     let idlist = self.get_id_list( t, w );
-    let mut row = t.row();
-    let mut codes = Vec::new();
+    let mut oldrow = t.row();
     for id in idlist
     {
-      row.id = id as i64; 
+      // Load oldrow so that any codes are deleted.
       if let Some( ( p, off ) ) = t.id_get( &self.db, id )
       {
-        let p = p.borrow_mut();
-        // Delete any codes no longer in use.
-        for (i,typ) in t.info.typ.iter().enumerate()
-        {
-          match data_kind( *typ )
-          {
-            DataKind::String | DataKind::Binary =>
-            {
-              let u = util::getu64( &p.data, off + t.info.off[i] );
-              codes.push( u );
-            }
-            _ => {}
-          }
-        }
+        let p = p.borrow();
+        let data = &p.data[off..];
+        oldrow.load( &self.db, data );
+        t.remove( &self.db, &oldrow );
       }
-      t.remove( &self.db, &row );
-    }
-    for u in codes
-    {
-      self.db.delcode( u );
     }
   }
 
@@ -354,7 +336,6 @@ impl <'r> EvalEnv <'r>
     let mut oldrow = t.row();
     for id in idlist
     {
-      oldrow.id = id as i64;
       if let Some( ( p, off ) ) = t.id_get( &self.db, id )
       {
         let mut newrow =
@@ -370,7 +351,7 @@ impl <'r> EvalEnv <'r>
           newrow
         };
         // Would be nice to optimise this to minimise re-indexing.
-        t.remove( &self.db, &mut oldrow );
+        t.remove( &self.db, &oldrow );
         t.insert( &self.db, &mut newrow );
       }
     }

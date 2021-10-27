@@ -1,11 +1,3 @@
-//!ToDo List:
-//!
-//!Decimal shifting when scales do not match.
-//!
-//!Multi-column index use from WHERE.
-//!
-//!multipart requests ( for file upload ).
-//!
 //! Database with SQL-like language.
 //! Example program:
 //! ```
@@ -40,10 +32,22 @@
 //!(2) Database Table storage. Each record has a 64-bit Id.
 //!
 //!(3) Index storage ( an index record refers back to the main table ).
+//!
+//!ToDo List:
+//!
+//!Decimal shifting when scales do not match.
+//!
+//!Multi-column index use from WHERE.
+//!
+//!multipart requests ( for file upload ).
+//!
 
-use std::{ panic, cell::RefCell, rc::Rc, cell::Cell, collections::HashMap };
-use crate::{ value::Value, util::newmap, bytes::ByteStorage, run::FunctionPtr, compile::CompileFunc,
-  table::{Table,TablePtr,ColInfo}, sql::{DataType,DataKind,ObjRef,STRING,BIGINT,TINYINT,SqlError} };
+use std::{ panic, cell::RefCell, rc::Rc, cell::Cell, collections::HashMap, cmp::Ordering };
+use crate::
+{ 
+  util::*, bytes::*, run::*, compile::*, eval::*, 
+  value::*, table::*, sql::*, sf::*, sqlparse::*, page::*
+};
 
 /// WebQuery struct for making a http web server.
 pub mod web;
@@ -60,19 +64,19 @@ pub mod spf;
 /// Value.
 pub mod value;
 
-// Private modules.
+// Private modules ( in principle, currently public ).
 
 /// SQL parser.
-mod sqlparse;
+pub mod sqlparse;
 
 /// Utility functions.
 #[macro_use]mod util;
 
 /// Access system tables (Schema,Table,Column,Index,IndexColumn,Function).
-mod sys;
+pub mod sys;
 
 /// Sorted Record storage : SortedFile.
-mod sf;
+pub mod sf;
 
 /// Page for SortedFile.
 ///
@@ -81,25 +85,25 @@ mod sf;
 /// Nodes are numbered from 1..2047, with 0 indicating a null ( non-existent ) node.
 /// 
 /// Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids. 
-mod page;
+pub mod page;
 
 /// Table : ColInfo, Row, other Table types.
-mod table;
+pub mod table;
 
 /// SQL execution : Instruction (Inst) and other run time types.
-mod run;
+pub mod run;
 
 /// SQL execution : EvalEnv struct.
-mod eval; 
+pub mod eval; 
 
 /// CExp implementations for basic expressions.
-mod cexp;
+pub mod cexp;
 
 /// Storage of variable length values : ByteStorage.
-mod bytes;
+pub mod bytes;
 
 /// Compilation of SQL builtin functions.
-mod builtin;
+pub mod builtin;
 
 /// ```Rc<Database>```
 pub type DB = Rc<Database>;

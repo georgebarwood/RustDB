@@ -1,5 +1,5 @@
 use std::{ rc::Rc, cell::{Cell,RefCell}, collections::HashMap, cmp::Ordering };
-use crate::{value::{Value,get_bytes},util,sf::*,DB,sql::*,run::*,page::*,sqlparse::Parser,compile::*};
+use crate::*;
 
 /// Table Pointer.
 pub type TablePtr = Rc<Table>;
@@ -172,13 +172,13 @@ impl Table
   /// Utility for accessing fields by number.
   pub fn access<'d,'t>( &'t self, p: &'d Page, off:usize ) -> Access::<'d,'t>
   {
-    Access::<'d,'t>{ data: &p.data[ off..PAGE_SIZE ], info: &self.info }
+    Access::<'d,'t>{ data: &p.data[off..], info: &self.info }
   }
 
   /// Utility for updating fields by number.
   pub fn write_access<'d,'t>( &'t self, p: &'d mut Page, off:usize ) -> WriteAccess::<'d,'t>
   {
-    WriteAccess::<'d,'t>{ data: &mut p.data[ off..PAGE_SIZE ], info: &self.info }
+    WriteAccess::<'d,'t>{ data: &mut p.data[off..], info: &self.info }
   }
 
   /// Construct a row for the table.
@@ -430,19 +430,19 @@ impl Row
     }
   }
 
+  /// Load the row values and codes from data.
   pub fn load( &mut self, db: &DB, data: &[u8] )
   {
+    self.values.clear();
     self.codes.clear();
     self.id = util::getu64( data, 0 ) as i64;
     let mut off = 8;
-    let info = &self.info;
-    for i in 0..info.typ.len()
+    for typ in &self.info.typ
     {
-      let typ = info.typ[i];
-      let ( val, code ) = Value::load( db, typ, data, off );
-      self.values[ i ]  = val;
+      let ( val, code ) = Value::load( db, *typ, data, off );
+      self.values.push( val );
       self.codes.push( code );
-      off += data_size( typ );
+      off += data_size( *typ );
     }
   }
 }
