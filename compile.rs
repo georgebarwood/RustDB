@@ -34,7 +34,6 @@ fn check(p: &Parser, e: &mut Expr)
       if let Some((dk, _cf)) = p.db.builtins.borrow().get(name)
       {
         e.data_type = *dk as DataType;
-        // e.cf = Some(*cf);
         for pe in args
         {
           check(p, pe);
@@ -134,10 +133,24 @@ fn check(p: &Parser, e: &mut Expr)
     }
     ExprIs::FuncCall(name, parms) =>
     {
-      e.data_type = rlook(p, name).return_type;
-      for a in parms
+      let f = rlook(p, name);
+      e.data_type = f.return_type;
+      if parms.len() != f.param_count
+      {
+        panic!(
+          "function parameter count mismatch expected {} got {}",
+          f.param_count,
+          parms.len()
+        );
+      }
+      for (i, a) in parms.iter_mut().enumerate()
       {
         check(p, a);
+        let (t, et) = (data_kind(a.data_type), data_kind(f.local_typ[i]));
+        if t != et
+        {
+          panic!("function param type mismatch expected {:?} got {:?}", et, t);
+        }
         if !a.is_constant
         {
           e.is_constant = false;
@@ -191,6 +204,16 @@ pub fn cexp_value(p: &Parser, e: &mut Expr) -> CExpPtr<Value>
     DataKind::Decimal => Box::new(cexp::IntToVal { ce: cexp_decimal(p, e) }),
     _ => match &mut e.exp
     {
+      ExprIs::ColName(x) =>
+      {
+        let (off, typ) = name_to_col(p, x);
+        match typ
+        {
+          STRING => Box::new(cexp::ColumnString { off }),
+          BINARY => Box::new(cexp::ColumnBinary { off }),
+          _ => panic!(),
+        }
+      }
       ExprIs::Const(x) => Box::new(cexp::Const { value: (*x).clone() }),
       ExprIs::Local(x) => Box::new(cexp::Local { num: *x }),
       ExprIs::Binary(op, b1, b2) =>
@@ -204,16 +227,6 @@ pub fn cexp_value(p: &Parser, e: &mut Expr) -> CExpPtr<Value>
         }
       }
       ExprIs::FuncCall(name, parms) => compile_call(p, name, parms),
-      ExprIs::ColName(x) =>
-      {
-        let (off, typ) = name_to_col(p, x);
-        match typ
-        {
-          STRING => Box::new(cexp::ColumnString { off }),
-          BINARY => Box::new(cexp::ColumnBinary { off }),
-          _ => panic!(),
-        }
-      }
       ExprIs::Case(list, els) => compile_case(p, list, els, cexp_value),
       ExprIs::BuiltinCall(name, parms) => compile_builtin_value(p, name, parms),
       _ => panic!(),
@@ -243,12 +256,12 @@ pub fn cexp_int(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
       }
     }
     ExprIs::Const(Value::Int(b)) => Box::new(cexp::Const::<i64> { value: *b }),
-    ExprIs::Local(x) => Box::new(cexp::Local { num: *x }),
+    ExprIs::Local(num) => Box::new(cexp::Local { num: *num }),
     ExprIs::Binary(op, b1, b2) => compile_arithmetic(p, *op, b1, b2, cexp_int),
-    ExprIs::Minus(u) => Box::new(cexp::Minus::<i64> { ce: cexp_int(p, u) }),
-    ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToInt { ce: compile_call(p, name, parms) }),
-    ExprIs::Case(list, els) => compile_case(p, list, els, cexp_int),
-    ExprIs::BuiltinCall(name, parms) => compile_builtin_int(p, name, parms),
+    ExprIs::Minus(x) => Box::new(cexp::Minus::<i64> { ce: cexp_int(p, x) }),
+    ExprIs::Case(w, e) => compile_case(p, w, e, cexp_int),
+    ExprIs::FuncCall(n, a) => Box::new(cexp::ValToInt { ce: compile_call(p, n, a) }),
+    ExprIs::BuiltinCall(n, a) => compile_builtin_int(p, n, a),
     _ => panic!(),
   }
 }
@@ -272,12 +285,12 @@ pub fn cexp_float(p: &Parser, e: &mut Expr) -> CExpPtr<f64>
         _ => panic!(),
       }
     }
-    ExprIs::Local(x) => Box::new(cexp::Local { num: *x }),
+    ExprIs::Local(num) => Box::new(cexp::Local { num: *num }),
     ExprIs::Binary(op, b1, b2) => compile_arithmetic(p, *op, b1, b2, cexp_float),
-    ExprIs::Minus(u) => Box::new(cexp::Minus::<f64> { ce: cexp_float(p, u) }),
-    ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToFloat { ce: compile_call(p, name, parms) }),
-    ExprIs::Case(list, els) => compile_case(p, list, els, cexp_float),
-    ExprIs::BuiltinCall(name, parms) => compile_builtin_float(p, name, parms),
+    ExprIs::Minus(x) => Box::new(cexp::Minus::<f64> { ce: cexp_float(p, x) }),
+    ExprIs::Case(w, e) => compile_case(p, w, e, cexp_float),
+    ExprIs::FuncCall(n, a) => Box::new(cexp::ValToFloat { ce: compile_call(p, n, a) }),
+    ExprIs::BuiltinCall(n, a) => compile_builtin_float(p, n, a),
     _ => panic!(),
   }
 }
@@ -706,18 +719,9 @@ pub(crate) fn push(p: &mut Parser, e: &mut Expr) -> DataType
     {
       let rp = rlook(p, name);
       {
-        if rp.param_count != parms.len()
+        for e in parms.iter_mut()
         {
-          panic!("Param count mismatch")
-        }
-        for (pnum, e) in parms.iter_mut().enumerate()
-        {
-          let et = data_kind(push(p, e));
-          let ft = data_kind(rp.local_typ[pnum]);
-          if ft != et
-          {
-            panic!("Param type mismatch expected {:?} got {:?}", ft, et);
-          }
+          push(p, e);
         }
       }
       p.add(Inst::Call(rp));

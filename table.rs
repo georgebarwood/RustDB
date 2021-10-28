@@ -213,14 +213,7 @@ impl Table
     let key_size = 8;
     let file = Rc::new(SortedFile::new(rec_size, key_size, root_page));
     let ixlist = RefCell::new(Vec::new());
-    Rc::new(Table {
-      id,
-      file,
-      info,
-      ixlist,
-      id_alloc: Cell::new(id_alloc),
-      id_alloc_dirty: Cell::new(false),
-    })
+    Rc::new(Table { id, file, info, ixlist, id_alloc: Cell::new(id_alloc), id_alloc_dirty: Cell::new(false) })
   }
 
   pub fn _dump(&self, db: &DB)

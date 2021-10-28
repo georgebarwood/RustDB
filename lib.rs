@@ -1,3 +1,22 @@
+//!
+//!ToDo List:
+//!
+//!Optimise WHERE condition for UPDATE and DELETE.
+//!
+//!Decimal shifting when scales do not match.
+//!
+//!Multi-column index use from WHERE.
+//!
+//!multipart requests ( for file upload ).
+//!
+//!Implement DROP TABLE, DROP INDEX, DROP FUNCTION etc.
+//!
+//!Implement ALTER TABLE.
+//!
+//!Fully implement CREATE INDEX.
+//!
+//!Handle HTTP IO in parallel. Read-only transactions.
+//!
 //! Database with SQL-like language.
 //! Example program:
 //! ```
@@ -32,17 +51,6 @@
 //!(2) Database Table storage. Each record has a 64-bit Id.
 //!
 //!(3) Index storage ( an index record refers back to the main table ).
-//!
-//!ToDo List:
-//!
-//!Optimise WHERE condition for UPDATE and DELETE.
-//!
-//!Decimal shifting when scales do not match.
-//!
-//!Multi-column index use from WHERE.
-//!
-//!multipart requests ( for file upload ).
-//!
 
 use crate::{
   bytes::*, compile::*, eval::*, page::*, run::*, sf::*, sql::*, sqlparse::*, table::*, util::newmap, value::*,

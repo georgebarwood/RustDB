@@ -475,7 +475,7 @@ impl<'a> Parser<'a>
   {
     if ptypes.len() != r.param_count
     {
-      self.err("Param count mismatch");
+      self.err("param count mismatch");
     }
     for (i, pt) in ptypes.iter().enumerate()
     {
@@ -483,7 +483,7 @@ impl<'a> Parser<'a>
       let et = data_kind(*pt);
       if ft != et
       {
-        panic!("Param type mismatch expected {:?} got {:?}", ft, et);
+        panic!("param type mismatch expected {:?} got {:?}", ft, et);
       }
     }
   }
@@ -653,12 +653,7 @@ impl<'a> Parser<'a>
   /// Construct SqlError based on current line/column/rname.
   pub(crate) fn make_error(&self, msg: String) -> SqlError
   {
-    SqlError {
-      line: self.prev_source_line,
-      column: self.prev_source_column,
-      msg,
-      rname: self.rname(),
-    }
+    SqlError { line: self.prev_source_line, column: self.prev_source_column, msg, rname: self.rname() }
   }
 
   /// Panic based on current line/column with specified message.

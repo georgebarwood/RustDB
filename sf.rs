@@ -342,13 +342,7 @@ impl Split
 {
   fn new(db: &DB, p: &Page) -> Self
   {
-    let mut result = Split {
-      count: 0,
-      half: p.count / 2,
-      split_node: 0,
-      left: p.new_page(),
-      right: p.new_page(),
-    };
+    let mut result = Split { count: 0, half: p.count / 2, split_node: 0, left: p.new_page(), right: p.new_page() };
     result.left.first_page = p.first_page;
     result.split(db, p, p.root);
     result
