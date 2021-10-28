@@ -112,7 +112,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool)
       // Columns are Schema(0), Name(1), Definition(2).
       let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
 
-      if let Some((p, off)) = t.ix_get(db, &[0, 1], keys)
+      if let Some((p, off)) = t.ix_get(db, 0, keys)
       {
         let mut p = p.borrow_mut();
         let off = off + t.info.off[2];
@@ -180,7 +180,7 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)>
     // Columns are root, schema, name, is_view, definition, id_alloc
     let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
 
-    if let Some((p, off)) = t.ix_get(db, &[1, 2], keys)
+    if let Some((p, off)) = t.ix_get(db, 0, keys)
     {
       let p = p.borrow();
       let a = t.access(&p, off);
@@ -200,7 +200,7 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
     // Load columns. Columns are Table, Name, Type
     let t = &db.sys_column;
     let key = Value::Int(table_id);
-    for (p, off) in t.scan_key(db, 0, key)
+    for (p, off) in t.scan_key(db, key, 0)
     {
       let p = p.borrow();
       let a = t.access(&p, off);
@@ -214,7 +214,7 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
     // Load indexes. Columns are Root, Table, Name.
     let t = &db.sys_index;
     let key = Value::Int(table_id);
-    for (p, off) in t.scan_key(db, 1, key)
+    for (p, off) in t.scan_key(db, key, 0)
     {
       let p = p.borrow();
       let a = t.access(&p, off);
@@ -225,7 +225,7 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
       let t = &db.sys_index_col;
       // Columns are Index, ColIndex
       let key = Value::Int(index_id);
-      for (p, off) in t.scan_key(db, 0, key)
+      for (p, off) in t.scan_key(db, key, 0)
       {
         let p = p.borrow();
         let a = t.access(&p, off);
@@ -255,7 +255,7 @@ pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr>
 
     let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
 
-    if let Some((p, off)) = t.ix_get(db, &[0, 1], keys)
+    if let Some((p, off)) = t.ix_get(db, 0, keys)
     {
       let p = p.borrow();
       let a = t.access(&p, off);

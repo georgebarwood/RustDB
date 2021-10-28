@@ -53,7 +53,7 @@
 //!(3) Index storage ( an index record refers back to the main table ).
 
 use crate::{
-  bytes::*, compile::*, eval::*, expr::*, page::*, run::*, sf::*, parse::*, table::*, util::newmap, value::*,
+  bytes::*, compile::*, eval::*, expr::*, page::*, parse::*, run::*, sf::*, table::*, util::newmap, value::*,
 };
 use std::{cell::Cell, cell::RefCell, cmp::Ordering, collections::HashMap, panic, rc::Rc};
 

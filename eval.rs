@@ -387,10 +387,10 @@ impl<'r> EvalEnv<'r>
         let id = idexp.eval(self, &[]);
         Box::new(t.scan_id(&self.db, id))
       }
-      CTableExpression::IxGet(t, val, col) =>
+      CTableExpression::IxGet(t, val, index) =>
       {
         let key = val.eval(self, &[]);
-        Box::new(t.scan_key(&self.db, *col, key))
+        Box::new(t.scan_key(&self.db, key, *index))
       }
       _ => panic!(),
     }

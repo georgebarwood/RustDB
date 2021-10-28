@@ -46,11 +46,11 @@ impl Table
           else
           {
             let list = self.ixlist.borrow();
-            for (_f, c) in &*list
+            for (index, (_f, c)) in list.iter().enumerate()
             {
               if c[0] == e1.col
               {
-                return Some(CTableExpression::IxGet(self.clone(), cexp_value(p, e2), e1.col));
+                return Some(CTableExpression::IxGet(self.clone(), cexp_value(p, e2), index));
               }
             }
           }
@@ -66,24 +66,18 @@ impl Table
     self.file.get(db, &Id { id })
   }
 
-  /// Get record with matching key, using an index.
-  pub fn ix_get(&self, db: &DB, keycols: &[usize], key: Vec<Value>) -> Option<(PagePtr, usize)>
+  /// Get record with matching key, using specified index.
+  pub fn ix_get(&self, db: &DB, index: usize, key: Vec<Value>) -> Option<(PagePtr, usize)>
   {
     let list = self.ixlist.borrow();
-    for (f, c) in &*list
+    let (f, c) = &list[index];
+    let key = IndexKey::new(self, c.clone(), key, Ordering::Equal);
+    if let Some((p, off)) = f.get(db, &key)
     {
-      if **c == keycols
-      {
-        let key = IndexKey::new(self, c.clone(), key, Ordering::Equal);
-        if let Some((p, off)) = f.get(db, &key)
-        {
-          let p = p.borrow();
-          let id = util::getu64(&p.data, off);
-          let row = Id { id };
-          return self.file.get(db, &row);
-        }
-        break;
-      }
+      let p = p.borrow();
+      let id = util::getu64(&p.data, off);
+      let row = Id { id };
+      return self.file.get(db, &row);
     }
     None
   }
@@ -101,27 +95,20 @@ impl Table
   }
 
   /// Get records with matching key.
-  pub fn scan_key(self: &TablePtr, db: &DB, keycol: usize, key: Value) -> IndexScan
+  pub fn scan_key(self: &TablePtr, db: &DB, key: Value, index: usize) -> IndexScan
   {
     let keys = vec![key];
-    let keycols = [keycol];
-    self.scan_keys(db, &keycols, keys)
+    self.scan_keys(db, keys, index)
   }
 
   /// Get records with matching keys.
-  pub fn scan_keys(self: &TablePtr, db: &DB, keycols: &[usize], keys: Vec<Value>) -> IndexScan
+  pub fn scan_keys(self: &TablePtr, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan
   {
     let list = self.ixlist.borrow();
-    for (f, c) in &*list
-    {
-      if c.len() >= keycols.len() && keycols == &c[0..keycols.len()]
-      {
-        let ikey = IndexKey::new(self, c.clone(), keys.clone(), Ordering::Less);
-        let ixa = f.asc(db, Box::new(ikey));
-        return IndexScan { ixa, table: self.clone(), db: db.clone(), cols: c.clone(), keys };
-      }
-    }
-    panic!()
+    let (f, c) = &list[index];
+    let ikey = IndexKey::new(self, c.clone(), keys.clone(), Ordering::Less);
+    let ixa = f.asc(db, Box::new(ikey));
+    return IndexScan { ixa, table: self.clone(), db: db.clone(), cols: c.clone(), keys };
   }
 
   /// Insert specified row into the table.
