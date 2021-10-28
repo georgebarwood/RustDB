@@ -272,7 +272,7 @@ pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr>
 /// Parse a function definition.
 fn parse_function(db: &DB, source: Rc<String>) -> FunctionPtr
 {
-  let mut p = sqlparse::Parser::new(&source, db);
+  let mut p = Parser::new(&source, db);
   p.parse_only = true;
   p.parse_function();
   Rc::new(Function {

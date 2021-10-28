@@ -53,15 +53,15 @@
 //!(3) Index storage ( an index record refers back to the main table ).
 
 use crate::{
-  bytes::*, compile::*, eval::*, page::*, run::*, sf::*, sql::*, sqlparse::*, table::*, util::newmap, value::*,
+  bytes::*, compile::*, eval::*, expr::*, page::*, run::*, sf::*, parse::*, table::*, util::newmap, value::*,
 };
 use std::{cell::Cell, cell::RefCell, cmp::Ordering, collections::HashMap, panic, rc::Rc};
 
 /// WebQuery struct for making a http web server.
 pub mod web;
 
-/// Structured Query Language : various types.
-pub mod sql;
+/// Expression (uncompiled) types.
+pub mod expr;
 
 /// Compile parsed expressions, checking types.
 pub mod compile;
@@ -74,8 +74,8 @@ pub mod value;
 
 // Private modules ( in principle, currently public ).
 
-/// SQL parser.
-mod sqlparse;
+/// Parser.
+mod parse;
 
 /// Utility functions.
 #[macro_use]
@@ -240,7 +240,7 @@ GO
   }
 
   /// Register a builtin function.
-  pub fn register(self: &DB, name: &str, typ: sql::DataKind, cf: CompileFunc)
+  pub fn register(self: &DB, name: &str, typ: DataKind, cf: CompileFunc)
   {
     self.builtins.borrow_mut().insert(name.to_string(), (typ, cf));
   }
@@ -270,7 +270,7 @@ GO
   /// Run a batch of SQL.
   fn go(self: &DB, source: &str, qy: &mut dyn Query) -> Option<SqlError>
   {
-    let mut p = sqlparse::Parser::new(source, self);
+    let mut p = Parser::new(source, self);
 
     let result = std::panic::catch_unwind(panic::AssertUnwindSafe(|| {
       p.batch(qy);
