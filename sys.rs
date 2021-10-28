@@ -112,7 +112,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool)
       // Columns are Schema(0), Name(1), Definition(2).
       let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
 
-      if let Some((p, off)) = t.ix_get(db, 0, keys)
+      if let Some((p, off)) = t.ix_get(db, keys, 0)
       {
         let mut p = p.borrow_mut();
         let off = off + t.info.off[2];
@@ -180,7 +180,7 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)>
     // Columns are root, schema, name, is_view, definition, id_alloc
     let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
 
-    if let Some((p, off)) = t.ix_get(db, 0, keys)
+    if let Some((p, off)) = t.ix_get(db, keys, 0)
     {
       let p = p.borrow();
       let a = t.access(&p, off);
@@ -255,7 +255,7 @@ pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr>
 
     let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
 
-    if let Some((p, off)) = t.ix_get(db, 0, keys)
+    if let Some((p, off)) = t.ix_get(db, keys, 0)
     {
       let p = p.borrow();
       let a = t.access(&p, off);

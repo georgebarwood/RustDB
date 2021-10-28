@@ -67,7 +67,7 @@ impl Table
   }
 
   /// Get record with matching key, using specified index.
-  pub fn ix_get(&self, db: &DB, index: usize, key: Vec<Value>) -> Option<(PagePtr, usize)>
+  pub fn ix_get(&self, db: &DB, key: Vec<Value>, index: usize) -> Option<(PagePtr, usize)>
   {
     let list = self.ixlist.borrow();
     let (f, c) = &list[index];
