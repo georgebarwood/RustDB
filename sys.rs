@@ -113,9 +113,9 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool)
       // Columns are Schema(0), Name(1), Definition(2).
       let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
 
-      if let Some((p, off)) = t.ix_get(db, keys, 0)
+      if let Some((pp, off)) = t.ix_get(db, keys, 0)
       {
-        let mut p = p.borrow_mut();
+        let p = &mut pp.borrow_mut();
         let off = off + t.info.off[2];
         let (val, oldcode) = Value::load(db, STRING, &p.data, off);
         if val.str() != source
@@ -124,7 +124,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool)
           let val = Value::String(source);
           let newcode = db.encode(&val);
           val.save(STRING, &mut p.data, off, newcode);
-          p.dirty = true;
+          t.file.set_dirty(p, &pp);
           db.functions_dirty.set(true);
         }
         return;
@@ -159,8 +159,8 @@ fn get_schema(db: &DB, sname: &str) -> Option<i64>
   let t = &db.sys_schema;
   for (p, off) in t.scan(db)
   {
-    let p = p.borrow();
-    let a = t.access(&p, off);
+    let p = &p.borrow();
+    let a = t.access(p, off);
     if a.str(db, 0) == sname
     {
       let id = a.id();
@@ -183,8 +183,8 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)>
 
     if let Some((p, off)) = t.ix_get(db, keys, 0)
     {
-      let p = p.borrow();
-      let a = t.access(&p, off);
+      let p = &p.borrow();
+      let a = t.access(p, off);
       return Some((a.id(), a.int(0), a.int(5)));
     }
   }
@@ -203,8 +203,8 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
     let key = Value::Int(table_id);
     for (p, off) in t.scan_key(db, key, 0)
     {
-      let p = p.borrow();
-      let a = t.access(&p, off);
+      let p = &p.borrow();
+      let a = t.access(p, off);
       debug_assert!(a.int(0) == table_id);
       let cname = a.str(db, 1);
       let ctype = a.int(2) as DataType;
@@ -217,8 +217,8 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
     let key = Value::Int(table_id);
     for (p, off) in t.scan_key(db, key, 0)
     {
-      let p = p.borrow();
-      let a = t.access(&p, off);
+      let p = &p.borrow();
+      let a = t.access(p, off);
       debug_assert!(a.int(1) == table_id);
       let index_id = a.id();
       let root = a.int(0) as u64;
@@ -228,8 +228,8 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
       let key = Value::Int(index_id);
       for (p, off) in t.scan_key(db, key, 0)
       {
-        let p = p.borrow();
-        let a = t.access(&p, off);
+        let p = &p.borrow();
+        let a = t.access(p, off);
         debug_assert!(a.int(0) == index_id);
         let cnum = a.int(1) as usize;
         cols.push(cnum);
@@ -258,8 +258,8 @@ pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr>
 
     if let Some((p, off)) = t.ix_get(db, keys, 0)
     {
-      let p = p.borrow();
-      let a = t.access(&p, off);
+      let p = &p.borrow();
+      let a = t.access(p, off);
       let source = Rc::new(a.str(db, 2));
       let rptr = parse_function(db, source);
       db.functions.borrow_mut().insert(name.clone(), rptr.clone());
@@ -290,11 +290,11 @@ fn parse_function(db: &DB, source: Rc<String>) -> FunctionPtr
 pub(crate) fn save_alloc(db: &DB, id: u64, val: i64)
 {
   let t = &db.sys_table;
-  let (p, off) = t.id_get(db, id).unwrap();
-  let mut p = p.borrow_mut();
-  let mut wa = t.write_access(&mut p, off);
+  let (pp, off) = t.id_get(db, id).unwrap();
+  let p = &mut pp.borrow_mut();
+  let mut wa = t.write_access(p, off);
   wa.set_int(5, val);
-  p.dirty = true;
+  t.file.set_dirty(p, &pp);
 }
 
 /// This is only needed to initialise system tables.
@@ -302,7 +302,7 @@ pub(crate) fn get_alloc(db: &DB, id: u64) -> i64
 {
   let t = &db.sys_table;
   let (p, off) = t.id_get(db, id).unwrap();
-  let p = p.borrow();
-  let a = t.access(&p, off);
+  let p = &p.borrow();
+  let a = t.access(p, off);
   a.int(5)
 }

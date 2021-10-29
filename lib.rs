@@ -1,6 +1,8 @@
 //!
 //!ToDo List:
 //!
+//!Page dirty flag : get rid of it, instead have set of dirty pages in SortedFile.
+//!
 //!Optimise WHERE condition for UPDATE and DELETE.
 //!
 //!Decimal shifting when scales do not match.
@@ -73,6 +75,10 @@ use crate::{
 };
 use std::{cell::Cell, cell::RefCell, cmp::Ordering, collections::HashMap, panic, rc::Rc};
 
+/// Utility functions and macros.
+#[macro_use]
+mod util;
+
 /// WebQuery struct for making a http web server.
 pub mod web;
 
@@ -88,6 +94,15 @@ pub mod spf;
 /// Value.
 pub mod value;
 
+/// Page for SortedFile.
+///
+/// A page is 0x4000 (16kb) bytes, logically divided into up to 2047 fixed size nodes, which implement a balanced binary tree.
+///
+/// Nodes are numbered from 1..2047, with 0 indicating a null ( non-existent ) node.
+///
+/// Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids.
+pub mod page;
+
 // Private modules ( in principle, currently public ).
 
 pub mod managedfile;
@@ -101,24 +116,11 @@ mod bytes;
 /// Parser.
 mod parse;
 
-/// Utility functions.
-#[macro_use]
-mod util;
-
 /// Access to system tables (Schema,Table,Column,Index,IndexColumn,Function).
 mod sys;
 
 /// Low-level sorted Record storage : SortedFile.
-mod sf;
-
-/// Page for SortedFile.
-///
-/// A page is 0x4000 (16kb) bytes, logically divided into up to 2047 fixed size nodes, which implement a balanced binary tree.
-///
-/// Nodes are numbered from 1..2047, with 0 indicating a null ( non-existent ) node.
-///
-/// Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids.
-mod page;
+pub mod sf;
 
 /// Execution : Instruction (Inst) and other run time types.
 mod run;

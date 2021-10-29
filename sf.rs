@@ -48,13 +48,14 @@ impl Record for Id
 pub struct SortedFile
 {
   /// Cached pages.
-  pub pages: RefCell<HashMap<u64, PagePtr>>,
+  pages: RefCell<HashMap<u64, PagePtr>>,
+  dirty_pages: RefCell<Vec<PagePtr>>,
   /// Size of a record.
-  pub rec_size: usize,
+  rec_size: usize,
   /// Size of a key.
-  pub key_size: usize,
+  key_size: usize,
   /// The root page.
-  pub root_page: u64,
+  root_page: u64,
 }
 
 impl SortedFile
@@ -62,9 +63,9 @@ impl SortedFile
   /// For debugging, dumps a summary of each page of the file.
   pub(crate) fn dump(&self)
   {
-    for (pnum, ptr) in self.pages.borrow().iter()
+    for (pnum, pp) in self.pages.borrow().iter()
     {
-      let p = ptr.borrow();
+      let p = pp.borrow();
       println!(
         "Cached Page pnum={} count={} level={} size()={}",
         pnum,
@@ -78,7 +79,17 @@ impl SortedFile
   /// Create File with specified record size, key size, root page.
   pub fn new(rec_size: usize, key_size: usize, root_page: u64) -> Self
   {
-    SortedFile { pages: util::newmap(), rec_size, key_size, root_page }
+    SortedFile { pages: util::newmap(), dirty_pages: RefCell::new(Vec::new()), rec_size, key_size, root_page }
+  }
+
+  /// Mark a page as dirty
+  pub fn set_dirty(&self, p: &mut Page, pp: &PagePtr)
+  {
+    if !p.is_dirty
+    {
+      p.is_dirty = true;
+      self.dirty_pages.borrow_mut().push(pp.clone());
+    }
   }
 
   /// Insert a Record. If the key is a duplicate, the record is not saved.
@@ -90,16 +101,16 @@ impl SortedFile
     }
   }
 
-  /// Locate a record with matching key. Result is page ptr and offset of data.
+  /// Locate a record with matching key. Result is PagePtr and offset of data.
   pub fn get(&self, db: &DB, r: &dyn Record) -> Option<(PagePtr, usize)>
   {
-    let mut ptr = self.load_page(db, self.root_page);
+    let mut pp = self.load_page(db, self.root_page);
     let off;
     loop
     {
       let cp;
       {
-        let p = ptr.borrow();
+        let p = pp.borrow();
         if p.level == 0
         {
           let x = p.find_equal(db, r);
@@ -113,29 +124,30 @@ impl SortedFile
         let x = p.find_node(db, r);
         cp = if x == 0 { p.first_page } else { p.child_page(x) };
       }
-      ptr = self.load_page(db, cp);
+      pp = self.load_page(db, cp);
     }
-    Some((ptr, off))
+    Some((pp, off))
   }
 
   /// Remove a Record.
   pub fn remove(&self, db: &DB, r: &dyn Record)
   {
-    let mut ptr = self.load_page(db, self.root_page);
+    let mut pp = self.load_page(db, self.root_page);
     loop
     {
       let cp;
       {
-        let mut p = ptr.borrow_mut();
+        let p = &mut *pp.borrow_mut();
         if p.level == 0
         {
+          self.set_dirty(p, &pp);
           p.remove(db, r);
           break;
         }
         let x = p.find_node(db, r);
         cp = if x == 0 { p.first_page } else { p.child_page(x) };
       }
-      ptr = self.load_page(db, cp);
+      pp = self.load_page(db, cp);
     }
   }
 
@@ -154,18 +166,19 @@ impl SortedFile
   /// Save any changed pages.
   pub(crate) fn save(&self, db: &DB)
   {
-    for (pnum, ptr) in self.pages.borrow().iter()
+    let dp = &mut *self.dirty_pages.borrow_mut();
+    while let Some(pp) = dp.pop()
     {
-      let mut p = ptr.borrow_mut();
-      if p.dirty
+      let p = &mut pp.borrow_mut();
+      if p.pnum != u64::MAX
       {
         println!(
           "Saving page {} root={} count={} node_size={}",
-          pnum, self.root_page, p.count, p.node_size
+          p.pnum, self.root_page, p.count, p.node_size
         );
         p.write_header();
-        p.dirty = false;
-        db.file.borrow_mut().write_page(*pnum, &p.data);
+        p.is_dirty = false;
+        db.file.borrow_mut().write_page(p.pnum, &p.data);
       }
     }
   }
@@ -173,11 +186,11 @@ impl SortedFile
   /// Insert a record into a leaf page.
   fn insert_leaf(&self, db: &DB, pnum: u64, r: &dyn Record, pi: Option<&ParentInfo>) -> bool
   {
-    let p = self.load_page(db, pnum);
-    // If this is a parent page, we have to be careful to release the borrow before recursing.
+    let pp = self.load_page(db, pnum);
     let child_page;
     {
-      let mut p = p.borrow_mut();
+      // new block to ensure pp borrow is released before recursing.
+      let p = &mut pp.borrow_mut();
       if p.level != 0
       {
         let x = p.find_node(db, r);
@@ -185,24 +198,29 @@ impl SortedFile
       }
       else if !p.full()
       {
+        self.set_dirty(p, &pp);
         p.insert(db, r);
         return true;
       }
       else
       {
         // Page is full, divide it into left and right.
+        p.pnum = u64::MAX; // Invalidate old page, so that it is not saved.
         let sp = Split::new(db, &p);
         let sk = &*p.get_key(db, sp.split_node, r);
 
         // Could insert r into left or right here.
 
+        // sp.right is allocated a new page number.
         let pnum2 = self.alloc_page(db, sp.right);
         match pi
         {
           None =>
           {
             // New root page needed.
+            // New root re-uses the root page number.
             let mut new_root = self.new_page(p.level + 1);
+            // sp.left is allocated a new page number, which is first page of new root.
             new_root.first_page = self.alloc_page(db, sp.left);
             self.publish_page(self.root_page, new_root);
             self.append_page(db, self.root_page, sk, pnum2);
@@ -215,27 +233,31 @@ impl SortedFile
         }
         return false; // r has not yet been inserted.
       }
-    };
+    }
     self.insert_leaf(db, child_page, r, Some(&ParentInfo { pnum, parent: pi }))
   }
 
   fn insert_page(&self, db: &DB, into: &ParentInfo, r: &dyn Record, cpnum: u64)
   {
-    let p = self.load_page(db, into.pnum);
+    let pp = self.load_page(db, into.pnum);
+    let p = &mut *pp.borrow_mut();
+
     // Need to check if page is full.
-    if !p.borrow().full()
-    {
-      p.borrow_mut().insert_child(db, r, cpnum);
+    if !p.full()
+    {      
+      self.set_dirty(p, &pp);
+      p.insert_child(db, r, cpnum);
     }
     else
     {
       // Split the parent page.
+      p.pnum = u64::MAX; // Invalidate old parent page, so that it is not saved.
 
-      let mut sp = Split::new(db, &p.borrow());
-      let sk = &*p.borrow().get_key(db, sp.split_node, r);
+      let mut sp = Split::new(db, p);
+      let sk = &*p.get_key(db, sp.split_node, r);
 
       // Insert into either left or right.
-      let c = p.borrow().compare(db, r, sp.split_node);
+      let c = p.compare(db, r, sp.split_node);
       if c == Ordering::Greater
       {
         sp.left.insert_child(db, r, cpnum)
@@ -251,7 +273,7 @@ impl SortedFile
         None =>
         {
           // New root page needed.
-          let mut new_root = self.new_page(p.borrow().level + 1);
+          let mut new_root = self.new_page(pp.borrow().level + 1);
           new_root.first_page = self.alloc_page(db, sp.left);
           self.publish_page(self.root_page, new_root);
           self.append_page(db, self.root_page, sk, pnum2);
@@ -267,8 +289,9 @@ impl SortedFile
 
   fn append_page(&self, db: &DB, into: u64, k: &dyn Record, pnum: u64)
   {
-    let ptr = self.load_page(db, into);
-    let mut p = ptr.borrow_mut();
+    let pp = self.load_page(db, into);
+    let p = &mut pp.borrow_mut();
+    self.set_dirty(p, &pp);
     p.append_child(db, k, pnum);
   }
 
@@ -279,6 +302,7 @@ impl SortedFile
       if level != 0 { self.key_size } else { self.rec_size },
       level,
       vec![0; PAGE_SIZE],
+      u64::MAX,
     )
   }
 
@@ -290,10 +314,14 @@ impl SortedFile
     pnum
   }
 
-  /// Publish a page in the cache.
-  fn publish_page(&self, pnum: u64, p: Page)
+  /// Publish a page in the cache with specified page number.
+  fn publish_page(&self, pnum: u64, mut p: Page)
   {
-    self.pages.borrow_mut().insert(pnum, util::new(p));
+    p.pnum = pnum;
+    let pp = util::new(p);
+    self.pages.borrow_mut().insert(pnum, pp.clone());
+    let p = &mut pp.borrow_mut();
+    self.set_dirty(p, &pp);
   }
 
   /// Get a page from the cache, or if it is not in the cache, load it from external storage.
@@ -311,6 +339,7 @@ impl SortedFile
           if level != 0 { self.key_size } else { self.rec_size },
           level,
           data,
+          pnum,
         ));
         e.insert(p.clone());
         p
@@ -386,8 +415,8 @@ impl Asc
   {
     let root_page = file.root_page;
     let mut result = Asc { stk: Stack::new(db, start), file: file.clone() };
-    let ptr = file.load_page(db, root_page);
-    result.stk.v.push((ptr, 0));
+    let pp = file.load_page(db, root_page);
+    result.stk.v.push((pp, 0));
     result
   }
 }
@@ -447,26 +476,26 @@ impl Stack
 
   fn next(&mut self, file: &SortedFile) -> Option<(PagePtr, usize)>
   {
-    while let Some((ptr, x)) = self.v.pop()
+    while let Some((pp, x)) = self.v.pop()
     {
       if x == 0
       {
-        self.add_page_right(file, ptr);
+        self.add_page_right(file, pp);
       }
       else
       {
-        let p = ptr.borrow();
-        self.add_right(&p, ptr.clone(), p.left(x));
+        let p = pp.borrow();
+        self.add_right(&p, pp.clone(), p.left(x));
         if p.level != 0
         {
           let cp = p.child_page(x);
-          let cptr = file.load_page(&self.db, cp);
-          self.add_page_right(file, cptr);
+          let cpp = file.load_page(&self.db, cp);
+          self.add_page_right(file, cpp);
         }
         else
         {
           self.seeking = false;
-          return Some((ptr.clone(), p.rec_offset(x)));
+          return Some((pp.clone(), p.rec_offset(x)));
         }
       }
     }
@@ -475,10 +504,10 @@ impl Stack
 
   fn prev(&mut self, file: &SortedFile) -> Option<(PagePtr, usize)>
   {
-    while let Some((ptr, x)) = self.v.pop()
+    while let Some((pp, x)) = self.v.pop()
     {
-      let p = ptr.borrow();
-      self.add_left(&p, ptr.clone(), p.right(x));
+      let p = pp.borrow();
+      self.add_left(&p, pp.clone(), p.right(x));
       if p.level != 0
       {
         let cp = p.child_page(x);
@@ -487,31 +516,31 @@ impl Stack
       else
       {
         self.seeking = false;
-        return Some((ptr.clone(), p.rec_offset(x)));
+        return Some((pp.clone(), p.rec_offset(x)));
       }
     }
     None
   }
 
-  fn add_right(&mut self, p: &Page, ptr: PagePtr, mut x: usize)
+  fn add_right(&mut self, p: &Page, pp: PagePtr, mut x: usize)
   {
     while x != 0
     {
-      self.v.push((ptr.clone(), x));
+      self.v.push((pp.clone(), x));
       x = p.right(x);
     }
   }
 
-  fn add_left(&mut self, p: &Page, ptr: PagePtr, mut x: usize)
+  fn add_left(&mut self, p: &Page, pp: PagePtr, mut x: usize)
   {
     while x != 0
     {
-      self.v.push((ptr.clone(), x));
+      self.v.push((pp.clone(), x));
       x = p.left(x);
     }
   }
 
-  fn seek_right(&mut self, p: &Page, ptr: PagePtr, mut x: usize)
+  fn seek_right(&mut self, p: &Page, pp: PagePtr, mut x: usize)
   {
     while x != 0
     {
@@ -519,12 +548,12 @@ impl Stack
       {
         Ordering::Less =>
         {
-          self.v.push((ptr.clone(), x));
+          self.v.push((pp.clone(), x));
           x = p.right(x);
         }
         Ordering::Equal =>
         {
-          self.v.push((ptr, x));
+          self.v.push((pp, x));
           break;
         }
         Ordering::Greater => x = p.left(x),
@@ -532,7 +561,7 @@ impl Stack
     }
   }
 
-  fn seek_left(&mut self, p: &Page, ptr: PagePtr, mut x: usize) -> bool
+  fn seek_left(&mut self, p: &Page, pp: PagePtr, mut x: usize) -> bool
 // Returns true if a node is found which is <= start.
   // This is used to decide whether the the preceding child page is added.
   {
@@ -542,20 +571,20 @@ impl Stack
       {
         Ordering::Less =>
         {
-          if !self.seek_left(p, ptr.clone(), p.right(x)) && p.level != 0
+          if !self.seek_left(p, pp.clone(), p.right(x)) && p.level != 0
           {
-            self.v.push((ptr, x));
+            self.v.push((pp, x));
           }
           return true;
         }
         Ordering::Equal =>
         {
-          self.v.push((ptr, x));
+          self.v.push((pp, x));
           return true;
         }
         Ordering::Greater =>
         {
-          self.v.push((ptr.clone(), x));
+          self.v.push((pp.clone(), x));
           x = p.left(x);
         }
       }
@@ -563,9 +592,9 @@ impl Stack
     false
   }
 
-  fn add_page_right(&mut self, file: &SortedFile, ptr: PagePtr)
+  fn add_page_right(&mut self, file: &SortedFile, pp: PagePtr)
   {
-    let p = ptr.borrow();
+    let p = pp.borrow();
     if p.level != 0
     {
       let fp = file.load_page(&self.db, p.first_page);
@@ -574,11 +603,11 @@ impl Stack
     let root = p.root;
     if self.seeking
     {
-      self.seek_right(&p, ptr.clone(), root);
+      self.seek_right(&p, pp.clone(), root);
     }
     else
     {
-      self.add_right(&p, ptr.clone(), root);
+      self.add_right(&p, pp.clone(), root);
     }
   }
 
@@ -586,19 +615,19 @@ impl Stack
   {
     loop
     {
-      let ptr = file.load_page(&self.db, pnum);
-      let p = ptr.borrow();
+      let pp = file.load_page(&self.db, pnum);
+      let p = pp.borrow();
       let root = p.root;
       if self.seeking
       {
-        if self.seek_left(&p, ptr.clone(), root)
+        if self.seek_left(&p, pp.clone(), root)
         {
           return;
         }
       }
       else
       {
-        self.add_left(&p, ptr.clone(), root);
+        self.add_left(&p, pp.clone(), root);
       }
       if p.level == 0
       {

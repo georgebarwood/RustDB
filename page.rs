@@ -33,24 +33,27 @@ const MAX_NODE: usize = bitmask!(0, NODE_ID_BITS);
 /// A page in a SortedFile.
 pub struct Page
 {
-  /// Data storage. Other items can be derived from data.
+  /// Data storage.
   pub data: Vec<u8>,
-  /// Number of records currently stored in the page.
-  pub count: usize,
+  /// Page number in file where page is saved.
+  pub(crate) pnum: u64,
   /// Does page need to be saved to backing storage?
-  pub dirty: bool,
+  pub(crate) is_dirty: bool,
+
+  /// Number of records currently stored in the page.
+  pub(crate) count: usize,
   /// Page level. 0 means a child page, more than 0 a parent page.
-  pub level: u8,
+  pub(crate) level: u8,
   /// Number of bytes required for each node.
-  pub node_size: usize,
+  pub(crate) node_size: usize,
   /// Root node for the page.
-  pub root: usize,
+  pub(crate) root: usize,
   /// First Free node.
   free: usize,
   /// Number of Nodes currently allocated.     
   alloc: usize,
   /// First child page ( for a parent page ).    
-  pub first_page: u64,
+  pub(crate) first_page: u64,
 }
 
 impl Page
@@ -62,7 +65,7 @@ impl Page
   }
 
   /// Construct a new page.
-  pub fn new(rec_size: usize, level: u8, data: Vec<u8>) -> Page
+  pub fn new(rec_size: usize, level: u8, data: Vec<u8>, pnum: u64) -> Page
   {
     let node_size = rec_size + if level != 0 { PAGE_ID_SIZE } else { 0 } + NODE_OVERHEAD;
     // Round up to multiple of 8 bytes.
@@ -84,7 +87,7 @@ impl Page
       0
     };
 
-    Page { data, node_size, root, count, free, alloc, first_page, level, dirty: false }
+    Page { data, node_size, root, count, free, alloc, first_page, level, is_dirty: false, pnum }
   }
 
   /// Sets header and trailer data (if parent). Called just before page is saved to file.
@@ -115,7 +118,7 @@ impl Page
   /// Construct a new empty page inheriting record size and parent from self.
   pub fn new_page(&self) -> Page
   {
-    Page::new(self.rec_size(), self.level, vec![0; PAGE_SIZE])
+    Page::new(self.rec_size(), self.level, vec![0; PAGE_SIZE], u64::MAX)
   }
 
   /// Returns node id of the greatest Record less than or equal to v, or zero if no such node exists.
@@ -171,7 +174,6 @@ impl Page
     self.root = self.insert_into(db, self.root, Some(r)).0;
     if inserted != self.next_alloc()
     {
-      self.dirty = true;
       self.set_record(inserted, r);
     }
   }
@@ -180,7 +182,6 @@ impl Page
   {
     let inserted = self.next_alloc();
     self.root = self.insert_into(db, self.root, Some(r)).0;
-    self.dirty = true;
     self.set_record(inserted, r);
     self.set_child_page(inserted, cp);
   }
@@ -189,7 +190,6 @@ impl Page
   {
     let inserted = self.next_alloc();
     self.root = self.insert_into(db, self.root, None).0;
-    self.dirty = true;
     self.set_record(inserted, r);
     self.set_child_page(inserted, cp);
   }
@@ -210,13 +210,11 @@ impl Page
       // for i in 0..n {  self.data[ dest_off + i ] = from.data[ src_off + i ]; }
       self.data[dest_off..dest_off + n].copy_from_slice(&from.data[src_off..src_off + n]);
     }
-    self.dirty = true;
   }
 
   pub fn remove(&mut self, db: &DB, r: &dyn Record)
   {
     self.root = self.remove_from(db, self.root, r).0;
-    self.dirty = true;
   }
 
   // Node access functions.
