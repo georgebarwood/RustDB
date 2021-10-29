@@ -3,6 +3,9 @@ use crate::*;
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
 
+/// = 0x4000. The maximum size in bytes of each page.
+pub const PAGE_SIZE: usize = 0x4000;
+
 /// = 3. Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
 const NODE_OVERHEAD: usize = 3;
 
@@ -27,9 +30,6 @@ const NODE_ID_BITS: usize = 11;
 /// = 2047. Largest Node id.
 const MAX_NODE: usize = bitmask!(0, NODE_ID_BITS);
 
-/// = 0x4000. The maximum size in bytes of each page.
-pub const PAGE_SIZE: usize = 0x4000;
-
 /// A page in a SortedFile.
 pub struct Page
 {
@@ -39,8 +39,8 @@ pub struct Page
   pub count: usize,
   /// Does page need to be saved to backing storage?
   pub dirty: bool,
-  /// Is page a parent page?
-  pub parent: bool,
+  /// Page level. 0 means a child page, more than 0 a parent page.
+  pub level: u8,
   /// Number of bytes required for each node.
   pub node_size: usize,
   /// Root node for the page.
@@ -58,24 +58,24 @@ impl Page
   /// The size of the page in bytes.
   pub fn size(&self) -> usize
   {
-    NODE_BASE + self.alloc * self.node_size + if self.parent { PAGE_ID_SIZE } else { 0 }
+    NODE_BASE + self.alloc * self.node_size + if self.level != 0 { PAGE_ID_SIZE } else { 0 }
   }
 
   /// Construct a new page.
-  pub fn new(rec_size: usize, parent: bool, data: Vec<u8>) -> Page
+  pub fn new(rec_size: usize, level: u8, data: Vec<u8>) -> Page
   {
-    let node_size = rec_size + if parent { PAGE_ID_SIZE } else { 0 } + NODE_OVERHEAD;
+    let node_size = rec_size + if level != 0 { PAGE_ID_SIZE } else { 0 } + NODE_OVERHEAD;
     // Round up to multiple of 8 bytes.
     // node_size = node_size + 7;
     // node_size = node_size - node_size % 8;
 
     let u = util::get(&data, 0, NODE_BASE);
-    let root = getbits!(u, 1, NODE_ID_BITS) as usize;
-    let count = getbits!(u, 1 + NODE_ID_BITS, NODE_ID_BITS) as usize;
-    let free = getbits!(u, 1 + NODE_ID_BITS * 2, NODE_ID_BITS) as usize;
-    let alloc = getbits!(u, 1 + NODE_ID_BITS * 3, NODE_ID_BITS) as usize;
+    let root = getbits!(u, 8, NODE_ID_BITS) as usize;
+    let count = getbits!(u, 8 + NODE_ID_BITS, NODE_ID_BITS) as usize;
+    let free = getbits!(u, 8 + NODE_ID_BITS * 2, NODE_ID_BITS) as usize;
+    let alloc = getbits!(u, 8 + NODE_ID_BITS * 3, NODE_ID_BITS) as usize;
 
-    let first_page = if parent
+    let first_page = if level != 0
     {
       util::get(&data, NODE_BASE + alloc * node_size, PAGE_ID_SIZE)
     }
@@ -84,20 +84,20 @@ impl Page
       0
     };
 
-    Page { data, node_size, root, count, free, alloc, first_page, parent, dirty: false }
+    Page { data, node_size, root, count, free, alloc, first_page, level, dirty: false }
   }
 
   /// Sets header and trailer data (if parent). Called just before page is saved to file.
   pub fn write_header(&mut self)
   {
-    let u = if self.parent { 1 } else { 0 }
-      | ((self.root as u64) << 1)
-      | ((self.count as u64) << (1 + NODE_ID_BITS))
-      | ((self.free as u64) << (1 + 2 * NODE_ID_BITS))
-      | ((self.alloc as u64) << (1 + 3 * NODE_ID_BITS));
+    let u = self.level as u64
+      | ((self.root as u64) << 8)
+      | ((self.count as u64) << (8 + NODE_ID_BITS))
+      | ((self.free as u64) << (8 + 2 * NODE_ID_BITS))
+      | ((self.alloc as u64) << (8 + 3 * NODE_ID_BITS));
 
     util::set(&mut self.data, 0, u, NODE_BASE);
-    if self.parent
+    if self.level != 0
     {
       let off = self.size() - PAGE_ID_SIZE;
       util::set(&mut self.data, off, self.first_page, PAGE_ID_SIZE);
@@ -109,13 +109,13 @@ impl Page
   {
     self.free == 0
       && (self.alloc == MAX_NODE
-        || NODE_BASE + (self.alloc + 1) * self.node_size + if self.parent { PAGE_ID_SIZE } else { 0 } >= PAGE_SIZE)
+        || NODE_BASE + (self.alloc + 1) * self.node_size + if self.level != 0 { PAGE_ID_SIZE } else { 0 } >= PAGE_SIZE)
   }
 
   /// Construct a new empty page inheriting record size and parent from self.
   pub fn new_page(&self) -> Page
   {
-    Page::new(self.rec_size(), self.parent, vec![0; PAGE_SIZE])
+    Page::new(self.rec_size(), self.level, vec![0; PAGE_SIZE])
   }
 
   /// Returns node id of the greatest Record less than or equal to v, or zero if no such node exists.
@@ -196,7 +196,7 @@ impl Page
 
   pub fn append_from(&mut self, db: &DB, from: &Page, x: usize)
   {
-    if self.parent && self.first_page == 0
+    if self.level != 0 && self.first_page == 0
     {
       self.first_page = from.child_page(x);
     }
@@ -241,7 +241,7 @@ impl Page
   /// The client data size.
   pub fn rec_size(&self) -> usize
   {
-    self.node_size - NODE_OVERHEAD - if self.parent { PAGE_ID_SIZE } else { 0 }
+    self.node_size - NODE_OVERHEAD - if self.level != 0 { PAGE_ID_SIZE } else { 0 }
   }
 
   fn balance(&self, x: usize) -> u8

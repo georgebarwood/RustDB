@@ -25,11 +25,12 @@ pub fn create_table(db: &DB, info: &ColInfo)
     let schema = &info.name.schema;
     if let Some(schema_id) = get_schema(db, schema)
     {
+      let root = db.alloc_page();
       let t = &db.sys_table;
       let mut row = t.row();
       // Columns are root, schema, name, is_view, definition, id_alloc
       row.id = t.alloc_id() as i64;
-      row.values[0] = Value::Int(db.file.alloc_page() as i64);
+      row.values[0] = Value::Int(root as i64);
       row.values[1] = Value::Int(schema_id);
       row.values[2] = Value::String(Rc::new(info.name.name.clone()));
       row.values[3] = Value::Bool(false);
@@ -64,7 +65,7 @@ pub fn create_index(db: &DB, info: &IndexInfo)
 {
   if let Some(table) = db.get_table(&info.tname)
   {
-    let root = db.file.alloc_page();
+    let root = db.alloc_page();
     let index_id = {
       let t = &db.sys_index;
       let mut row = t.row();

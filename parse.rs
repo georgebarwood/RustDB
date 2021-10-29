@@ -1072,7 +1072,7 @@ impl<'a> Parser<'a>
     let se = self.select_expression(false);
     if !self.parse_only
     {
-      let cte = compile_select(self, se);
+      let cte = c_select(self, se);
       self.add(Inst::Select(Box::new(cte)));
     }
   }
@@ -1082,7 +1082,7 @@ impl<'a> Parser<'a>
     let se = self.select_expression(true);
     if !self.parse_only
     {
-      let cte = compile_select(self, se);
+      let cte = c_select(self, se);
       self.add(Inst::Set(Box::new(cte)));
     }
   }
@@ -1113,7 +1113,7 @@ impl<'a> Parser<'a>
     let mut src = self.insert_expression(cnames.len());
     if !self.parse_only
     {
-      let t = tlook(self, &tr);
+      let t = table_look(self, &tr);
       let mut cnums: Vec<usize> = Vec::new();
       {
         for cname in &cnames
@@ -1128,7 +1128,7 @@ impl<'a> Parser<'a>
           }
         }
       }
-      let csrc = compile_te(self, &mut src);
+      let csrc = c_te(self, &mut src);
       self.dop(DO::Insert(t, cnums, csrc));
     }
   }
@@ -1156,17 +1156,17 @@ impl<'a> Parser<'a>
     let mut w = self.exp();
     if !self.parse_only
     {
-      let t = tlook(self, &t);
+      let t = table_look(self, &t);
       let from = CTableExpression::Base(t.clone());
       let save = mem::replace(&mut self.from, Some(from));
 
-      let w = cexp_bool(self, &mut w);
+      let w = c_bool(self, &mut w);
       let mut se = Vec::new();
       for (name, mut exp) in s
       {
         if let Some(cnum) = t.info.colmap.get(&name)
         {
-          let exp = cexp_value(self, &mut exp);
+          let exp = c_value(self, &mut exp);
           se.push((*cnum, exp));
         }
         else
@@ -1191,11 +1191,11 @@ impl<'a> Parser<'a>
 
     if !self.parse_only
     {
-      let t = tlook(self, &tname);
+      let t = table_look(self, &tname);
       let from = CTableExpression::Base(t.clone());
 
       let save = mem::replace(&mut self.from, Some(from));
-      let w = cexp_bool(self, &mut w);
+      let w = c_bool(self, &mut w);
       self.from = save;
       self.dop(DO::Delete(t, w));
     }
@@ -1239,7 +1239,7 @@ impl<'a> Parser<'a>
     }
     if !self.parse_only
     {
-      let rp = rlook(self, &name);
+      let rp = function_look(self, &name);
       self.check_types(&rp, &ptypes);
       self.add(Inst::Call(rp));
     }
@@ -1257,7 +1257,7 @@ impl<'a> Parser<'a>
     {
       let start_id;
       let break_id = self.get_jump_id();
-      let mut cse = compile_select(self, se);
+      let mut cse = c_select(self, se);
       let orderbylen = cse.orderby.len();
       if orderbylen == 0
       {
@@ -1340,7 +1340,7 @@ impl<'a> Parser<'a>
     if !self.parse_only
     {
       let mut cols = Vec::new();
-      let table = tlook(self, &tname);
+      let table = table_look(self, &tname);
       for cname in &cnames
       {
         if let Some(cnum) = table.info.colmap.get(cname)
@@ -1644,7 +1644,7 @@ impl<'a> Parser<'a>
     let break_id = self.get_jump_id();
     if !self.parse_only
     {
-      let exp = cexp_bool(self, &mut exp);
+      let exp = c_bool(self, &mut exp);
       self.add(Inst::JumpIfFalse(break_id, exp));
       let save = self.b.break_id;
       self.b.break_id = break_id;
@@ -1661,7 +1661,7 @@ impl<'a> Parser<'a>
     let false_id = self.get_jump_id();
     if !self.parse_only
     {
-      let exp = cexp_bool(self, &mut exp);
+      let exp = c_bool(self, &mut exp);
       self.add(Inst::JumpIfFalse(false_id, exp));
     }
     self.statement();

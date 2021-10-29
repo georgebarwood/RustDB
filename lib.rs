@@ -52,6 +52,22 @@
 //!
 //!(3) Index storage ( an index record refers back to the main table ).
 
+/* Idea for compressing database file
+
+(1) Scan Table and Index tables for roots.
+(2) Scan parent pages for used pages.
+(3) Now have bitmap with free pages, and also map ( pp -> page,offset for high-numbered pages pp ).
+(4) Use free pages to relocate high-numbered pages (updating Table/Index or parent page).
+(5) Truncate file.
+
+Another idea:
+At beginning of each page, store associated Index or Table Id.
+Now to relocate a page, we find it's parent by starting from the root ( using a key from the page ).
+
+Keep a list of free pages. When not busy, and have a free page, relocate last page in file to free page.
+
+*/
+
 use crate::{
   bytes::*, compile::*, eval::*, expr::*, page::*, parse::*, run::*, sf::*, table::*, util::newmap, value::*,
 };
@@ -74,6 +90,14 @@ pub mod value;
 
 // Private modules ( in principle, currently public ).
 
+pub mod managedfile;
+
+/// Table, ColInfo, Row and other Table types.
+pub mod table;
+
+/// Storage of variable length values : ByteStorage.
+mod bytes;
+
 /// Parser.
 mod parse;
 
@@ -81,10 +105,10 @@ mod parse;
 #[macro_use]
 mod util;
 
-/// Access system tables (Schema,Table,Column,Index,IndexColumn,Function).
+/// Access to system tables (Schema,Table,Column,Index,IndexColumn,Function).
 mod sys;
 
-/// Sorted Record storage : SortedFile.
+/// Low-level sorted Record storage : SortedFile.
 mod sf;
 
 /// Page for SortedFile.
@@ -96,22 +120,16 @@ mod sf;
 /// Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids.
 mod page;
 
-/// Table : ColInfo, Row, other Table types.
-pub mod table;
-
-/// SQL execution : Instruction (Inst) and other run time types.
+/// Execution : Instruction (Inst) and other run time types.
 mod run;
 
-/// SQL execution : EvalEnv struct.
+/// Execution : EvalEnv struct.
 mod eval;
 
 /// CExp implementations for basic expressions.
 mod cexp;
 
-/// Storage of variable length values : ByteStorage.
-mod bytes;
-
-/// Compilation of SQL builtin functions.
+/// Compilation of builtin functions.
 mod builtin;
 
 // End of modules.
@@ -123,7 +141,7 @@ pub type DB = Rc<Database>;
 pub struct Database
 {
   /// Page storage.
-  file: Box<dyn PagedFile>,
+  file: RefCell<Box<dyn PagedFile>>,
   sys_schema: TablePtr,
   sys_table: TablePtr,
   sys_column: TablePtr,
@@ -143,10 +161,15 @@ pub struct Database
 impl Database
 {
   /// Construct a new DB, based on the specified file.
-  pub fn new(file: Box<dyn PagedFile>, initsql: &str) -> DB
+  pub fn new(mut file: Box<dyn PagedFile>, initsql: &str) -> DB
   {
     let mut cq = ConsoleQuery {};
     let is_new = file.is_new();
+    if is_new
+    {
+      file.alloc_page(); // Allocate page for byte storage.
+    }
+
     let mut tb = TableBuilder::new();
 
     let sys_schema = tb.nt("sys", "Schema", &[("Name", STRING)]);
@@ -180,7 +203,7 @@ impl Database
     sys_index_col.add_index(9, vec![0]);
 
     let db = Rc::new(Database {
-      file,
+      file: RefCell::new(file),
       sys_schema,
       sys_table,
       sys_column,
@@ -404,6 +427,12 @@ GO
   {
     self.bs.delcode(self, code);
   }
+
+  /// Allocate a page of underlying file storage.
+  fn alloc_page(self: &DB) -> u64
+  {
+    self.file.borrow_mut().alloc_page()
+  }
 } // end impl Database
 
 impl Drop for Database
@@ -448,10 +477,12 @@ impl TableBuilder
 /// Backing storage for database tables.
 pub trait PagedFile
 {
-  fn read_page(&self, pnum: u64, data: &mut [u8]);
-  fn write_page(&self, pnum: u64, data: &[u8]);
-  fn alloc_page(&self) -> u64;
+  fn read_page(&mut self, pnum: u64, data: &mut [u8]);
+  fn write_page(&mut self, pnum: u64, data: &[u8]);
+  fn alloc_page(&mut self) -> u64;
+  fn free_page(&mut self, pnum: u64);
   fn is_new(&self) -> bool;
+  fn rollback(&mut self) {}
 }
 
 /// IO Methods.

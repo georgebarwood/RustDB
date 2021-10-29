@@ -41,7 +41,7 @@ impl Table
         {
           if name == "Id"
           {
-            return Some(CTableExpression::IdGet(self.clone(), cexp_int(p, e2)));
+            return Some(CTableExpression::IdGet(self.clone(), c_int(p, e2)));
           }
           else
           {
@@ -50,7 +50,7 @@ impl Table
             {
               if c[0] == e1.col
               {
-                return Some(CTableExpression::IxGet(self.clone(), cexp_value(p, e2), index));
+                return Some(CTableExpression::IxGet(self.clone(), c_value(p, e2), index));
               }
             }
           }
@@ -104,11 +104,11 @@ impl Table
   /// Get records with matching keys.
   pub fn scan_keys(self: &TablePtr, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan
   {
-    let list = self.ixlist.borrow();
-    let (f, c) = &list[index];
+    let ixlist = self.ixlist.borrow();
+    let (f, c) = &ixlist[index];
     let ikey = IndexKey::new(self, c.clone(), keys.clone(), Ordering::Less);
     let ixa = f.asc(db, Box::new(ikey));
-    return IndexScan { ixa, table: self.clone(), db: db.clone(), cols: c.clone(), keys };
+    IndexScan { ixa, keys, cols: c.clone(), table: self.clone(), db: db.clone() }
   }
 
   /// Insert specified row into the table.
@@ -203,17 +203,19 @@ impl Table
     Rc::new(Table { id, file, info, ixlist, id_alloc: Cell::new(id_alloc), id_alloc_dirty: Cell::new(false) })
   }
 
-  pub fn _dump(&self, db: &DB)
+  pub fn _dump(&self, _db: &DB)
   {
     // println!( "table_dump info={:?}", self.info );
     self.file.dump();
-    let mut r = self.row();
-    for (p, off) in self.file.asc(db, Box::new(Zero {}))
-    {
-      let p = p.borrow();
-      r.load(db, &p.data[off..]);
-      println!("row id={} value={:?}", r.id, r.values);
-    }
+    /*
+        let mut r = self.row();
+        for (p, off) in self.file.asc(db, Box::new(Zero {}))
+        {
+          let p = p.borrow();
+          r.load(db, &p.data[off..]);
+          println!("row id={} value={:?}", r.id, r.values);
+        }
+    */
   }
 }
 

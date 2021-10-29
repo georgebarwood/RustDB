@@ -133,7 +133,7 @@ fn check(p: &Parser, e: &mut Expr)
     }
     ExprIs::FuncCall(name, parms) =>
     {
-      let f = rlook(p, name);
+      let f = function_look(p, name);
       e.data_type = f.return_type;
       if parms.len() != f.param_count
       {
@@ -184,7 +184,7 @@ pub fn get_kind(p: &Parser, e: &mut Expr) -> DataKind
 }
 
 /// Compile a call to a builtin function that returns a Value.
-fn compile_builtin_value(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<Value>
+fn c_builtin_value(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<Value>
 {
   if let Some((_dk, CompileFunc::Value(cf))) = p.db.builtins.borrow().get(name)
   {
@@ -194,14 +194,14 @@ fn compile_builtin_value(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<V
 }
 
 /// Compile an expression.
-pub fn cexp_value(p: &Parser, e: &mut Expr) -> CExpPtr<Value>
+pub fn c_value(p: &Parser, e: &mut Expr) -> CExpPtr<Value>
 {
   match get_kind(p, e)
   {
-    DataKind::Bool => Box::new(cexp::BoolToVal { ce: cexp_bool(p, e) }),
-    DataKind::Int => Box::new(cexp::IntToVal { ce: cexp_int(p, e) }),
-    DataKind::Float => Box::new(cexp::FloatToVal { ce: cexp_float(p, e) }),
-    DataKind::Decimal => Box::new(cexp::IntToVal { ce: cexp_decimal(p, e) }),
+    DataKind::Bool => Box::new(cexp::BoolToVal { ce: c_bool(p, e) }),
+    DataKind::Int => Box::new(cexp::IntToVal { ce: c_int(p, e) }),
+    DataKind::Float => Box::new(cexp::FloatToVal { ce: c_float(p, e) }),
+    DataKind::Decimal => Box::new(cexp::IntToVal { ce: c_decimal(p, e) }),
     _ => match &mut e.exp
     {
       ExprIs::ColName(x) =>
@@ -218,24 +218,24 @@ pub fn cexp_value(p: &Parser, e: &mut Expr) -> CExpPtr<Value>
       ExprIs::Local(x) => Box::new(cexp::Local { num: *x }),
       ExprIs::Binary(op, b1, b2) =>
       {
-        let c1 = cexp_value(p, b1);
-        let c2 = cexp_value(p, b2);
+        let c1 = c_value(p, b1);
+        let c2 = c_value(p, b2);
         match op
         {
           Token::VBar => Box::new(cexp::Concat { c1, c2 }),
           _ => panic!(),
         }
       }
-      ExprIs::FuncCall(name, parms) => compile_call(p, name, parms),
-      ExprIs::Case(list, els) => compile_case(p, list, els, cexp_value),
-      ExprIs::BuiltinCall(name, parms) => compile_builtin_value(p, name, parms),
+      ExprIs::FuncCall(name, parms) => c_call(p, name, parms),
+      ExprIs::Case(list, els) => c_case(p, list, els, c_value),
+      ExprIs::BuiltinCall(name, parms) => c_builtin_value(p, name, parms),
       _ => panic!(),
     },
   }
 }
 
 /// Compile int expression.
-pub fn cexp_int(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
+pub fn c_int(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
 {
   if get_kind(p, e) != DataKind::Int
   {
@@ -257,17 +257,17 @@ pub fn cexp_int(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
     }
     ExprIs::Const(Value::Int(b)) => Box::new(cexp::Const::<i64> { value: *b }),
     ExprIs::Local(num) => Box::new(cexp::Local { num: *num }),
-    ExprIs::Binary(op, b1, b2) => compile_arithmetic(p, *op, b1, b2, cexp_int),
-    ExprIs::Minus(x) => Box::new(cexp::Minus::<i64> { ce: cexp_int(p, x) }),
-    ExprIs::Case(w, e) => compile_case(p, w, e, cexp_int),
-    ExprIs::FuncCall(n, a) => Box::new(cexp::ValToInt { ce: compile_call(p, n, a) }),
-    ExprIs::BuiltinCall(n, a) => compile_builtin_int(p, n, a),
+    ExprIs::Binary(op, b1, b2) => c_arithmetic(p, *op, b1, b2, c_int),
+    ExprIs::Minus(x) => Box::new(cexp::Minus::<i64> { ce: c_int(p, x) }),
+    ExprIs::Case(w, e) => c_case(p, w, e, c_int),
+    ExprIs::FuncCall(n, a) => Box::new(cexp::ValToInt { ce: c_call(p, n, a) }),
+    ExprIs::BuiltinCall(n, a) => c_builtin_int(p, n, a),
     _ => panic!(),
   }
 }
 
 /// Compile float expression.
-pub fn cexp_float(p: &Parser, e: &mut Expr) -> CExpPtr<f64>
+pub fn c_float(p: &Parser, e: &mut Expr) -> CExpPtr<f64>
 {
   if get_kind(p, e) != DataKind::Float
   {
@@ -286,17 +286,17 @@ pub fn cexp_float(p: &Parser, e: &mut Expr) -> CExpPtr<f64>
       }
     }
     ExprIs::Local(num) => Box::new(cexp::Local { num: *num }),
-    ExprIs::Binary(op, b1, b2) => compile_arithmetic(p, *op, b1, b2, cexp_float),
-    ExprIs::Minus(x) => Box::new(cexp::Minus::<f64> { ce: cexp_float(p, x) }),
-    ExprIs::Case(w, e) => compile_case(p, w, e, cexp_float),
-    ExprIs::FuncCall(n, a) => Box::new(cexp::ValToFloat { ce: compile_call(p, n, a) }),
-    ExprIs::BuiltinCall(n, a) => compile_builtin_float(p, n, a),
+    ExprIs::Binary(op, b1, b2) => c_arithmetic(p, *op, b1, b2, c_float),
+    ExprIs::Minus(x) => Box::new(cexp::Minus::<f64> { ce: c_float(p, x) }),
+    ExprIs::Case(w, e) => c_case(p, w, e, c_float),
+    ExprIs::FuncCall(n, a) => Box::new(cexp::ValToFloat { ce: c_call(p, n, a) }),
+    ExprIs::BuiltinCall(n, a) => c_builtin_float(p, n, a),
     _ => panic!(),
   }
 }
 
 /// Compile bool expression.
-pub fn cexp_bool(p: &Parser, e: &mut Expr) -> CExpPtr<bool>
+pub fn c_bool(p: &Parser, e: &mut Expr) -> CExpPtr<bool>
 {
   if get_kind(p, e) != DataKind::Bool
   {
@@ -315,8 +315,8 @@ pub fn cexp_bool(p: &Parser, e: &mut Expr) -> CExpPtr<bool>
     {
       if *op == Token::Or || *op == Token::And
       {
-        let c1 = cexp_bool(p, b1);
-        let c2 = cexp_bool(p, b2);
+        let c1 = c_bool(p, b1);
+        let c2 = c_bool(p, b2);
         match op
         {
           Token::Or => Box::new(cexp::Or { c1, c2 }),
@@ -328,22 +328,22 @@ pub fn cexp_bool(p: &Parser, e: &mut Expr) -> CExpPtr<bool>
       {
         match get_kind(p, b1)
         {
-          DataKind::Bool => compile_compare(p, *op, b1, b2, cexp_bool),
-          DataKind::Int => compile_compare(p, *op, b1, b2, cexp_int),
-          DataKind::Float => compile_compare(p, *op, b1, b2, cexp_float),
-          _ => compile_compare(p, *op, b1, b2, cexp_value),
+          DataKind::Bool => c_compare(p, *op, b1, b2, c_bool),
+          DataKind::Int => c_compare(p, *op, b1, b2, c_int),
+          DataKind::Float => c_compare(p, *op, b1, b2, c_float),
+          _ => c_compare(p, *op, b1, b2, c_value),
         }
       }
     }
-    ExprIs::Not(x) => Box::new(cexp::Not { ce: cexp_bool(p, x) }),
-    ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToBool { ce: compile_call(p, name, parms) }),
-    ExprIs::Case(list, els) => compile_case(p, list, els, cexp_bool),
+    ExprIs::Not(x) => Box::new(cexp::Not { ce: c_bool(p, x) }),
+    ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToBool { ce: c_call(p, name, parms) }),
+    ExprIs::Case(list, els) => c_case(p, list, els, c_bool),
     _ => panic!(),
   }
 }
 
 /// Compile decimal expression.
-pub fn cexp_decimal(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
+pub fn c_decimal(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
 {
   if get_kind(p, e) != DataKind::Decimal
   {
@@ -360,8 +360,8 @@ pub fn cexp_decimal(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
     ExprIs::Local(x) => Box::new(cexp::Local { num: *x }),
     ExprIs::Binary(op, b1, b2) =>
     {
-      let c1 = cexp_decimal(p, b1);
-      let c2 = cexp_decimal(p, b2);
+      let c1 = c_decimal(p, b1);
+      let c2 = c_decimal(p, b2);
       match op
       {
         Token::Plus => Box::new(cexp::Add::<i64> { c1, c2 }),
@@ -374,17 +374,17 @@ pub fn cexp_decimal(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
     }
     ExprIs::Minus(u) =>
     {
-      let ce = cexp_decimal(p, u);
+      let ce = c_decimal(p, u);
       Box::new(cexp::Minus::<i64> { ce })
     }
-    ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToInt { ce: compile_call(p, name, parms) }),
-    ExprIs::Case(list, els) => compile_case(p, list, els, cexp_decimal),
+    ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToInt { ce: c_call(p, name, parms) }),
+    ExprIs::Case(list, els) => c_case(p, list, els, c_decimal),
     _ => panic!(),
   }
 }
 
 /// Compile arithmetic.
-fn compile_arithmetic<T>(
+fn c_arithmetic<T>(
   p: &Parser, op: Token, e1: &mut Expr, e2: &mut Expr, cexp: fn(&Parser, &mut Expr) -> CExpPtr<T>,
 ) -> CExpPtr<T>
 where
@@ -409,7 +409,7 @@ where
 }
 
 /// Compile comparison.
-fn compile_compare<T>(
+fn c_compare<T>(
   p: &Parser, op: Token, e1: &mut Expr, e2: &mut Expr, cexp: fn(&Parser, &mut Expr) -> CExpPtr<T>,
 ) -> CExpPtr<bool>
 where
@@ -430,7 +430,7 @@ where
 }
 
 /// Compile CASE Expression.
-fn compile_case<T>(
+fn c_case<T>(
   p: &Parser, wes: &mut [(Expr, Expr)], els: &mut Expr, cexp: fn(&Parser, &mut Expr) -> CExpPtr<T>,
 ) -> CExpPtr<T>
 where
@@ -439,7 +439,7 @@ where
   let mut whens = Vec::new();
   for (be, ve) in wes
   {
-    let b = cexp_bool(p, be);
+    let b = c_bool(p, be);
     let v = cexp(p, ve);
     whens.push((b, v));
   }
@@ -448,7 +448,7 @@ where
 }
 
 /// Compile a call to a builtin function that returns an integer.
-fn compile_builtin_int(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64>
+fn c_builtin_int(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64>
 {
   if let Some((_dk, CompileFunc::Int(cf))) = p.db.builtins.borrow().get(name)
   {
@@ -458,7 +458,7 @@ fn compile_builtin_int(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64
 }
 
 /// Compile a call to a builtin function that returns a float.
-fn compile_builtin_float(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<f64>
+fn c_builtin_float(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<f64>
 {
   if let Some((_dk, CompileFunc::Float(cf))) = p.db.builtins.borrow().get(name)
   {
@@ -468,9 +468,9 @@ fn compile_builtin_float(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<f
 }
 
 /// Compile SelectExpression to CSelectExpression.
-pub(crate) fn compile_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpression
+pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpression
 {
-  let mut from = x.from.map(|mut te| compile_te(p, &mut te));
+  let mut from = x.from.map(|mut te| c_te(p, &mut te));
 
   let table = match &from
   {
@@ -485,7 +485,7 @@ pub(crate) fn compile_select(p: &mut Parser, mut x: SelectExpression) -> CSelect
   let mut exps = Vec::new();
   for mut e in x.exps
   {
-    exps.push(cexp_value(p, &mut e));
+    exps.push(c_value(p, &mut e));
   }
   let wher = {
     if let Some(we) = &mut x.wher
@@ -505,7 +505,7 @@ pub(crate) fn compile_select(p: &mut Parser, mut x: SelectExpression) -> CSelect
       }
       else
       {
-        Some(cexp_bool(p, we))
+        Some(c_bool(p, we))
       }
     }
     else
@@ -518,7 +518,7 @@ pub(crate) fn compile_select(p: &mut Parser, mut x: SelectExpression) -> CSelect
   let mut desc = Vec::new();
   for (e, a) in &mut x.orderby
   {
-    let e = cexp_value(p, e);
+    let e = c_value(p, e);
     orderby.push(e);
     desc.push(*a);
   }
@@ -533,7 +533,7 @@ pub(crate) fn compile_select(p: &mut Parser, mut x: SelectExpression) -> CSelect
 }
 
 /// Compile a TableExpression to CTableExpression.
-pub(crate) fn compile_te(p: &Parser, te: &mut TableExpression) -> CTableExpression
+pub(crate) fn c_te(p: &Parser, te: &mut TableExpression) -> CTableExpression
 {
   match te
   {
@@ -545,7 +545,7 @@ pub(crate) fn compile_te(p: &Parser, te: &mut TableExpression) -> CTableExpressi
         let mut cr = Vec::new();
         for e in r
         {
-          let ce = cexp_value(p, e);
+          let ce = c_value(p, e);
           cr.push(ce);
         }
         cm.push(cr);
@@ -554,14 +554,14 @@ pub(crate) fn compile_te(p: &Parser, te: &mut TableExpression) -> CTableExpressi
     }
     TableExpression::Base(x) =>
     {
-      let t = tlook(p, x);
+      let t = table_look(p, x);
       CTableExpression::Base(t)
     }
   }
 }
 
 /// Look for named table in database.
-pub(crate) fn tlook(p: &Parser, name: &ObjRef) -> TablePtr
+pub(crate) fn table_look(p: &Parser, name: &ObjRef) -> TablePtr
 {
   if let Some(t) = p.db.get_table(name)
   {
@@ -574,7 +574,7 @@ pub(crate) fn tlook(p: &Parser, name: &ObjRef) -> TablePtr
 }
 
 /// Look for named function in database and compile it if not already compiled.
-pub(crate) fn rlook(p: &Parser, name: &ObjRef) -> FunctionPtr
+pub(crate) fn function_look(p: &Parser, name: &ObjRef) -> FunctionPtr
 {
   if let Some(r) = p.db.get_function(name)
   {
@@ -659,9 +659,9 @@ pub(crate) fn name_to_colnum(p: &Parser, name: &str) -> (usize, DataType)
 }
 
 /// Compile ExprCall to CExpPtr<Value>, checking parameter types.
-pub(crate) fn compile_call(p: &Parser, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value>
+pub(crate) fn c_call(p: &Parser, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value>
 {
-  let rp: FunctionPtr = rlook(p, name);
+  let rp: FunctionPtr = function_look(p, name);
 
   let mut pv: Vec<CExpPtr<Value>> = Vec::new();
   let mut pt: Vec<DataType> = Vec::new();
@@ -669,7 +669,7 @@ pub(crate) fn compile_call(p: &Parser, name: &ObjRef, parms: &mut Vec<Expr>) -> 
   {
     let t: DataType = get_type(p, e);
     pt.push(t);
-    let ce = cexp_value(p, e);
+    let ce = c_value(p, e);
     pv.push(ce);
   }
 
@@ -696,28 +696,28 @@ pub(crate) fn push(p: &mut Parser, e: &mut Expr) -> DataType
     {
       DataKind::Int =>
       {
-        let ce = cexp_int(p, e);
+        let ce = c_int(p, e);
         p.add(Inst::PushInt(ce));
       }
       DataKind::Float =>
       {
-        let ce = cexp_float(p, e);
+        let ce = c_float(p, e);
         p.add(Inst::PushFloat(ce));
       }
       DataKind::Bool =>
       {
-        let ce = cexp_bool(p, e);
+        let ce = c_bool(p, e);
         p.add(Inst::PushBool(ce));
       }
       _ =>
       {
-        let ce = cexp_value(p, e);
+        let ce = c_value(p, e);
         p.add(Inst::PushValue(ce));
       }
     },
     ExprIs::FuncCall(name, parms) =>
     {
-      let rp = rlook(p, name);
+      let rp = function_look(p, name);
       {
         for e in parms.iter_mut()
         {
@@ -732,7 +732,7 @@ pub(crate) fn push(p: &mut Parser, e: &mut Expr) -> DataType
     }
     _ =>
     {
-      let ce = cexp_value(p, e);
+      let ce = c_value(p, e);
       p.add(Inst::PushValue(ce));
     }
   }

@@ -66,10 +66,10 @@ impl SortedFile
     {
       let p = ptr.borrow();
       println!(
-        "Page pnum={} count={} Parent={} size()={}",
+        "Cached Page pnum={} count={} level={} size()={}",
         pnum,
         p.count,
-        p.parent,
+        p.level,
         p.size()
       );
     }
@@ -100,7 +100,7 @@ impl SortedFile
       let cp;
       {
         let p = ptr.borrow();
-        if !p.parent
+        if p.level == 0
         {
           let x = p.find_equal(db, r);
           if x == 0
@@ -127,7 +127,7 @@ impl SortedFile
       let cp;
       {
         let mut p = ptr.borrow_mut();
-        if !p.parent
+        if p.level == 0
         {
           p.remove(db, r);
           break;
@@ -165,7 +165,7 @@ impl SortedFile
         );
         p.write_header();
         p.dirty = false;
-        db.file.write_page(*pnum, &p.data);
+        db.file.borrow_mut().write_page(*pnum, &p.data);
       }
     }
   }
@@ -178,7 +178,7 @@ impl SortedFile
     let child_page;
     {
       let mut p = p.borrow_mut();
-      if p.parent
+      if p.level != 0
       {
         let x = p.find_node(db, r);
         child_page = if x == 0 { p.first_page } else { p.child_page(x) };
@@ -202,7 +202,7 @@ impl SortedFile
           None =>
           {
             // New root page needed.
-            let mut new_root = self.new_page(true);
+            let mut new_root = self.new_page(p.level + 1);
             new_root.first_page = self.alloc_page(db, sp.left);
             self.publish_page(self.root_page, new_root);
             self.append_page(db, self.root_page, sk, pnum2);
@@ -251,7 +251,7 @@ impl SortedFile
         None =>
         {
           // New root page needed.
-          let mut new_root = self.new_page(true);
+          let mut new_root = self.new_page(p.borrow().level + 1);
           new_root.first_page = self.alloc_page(db, sp.left);
           self.publish_page(self.root_page, new_root);
           self.append_page(db, self.root_page, sk, pnum2);
@@ -273,11 +273,11 @@ impl SortedFile
   }
 
   /// Construct a new empty page.
-  fn new_page(&self, parent: bool) -> Page
+  fn new_page(&self, level: u8) -> Page
   {
     Page::new(
-      if parent { self.key_size } else { self.rec_size },
-      parent,
+      if level != 0 { self.key_size } else { self.rec_size },
+      level,
       vec![0; PAGE_SIZE],
     )
   }
@@ -285,7 +285,7 @@ impl SortedFile
   /// Allocate a page number, publish the page in the cache.
   fn alloc_page(&self, db: &DB, p: Page) -> u64
   {
-    let pnum = db.file.alloc_page();
+    let pnum = db.alloc_page();
     self.publish_page(pnum, p);
     pnum
   }
@@ -305,11 +305,11 @@ impl SortedFile
       Entry::Vacant(e) =>
       {
         let mut data = vec![0; PAGE_SIZE];
-        db.file.read_page(pnum, &mut data);
-        let parent = data[0] & 1 != 0;
+        db.file.borrow_mut().read_page(pnum, &mut data);
+        let level = data[0];
         let p = util::new(Page::new(
-          if parent { self.key_size } else { self.rec_size },
-          parent,
+          if level != 0 { self.key_size } else { self.rec_size },
+          level,
           data,
         ));
         e.insert(p.clone());
@@ -457,7 +457,7 @@ impl Stack
       {
         let p = ptr.borrow();
         self.add_right(&p, ptr.clone(), p.left(x));
-        if p.parent
+        if p.level != 0
         {
           let cp = p.child_page(x);
           let cptr = file.load_page(&self.db, cp);
@@ -479,7 +479,7 @@ impl Stack
     {
       let p = ptr.borrow();
       self.add_left(&p, ptr.clone(), p.right(x));
-      if p.parent
+      if p.level != 0
       {
         let cp = p.child_page(x);
         self.add_page_left(file, cp);
@@ -542,7 +542,7 @@ impl Stack
       {
         Ordering::Less =>
         {
-          if !self.seek_left(p, ptr.clone(), p.right(x)) && p.parent
+          if !self.seek_left(p, ptr.clone(), p.right(x)) && p.level != 0
           {
             self.v.push((ptr, x));
           }
@@ -566,7 +566,7 @@ impl Stack
   fn add_page_right(&mut self, file: &SortedFile, ptr: PagePtr)
   {
     let p = ptr.borrow();
-    if p.parent
+    if p.level != 0
     {
       let fp = file.load_page(&self.db, p.first_page);
       self.v.push((fp, 0));
@@ -600,7 +600,7 @@ impl Stack
       {
         self.add_left(&p, ptr.clone(), root);
       }
-      if !p.parent
+      if p.level == 0
       {
         return;
       }
