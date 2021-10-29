@@ -71,7 +71,7 @@ Keep a list of free pages. When not busy, and have a free page, relocate last pa
 */
 
 use crate::{
-  bytes::*, compile::*, eval::*, expr::*, page::*, parse::*, run::*, sf::*, table::*, util::newmap, value::*,
+  bytes::*, compile::*, eval::*, expr::*, page::*, parse::*, run::*, sortedfile::*, table::*, util::newmap, value::*,
 };
 use std::{cell::Cell, cell::RefCell, cmp::Ordering, collections::HashMap, panic, rc::Rc};
 
@@ -120,7 +120,7 @@ mod parse;
 mod sys;
 
 /// Low-level sorted Record storage : SortedFile.
-pub mod sf;
+pub mod sortedfile;
 
 /// Execution : Instruction (Inst) and other run time types.
 mod run;

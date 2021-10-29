@@ -45,7 +45,7 @@ impl Table
           }
           else
           {
-            let list = self.ixlist.borrow();
+            let list = &self.ixlist.borrow();
             for (index, (_f, c)) in list.iter().enumerate()
             {
               if c[0] == e1.col
@@ -69,7 +69,7 @@ impl Table
   /// Get record with matching key, using specified index.
   pub fn ix_get(&self, db: &DB, key: Vec<Value>, index: usize) -> Option<(PagePtr, usize)>
   {
-    let list = self.ixlist.borrow();
+    let list = &self.ixlist.borrow();
     let (f, c) = &list[index];
     let key = IndexKey::new(self, c.clone(), key, Ordering::Equal);
     if let Some((p, off)) = f.get(db, &key)
@@ -104,7 +104,7 @@ impl Table
   /// Get records with matching keys.
   pub fn scan_keys(self: &TablePtr, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan
   {
-    let ixlist = self.ixlist.borrow();
+    let ixlist = &self.ixlist.borrow();
     let (f, c) = &ixlist[index];
     let ikey = IndexKey::new(self, c.clone(), keys.clone(), Ordering::Less);
     let ixa = f.asc(db, Box::new(ikey));
@@ -142,7 +142,7 @@ impl Table
     let key_size = self.info.calc_index_key_size(&cols) + 8;
     let file = Rc::new(SortedFile::new(key_size, key_size, root));
 
-    let mut list = self.ixlist.borrow_mut();
+    let list = &mut self.ixlist.borrow_mut();
     list.push((file, Rc::new(cols)));
   }
 
