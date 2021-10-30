@@ -116,7 +116,8 @@ impl Page
         || NODE_BASE + (self.alloc + 1) * self.node_size + if self.level != 0 { PAGE_ID_SIZE } else { 0 } >= PAGE_SIZE)
   }
 
-  /// Construct a new empty page inheriting record size and parent from self.
+  /// Construct a new empty page inheriting record size and level from self.
+  /// Used when splitting a page that is full.
   pub fn new_page(&self) -> Page
   {
     Page::new(self.rec_size(), self.level, vec![0; PAGE_SIZE], u64::MAX)
