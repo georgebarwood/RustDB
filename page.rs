@@ -15,20 +15,21 @@ const NODE_BASE: usize = 8;
 /// = 6. Number of bytes used to store a page number.
 const PAGE_ID_SIZE: usize = 6;
 
-/// = 0. The left sub-tree is higher than the right.  
-const BAL_LEFT_HIGHER: u8 = 0;
-
-/// = 1. The left and right sub-trees have equal height.
-const BALANCED: u8 = 1;
-
-/// = 2. The right sub-tree is higher than the left.
-const BAL_RIGHT_HIGHER: u8 = 2;
-
 /// = 11. Node ids are 11 bits.
 const NODE_ID_BITS: usize = 11;
 
 /// = 2047. Largest Node id.
 const MAX_NODE: usize = bitmask!(0, NODE_ID_BITS);
+
+/// Node balance - indicates which child tree is higher.
+#[derive(PartialEq)]
+enum Balance
+{
+  LeftHigher = 0,
+  Balanced = 1,
+  RightHigher = 2,
+}
+use Balance::*;
 
 /// A page in a SortedFile.
 pub struct Page
@@ -171,30 +172,33 @@ impl Page
   pub fn insert(&mut self, db: &DB, r: &dyn Record)
   {
     let inserted = self.next_alloc();
-    self.root = self.insert_into(db, self.root, Some(r)).0;
+    self.root = self.insert_into(self.root, Some((db, r))).0;
     if inserted != self.next_alloc()
     {
       self.set_record(inserted, r);
     }
   }
 
-  pub fn insert_child(&mut self, db: &DB, r: &dyn Record, cp: u64)
+  /// Insert a parent record into this page with specified key and chuld page.
+  pub fn insert_parent(&mut self, db: &DB, r: &dyn Record, cp: u64)
   {
     let inserted = self.next_alloc();
-    self.root = self.insert_into(db, self.root, Some(r)).0;
+    self.root = self.insert_into(self.root, Some((db, r))).0;
     self.set_record(inserted, r);
     self.set_child_page(inserted, cp);
   }
 
-  pub fn append_child(&mut self, db: &DB, r: &dyn Record, cp: u64)
+  /// Append a parent record to this page with specified key and child page.
+  pub fn append_parent(&mut self, r: &dyn Record, cp: u64)
   {
     let inserted = self.next_alloc();
-    self.root = self.insert_into(db, self.root, None).0;
+    self.root = self.insert_into(self.root, None).0;
     self.set_record(inserted, r);
     self.set_child_page(inserted, cp);
   }
 
-  pub fn append_from(&mut self, db: &DB, from: &Page, x: usize)
+  /// Append record x from specified page to this page.
+  pub fn append_from(&mut self, from: &Page, x: usize)
   {
     if self.level != 0 && self.first_page == 0
     {
@@ -203,15 +207,15 @@ impl Page
     else
     {
       let inserted = self.next_alloc();
-      self.root = self.insert_into(db, self.root, None).0;
+      self.root = self.insert_into(self.root, None).0;
       let dest_off = self.rec_offset(inserted);
       let src_off = from.rec_offset(x);
       let n = self.node_size - NODE_OVERHEAD;
-      // for i in 0..n {  self.data[ dest_off + i ] = from.data[ src_off + i ]; }
       self.data[dest_off..dest_off + n].copy_from_slice(&from.data[src_off..src_off + n]);
     }
   }
 
+  /// Remove record from this page.
   pub fn remove(&mut self, db: &DB, r: &dyn Record)
   {
     self.root = self.remove_from(db, self.root, r).0;
@@ -242,16 +246,23 @@ impl Page
     self.node_size - NODE_OVERHEAD - if self.level != 0 { PAGE_ID_SIZE } else { 0 }
   }
 
-  fn balance(&self, x: usize) -> u8
+  /// Node balance.
+  fn balance(&self, x: usize) -> Balance
   {
     let off = self.over_off(x);
-    getbits!(self.data[off], 0, 2)
+    match getbits!(self.data[off], 0, 2)
+    {
+      0 => LeftHigher,
+      1 => Balanced,
+      2 => RightHigher,
+      _ => panic!(),
+    }
   }
 
-  fn set_balance(&mut self, x: usize, balance: u8)
+  fn set_balance(&mut self, x: usize, balance: Balance)
   {
     let off = self.over_off(x);
-    setbits!(self.data[off], 0, 2, balance);
+    setbits!(self.data[off], 0, 2, balance as u8);
   }
 
   /// Get the left child node for a node. Result is zero if there is no child.
@@ -268,6 +279,7 @@ impl Page
     self.data[off + 2] as usize | (getbits!(self.data[off] as usize, 2 + NODE_ID_BITS - 8, NODE_ID_BITS - 8) << 8)
   }
 
+  /// Set the left child for node x.
   fn set_left(&mut self, x: usize, y: usize)
   {
     let off = self.over_off(x);
@@ -276,6 +288,7 @@ impl Page
     debug_assert!(self.left(x) == y);
   }
 
+  /// Set the right child for node x.
   fn set_right(&mut self, x: usize, y: usize)
   {
     let off = self.over_off(x);
@@ -284,19 +297,23 @@ impl Page
     debug_assert!(self.right(x) == y);
   }
 
-  /// Get the child page number for a node in a parent page.
+  /// Get the child page number for node x in a parent page.
   pub fn child_page(&self, x: usize) -> u64
   {
+    debug_assert!(self.level != 0);
     let off = self.over_off(x) - PAGE_ID_SIZE;
     util::get(&self.data, off, PAGE_ID_SIZE)
   }
 
+  /// Set the child page for node x.
   fn set_child_page(&mut self, x: usize, pnum: u64)
   {
+    debug_assert!(self.level != 0);
     let off = self.over_off(x) - PAGE_ID_SIZE;
     util::set(&mut self.data, off, pnum as u64, PAGE_ID_SIZE);
   }
 
+  /// Set the record data for node x.
   fn set_record(&mut self, x: usize, r: &dyn Record)
   {
     let off = self.rec_offset(x);
@@ -304,6 +321,7 @@ impl Page
     r.save(&mut self.data[off..off + size]);
   }
 
+  /// Compare record data for node x with record r.
   pub fn compare(&self, db: &DB, r: &dyn Record, x: usize) -> Ordering
   {
     let off = self.rec_offset(x);
@@ -311,6 +329,7 @@ impl Page
     r.compare(db, &self.data[off..off + size])
   }
 
+  /// Get record key for node x.
   pub fn get_key(&self, db: &DB, x: usize, r: &dyn Record) -> Box<dyn Record>
   {
     let off = self.rec_offset(x);
@@ -320,6 +339,7 @@ impl Page
 
   // Node Id Allocation.
 
+  /// Peek alloc_node.
   fn next_alloc(&self) -> usize
   {
     if self.free != 0
@@ -332,6 +352,7 @@ impl Page
     }
   }
 
+  /// Allocate a node.
   fn alloc_node(&mut self) -> usize
   {
     self.count += 1;
@@ -348,6 +369,7 @@ impl Page
     }
   }
 
+  /// Free node x.
   fn free_node(&mut self, x: usize)
   {
     self.set_left(x, self.free);
@@ -355,13 +377,14 @@ impl Page
     self.count -= 1;
   }
 
-  fn insert_into(&mut self, db: &DB, mut x: usize, r: Option<&dyn Record>) -> (usize, bool)
+  /// Insert into node x. Result is node and whether tree height increased.
+  fn insert_into(&mut self, mut x: usize, r: Option<(&DB, &dyn Record)>) -> (usize, bool)
   {
     let mut height_increased: bool;
     if x == 0
     {
       x = self.alloc_node();
-      self.set_balance(x, BALANCED);
+      self.set_balance(x, Balanced);
       self.set_left(x, 0);
       self.set_right(x, 0);
       height_increased = true;
@@ -370,53 +393,53 @@ impl Page
     {
       let c = match r
       {
-        Some(r) => self.compare(db, r, x),
+        Some((db, r)) => self.compare(db, r, x),
         None => Ordering::Less,
       };
 
       if c == Ordering::Greater
       {
-        let p = self.insert_into(db, self.left(x), r);
+        let p = self.insert_into(self.left(x), r);
         self.set_left(x, p.0);
         height_increased = p.1;
         if height_increased
         {
           let bx = self.balance(x);
-          if bx == BALANCED
+          if bx == Balanced
           {
-            self.set_balance(x, BAL_LEFT_HIGHER);
+            self.set_balance(x, LeftHigher);
           }
           else
           {
             height_increased = false;
-            if bx == BAL_LEFT_HIGHER
+            if bx == LeftHigher
             {
               return (self.rotate_right(x).0, false);
             }
-            self.set_balance(x, BALANCED);
+            self.set_balance(x, Balanced);
           }
         }
       }
       else if c == Ordering::Less
       {
-        let p = self.insert_into(db, self.right(x), r);
+        let p = self.insert_into(self.right(x), r);
         self.set_right(x, p.0);
         height_increased = p.1;
         if height_increased
         {
           let bx = self.balance(x);
-          if bx == BALANCED
+          if bx == Balanced
           {
-            self.set_balance(x, BAL_RIGHT_HIGHER);
+            self.set_balance(x, RightHigher);
           }
           else
           {
-            if bx == BAL_RIGHT_HIGHER
+            if bx == RightHigher
             {
               return (self.rotate_left(x).0, false);
             }
             height_increased = false;
-            self.set_balance(x, BALANCED);
+            self.set_balance(x, Balanced);
           }
         }
       }
@@ -428,6 +451,7 @@ impl Page
     (x, height_increased)
   }
 
+  /// Rotate right to rebalance tree.
   fn rotate_right(&mut self, x: usize) -> (usize, bool)
   {
     // Left is 2 levels higher than Right.
@@ -435,23 +459,23 @@ impl Page
     let z = self.left(x);
     let y = self.right(z);
     let zb = self.balance(z);
-    if zb != BAL_RIGHT_HIGHER
+    if zb != RightHigher
     // Single rotation.
     {
       self.set_right(z, x);
       self.set_left(x, y);
-      if zb == BALANCED
+      if zb == Balanced
       // Can only occur when deleting Records.
       {
-        self.set_balance(x, BAL_LEFT_HIGHER);
-        self.set_balance(z, BAL_RIGHT_HIGHER);
+        self.set_balance(x, LeftHigher);
+        self.set_balance(z, RightHigher);
         height_decreased = false;
       }
       else
       {
-        // zb = BAL_LEFT_HIGHER
-        self.set_balance(x, BALANCED);
-        self.set_balance(z, BALANCED);
+        // zb = LeftHigher
+        self.set_balance(x, Balanced);
+        self.set_balance(z, Balanced);
       }
       (z, height_decreased)
     }
@@ -463,27 +487,28 @@ impl Page
       self.set_right(y, x);
       self.set_left(y, z);
       let yb = self.balance(y);
-      if yb == BAL_LEFT_HIGHER
+      if yb == LeftHigher
       {
-        self.set_balance(x, BAL_RIGHT_HIGHER);
-        self.set_balance(z, BALANCED);
+        self.set_balance(x, RightHigher);
+        self.set_balance(z, Balanced);
       }
-      else if yb == BALANCED
+      else if yb == Balanced
       {
-        self.set_balance(x, BALANCED);
-        self.set_balance(z, BALANCED);
+        self.set_balance(x, Balanced);
+        self.set_balance(z, Balanced);
       }
       else
       {
-        // yb == BAL_RIGHT_HIGHER
-        self.set_balance(x, BALANCED);
-        self.set_balance(z, BAL_LEFT_HIGHER);
+        // yb == RightHigher
+        self.set_balance(x, Balanced);
+        self.set_balance(z, LeftHigher);
       }
-      self.set_balance(y, BALANCED);
+      self.set_balance(y, Balanced);
       (y, height_decreased)
     }
   }
 
+  /// Rotate left to rebalance tree.
   fn rotate_left(&mut self, x: usize) -> (usize, bool)
   {
     // Right is 2 levels higher than Left.
@@ -491,23 +516,23 @@ impl Page
     let z = self.right(x);
     let y = self.left(z);
     let zb = self.balance(z);
-    if zb != BAL_LEFT_HIGHER
+    if zb != LeftHigher
     // Single rotation.
     {
       self.set_left(z, x);
       self.set_right(x, y);
-      if zb == BALANCED
+      if zb == Balanced
       // Can only occur when deleting Records.
       {
-        self.set_balance(x, BAL_RIGHT_HIGHER);
-        self.set_balance(z, BAL_LEFT_HIGHER);
+        self.set_balance(x, RightHigher);
+        self.set_balance(z, LeftHigher);
         height_decreased = false;
       }
       else
       {
-        // zb = BAL_RIGHT_HIGHER
-        self.set_balance(x, BALANCED);
-        self.set_balance(z, BALANCED);
+        // zb = RightHigher
+        self.set_balance(x, Balanced);
+        self.set_balance(z, Balanced);
       }
       (z, height_decreased)
     }
@@ -519,27 +544,28 @@ impl Page
       self.set_left(y, x);
       self.set_right(y, z);
       let yb = self.balance(y);
-      if yb == BAL_RIGHT_HIGHER
+      if yb == RightHigher
       {
-        self.set_balance(x, BAL_LEFT_HIGHER);
-        self.set_balance(z, BALANCED);
+        self.set_balance(x, LeftHigher);
+        self.set_balance(z, Balanced);
       }
-      else if yb == BALANCED
+      else if yb == Balanced
       {
-        self.set_balance(x, BALANCED);
-        self.set_balance(z, BALANCED);
+        self.set_balance(x, Balanced);
+        self.set_balance(z, Balanced);
       }
       else
       {
-        // yb == BAL_LEFT_HIGHER
-        self.set_balance(x, BALANCED);
-        self.set_balance(z, BAL_RIGHT_HIGHER);
+        // yb == LeftHigher
+        self.set_balance(x, Balanced);
+        self.set_balance(z, RightHigher);
       }
-      self.set_balance(y, BALANCED);
+      self.set_balance(y, Balanced);
       (y, height_decreased)
     }
   }
 
+  /// Remove record from tree x.
   fn remove_from(&mut self, db: &DB, mut x: usize, r: &dyn Record) -> (usize, bool) // out bool heightDecreased
   {
     if x == 0
@@ -573,19 +599,19 @@ impl Page
         self.set_balance(x, self.balance(deleted));
         if height_decreased
         {
-          if self.balance(x) == BAL_LEFT_HIGHER
+          if self.balance(x) == LeftHigher
           {
             let rr = self.rotate_right(x);
             x = rr.0;
             height_decreased = rr.1;
           }
-          else if self.balance(x) == BAL_RIGHT_HIGHER
+          else if self.balance(x) == RightHigher
           {
-            self.set_balance(x, BALANCED);
+            self.set_balance(x, Balanced);
           }
           else
           {
-            self.set_balance(x, BAL_LEFT_HIGHER);
+            self.set_balance(x, LeftHigher);
             height_decreased = false;
           }
         }
@@ -600,17 +626,17 @@ impl Page
       if height_decreased
       {
         let xb = self.balance(x);
-        if xb == BAL_RIGHT_HIGHER
+        if xb == RightHigher
         {
           return self.rotate_left(x);
         }
-        if xb == BAL_LEFT_HIGHER
+        if xb == LeftHigher
         {
-          self.set_balance(x, BALANCED);
+          self.set_balance(x, Balanced);
         }
         else
         {
-          self.set_balance(x, BAL_RIGHT_HIGHER);
+          self.set_balance(x, RightHigher);
           height_decreased = false;
         }
       }
@@ -623,17 +649,17 @@ impl Page
       if height_decreased
       {
         let xb = self.balance(x);
-        if xb == BAL_LEFT_HIGHER
+        if xb == LeftHigher
         {
           return self.rotate_right(x);
         }
-        if self.balance(x) == BAL_RIGHT_HIGHER
+        if self.balance(x) == RightHigher
         {
-          self.set_balance(x, BALANCED);
+          self.set_balance(x, Balanced);
         }
         else
         {
-          self.set_balance(x, BAL_LEFT_HIGHER);
+          self.set_balance(x, LeftHigher);
           height_decreased = false;
         }
       }
@@ -641,7 +667,7 @@ impl Page
     (x, height_decreased)
   }
 
-  // Returns root of tree, removed node and height_decreased.
+  /// Remove smallest node from tree x. Returns root of tree, removed node and height_decreased.
   fn remove_least(&mut self, x: usize) -> (usize, usize, bool)
   {
     if self.left(x) == 0
@@ -657,18 +683,18 @@ impl Page
       if height_decreased
       {
         let xb = self.balance(x);
-        if xb == BAL_RIGHT_HIGHER
+        if xb == RightHigher
         {
           let rl = self.rotate_left(x);
           return (rl.0, least, rl.1);
         }
-        if xb == BAL_LEFT_HIGHER
+        if xb == LeftHigher
         {
-          self.set_balance(x, BALANCED);
+          self.set_balance(x, Balanced);
         }
         else
         {
-          self.set_balance(x, BAL_RIGHT_HIGHER);
+          self.set_balance(x, RightHigher);
           height_decreased = false;
         }
       }

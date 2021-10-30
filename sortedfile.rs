@@ -206,7 +206,7 @@ impl SortedFile
       {
         // Page is full, divide it into left and right.
         p.pnum = u64::MAX; // Invalidate old page, so that it is not saved.
-        let sp = Split::new(db, p);
+        let sp = Split::new(p);
         let sk = &*p.get_key(db, sp.split_node, r);
 
         // Could insert r into left or right here.
@@ -244,27 +244,27 @@ impl SortedFile
 
     // Need to check if page is full.
     if !p.full()
-    {      
+    {
       self.set_dirty(p, &pp);
-      p.insert_child(db, r, cpnum);
+      p.insert_parent(db, r, cpnum);
     }
     else
     {
       // Split the parent page.
       p.pnum = u64::MAX; // Invalidate old parent page, so that it is not saved.
 
-      let mut sp = Split::new(db, p);
+      let mut sp = Split::new(p);
       let sk = &*p.get_key(db, sp.split_node, r);
 
       // Insert into either left or right.
       let c = p.compare(db, r, sp.split_node);
       if c == Ordering::Greater
       {
-        sp.left.insert_child(db, r, cpnum)
+        sp.left.insert_parent(db, r, cpnum)
       }
       else
       {
-        sp.right.insert_child(db, r, cpnum)
+        sp.right.insert_parent(db, r, cpnum)
       }
 
       let pnum2 = self.alloc_page(db, sp.right);
@@ -292,7 +292,7 @@ impl SortedFile
     let pp = self.load_page(db, into);
     let p = &mut pp.borrow_mut();
     self.set_dirty(p, &pp);
-    p.append_child(db, k, pnum);
+    p.append_parent(k, pnum);
   }
 
   /// Construct a new empty page.
@@ -369,22 +369,22 @@ struct Split
 
 impl Split
 {
-  fn new(db: &DB, p: &Page) -> Self
+  fn new(p: &Page) -> Self
   {
     let mut result = Split { count: 0, half: p.count / 2, split_node: 0, left: p.new_page(), right: p.new_page() };
     result.left.first_page = p.first_page;
-    result.split(db, p, p.root);
+    result.split(p, p.root);
     result
   }
 
-  fn split(&mut self, db: &DB, p: &Page, x: usize)
+  fn split(&mut self, p: &Page, x: usize)
   {
     if x != 0
     {
-      self.split(db, p, p.left(x));
+      self.split(p, p.left(x));
       if self.count < self.half
       {
-        self.left.append_from(db, p, x);
+        self.left.append_from(p, x);
       }
       else
       {
@@ -392,10 +392,10 @@ impl Split
         {
           self.split_node = x;
         }
-        self.right.append_from(db, p, x);
+        self.right.append_from(p, x);
       }
       self.count += 1;
-      self.split(db, p, p.right(x));
+      self.split(p, p.right(x));
     }
   }
 }

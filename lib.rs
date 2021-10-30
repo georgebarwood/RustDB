@@ -1,8 +1,6 @@
 //!
 //!ToDo List:
 //!
-//!Page dirty flag : get rid of it, instead have set of dirty pages in SortedFile.
-//!
 //!Optimise WHERE condition for UPDATE and DELETE.
 //!
 //!Decimal shifting when scales do not match.
