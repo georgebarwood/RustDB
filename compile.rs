@@ -16,6 +16,7 @@ pub enum CompileFunc
 {
   Value(fn(&Parser, &mut [Expr]) -> CExpPtr<Value>),
   Int(fn(&Parser, &mut [Expr]) -> CExpPtr<i64>),
+  Decimal(fn(&Parser, &mut [Expr]) -> CExpPtr<i64>),
   Float(fn(&Parser, &mut [Expr]) -> CExpPtr<f64>),
 }
 
@@ -377,8 +378,9 @@ pub fn c_decimal(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
       let ce = c_decimal(p, u);
       Box::new(cexp::Minus::<i64> { ce })
     }
-    ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToInt { ce: c_call(p, name, parms) }),
     ExprIs::Case(list, els) => c_case(p, list, els, c_decimal),
+    ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToInt { ce: c_call(p, name, parms) }),
+    ExprIs::BuiltinCall(n, a) => c_builtin_decimal(p, n, a),
     _ => panic!(),
   }
 }
@@ -451,6 +453,16 @@ where
 fn c_builtin_int(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64>
 {
   if let Some((_dk, CompileFunc::Int(cf))) = p.db.builtins.borrow().get(name)
+  {
+    return cf(p, args);
+  }
+  panic!()
+}
+
+/// Compile a call to a builtin function that returns a decimal.
+fn c_builtin_decimal(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64>
+{
+  if let Some((_dk, CompileFunc::Decimal(cf))) = p.db.builtins.borrow().get(name)
   {
     return cf(p, args);
   }

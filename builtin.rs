@@ -11,7 +11,7 @@ pub fn register_builtins(db: &DB)
     ("LEN", DataKind::Int, CompileFunc::Int(c_len)),
     ("PARSEINT", DataKind::Int, CompileFunc::Int(c_parse_int)),
     ("PARSEFLOAT", DataKind::Float, CompileFunc::Float(c_parse_float)),
-    ("PARSEDECIMAL", DataKind::Int, CompileFunc::Int(c_parse_decimal)),
+    ("PARSEDECIMAL", DataKind::Decimal, CompileFunc::Decimal(c_parse_decimal)),
     ("EXCEPTION", DataKind::String, CompileFunc::Value(c_exception)),
     ("LASTID", DataKind::Int, CompileFunc::Int(c_lastid)),
   ];
