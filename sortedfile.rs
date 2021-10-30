@@ -562,7 +562,7 @@ impl Stack
   }
 
   fn seek_left(&mut self, p: &Page, pp: PagePtr, mut x: usize) -> bool
-// Returns true if a node is found which is <= start.
+  // Returns true if a node is found which is <= start.
   // This is used to decide whether the the preceding child page is added.
   {
     while x != 0
