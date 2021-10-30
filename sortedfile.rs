@@ -1,45 +1,6 @@
 use crate::*;
 use std::collections::hash_map::Entry;
 
-/// A record to be stored in a SortedFile.
-pub trait Record
-{
-  /// Save record as bytes.
-  fn save(&self, _data: &mut [u8]) {}
-
-  /// Compare record with stored bytes.
-  fn compare(&self, db: &DB, data: &[u8]) -> std::cmp::Ordering;
-
-  /// Load key from bytes ( to store in parent page ).
-  fn key(&self, _db: &DB, data: &[u8]) -> Box<dyn Record>
-  {
-    Box::new(Id { id: util::getu64(data, 0) })
-  }
-
-  /// Drop parent key ( may need to delete codes ).
-  /// Only used when pages are being merged ( not yet implemented ).
-  fn dropkey(&self, _db: &DB, _data: &[u8]) {}
-}
-
-/// Id record.
-pub struct Id
-{
-  pub id: u64,
-}
-
-impl Record for Id
-{
-  fn compare(&self, _db: &DB, data: &[u8]) -> std::cmp::Ordering
-  {
-    let id = util::getu64(data, 0);
-    self.id.cmp(&id)
-  }
-  fn save(&self, data: &mut [u8])
-  {
-    util::setu64(data, self.id);
-  }
-}
-
 /// Sorted Record storage.
 ///
 /// SortedFile is a tree of pages.
@@ -49,6 +10,7 @@ pub struct SortedFile
 {
   /// Cached pages.
   pages: RefCell<HashMap<u64, PagePtr>>,
+  /// List of pages that have changed.
   dirty_pages: RefCell<Vec<PagePtr>>,
   /// Size of a record.
   rec_size: usize,
@@ -60,36 +22,10 @@ pub struct SortedFile
 
 impl SortedFile
 {
-  /// For debugging, dumps a summary of each page of the file.
-  pub(crate) fn dump(&self)
-  {
-    for (pnum, pp) in self.pages.borrow().iter()
-    {
-      let p = &pp.borrow();
-      println!(
-        "Cached Page pnum={} count={} level={} size()={}",
-        pnum,
-        p.count,
-        p.level,
-        p.size()
-      );
-    }
-  }
-
   /// Create File with specified record size, key size, root page.
   pub fn new(rec_size: usize, key_size: usize, root_page: u64) -> Self
   {
     SortedFile { pages: util::newmap(), dirty_pages: RefCell::new(Vec::new()), rec_size, key_size, root_page }
-  }
-
-  /// Mark a page as dirty
-  pub fn set_dirty(&self, p: &mut Page, pp: &PagePtr)
-  {
-    if !p.is_dirty
-    {
-      p.is_dirty = true;
-      self.dirty_pages.borrow_mut().push(pp.clone());
-    }
   }
 
   /// Insert a Record. If the key is a duplicate, the record is not saved.
@@ -101,6 +37,26 @@ impl SortedFile
     }
   }
 
+  /// Remove a Record.
+  pub fn remove(&self, db: &DB, r: &dyn Record)
+  {
+    let mut pp = self.load_page(db, self.root_page);
+    loop
+    {
+      let cpnum = {
+        let p = &mut *pp.borrow_mut();
+        if p.level == 0
+        {
+          self.set_dirty(p, &pp);
+          p.remove(db, r);
+          break;
+        }
+        p.find_child(db, r)
+      };
+      pp = self.load_page(db, cpnum);
+    }
+  }
+
   /// Locate a record with matching key. Result is PagePtr and offset of data.
   pub fn get(&self, db: &DB, r: &dyn Record) -> Option<(PagePtr, usize)>
   {
@@ -108,8 +64,7 @@ impl SortedFile
     let off;
     loop
     {
-      let cp;
-      {
+      let cpnum = {
         let p = &pp.borrow();
         if p.level == 0
         {
@@ -121,34 +76,11 @@ impl SortedFile
           off = p.rec_offset(x);
           break;
         }
-        let x = p.find_node(db, r);
-        cp = if x == 0 { p.first_page } else { p.child_page(x) };
-      }
-      pp = self.load_page(db, cp);
+        p.find_child(db, r)
+      };
+      pp = self.load_page(db, cpnum);
     }
     Some((pp, off))
-  }
-
-  /// Remove a Record.
-  pub fn remove(&self, db: &DB, r: &dyn Record)
-  {
-    let mut pp = self.load_page(db, self.root_page);
-    loop
-    {
-      let cp;
-      {
-        let p = &mut *pp.borrow_mut();
-        if p.level == 0
-        {
-          self.set_dirty(p, &pp);
-          p.remove(db, r);
-          break;
-        }
-        let x = p.find_node(db, r);
-        cp = if x == 0 { p.first_page } else { p.child_page(x) };
-      }
-      pp = self.load_page(db, cp);
-    }
   }
 
   /// For iteration in ascending order from start.
@@ -163,38 +95,16 @@ impl SortedFile
     Dsc::new(db, start, self.clone())
   }
 
-  /// Save any changed pages.
-  pub(crate) fn save(&self, db: &DB)
-  {
-    let dp = &mut *self.dirty_pages.borrow_mut();
-    while let Some(pp) = dp.pop()
-    {
-      let p = &mut pp.borrow_mut();
-      if p.pnum != u64::MAX
-      {
-        println!(
-          "Saving page {} root={} count={} node_size={}",
-          p.pnum, self.root_page, p.count, p.node_size
-        );
-        p.write_header();
-        p.is_dirty = false;
-        db.file.borrow_mut().write_page(p.pnum, &p.data);
-      }
-    }
-  }
-
   /// Insert a record into a leaf page.
   fn insert_leaf(&self, db: &DB, pnum: u64, r: &dyn Record, pi: Option<&ParentInfo>) -> bool
   {
     let pp = self.load_page(db, pnum);
-    let child_page;
-    {
+    let cpnum = {
       // new block to ensure pp borrow is released before recursing.
       let p = &mut pp.borrow_mut();
       if p.level != 0
       {
-        let x = p.find_node(db, r);
-        child_page = if x == 0 { p.first_page } else { p.child_page(x) };
+        p.find_child(db, r)
       }
       else if !p.full()
       {
@@ -205,7 +115,6 @@ impl SortedFile
       else
       {
         // Page is full, divide it into left and right.
-        p.pnum = u64::MAX; // Invalidate old page, so that it is not saved.
         let sp = Split::new(p);
         let sk = &*p.get_key(db, sp.split_node, r);
 
@@ -233,10 +142,11 @@ impl SortedFile
         }
         return false; // r has not yet been inserted.
       }
-    }
-    self.insert_leaf(db, child_page, r, Some(&ParentInfo { pnum, parent: pi }))
+    };
+    self.insert_leaf(db, cpnum, r, Some(&ParentInfo { pnum, parent: pi }))
   }
 
+  /// Insert child into a non-leaf page.
   fn insert_page(&self, db: &DB, into: &ParentInfo, r: &dyn Record, cpnum: u64)
   {
     let pp = self.load_page(db, into.pnum);
@@ -246,13 +156,11 @@ impl SortedFile
     if !p.full()
     {
       self.set_dirty(p, &pp);
-      p.insert_parent(db, r, cpnum);
+      p.insert_page(db, r, cpnum);
     }
     else
     {
       // Split the parent page.
-      p.pnum = u64::MAX; // Invalidate old parent page, so that it is not saved.
-
       let mut sp = Split::new(p);
       let sk = &*p.get_key(db, sp.split_node, r);
 
@@ -260,11 +168,11 @@ impl SortedFile
       let c = p.compare(db, r, sp.split_node);
       if c == Ordering::Greater
       {
-        sp.left.insert_parent(db, r, cpnum)
+        sp.left.insert_page(db, r, cpnum)
       }
       else
       {
-        sp.right.insert_parent(db, r, cpnum)
+        sp.right.insert_page(db, r, cpnum)
       }
 
       let pnum2 = self.alloc_page(db, sp.right);
@@ -287,12 +195,13 @@ impl SortedFile
     }
   }
 
-  fn append_page(&self, db: &DB, into: u64, k: &dyn Record, pnum: u64)
+  /// Append child to a non-leaf page. Used when a new root page has just been created.
+  fn append_page(&self, db: &DB, into: u64, k: &dyn Record, cpnum: u64)
   {
     let pp = self.load_page(db, into);
     let p = &mut pp.borrow_mut();
     self.set_dirty(p, &pp);
-    p.append_parent(k, pnum);
+    p.append_page(k, cpnum);
   }
 
   /// Construct a new empty page.
@@ -346,6 +255,52 @@ impl SortedFile
       }
     }
   }
+
+  /// Mark a page as changed.
+  pub fn set_dirty(&self, p: &mut Page, pp: &PagePtr)
+  {
+    if !p.is_dirty
+    {
+      p.is_dirty = true;
+      self.dirty_pages.borrow_mut().push(pp.clone());
+    }
+  }
+
+  /// Save any changed pages.
+  pub(crate) fn save(&self, db: &DB)
+  {
+    let dp = &mut *self.dirty_pages.borrow_mut();
+    while let Some(pp) = dp.pop()
+    {
+      let p = &mut pp.borrow_mut();
+      if p.pnum != u64::MAX
+      {
+        println!(
+          "Saving page {} root={} count={} node_size={}",
+          p.pnum, self.root_page, p.count, p.node_size
+        );
+        p.write_header();
+        p.is_dirty = false;
+        db.file.borrow_mut().write_page(p.pnum, &p.data);
+      }
+    }
+  }
+
+  /// For debugging, dump a summary of each page of the file.
+  pub(crate) fn dump(&self)
+  {
+    for (pnum, pp) in self.pages.borrow().iter()
+    {
+      let p = &pp.borrow();
+      println!(
+        "Cached Page pnum={} count={} level={} size()={}",
+        pnum,
+        p.count,
+        p.level,
+        p.size()
+      );
+    }
+  }
 } // end impl File
 
 // *********************************************************************
@@ -369,8 +324,10 @@ struct Split
 
 impl Split
 {
-  fn new(p: &Page) -> Self
+  /// Split the records of p into two new pages.
+  fn new(p: &mut Page) -> Self
   {
+    p.pnum = u64::MAX; // Invalidate old pnum to prevent old page being saved.
     let mut result = Split { count: 0, half: p.count / 2, split_node: 0, left: p.new_page(), right: p.new_page() };
     result.left.first_page = p.first_page;
     result.split(p, p.root);
@@ -397,6 +354,47 @@ impl Split
       self.count += 1;
       self.split(p, p.right(x));
     }
+  }
+} // end impl split
+
+// *********************************************************************
+
+/// A record to be stored in a SortedFile.
+pub trait Record
+{
+  /// Save record as bytes.
+  fn save(&self, _data: &mut [u8]) {}
+
+  /// Compare record with stored bytes.
+  fn compare(&self, db: &DB, data: &[u8]) -> std::cmp::Ordering;
+
+  /// Load key from bytes ( to store in parent page ).
+  fn key(&self, _db: &DB, data: &[u8]) -> Box<dyn Record>
+  {
+    Box::new(Id { id: util::getu64(data, 0) })
+  }
+
+  /// Drop parent key ( may need to delete codes ).
+  /// Only used when pages are being merged ( not yet implemented ).
+  fn dropkey(&self, _db: &DB, _data: &[u8]) {}
+}
+
+/// Id record.
+pub struct Id
+{
+  pub id: u64,
+}
+
+impl Record for Id
+{
+  fn compare(&self, _db: &DB, data: &[u8]) -> std::cmp::Ordering
+  {
+    let id = util::getu64(data, 0);
+    self.id.cmp(&id)
+  }
+  fn save(&self, data: &mut [u8])
+  {
+    util::setu64(data, self.id);
   }
 }
 
@@ -474,6 +472,7 @@ impl Stack
     Stack { v: Vec::new(), start, seeking: true, db: db.clone() }
   }
 
+  /// Fetch the next record.
   fn next(&mut self, file: &SortedFile) -> Option<(PagePtr, usize)>
   {
     while let Some((pp, x)) = self.v.pop()
@@ -488,8 +487,8 @@ impl Stack
         self.add_right(p, pp.clone(), p.left(x));
         if p.level != 0
         {
-          let cp = p.child_page(x);
-          let cpp = file.load_page(&self.db, cp);
+          let cpnum = p.child_page(x);
+          let cpp = file.load_page(&self.db, cpnum);
           self.add_page_right(file, cpp);
         }
         else
@@ -510,8 +509,8 @@ impl Stack
       self.add_left(p, pp.clone(), p.right(x));
       if p.level != 0
       {
-        let cp = p.child_page(x);
-        self.add_page_left(file, cp);
+        let cpnum = p.child_page(x);
+        self.add_page_left(file, cpnum);
       }
       else
       {
@@ -561,9 +560,9 @@ impl Stack
     }
   }
 
+  /// Returns true if a node is found which is <= start.
+  /// This is used to decide whether the the preceding child page is added.
   fn seek_left(&mut self, p: &Page, pp: PagePtr, mut x: usize) -> bool
-  // Returns true if a node is found which is <= start.
-  // This is used to decide whether the the preceding child page is added.
   {
     while x != 0
     {

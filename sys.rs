@@ -261,10 +261,10 @@ pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr>
       let p = &p.borrow();
       let a = t.access(p, off);
       let source = Rc::new(a.str(db, 2));
-      let rptr = parse_function(db, source);
-      db.functions.borrow_mut().insert(name.clone(), rptr.clone());
+      let function = parse_function(db, source);
+      db.functions.borrow_mut().insert(name.clone(), function.clone());
       // println!( "got function {:?}", name );
-      return Some(rptr);
+      return Some(function);
     }
   }
   None

@@ -123,11 +123,11 @@ impl Page
     Page::new(self.rec_size(), self.level, vec![0; PAGE_SIZE], u64::MAX)
   }
 
-  /// Returns node id of the greatest Record less than or equal to v, or zero if no such node exists.
-  pub fn find_node(&self, db: &DB, r: &dyn Record) -> usize
+  /// Find child page number.
+  pub fn find_child(&self, db: &DB, r: &dyn Record) -> u64
   {
     let mut x = self.root;
-    let mut result = 0;
+    let mut rx = 0;
     while x != 0
     {
       let c = self.compare(db, r, x);
@@ -136,17 +136,24 @@ impl Page
         Ordering::Greater => x = self.left(x),
         Ordering::Less =>
         {
-          result = x;
-          x = self.right(x)
+          rx = x;
+          x = self.right(x);
         }
         Ordering::Equal =>
         {
-          result = x;
+          rx = x;
           break;
         }
       }
     }
-    result
+    if rx == 0
+    {
+      self.first_page
+    }
+    else
+    {
+      self.child_page(rx)
+    }
   }
 
   /// Returns node id of Record equal to r, or zero if no such node exists.
@@ -180,8 +187,8 @@ impl Page
     }
   }
 
-  /// Insert a parent record into this page with specified key and chuld page.
-  pub fn insert_parent(&mut self, db: &DB, r: &dyn Record, cp: u64)
+  /// Insert a child page with specified key and number.
+  pub fn insert_page(&mut self, db: &DB, r: &dyn Record, cp: u64)
   {
     let inserted = self.next_alloc();
     self.root = self.insert_into(self.root, Some((db, r))).0;
@@ -189,8 +196,8 @@ impl Page
     self.set_child_page(inserted, cp);
   }
 
-  /// Append a parent record to this page with specified key and child page.
-  pub fn append_parent(&mut self, r: &dyn Record, cp: u64)
+  /// Append a child page with specified key and number.
+  pub fn append_page(&mut self, r: &dyn Record, cp: u64)
   {
     let inserted = self.next_alloc();
     self.root = self.insert_into(self.root, None).0;
@@ -225,17 +232,17 @@ impl Page
   // Node access functions.
   // Layout of a Node is
   // Client data
-  // Padding ( so that total node size is multiple of 8 bytes )
+  // Possibly padding
   // Child page number ( if parent page ) ( 6 bytes )
   // Node overhead ( 3 bytes )
 
-  /// Offset of the 3 byte node overhead  for record number x.
+  /// Offset of the 3 byte node overhead  for node x.
   fn over_off(&self, x: usize) -> usize
   {
     (NODE_BASE - NODE_OVERHEAD) + x * self.node_size
   }
 
-  /// Offset of the client data for record number x.
+  /// Offset of the client data for node x.
   pub fn rec_offset(&self, x: usize) -> usize
   {
     NODE_BASE + (x - 1) * self.node_size
@@ -267,21 +274,21 @@ impl Page
     setbits!(self.data[off], 0, 2, balance as u8);
   }
 
-  /// Get the left child node for a node. Result is zero if there is no child.
+  /// Get the left child node for node x. Result is zero if there is no child.
   pub fn left(&self, x: usize) -> usize
   {
     let off = self.over_off(x);
     self.data[off + 1] as usize | (getbits!(self.data[off] as usize, 2, NODE_ID_BITS - 8) << 8)
   }
 
-  /// Get the right child node for a node. Result is zero if there is no child.
+  /// Get the right child node for node x. Result is zero if there is no child.
   pub fn right(&self, x: usize) -> usize
   {
     let off = self.over_off(x);
     self.data[off + 2] as usize | (getbits!(self.data[off] as usize, 2 + NODE_ID_BITS - 8, NODE_ID_BITS - 8) << 8)
   }
 
-  /// Set the left child for node x.
+  /// Set the left child node for node x.
   fn set_left(&mut self, x: usize, y: usize)
   {
     let off = self.over_off(x);
@@ -290,7 +297,7 @@ impl Page
     debug_assert!(self.left(x) == y);
   }
 
-  /// Set the right child for node x.
+  /// Set the right child node for node x.
   fn set_right(&mut self, x: usize, y: usize)
   {
     let off = self.over_off(x);

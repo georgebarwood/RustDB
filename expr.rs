@@ -238,7 +238,7 @@ impl<'a> Block<'a>
     }
   }
 
-  /// Patch check labels are all defined and patch jump instructions.
+  /// Check labels are all defined and patch jump instructions.
   pub fn resolve_jumps(&mut self)
   {
     for (k, v) in &self.labels

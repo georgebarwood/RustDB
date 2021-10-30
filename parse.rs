@@ -488,7 +488,9 @@ impl<'a> Parser<'a>
     }
   }
 
-  fn get_operator(&mut self) -> (Token, i8)
+  /// Examine current token, determine if it is an operator.
+  /// Result is operator token and precedence, or -1 if current token is not an operator.
+  fn operator(&mut self) -> (Token, i8)
   {
     let mut t = self.token;
     if t >= Token::Id
@@ -562,7 +564,7 @@ impl<'a> Parser<'a>
   {
     if self.token != t
     {
-      panic!("Expected ttoken '{:?}' got '{:?}'", t, self.token)
+      panic!("Expected '{:?}' got '{:?}'", t, self.token)
     }
     else
     {
@@ -583,7 +585,18 @@ impl<'a> Parser<'a>
     }
   }
 
-  /// Tests whether the token is the speificed id. If so, it is consumed.
+  /// Tests whether the token is as specified. If so, it is consumed.
+  fn test(&mut self, t: Token) -> bool
+  {
+    let result = self.token == t;
+    if result
+    {
+      self.read_token();
+    }
+    result
+  }
+
+  /// Tests whether the token is the specified id. If so, it is consumed.
   fn test_id(&mut self, s: &[u8]) -> bool
   {
     if self.token != Token::Id || self.cs != s
@@ -595,17 +608,6 @@ impl<'a> Parser<'a>
       self.read_token();
       true
     }
-  }
-
-  /// Tests whether the token is as specified. If so, it is consumed.
-  fn test(&mut self, t: Token) -> bool
-  {
-    let result = self.token == t;
-    if result
-    {
-      self.read_token();
-    }
-    result
   }
 
   /// Reads an ObjRef ( schema.name pair ).
@@ -844,38 +846,36 @@ impl<'a> Parser<'a>
     self.exp_lp(pri, 0)
   }
 
+  /// Parse an expression.
   fn exp(&mut self) -> Expr
   {
     self.exp_p(0)
   }
 
+  /// Parse an expression, with specified operator precedence.
   fn exp_p(&mut self, precedence: i8) -> Expr
   {
     let pr = self.exp_primary(false);
     self.exp_lp(pr, precedence)
   }
 
+  /// Apply binary operator to lhs based on precedence.
   fn exp_lp(&mut self, mut lhs: Expr, precedence: i8) -> Expr
   {
-    let (mut t, mut prec_t) = self.get_operator();
-    while prec_t >= precedence
+    let mut t = self.operator();
+    while t.1 >= precedence
     {
-      let prec_op = prec_t;
       let op = t;
       self.read_token();
       let mut rhs = self.exp_primary(false);
-      let z = self.get_operator();
-      t = z.0;
-      prec_t = z.1;
-      while prec_t > prec_op
-      /* or t is right-associative and prec_t == prec_op */
+      t = self.operator();
+      while t.1 > op.1
+      /* or t is right-associative and t.1 == op.1 */
       {
-        rhs = self.exp_lp(rhs, prec_t);
-        let z = self.get_operator();
-        t = z.0;
-        prec_t = z.1;
+        rhs = self.exp_lp(rhs, t.1);
+        t = self.operator();
       }
-      lhs = Expr::new(ExprIs::Binary(op, Box::new(lhs), Box::new(rhs)));
+      lhs = Expr::new(ExprIs::Binary(op.0, Box::new(lhs), Box::new(rhs)));
     }
     lhs
   }
