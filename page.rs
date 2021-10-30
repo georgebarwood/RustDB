@@ -246,7 +246,7 @@ impl Page
     self.node_size - NODE_OVERHEAD - if self.level != 0 { PAGE_ID_SIZE } else { 0 }
   }
 
-  /// Node balance.
+  /// Get balance for node x.
   fn balance(&self, x: usize) -> Balance
   {
     let off = self.over_off(x);
@@ -259,6 +259,7 @@ impl Page
     }
   }
 
+  /// Set balance for node x.
   fn set_balance(&mut self, x: usize, balance: Balance)
   {
     let off = self.over_off(x);
