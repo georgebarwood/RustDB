@@ -708,31 +708,6 @@ impl<'a> Parser<'a>
       }
       self.read(Token::RBra);
       Expr::new(ExprIs::BuiltinCall(to_s(name), parms))
-    /*
-          if agg_allowed && name == "COUNT"
-          {
-            if ( parms.Count > 0 { return self.error( "COUNT does have any parameters" ); }
-            result = new COUNT();
-          }
-          else if ( agg_allowed && name == "SUM" ) result = new ExpAgg( AggOp.Sum, parms, this );
-          else if ( agg_allowed && name == "MIN" ) result = new ExpAgg( AggOp.Min, parms, this );
-          else if ( agg_allowed && name == "MAX" ) result = new ExpAgg( AggOp.Max, parms, this );
-          else if ( name == "PARSEINT" ) result = new PARSEINT( parms, this );
-          else if ( name == "PARSEDOUBLE" ) result = new PARSEDOUBLE( parms, this );
-          else if ( name == "PARSEDECIMAL" ) result = new PARSEDECIMAL( parms, this );
-          else if ( name == "LEN" ) result = new LEN( parms, this );
-          else if ( name == "REPLACE" ) result = new REPLACE( parms, this );
-          else if ( name == "SUBSTRING" ) result = new SUBSTRING( parms, this );
-          else if ( name == "EXCEPTION" ) result = new EXCEPTION( parms, this );
-          else if ( name == "LASTID" ) result = new LASTID( parms, this );
-          else if ( name == "GLOBAL" ) result = new GLOBAL( parms, this );
-          else if ( name == "ARG" ) result = new ARG( parms, this );
-          else if ( name == "ARGNAME" ) result = new ARGNAME( parms, this );
-          else if ( name == "FILEATTR" ) result = new FILEATTR( parms, this );
-          else if ( name == "FILECONTENT" ) result = new FILECONTENT( parms, this );
-          else Error( "Unknown function : " + name );
-        }
-    */
     }
     else if name == b"true"
     {
@@ -1239,9 +1214,9 @@ impl<'a> Parser<'a>
     }
     if !self.parse_only
     {
-      let rp = function_look(self, &name);
-      self.check_types(&rp, &ptypes);
-      self.add(Inst::Call(rp));
+      let func = function_look(self, &name);
+      self.check_types(&func, &ptypes);
+      self.add(Inst::Call(func));
     }
   }
 

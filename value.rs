@@ -22,7 +22,6 @@ impl Value
 {
   pub fn load(db: &DB, typ: DataType, data: &[u8], off: usize) -> (Value, u64)
   {
-    let size = data_size(typ);
     let mut code = u64::MAX;
     let val = match data_kind(typ)
     {
@@ -40,7 +39,11 @@ impl Value
         code = u;
         Value::Binary(Rc::new(bytes))
       }
-      _ => Value::Int(util::get(data, off, size) as i64),
+      _ => 
+      {
+        let size = data_size(typ);
+        Value::Int(util::get(data, off, size) as i64)
+      }
     };
     (val, code)
   }
