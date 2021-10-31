@@ -19,10 +19,10 @@ pub struct Table
   pub(crate) id: i64,
 
   /// Row id allocator.
-  pub(crate) id_alloc: Cell<i64>,
+  pub(crate) id_gen: Cell<i64>,
 
   /// Row id allocator has changed.
-  pub(crate) id_alloc_dirty: Cell<bool>,
+  pub(crate) id_gen_dirty: Cell<bool>,
 }
 
 /// List of indexes. Each index has a file and a list of column numbers.
@@ -167,19 +167,19 @@ impl Table
   /// Allocate  row id.
   pub fn alloc_id(&self) -> i64
   {
-    let result = self.id_alloc.get();
-    self.id_alloc.set(result + 1);
-    self.id_alloc_dirty.set(true);
+    let result = self.id_gen.get();
+    self.id_gen.set(result + 1);
+    self.id_gen_dirty.set(true);
     result
   }
 
   /// Update id allocator if supplied row id exceeds current value.
   pub fn id_allocated(&self, id: i64)
   {
-    if id >= self.id_alloc.get()
+    if id >= self.id_gen.get()
     {
-      self.id_alloc.set(id + 1);
-      self.id_alloc_dirty.set(true);
+      self.id_gen.set(id + 1);
+      self.id_gen_dirty.set(true);
     }
   }
 
@@ -194,13 +194,13 @@ impl Table
   }
 
   /// Construct a new table with specified info.
-  pub(crate) fn new(id: i64, root_page: u64, id_alloc: i64, info: Rc<ColInfo>) -> TablePtr
+  pub(crate) fn new(id: i64, root_page: u64, id_gen: i64, info: Rc<ColInfo>) -> TablePtr
   {
     let rec_size = info.total;
     let key_size = 8;
     let file = Rc::new(SortedFile::new(rec_size, key_size, root_page));
     let ixlist = RefCell::new(Vec::new());
-    Rc::new(Table { id, file, info, ixlist, id_alloc: Cell::new(id_alloc), id_alloc_dirty: Cell::new(false) })
+    Rc::new(Table { id, file, info, ixlist, id_gen: Cell::new(id_gen), id_gen_dirty: Cell::new(false) })
   }
 
   pub fn _dump(&self, _db: &DB)
@@ -518,6 +518,8 @@ impl Record for IndexRow
     loop
     {
       let typ = self.tinfo.typ[self.cols[ix]];
+
+      // Could have special purpose Value method which compares instead of loading to save heap allocations.
       let val = Value::load(db, typ, data, off).0;
       let cf = val.cmp(&self.keys[ix]);
       if cf != Ordering::Equal

@@ -224,7 +224,7 @@ impl Database
     {
       if !is_new
       {
-        t.id_alloc.set(sys::get_alloc(&db, t.id as u64));
+        t.id_gen.set(sys::get_id_gen(&db, t.id as u64));
       }
       db.publish_table(t.clone());
     }
@@ -334,10 +334,10 @@ GO
     let tm = &*self.tables.borrow();
     for t in tm.values()
     {
-      if t.id_alloc_dirty.get()
+      if t.id_gen_dirty.get()
       {
-        sys::save_alloc(self, t.id as u64, t.id_alloc.get());
-        t.id_alloc_dirty.set(false);
+        sys::save_id_gen(self, t.id as u64, t.id_gen.get());
+        t.id_gen_dirty.set(false);
       }
     }
 

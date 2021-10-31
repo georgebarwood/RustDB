@@ -39,7 +39,7 @@ impl Value
         code = u;
         Value::Binary(Rc::new(bytes))
       }
-      _ => 
+      _ =>
       {
         let size = data_size(typ);
         Value::Int(util::get(data, off, size) as i64)
@@ -124,47 +124,43 @@ impl Value
 
 impl std::cmp::Ord for Value
 {
-  fn cmp(&self, other: &Self) -> std::cmp::Ordering
+  fn cmp(&self, other: &Self) -> Ordering
   {
-    let mut result = std::cmp::Ordering::Equal;
     match self
     {
       Value::String(s1) =>
       {
         if let Value::String(s2) = other
         {
-          result = s1.cmp(s2);
+          return s1.cmp(s2);
         }
       }
       Value::Int(x1) =>
       {
         if let Value::Int(x2) = other
         {
-          result = x1.cmp(x2);
+          return x1.cmp(x2);
+        }
+      }
+      Value::Float(x1) =>
+      {
+        if let Value::Float(x2) = other
+        {
+          return x1.partial_cmp(x2).unwrap();
         }
       }
       _ =>
-      {
-        panic!()
-      }
+      {}
     }
-    result
+    panic!()
   }
 }
 
 impl PartialOrd for Value
 {
-  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering>
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering>
   {
-    let mut result = std::cmp::Ordering::Equal;
-    if let Value::String(s1) = self
-    {
-      if let Value::String(s2) = other
-      {
-        result = s1.cmp(s2);
-      }
-    }
-    Some(result)
+    Some(self.cmp(other))
   }
 }
 

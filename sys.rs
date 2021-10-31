@@ -286,8 +286,8 @@ fn parse_function(db: &DB, source: Rc<String>) -> FunctionPtr
   })
 }
 
-/// Update the alloc_id field for a table.
-pub(crate) fn save_alloc(db: &DB, id: u64, val: i64)
+/// Update IdGen field for a table.
+pub(crate) fn save_id_gen(db: &DB, id: u64, val: i64)
 {
   let t = &db.sys_table;
   let (pp, off) = t.id_get(db, id).unwrap();
@@ -297,8 +297,8 @@ pub(crate) fn save_alloc(db: &DB, id: u64, val: i64)
   t.file.set_dirty(p, &pp);
 }
 
-/// This is only needed to initialise system tables.
-pub(crate) fn get_alloc(db: &DB, id: u64) -> i64
+/// Get the IdGen field for a table. This is only needed to initialise system tables.
+pub(crate) fn get_id_gen(db: &DB, id: u64) -> i64
 {
   let t = &db.sys_table;
   let (p, off) = t.id_get(db, id).unwrap();
