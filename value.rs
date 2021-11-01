@@ -187,7 +187,7 @@ pub fn get_bytes(db: &DB, data: &[u8]) -> (Vec<u8>, u64)
   let n = data[0] as usize;
   if n <= 15
   {
-    let mut bytes = vec![0u8; n];
+    let mut bytes = vec![0_u8; n];
     bytes[0..n].copy_from_slice(&data[1..1 + n]);
     (bytes, u64::MAX)
   }

@@ -168,11 +168,11 @@ impl SortedFile
       let c = p.compare(db, r, sp.split_node);
       if c == Ordering::Greater
       {
-        sp.left.insert_page(db, r, cpnum)
+        sp.left.insert_page(db, r, cpnum);
       }
       else
       {
-        sp.right.insert_page(db, r, cpnum)
+        sp.right.insert_page(db, r, cpnum);
       }
 
       let pnum2 = self.alloc_page(db, sp.right);
@@ -485,7 +485,7 @@ impl Stack
       else
       {
         let p = &pp.borrow();
-        self.add_right(p, pp.clone(), p.left(x));
+        self.add_right(p, &pp, p.left(x));
         if p.level != 0
         {
           let cpnum = p.child_page(x);
@@ -507,7 +507,7 @@ impl Stack
     while let Some((pp, x)) = self.v.pop()
     {
       let p = &pp.borrow();
-      self.add_left(p, pp.clone(), p.right(x));
+      self.add_left(p, &pp, p.right(x));
       if p.level != 0
       {
         let cpnum = p.child_page(x);
@@ -522,7 +522,7 @@ impl Stack
     None
   }
 
-  fn add_right(&mut self, p: &Page, pp: PagePtr, mut x: usize)
+  fn add_right(&mut self, p: &Page, pp: &PagePtr, mut x: usize)
   {
     while x != 0
     {
@@ -531,7 +531,7 @@ impl Stack
     }
   }
 
-  fn add_left(&mut self, p: &Page, pp: PagePtr, mut x: usize)
+  fn add_left(&mut self, p: &Page, pp: &PagePtr, mut x: usize)
   {
     while x != 0
     {
@@ -607,7 +607,7 @@ impl Stack
     }
     else
     {
-      self.add_right(p, pp.clone(), root);
+      self.add_right(p, &pp, root);
     }
   }
 
@@ -627,7 +627,7 @@ impl Stack
       }
       else
       {
-        self.add_left(p, pp.clone(), root);
+        self.add_left(p, &pp, root);
       }
       if p.level == 0
       {

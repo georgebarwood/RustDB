@@ -190,6 +190,7 @@ pub fn data_kind(x: DataType) -> DataKind
 }
 
 /// Compute the number of bytes required to store a value of the specified DataType.
+#[must_use]
 pub fn data_size(x: DataType) -> usize
 {
   let p = (x >> KBITS) & 31;

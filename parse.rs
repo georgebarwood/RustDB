@@ -1558,16 +1558,15 @@ impl<'a> Parser<'a>
 
   fn get_goto(&mut self, s: &'a [u8]) -> usize
   {
-    let v = self.b.labels.get(s);
-    match v
+    if let Some(jump_id) = self.b.labels.get(s)
     {
-      Some(jump_id) => *jump_id,
-      None =>
-      {
-        let jump_id = self.get_jump_id();
-        self.b.labels.insert(s, jump_id);
-        jump_id
-      }
+      *jump_id
+    }
+    else
+    {
+      let jump_id = self.get_jump_id();
+      self.b.labels.insert(s, jump_id);
+      jump_id
     }
   }
 

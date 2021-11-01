@@ -711,7 +711,7 @@ impl Page
     }
   }
 
-  /// Reduce page size using free slots.
+  /// Reduce page size using free nodes.
   pub fn compress(&mut self)
   {
     // if self.alloc - self.count < 10 { return; } // Don't bother to compress if minimal free nodes.

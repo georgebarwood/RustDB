@@ -194,7 +194,7 @@ impl Query for WebQuery
 ///
 /// Consists of name=value pairs, for example name1=value1&name2=value2....
 ///
-/// [Reserved and] non-alphanumeric characters are replaced by `%HH', a percent sign and two hexadecimal digits representing the ASCII code of the character.
+/// [Reserved and] non-alphanumeric characters are replaced by '%HH', a percent sign and two hexadecimal digits representing the ASCII code of the character.
 ///
 /// target uses the same encoding for the "query string", the portion of the target that follows the path, and begins with "?".
 ///

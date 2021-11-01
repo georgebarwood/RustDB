@@ -68,7 +68,7 @@ impl ByteStorage
 
   pub fn decode(&self, db: &DB, mut id: u64) -> Vec<u8>
   {
-    let mut result = vec![0u8; 7]; // First 7 bytes will be filled in from inline data.
+    let mut result = vec![0_u8; 7]; // First 7 bytes will be filled in from inline data.
     let start = Fragment::new(id);
     for (p, off) in self.file.asc(db, Box::new(start))
     {

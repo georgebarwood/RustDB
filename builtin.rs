@@ -1,6 +1,6 @@
 use crate::*;
 
-/// Registers builtin functions - called from Database::new.
+/// Registers builtin functions - called from `Database`::new.
 pub fn register_builtins(db: &DB)
 {
   let list = [

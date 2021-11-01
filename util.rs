@@ -60,10 +60,10 @@ pub fn iget(data: &[u8], off: usize, n: usize) -> i64
   }
   if n < 8
   {
-    let sign_bit: u64 = 1u64 << (n * 8 - 1);
+    let sign_bit: u64 = 1_u64 << (n * 8 - 1);
     if (sign_bit & x) != 0
     {
-      x += 0xffffffffffffffff << (n * 8);
+      x += 0xffff_ffff_ffff_ffff << (n * 8);
     }
   }
   x as i64

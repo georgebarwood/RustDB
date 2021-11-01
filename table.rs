@@ -43,15 +43,12 @@ impl Table
           {
             return Some(CTableExpression::IdGet(self.clone(), c_int(p, e2)));
           }
-          else
+          let list = &self.ixlist.borrow();
+          for (index, (_f, c)) in list.iter().enumerate()
           {
-            let list = &self.ixlist.borrow();
-            for (index, (_f, c)) in list.iter().enumerate()
+            if c[0] == e1.col
             {
-              if c[0] == e1.col
-              {
-                return Some(CTableExpression::IxGet(self.clone(), c_value(p, e2), index));
-              }
+              return Some(CTableExpression::IxGet(self.clone(), c_value(p, e2), index));
             }
           }
         }
