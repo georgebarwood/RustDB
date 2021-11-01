@@ -224,13 +224,15 @@ impl SortedFile
   }
 
   /// Publish a page in the cache with specified page number.
-  fn publish_page(&self, pnum: u64, mut p: Page)
+  fn publish_page(&self, pnum: u64, p: Page)
   {
-    p.pnum = pnum;
     let pp = util::new(p);
-    self.pages.borrow_mut().insert(pnum, pp.clone());
-    let p = &mut pp.borrow_mut();
-    self.set_dirty(p, &pp);
+    {
+      let p = &mut pp.borrow_mut();
+      p.pnum = pnum;
+      self.set_dirty(p, &pp);
+    }
+    self.pages.borrow_mut().insert(pnum, pp);
   }
 
   /// Get a page from the cache, or if it is not in the cache, load it from external storage.

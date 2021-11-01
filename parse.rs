@@ -149,7 +149,7 @@ impl<'a> Parser<'a>
       }
       if self.token != Token::Comma
       {
-        self.err("Comma or closing bracket expected");
+        panic!("Comma or closing bracket expected");
       }
       self.read_token();
     }
@@ -300,7 +300,7 @@ impl<'a> Parser<'a>
           {
             if cc == 0
             {
-              self.err("missing closing quote for string literal");
+              panic!("missing closing quote for string literal");
             }
             if cc == b'\''
             {
@@ -419,7 +419,7 @@ impl<'a> Parser<'a>
   {
     if self.token != Token::Id
     {
-      self.err("datatype expected");
+      panic!("datatype expected");
     }
     match self.id_ref()
     {
@@ -441,11 +441,11 @@ impl<'a> Parser<'a>
           p = self.read_int();
           if p < 1
           {
-            self.err("Minimum precision is 1")
+            panic!("Minimum precision is 1")
           }
           if p > 18
           {
-            self.err("Maxiumum decimal precision is 18")
+            panic!("Maxiumum decimal precision is 18")
           }
           if self.test(Token::Comma)
           {
@@ -453,17 +453,17 @@ impl<'a> Parser<'a>
           }
           if q < 0
           {
-            self.err("Scale cannot be negative")
+            panic!("Scale cannot be negative")
           }
           if q > p
           {
-            self.err("Scale cannot be greater than precision")
+            panic!("Scale cannot be greater than precision")
           }
           self.read(Token::RBra);
         }
         DECIMAL + ((p as usize) << 3) + ((q as usize) << 8)
       }
-      _ => self.err("Datatype expected"),
+      _ => panic!("Datatype expected"),
     }
   }
 
@@ -471,7 +471,7 @@ impl<'a> Parser<'a>
   {
     if ptypes.len() != r.param_count
     {
-      self.err("param count mismatch");
+      panic!("param count mismatch");
     }
     for (i, pt) in ptypes.iter().enumerate()
     {
@@ -518,7 +518,7 @@ impl<'a> Parser<'a>
   {
     if self.token != Token::Id
     {
-      self.err("Name expected");
+      panic!("Name expected");
     }
     let result = self.cs;
     self.read_token();
@@ -530,7 +530,7 @@ impl<'a> Parser<'a>
     let result: usize;
     if self.token != Token::Id
     {
-      self.err("Name expected");
+      panic!("Name expected");
     }
     if let Some(local) = self.b.local_map.get(self.cs)
     {
@@ -548,7 +548,7 @@ impl<'a> Parser<'a>
   {
     if self.token != Token::Number
     {
-      self.err("Number expected");
+      panic!("Number expected");
     }
     let result = tos(self.cs).parse::<i64>().unwrap();
     self.read_token();
@@ -652,12 +652,6 @@ impl<'a> Parser<'a>
   pub(crate) fn make_error(&self, msg: String) -> SqlError
   {
     SqlError { line: self.prev_source_line, column: self.prev_source_column, msg, rname: self.rname() }
-  }
-
-  /// Panic based on current line/column with specified message.
-  pub(crate) fn err(&self, msg: &str) -> !
-  {
-    panic!("{}", msg.to_string());
   }
 
   // End Helper functions for parsing.
@@ -794,7 +788,7 @@ impl<'a> Parser<'a>
     {
       if self.cs.len() % 2 == 1
       {
-        self.err("Hex literal must have even number of characters");
+        panic!("Hex literal must have even number of characters");
       }
       let hb = &self.source[self.token_start + 2..self.source_ix - 1];
       result = Expr::new(ExprIs::Const(Value::Binary(Rc::new(util::parse_hex(hb)))));
@@ -806,7 +800,7 @@ impl<'a> Parser<'a>
     }
     else
     {
-      self.err("Expression expected")
+      panic!("Expression expected")
     }
     result
   }
@@ -864,7 +858,7 @@ impl<'a> Parser<'a>
     }
     if list.is_empty()
     {
-      self.err("Empty Case Expression");
+      panic!("Empty Case Expression");
     }
     self.read_id(b"ELSE");
     let els = Box::new(self.exp());
@@ -887,7 +881,7 @@ impl<'a> Parser<'a>
   {
     if !self.test_id(b"VALUES")
     {
-      self.err("VALUES or SELECT expected");
+      panic!("VALUES or SELECT expected");
     }
     // else if self.test_id( b"SELECT" ) { self.expressions() } ...
     self.values(expect)
@@ -909,13 +903,13 @@ impl<'a> Parser<'a>
         }
         if self.token != Token::Comma
         {
-          self.err("Comma or closing bracket expected");
+          panic!("Comma or closing bracket expected");
         }
         self.read_token();
       }
       if v.len() != expect
       {
-        self.err("Wrong number of values");
+        panic!("Wrong number of values");
       }
       values.push(v);
       if !self.test(Token::Comma) && self.token != Token::LBra
@@ -949,7 +943,7 @@ impl<'a> Parser<'a>
     */
     if self.token != Token::Id
     {
-      self.err("Table expected");
+      panic!("Table expected");
     }
     self.te_named_table()
   }
@@ -1069,7 +1063,7 @@ impl<'a> Parser<'a>
       let cname = self.id_ref();
       if cnames.contains(&cname)
       {
-        self.err("Duplicate column name");
+        panic!("Duplicate column name");
       }
       cnames.push(cname);
       if self.test(Token::RBra)
@@ -1078,7 +1072,7 @@ impl<'a> Parser<'a>
       }
       if !self.test(Token::Comma)
       {
-        self.err("Comma or closing bracket expected");
+        panic!("Comma or closing bracket expected");
       }
     }
     let mut src = self.insert_expression(cnames.len());
@@ -1122,7 +1116,7 @@ impl<'a> Parser<'a>
     }
     if !self.test_id(b"WHERE")
     {
-      self.err("UPDATE must have a WHERE");
+      panic!("UPDATE must have a WHERE");
     }
     let mut w = self.exp();
     if !self.parse_only
@@ -1156,7 +1150,7 @@ impl<'a> Parser<'a>
     let tname = self.obj_ref();
     if !self.test_id(b"WHERE")
     {
-      self.err("DELETE must have a WHERE");
+      panic!("DELETE must have a WHERE");
     }
     let mut w = self.exp();
 
@@ -1269,7 +1263,7 @@ impl<'a> Parser<'a>
       let typ = self.read_data_type();
       if ti.add(cname, typ)
       {
-        self.err("Duplicate column name");
+        panic!("Duplicate column name");
       }
       if self.test(Token::RBra)
       {
@@ -1277,7 +1271,7 @@ impl<'a> Parser<'a>
       }
       if self.token != Token::Comma
       {
-        self.err("Comma or closing bracket expected");
+        panic!("Comma or closing bracket expected");
       }
       self.read_token();
     }
@@ -1304,7 +1298,7 @@ impl<'a> Parser<'a>
       }
       if self.token != Token::Comma
       {
-        self.err("Comma or closing bracket expected")
+        panic!("Comma or closing bracket expected")
       };
       self.read_token();
     }
@@ -1372,7 +1366,7 @@ impl<'a> Parser<'a>
         self.dop(DO::CreateSchema(name));
       }
       b"INDEX" => self.create_index(),
-      _ => self.err("Unknown keyword"),
+      _ => panic!("Unknown keyword"),
     }
   }
 
@@ -1383,7 +1377,7 @@ impl<'a> Parser<'a>
       b"FUNCTION" => self.create_function(true),
       b"TABLE" => self.s_alter_table(),
       b"VIEW" => self.create_view(true),
-      _ => self.err("ALTER : TABLE,VIEW.. expected"),
+      _ => panic!("ALTER : TABLE,VIEW.. expected"),
     }
   }
 
@@ -1425,7 +1419,7 @@ impl<'a> Parser<'a>
       }
       _ =>
       {
-        self.err("DROP : TABLE,VIEW.. expected");
+        panic!("DROP : TABLE,VIEW.. expected");
       }
     }
   }
@@ -1471,7 +1465,7 @@ impl<'a> Parser<'a>
       }
       _ =>
       {
-        self.err("RENAME : TABLE,VIEW.. expected");
+        panic!("RENAME : TABLE,VIEW.. expected");
       }
     }
   }
@@ -1528,7 +1522,7 @@ impl<'a> Parser<'a>
     self.b.locals.push(name);
     if self.b.local_map.contains_key(name)
     {
-      self.err("Duplicate variable name");
+      panic!("Duplicate variable name");
     }
     self.b.local_map.insert(name, local_id);
   }
@@ -1584,26 +1578,19 @@ impl<'a> Parser<'a>
 
   fn s_set_label(&mut self, s: &'a [u8])
   {
-    let v = self.b.labels.get(s);
-    match v
+    if let Some(jump_id) = self.b.labels.get(s)
     {
-      Some(jump_id) =>
+      let j = *jump_id;
+      if self.b.jumps[j] != usize::MAX
       {
-        let j = *jump_id;
-        if self.b.jumps[j] != usize::MAX
-        {
-          self.err("Label already set");
-        }
-        else
-        {
-          self.set_jump(j);
-        }
+        panic!("Label already set");
       }
-      None =>
-      {
-        let jump_id = self.get_loop_id();
-        self.b.labels.insert(s, jump_id);
-      }
+      self.set_jump(j);
+    }
+    else
+    {
+      let jump_id = self.get_loop_id();
+      self.b.labels.insert(s, jump_id);
     }
   }
 
@@ -1661,7 +1648,7 @@ impl<'a> Parser<'a>
     let break_id = self.b.break_id;
     if break_id == usize::MAX
     {
-      self.err("No enclosing loop for break");
+      panic!("No enclosing loop for break");
     }
     self.add(Inst::Jump(break_id));
   }

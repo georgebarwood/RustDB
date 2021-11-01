@@ -610,7 +610,7 @@ pub(crate) fn function_look(p: &Parser, name: &ObjRef) -> FunctionPtr
           }
           else if let Some(s) = x.downcast_ref::<&str>()
           {
-            p.make_error(s.to_string())
+            p.make_error((*s).to_string())
           }
           else if let Some(s) = x.downcast_ref::<String>()
           {

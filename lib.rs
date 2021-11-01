@@ -24,17 +24,17 @@
 //! use database::{Database,spf::SimplePagedFile,web::WebQuery};
 //! fn main()
 //! {
-//!   let file = Box::new( SimplePagedFile::new( "c:\\Users\\pc\\rust\\test01.rustdb" ) );
-//!   let db = Database::new( file, INITSQL );    
-//!   let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
-//!   for tcps in listener.incoming()
-//!   {
-//!     let mut tcps = tcps.unwrap();
-//!     let mut wq = WebQuery::new( &tcps ); // Reads the http request from the TCP stream into wq.
-//!     db.run( SQL, &mut wq ); // Executes SQL, output is accumulated in wq.
-//!     wq.write( &mut tcps ); // Writes the http response to the TCP stream.
-//!     db.save(); // Saves database changes to disk.
-//!   }
+//!     let file = Box::new( SimplePagedFile::new( "c:\\Users\\pc\\rust\\test01.rustdb" ) );
+//!     let db = Database::new( file, INITSQL );    
+//!     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+//!     for tcps in listener.incoming()
+//!     {
+//!        let mut tcps = tcps.unwrap();
+//!        let mut wq = WebQuery::new( &tcps ); // Reads the http request from the TCP stream into wq.
+//!        db.run( SQL, &mut wq ); // Executes SQL, output is accumulated in wq.
+//!        wq.write( &mut tcps ); // Writes the http response to the TCP stream.
+//!        db.save(); // Saves database changes to disk.
+//!     }
 //! }
 //! const SQL : &str = "SELECT 'hello world'";
 //! const INITSQL : &str = "";
@@ -308,7 +308,7 @@ GO
         }
         else if let Some(s) = x.downcast_ref::<&str>()
         {
-          p.make_error(s.to_string())
+          p.make_error((*s).to_string())
         }
         else if let Some(s) = x.downcast_ref::<String>()
         {

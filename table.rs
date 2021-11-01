@@ -313,7 +313,7 @@ impl ColInfo
     let mut result = Self::empty(name);
     for (n, t) in ct
     {
-      result.add(n.to_string(), *t);
+      result.add((*n).to_string(), *t);
     }
     result
   }
