@@ -4,7 +4,7 @@ use crate::*;
 pub struct ByteStorage
 {
   pub file: Rc<SortedFile>,
-  pub id_alloc: Cell<u64>,
+  pub id_gen: Cell<u64>,
 }
 
 impl ByteStorage
@@ -12,7 +12,7 @@ impl ByteStorage
   pub fn new(root_page: u64) -> Self
   {
     let file = Rc::new(SortedFile::new(9 + BPF, 8, root_page));
-    ByteStorage { file, id_alloc: Cell::new(0) }
+    ByteStorage { file, id_gen: Cell::new(0) }
   }
 
   pub fn init(&self, db: &DB)
@@ -22,7 +22,7 @@ impl ByteStorage
     if let Some((p, off)) = self.file.clone().dsc(db, Box::new(start)).next()
     {
       let p = p.borrow();
-      self.id_alloc.set(1 + util::getu64(&p.data, off));
+      self.id_gen.set(1 + util::getu64(&p.data, off));
     }
   }
 
@@ -33,15 +33,15 @@ impl ByteStorage
 
   pub fn encode(&self, db: &DB, bytes: &[u8]) -> u64
   {
-    let result = self.id_alloc.get();
+    let result = self.id_gen.get();
     let mut r = Fragment::new(0);
     let n = bytes.len();
     let mut done = 0;
     let mut _frags = 0;
     loop
     {
-      r.id = self.id_alloc.get();
-      self.id_alloc.set(r.id + 1);
+      r.id = self.id_gen.get();
+      self.id_gen.set(r.id + 1);
       let mut len = n - done;
       if len > BPF
       {

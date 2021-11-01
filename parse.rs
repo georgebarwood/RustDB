@@ -309,16 +309,12 @@ impl<'a> Parser<'a>
               {
                 break;
               }
-              self
-                .ts
-                .push_str(str::from_utf8(&self.source[start..self.source_ix - 1]).unwrap());
+              self.ts.push_str(str::from_utf8(&self.source[start..self.source_ix - 1]).unwrap());
               start = self.source_ix;
             }
             cc = self.read_char();
           }
-          self
-            .ts
-            .push_str(str::from_utf8(&self.source[start..self.source_ix - 2]).unwrap());
+          self.ts.push_str(str::from_utf8(&self.source[start..self.source_ix - 2]).unwrap());
           break;
         }
 

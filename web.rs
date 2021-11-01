@@ -37,9 +37,7 @@ impl WebQuery
       let _content = hp.read_content();
     }
 
-    let now = std::time::SystemTime::now()
-      .duration_since(std::time::SystemTime::UNIX_EPOCH)
-      .unwrap();
+    let now = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap();
     let now = now.as_micros() as i64;
     let output = Vec::with_capacity(10000);
     let headers = String::with_capacity(1000);

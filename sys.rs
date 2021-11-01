@@ -28,7 +28,7 @@ pub fn create_table(db: &DB, info: &ColInfo)
       let root = db.alloc_page();
       let t = &db.sys_table;
       let mut row = t.row();
-      // Columns are root, schema, name, is_view, definition, id_alloc
+      // Columns are root, schema, name, is_view, definition, id_gen
       row.id = t.alloc_id() as i64;
       row.values[0] = Value::Int(root as i64);
       row.values[1] = Value::Int(schema_id);
@@ -171,14 +171,14 @@ fn get_schema(db: &DB, sname: &str) -> Option<i64>
   None
 }
 
-/// Get id, root, id_alloc for specified table.
+/// Get id, root, id_gen for specified table.
 fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)>
 {
   if let Some(schema_id) = get_schema(db, &name.schema)
   {
     let t = &db.sys_table;
 
-    // Columns are root, schema, name, is_view, definition, id_alloc
+    // Columns are root, schema, name, is_view, definition, id_gen
     let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
 
     if let Some((p, off)) = t.ix_get(db, keys, 0)
@@ -194,7 +194,7 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)>
 /// Gets a table from the database.
 pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
 {
-  if let Some((table_id, root, id_alloc)) = get_table0(db, name)
+  if let Some((table_id, root, id_gen)) = get_table0(db, name)
   {
     let mut info = ColInfo::empty(name.clone());
 
@@ -210,7 +210,7 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
       let ctype = a.int(2) as DataType;
       info.add(cname, ctype);
     }
-    let table = Table::new(table_id, root as u64, id_alloc, Rc::new(info));
+    let table = Table::new(table_id, root as u64, id_gen, Rc::new(info));
 
     // Load indexes. Columns are Root, Table, Name.
     let t = &db.sys_index;

@@ -44,12 +44,7 @@ impl SimplePagedFile
 {
   pub fn new(filename: &str) -> Self
   {
-    let mut file = OpenOptions::new()
-      .read(true)
-      .write(true)
-      .create(true)
-      .open(filename)
-      .unwrap();
+    let mut file = OpenOptions::new().read(true).write(true).create(true).open(filename).unwrap();
     let fsize = file.seek(SeekFrom::End(0)).unwrap();
     let page_count = (fsize + (PAGE_SIZE as u64) - 1) / (PAGE_SIZE as u64);
     let is_new = page_count == 0;

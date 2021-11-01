@@ -726,7 +726,7 @@ impl Page
       }
       f = self.left(f);
     }
-    if flist.len() > 0
+    if !flist.is_empty()
     {
       self.root = self.relocate(self.root, &mut flist);
     }
