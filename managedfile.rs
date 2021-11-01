@@ -1,3 +1,24 @@
+/*
+
+Idea:
+
+Each page is 0 to 15 "sectors".
+A page map entry for a logical page is 1..15 sector numbers.
+There is a stored reverse page map [physical sector] => [logical page:ix].
+When a sector is freed, we can relocate the last physical sector to the freed sector.
+
+Initial reverse page map could be
+
+1 -> 0:0
+2 -> 1:0
+3 -> 2:0
+
+If page 2 needs two sectors, we have also
+4 -> 2:1
+
+Objection: we have to scan the entire reverse page map on startup.
+*/
+
 use crate::*;
 use std::{fs, fs::OpenOptions, io::Read, io::Seek, io::SeekFrom, io::Write};
 

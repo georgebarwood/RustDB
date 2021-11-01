@@ -710,4 +710,62 @@ impl Page
       (x, least, height_decreased)
     }
   }
+
+  /// Reduce page size using free slots.
+  pub fn compress(&mut self)
+  {
+    // if self.alloc - self.count < 10 { return; } // Don't bother to compress if minimal free nodes.
+
+    let mut flist = Vec::new();
+    let mut f = self.free;
+    while f != 0
+    {
+      if f <= self.count
+      {
+        flist.push(f);
+      }
+      f = self.left(f);
+    }
+    if flist.len() > 0
+    {
+      self.root = self.relocate(self.root, &mut flist);
+    }
+    self.free = 0;
+    self.alloc = self.count;
+  }
+
+  /// Relocate node x (or any child of x) if it is greater than page count.
+  pub fn relocate(&mut self, mut x: usize, flist: &mut Vec<usize>) -> usize
+  {
+    if x != 0
+    {
+      if x > self.count
+      {
+        let to = flist.pop().unwrap();
+        println!("relocating x={} to {}", x, to);
+
+        let n = self.node_size;
+        let src = self.rec_offset(x);
+        let dest = self.rec_offset(to);
+        self.data.copy_within(src..src + n, dest);
+        self.data[src..src + n].fill(0);
+        x = to;
+      }
+
+      let c = self.left(x);
+      let c1 = self.relocate(c, flist);
+      if c1 != c
+      {
+        self.set_left(x, c1);
+      }
+
+      let c = self.right(x);
+      let c1 = self.relocate(c, flist);
+      if c1 != c
+      {
+        self.set_right(x, c1);
+      }
+    }
+    x
+  }
 } // end impl Page
