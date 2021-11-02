@@ -355,6 +355,7 @@ GO
       self.functions.borrow_mut().clear();
       self.functions_dirty.set(false);
     }
+    self.file.borrow_mut().save();
   }
 
   /// Print the tables ( for debugging ).
@@ -483,6 +484,7 @@ pub trait PagedFile
   fn free_page(&mut self, pnum: u64);
   fn is_new(&self) -> bool;
   fn rollback(&mut self) {}
+  fn save(&mut self) {}
 }
 
 /// IO Methods.
