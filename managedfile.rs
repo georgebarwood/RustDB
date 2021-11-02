@@ -1,46 +1,47 @@
-/*
-
-Idea:
-
-Each page is 0 to 15 "sectors".
-A page map entry for a logical page is 1..15 sector numbers.
-There is a stored reverse page map [physical sector] => [logical page:ix].
-When a sector is freed, we can relocate the last physical sector to the freed sector.
-
-Initial reverse page map could be
-
-1 -> 0:0
-2 -> 1:0
-3 -> 2:0
-
-If page 2 needs two sectors, we have also
-4 -> 2:1
-
-Objection: we have to scan the entire reverse page map on startup.
-*/
+//! ManagedFile implements PagedFile toring logical pages in smaller regions of backing storage.
+//!
+//! Each logical page has a fixed size "starter page".
+//!
+//! A logical page that does not fit in the "starter page" has 1 or more "extension pages".
+//!
+//! Each extension page starts with it's containing logical page number ( to allow extension pages to be relocated as required ).
+//!
+//! When a new extension page is needed, it is allocated from the end of the file.
+//!
+//! When an extension page is freed, the last extension page in the file is relocated to fill it
+//!( using the lpnum stored at the start of the extension page ).
+//!
+//!If a new logical page is needed, the first extension page is relocated to the end of the file.
+//!
+//![ A list of free logical page numbers is kept in a database file ]
+//!
+//!File layout: file header | starter pages | extension pages.
+//!
+//!Layout of starter page: 2 byte logical page size | array of 8 byte page numbers | user data | unused data.
+//!
+//!Layout of extension page: 8 byte logical page number | user data | unused data.
 
 use crate::*;
 use std::{fs, fs::OpenOptions, io::Read, io::Seek, io::SeekFrom, io::Write};
 
+/// = 24. Size of file header.
+const OVERHEAD: u64 = 24;
+
+/// = 400. Size of starter page.
+const SPSIZE: usize = 400;
+
+/// = 1024. Size of extension page.
+const EPSIZE: usize = 1024;
+
 pub struct ManagedFile
 {
   file: fs::File,
-  logical_page_count: u64,
-  first_free_logical_page: u64,
-  physical_page_count: u64,
+  lp_count: u64, // Number of logical pages in use.
+  lp_alloc: u64, // Allocator for logical pages.
+  pp_resvd: u64, // Number of pages reserved for logical page area.
+  pp_count: u64, // Number of pages allocated.
   is_new: bool,
-  to_be_freed: Vec<u64>,
-  to_be_allocated: Vec<u64>,
 }
-
-/* Primitives are
-
-   alloc_page
-   free_page
-
-   read_page
-   write_page
-*/
 
 impl ManagedFile
 {
@@ -48,45 +49,38 @@ impl ManagedFile
   {
     let mut file = OpenOptions::new().read(true).write(true).create(true).open(filename).unwrap();
     let fsize = file.seek(SeekFrom::End(0)).unwrap();
-    let mut physical_page_count = (fsize + (PAGE_SIZE as u64) - 1) / (PAGE_SIZE as u64);
-    let is_new = physical_page_count == 0;
+    let pp_count = (fsize + (EPSIZE as u64) - 1) / (EPSIZE as u64);
+
+    let is_new = pp_count == 0;
+    let mut x = Self { file, lp_count: 0, lp_alloc: 0, pp_resvd: 0, pp_count, is_new };
     if is_new
     {
-      physical_page_count = 1;
+      x.pp_count = 50;
+      x.pp_resvd = 50;
+      x.save();
     }
-
-    let mut x = Self {
-      file,
-      first_free_logical_page: u64::MAX,
-      logical_page_count: 0,
-      physical_page_count,
-      is_new,
-      to_be_freed: Vec::new(),
-      to_be_allocated: Vec::new(),
-    };
-    if !is_new
+    else
     {
-      x.logical_page_count = x.readu64(0);
-      x.first_free_logical_page = x.readu64(8);
+      x.lp_count = x.readu64(0);
+      x.lp_alloc = x.readu64(8);
+      x.pp_resvd = x.readu64(16);
     }
+    if x.pp_count < x.pp_resvd
+    {
+      x.pp_count = x.pp_resvd;
+    }
+    println!(
+      "lp_count={} pp_count={} pp_resvd={}",
+      x.lp_count, x.pp_count, x.pp_resvd
+    );
     x
-  }
-
-  pub fn allocate(&mut self)
-  {
-    for _lp in &self.to_be_allocated
-    {
-      // Use to_be_freed if possible.
-      // Otherwise allocate new page from end of file.
-    }
-    for _ in &self.to_be_freed
-    {}
   }
 
   pub fn save(&mut self)
   {
-    self.writeu64(0, self.logical_page_count);
-    self.writeu64(8, self.first_free_logical_page);
+    self.writeu64(0, self.lp_count);
+    self.writeu64(8, self.lp_alloc);
+    self.writeu64(16, self.pp_resvd);
   }
 
   fn readu64(&mut self, offset: u64) -> u64
@@ -104,54 +98,31 @@ impl ManagedFile
     let _ = self.file.write(&bytes);
   }
 
-  pub fn get_pp(&mut self, x: u64) -> u64
+  fn read(&mut self, off: u64, data: &mut [u8])
   {
-    if x >= self.logical_page_count
+    self.file.seek(SeekFrom::Start(off)).unwrap();
+    let _x = self.file.read_exact(data);
+  }
+
+  fn write(&mut self, off: u64, data: &[u8])
+  {
+    self.file.seek(SeekFrom::Start(off)).unwrap();
+    let _x = self.file.write(data);
+  }
+
+  /// Calculate the number of extension pages needed to store a page of given size.
+  fn calc_ext(size: usize) -> usize
+  {
+    let mut n = 0;
+    if size > SPSIZE - 2
     {
-      // This can occur during database initialisation.
-      x + 1
+      n = (size - SPSIZE) / (EPSIZE - 8);
+      if size + (2 + n * 16) > SPSIZE + n * EPSIZE
+      {
+        n += 1;
+      }
     }
-    else
-    {
-      self.readu64(16 + x * 16)
-    }
-  }
-
-  fn set_pp(&mut self, x: u64, to: u64)
-  {
-    self.writeu64(16 + x * 16, to);
-  }
-
-  fn get_lp(&mut self, x: u64) -> u64
-  {
-    self.readu64(24 + x * 16)
-  }
-
-  fn set_lp(&mut self, x: u64, to: u64)
-  {
-    self.writeu64(24 + x * 16, to);
-  }
-
-  fn move_page(&mut self, _from: u64, _to: u64) {}
-
-  pub fn do_free(&mut self, lp: u64)
-  {
-    let pp = self.get_pp(lp);
-
-    // move_pp is last physical page in file, gets relocated.
-    let move_pp = self.physical_page_count - 1;
-    self.physical_page_count = move_pp;
-
-    let move_lp = self.get_lp(move_pp);
-    self.move_page(move_pp, pp);
-
-    // Update location of move_lp
-    self.set_pp(move_lp, pp);
-    self.set_lp(pp, move_lp);
-
-    // Update logical page free chain.
-    self.set_pp(lp, self.first_free_logical_page);
-    self.first_free_logical_page = lp;
+    n
   }
 }
 
@@ -159,63 +130,132 @@ impl PagedFile for ManagedFile
 {
   fn read_page(&mut self, pnum: u64, data: &mut [u8])
   {
-    let pp = self.get_pp(pnum);
+    if pnum >= self.lp_count
+    {
+      return;
+    }
+    let off: u64 = OVERHEAD + (SPSIZE as u64) * pnum;
+    let mut starter = vec![0_u8; SPSIZE];
+    self.read(off, &mut starter);
+    let size = util::get(&starter, 0, 2) as usize; // Number of bytes in page.
+    let ext = Self::calc_ext(size); // Number of extension pages.
 
-    // println!( "reading page pnum={} pp={}", pnum, pp );
+    println!("read_page pnum={} size={} ext={}", pnum, size, ext);
 
-    let off = pp * PAGE_SIZE as u64;
-    self.file.seek(SeekFrom::Start(off)).unwrap();
-    let _x = self.file.read_exact(data);
+    let off = 2 + ext * 8;
+    let mut done = size;
+    if done > SPSIZE - off
+    {
+      done = SPSIZE - off;
+    }
+    data[0..done].copy_from_slice(&starter[off..off + done]);
+
+    // Read the extension pages.
+    for i in 0..ext
+    {
+      let mut amount = size - done;
+      if amount > EPSIZE - 8
+      {
+        amount = EPSIZE - 8;
+      }
+      let page = util::getu64(&starter, 2 + i * 8);
+      let roff = page * (EPSIZE as u64);
+
+      // println!( "read_page page={} done={} amount={}", page, done, amount );
+
+      self.read(roff + 8, &mut data[done..done + amount]);
+      done += amount;
+    }
   }
 
-  fn write_page(&mut self, pnum: u64, data: &[u8])
+  fn write_page(&mut self, pnum: u64, data: &[u8], size: usize)
   {
-    self.allocate();
+    if OVERHEAD + pnum * (SPSIZE as u64) >= self.pp_resvd * (EPSIZE as u64)
+    {
+      // Need to relocate page at offset self.lp_resvd.
+      println!("resvd={}", self.pp_resvd);
+      panic!()
+    }
 
-    let pp = self.get_pp(pnum);
+    if pnum >= self.lp_count
+    {
+      self.lp_count = pnum + 1;
+      println!("lp_count={}", self.lp_count);
+      self.save();
+    }
 
-    // println!( "writing page pnum={} pp={}", pnum, pp );
+    // Calculate number of extension pages needed.
+    let ext = Self::calc_ext(size);
 
-    let off = pp * (PAGE_SIZE as u64);
-    self.file.seek(SeekFrom::Start(off)).unwrap();
-    let _x = self.file.write(data);
+    println!("write_page pnum={} size={} ext={}", pnum, size, ext);
+
+    // Read the starter info.
+    let off: u64 = OVERHEAD + (SPSIZE as u64) * pnum;
+    let mut starter = vec![0_u8; SPSIZE];
+    self.read(off, &mut starter);
+    let old_size = util::get(&starter, 0, 2) as usize;
+    let mut old_ext = Self::calc_ext(old_size);
+    util::set(&mut starter, 0, size as u64, 2);
+
+    if ext != old_ext
+    {
+      if old_ext > ext
+      {
+        panic!()
+      }
+      // Need to allocate or free extension pages.
+      while old_ext < ext
+      {
+        util::set(&mut starter, 2 + old_ext * 8, self.pp_count, 8);
+        self.pp_count += 1;
+        old_ext += 1;
+      }
+    }
+
+    let off = 2 + ext * 8;
+    let mut done = SPSIZE - off;
+    if done > size
+    {
+      done = size;
+    }
+    starter[off..off + done].copy_from_slice(&data[0..done]);
+
+    // Save the starter data.
+    let woff: u64 = OVERHEAD + (SPSIZE as u64) * pnum;
+    self.write(woff, &starter[0..off + done]);
+
+    // Write the extension pages.
+    for i in 0..ext
+    {
+      let mut amount = size - done;
+      if amount > EPSIZE - 8
+      {
+        amount = EPSIZE - 8;
+      }
+      let page = util::getu64(&starter, 2 + i * 8) as u64;
+      // println!( "write_page page={} done={} amount={}", page, done, amount );
+      let woff = page * (EPSIZE as u64);
+      self.writeu64(woff, page);
+      self.write(woff + 8, &data[done..done + amount]);
+      done += amount;
+    }
   }
 
   fn alloc_page(&mut self) -> u64
   {
-    if let Some(p) = self.to_be_freed.pop()
-    {
-      return p;
-    }
-    let lp;
-    if self.first_free_logical_page == u64::MAX
-    {
-      lp = self.logical_page_count;
-      self.logical_page_count = lp + 1;
-    }
-    else
-    {
-      lp = self.first_free_logical_page;
-      self.first_free_logical_page = self.get_pp(lp);
-    }
-    self.to_be_allocated.push(lp);
-    lp
+    let result = self.lp_alloc;
+    self.lp_alloc += 1;
+    self.save(); // Probably want to sasve later.
+    result
   }
 
   /// Free a logical page number.
-  fn free_page(&mut self, lp: u64)
-  {
-    self.to_be_freed.push(lp);
-  }
+  fn free_page(&mut self, _lp: u64) {}
 
   fn is_new(&self) -> bool
   {
     self.is_new
   }
 
-  fn rollback(&mut self)
-  {
-    self.to_be_freed.clear();
-    self.to_be_allocated.clear();
-  }
+  fn rollback(&mut self) {}
 }

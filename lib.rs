@@ -478,7 +478,7 @@ impl TableBuilder
 pub trait PagedFile
 {
   fn read_page(&mut self, pnum: u64, data: &mut [u8]);
-  fn write_page(&mut self, pnum: u64, data: &[u8]);
+  fn write_page(&mut self, pnum: u64, data: &[u8], size: usize);
   fn alloc_page(&mut self) -> u64;
   fn free_page(&mut self, pnum: u64);
   fn is_new(&self) -> bool;

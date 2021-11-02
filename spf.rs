@@ -18,7 +18,7 @@ impl PagedFile for SimplePagedFile
     let _x = self.file.read_exact(data);
   }
 
-  fn write_page(&mut self, pnum: u64, data: &[u8])
+  fn write_page(&mut self, pnum: u64, data: &[u8], _size: usize)
   {
     let off = pnum * (PAGE_SIZE as u64);
     self.file.seek(SeekFrom::Start(off)).unwrap();

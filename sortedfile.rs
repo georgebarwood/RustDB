@@ -284,7 +284,7 @@ impl SortedFile
         p.compress();
         p.write_header();
         p.is_dirty = false;
-        db.file.borrow_mut().write_page(p.pnum, &p.data);
+        db.file.borrow_mut().write_page(p.pnum, &p.data, p.size());
       }
     }
   }
