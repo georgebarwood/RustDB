@@ -38,7 +38,7 @@ pub struct ManagedFile
   pp_count: u64, // Number of extension pages allocated.
   lp_free: u64,  // Freed logical page.
   is_new: bool,
-  dirty:bool, // Header needs to be saved.
+  dirty: bool, // Header needs to be saved ( alternative would be to keep copy of current saved header ).
 }
 
 impl ManagedFile
@@ -185,7 +185,7 @@ impl PagedFile for ManagedFile
   /// Write size bytes of data to the specified logical page.
   fn write_page(&mut self, lpnum: u64, data: &[u8], size: usize)
   {
-    assert!( size <= u16::MAX as usize );
+    assert!(size <= u16::MAX as usize);
     self.extend_starter_pages(lpnum);
     // Calculate number of extension pages needed.
     let ext = Self::calc_ext(size);
@@ -202,19 +202,22 @@ impl PagedFile for ManagedFile
 
     if ext != old_ext
     {
-      if old_ext > ext
+      self.dirty = true;
+      while old_ext > ext
       {
-        // Extension page free not yet implemented.
-        panic!()
+        // Relocate page from end of file to fill freed page.
+        old_ext -= 1;
+        let fp = util::getu64(&starter, 2 + old_ext * 8);
+        self.pp_count -= 1;
+        self.relocate(self.pp_count, fp);
       }
-      // Need to allocate or free extension pages.
       while old_ext < ext
       {
+        // Allocate page from end of file.
         util::set(&mut starter, 2 + old_ext * 8, self.pp_count, 8);
         self.pp_count += 1;
         old_ext += 1;
       }
-      self.dirty = true;
     }
 
     let off = 2 + ext * 8;
