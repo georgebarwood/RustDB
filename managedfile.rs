@@ -37,10 +37,11 @@ pub struct ManagedFile
   lp_alloc: u64,  // Allocator for logical pages.
   ep_resvd: u64,  // Number of extension pages reserved for starter pages.
   ep_count: u64,  // Number of extension pages allocated.
-  lp_free: u64,   // Start of linked list of free logical pages.
+  lp_first: u64,   // Start of linked list of free logical pages.
   is_new: bool,
   dirty: bool, // Header needs to be saved ( alternative would be to keep copy of current saved header ).
-  ep_free: BTreeSet<u64>, // Set of free extension pages.
+  ep_free: BTreeSet<u64>, // Temporary set of free extension pages.
+  lp_free: Vec<u64>, // Temporary list of free logical pages.
 }
 
 impl ManagedFile
@@ -54,18 +55,17 @@ impl ManagedFile
 
     let is_new = ep_count == 0;
     let mut x =
-      Self { file, lp_alloc: 0, ep_resvd: 0, ep_count, lp_free: 0, is_new, dirty: false, ep_free: BTreeSet::new() };
+      Self { file, lp_alloc: 0, ep_resvd: 0, ep_count, lp_first: 0, is_new, dirty: false, 
+      lp_free: Vec::new(), ep_free: BTreeSet::new() };
     if is_new
     {
       x.ep_count = 20; // About 100 starter pages ( 20 x 1k / 400 ).
       x.ep_resvd = 20;
-      x.lp_free = u64::MAX;
+      x.lp_first = u64::MAX;
     }
     else
     {
-      x.lp_alloc = x.readu64(0);
-      x.ep_resvd = x.readu64(8);
-      x.lp_free = x.readu64(16);
+      x.init();
     }
     if x.ep_count < x.ep_resvd
     {
@@ -74,12 +74,19 @@ impl ManagedFile
     x
   }
 
+  /// Initialise from file header.
+  fn init(&mut self)
+  {
+    self.lp_alloc = self.readu64(0);
+    self.ep_resvd = self.readu64(8);
+    self.lp_first = self.readu64(16);
+  }
+
   /// Read a u64 from the underlying file.
   fn readu64(&mut self, offset: u64) -> u64
   {
     let mut bytes = [0; 8];
     self.read(offset, &mut bytes);
-    let _x = self.file.read_exact(&mut bytes);
     u64::from_le_bytes(bytes)
   }
 
@@ -195,6 +202,12 @@ impl ManagedFile
     self.dirty = true;
     self.ep_free.insert(ppnum);
   }
+
+ fn _trace( &self )
+ {
+   println!( "lp_alloc={} ep_count={} ep_resvd={} lp_first={}", self.lp_alloc, self.ep_count, self.ep_resvd, self.lp_first );
+ }
+
 }
 
 impl PagedFile for ManagedFile
@@ -212,11 +225,18 @@ impl PagedFile for ManagedFile
       }
     }
 
+    while let Some(p) = self.lp_free.pop()
+    {
+      println!( "New free lp {}", p );
+      self.writeu64( HSIZE + p*SPSIZE as u64, self.lp_first );
+      self.lp_first = p;
+    }
+
     if self.dirty
     {
       self.writeu64(0, self.lp_alloc);
       self.writeu64(8, self.ep_resvd);
-      self.writeu64(16, self.lp_free);
+      self.writeu64(16, self.lp_first);
       self.file.set_len(self.ep_count * EPSIZE as u64).unwrap();
       self.dirty = false;
     }
@@ -326,28 +346,29 @@ impl PagedFile for ManagedFile
   /// Allocate logical page number.
   fn alloc_page(&mut self) -> u64
   {
-    self.dirty = true;
-    if self.lp_free != u64::MAX
+    if let Some(p) = self.lp_free.pop()
     {
-      let result = self.lp_free;
-      self.lp_free = self.readu64(HSIZE + result * SPSIZE as u64);
-      result
+      p
+    }
+    else if self.lp_first != u64::MAX
+    {
+      let p = self.lp_first;
+      self.lp_first = self.readu64( HSIZE + p*SPSIZE as u64 );
+      p
     }
     else
     {
-      let result = self.lp_alloc;
+      self.dirty = true;
+      let p = self.lp_alloc;
       self.lp_alloc += 1;
-      result
+      p
     }
   }
 
   /// Free a logical page number.
   fn free_page(&mut self, pnum: u64)
   {
-    self.dirty = true;
-    self.write_page(pnum, &[], 0);
-    self.writeu64(HSIZE + pnum * SPSIZE as u64, self.lp_free);
-    self.lp_free = pnum;
+    self.lp_free.push( pnum );
   }
 
   /// Is this a new file?
@@ -357,7 +378,13 @@ impl PagedFile for ManagedFile
   }
 
   /// ToDo.
-  fn rollback(&mut self) {}
+  fn rollback(&mut self) 
+  {
+    self.lp_free.clear();
+    self.ep_free.clear();
+    self.init();
+    self.dirty = false;
+  }
 
   /// Check whether compressing a page is worthwhile.
   fn compress(&self, size: usize, saving: usize) -> bool
