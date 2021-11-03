@@ -127,7 +127,7 @@ impl ManagedFile
     let mut ext = calc_ext(size);
     off += 2;
 
-    println!("relocate page from={} to={} lpnum={} ext={}", from, to, lpnum, ext);
+    // println!("relocate page from={} to={} lpnum={} ext={}", from, to, lpnum, ext);
 
     // Update the matching extension page number.
     loop
@@ -216,6 +216,7 @@ impl PagedFile for ManagedFile
       self.writeu64(0, self.lp_alloc);
       self.writeu64(8, self.ep_resvd);
       self.writeu64(16, self.lp_free);
+      self.file.set_len(self.ep_count * EPSIZE as u64).unwrap();
       println!(
         "ManagedFile::save lp_alloc={} ep_resvd={} ep_count={}",
         self.lp_alloc, self.ep_resvd, self.ep_count
@@ -251,12 +252,12 @@ impl PagedFile for ManagedFile
         old_ext -= 1;
         let fp = util::getu64(&starter, 2 + old_ext * 8);
         self.ep_free(fp);
-        println!("Freed page {}", fp);
       }
       while old_ext < ext
       {
-        // Allocate required pages.
-        util::set(&mut starter, 2 + old_ext * 8, self.ep_alloc(), 8);
+        // Allocate new pages.
+        let np = self.ep_alloc();
+        util::set(&mut starter, 2 + old_ext * 8, np, 8);
         old_ext += 1;
       }
     }
@@ -377,8 +378,8 @@ fn calc_ext(size: usize) -> usize
   let mut n = 0;
   if size > (SPSIZE - 2)
   {
-    n = ( (size - (SPSIZE  - 2)) + ( EPSIZE-16-1) ) / (EPSIZE - 16);
+    n = ((size - (SPSIZE - 2)) + (EPSIZE - 16 - 1)) / (EPSIZE - 16);
   }
-  debug_assert!( 2 + 16*n + size <= SPSIZE + n * EPSIZE );
+  debug_assert!(2 + 16 * n + size <= SPSIZE + n * EPSIZE);
   n
 }
