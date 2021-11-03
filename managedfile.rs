@@ -35,12 +35,12 @@ pub struct ManagedFile
 {
   file: fs::File,
   lp_alloc: u64, // Allocator for logical pages.
-  pp_resvd: u64, // Number of extension pages reserved for starter pages.
-  pp_count: u64, // Number of extension pages allocated.
+  ep_resvd: u64, // Number of extension pages reserved for starter pages.
+  ep_count: u64, // Number of extension pages allocated.
   lp_free: u64,  // Freed logical page.
   is_new: bool,
   dirty: bool, // Header needs to be saved ( alternative would be to keep copy of current saved header ).
-  pp_free: BTreeSet<u64>, // Set of free extension pages.
+  ep_free: BTreeSet<u64>, // Set of free extension pages.
 }
 
 impl ManagedFile
@@ -49,26 +49,26 @@ impl ManagedFile
   {
     let mut file = OpenOptions::new().read(true).write(true).create(true).open(filename).unwrap();
     let fsize = file.seek(SeekFrom::End(0)).unwrap();
-    let pp_count = (fsize + (EPSIZE as u64) - 1) / (EPSIZE as u64);
+    let ep_count = (fsize + (EPSIZE as u64) - 1) / (EPSIZE as u64);
 
-    let is_new = pp_count == 0;
+    let is_new = ep_count == 0;
     let mut x =
-      Self { file, lp_alloc: 0, pp_resvd: 0, pp_count, lp_free: 0, is_new, dirty: false, pp_free: BTreeSet::new() };
+      Self { file, lp_alloc: 0, ep_resvd: 0, ep_count, lp_free: 0, is_new, dirty: false, ep_free: BTreeSet::new() };
     if is_new
     {
-      x.pp_count = 20; // About 100 starter pages ( 20 x 1k / 400 ).
-      x.pp_resvd = 20;
+      x.ep_count = 20; // About 100 starter pages ( 20 x 1k / 400 ).
+      x.ep_resvd = 20;
       x.lp_free = u64::MAX;
     }
     else
     {
       x.lp_alloc = x.readu64(0);
-      x.pp_resvd = x.readu64(8);
+      x.ep_resvd = x.readu64(8);
       x.lp_free = x.readu64(16);
     }
-    if x.pp_count < x.pp_resvd
+    if x.ep_count < x.ep_resvd
     {
-      x.pp_count = x.pp_resvd;
+      x.ep_count = x.ep_resvd;
     }
     x
   }
@@ -159,40 +159,40 @@ impl ManagedFile
   {
     // Check if the end of the starter page array exceeds the reserved amount.
     // While it does, relocate the first extended page to the end of the file.
-    while HSIZE + (lpnum + 1) * (SPSIZE as u64) > self.pp_resvd * (EPSIZE as u64)
+    while HSIZE + (lpnum + 1) * (SPSIZE as u64) > self.ep_resvd * (EPSIZE as u64)
     {
-      // println!( "Extending pp_resvd={}", self.pp_resvd );
-      self.relocate(self.pp_resvd, self.pp_count);
-      self.clear(self.pp_resvd);
-      self.pp_resvd += 1;
-      self.pp_count += 1;
+      // println!( "Extending ep_resvd={}", self.ep_resvd );
+      self.relocate(self.ep_resvd, self.ep_count);
+      self.clear(self.ep_resvd);
+      self.ep_resvd += 1;
+      self.ep_count += 1;
       self.dirty = true;
     }
   }
 
-  fn pp_alloc(&mut self) -> u64
+  fn ep_alloc(&mut self) -> u64
   {
     self.dirty = true;
-    if let Some(pp) = self.pp_free.iter().next()
+    if let Some(pp) = self.ep_free.iter().next()
     {
       let p = *pp;
-      self.pp_free.remove(&p);
-      println!("pp_alloc re-using freed page {}", p);
+      self.ep_free.remove(&p);
+      // println!("ep_alloc re-using freed page {}", p);
       p
     }
     else
     {
-      let p = self.pp_count;
-      self.pp_count += 1;
-      println!("pp_alloc allocated {}", p);
+      let p = self.ep_count;
+      self.ep_count += 1;
+      // println!("ep_alloc allocated {}", p);
       p
     }
   }
 
-  fn pp_free(&mut self, ppnum: u64)
+  fn ep_free(&mut self, ppnum: u64)
   {
     self.dirty = true;
-    self.pp_free.insert(ppnum);
+    self.ep_free.insert(ppnum);
   }
 }
 
@@ -200,13 +200,13 @@ impl PagedFile for ManagedFile
 {
   fn save(&mut self)
   {
-    while !self.pp_free.is_empty()
+    while !self.ep_free.is_empty()
     {
-      self.pp_count -= 1;
-      let from = self.pp_count;
-      if !self.pp_free.remove(&from)
+      self.ep_count -= 1;
+      let from = self.ep_count;
+      if !self.ep_free.remove(&from)
       {
-        let to = self.pp_alloc();
+        let to = self.ep_alloc();
         self.relocate(from, to);
       }
     }
@@ -214,11 +214,11 @@ impl PagedFile for ManagedFile
     if self.dirty
     {
       self.writeu64(0, self.lp_alloc);
-      self.writeu64(8, self.pp_resvd);
+      self.writeu64(8, self.ep_resvd);
       self.writeu64(16, self.lp_free);
       println!(
-        "ManagedFile::save lp_alloc={} pp_resvd={} pp_count={}",
-        self.lp_alloc, self.pp_resvd, self.pp_count
+        "ManagedFile::save lp_alloc={} ep_resvd={} ep_count={}",
+        self.lp_alloc, self.ep_resvd, self.ep_count
       );
       self.dirty = false;
     }
@@ -250,13 +250,13 @@ impl PagedFile for ManagedFile
         //  Note freed pages.
         old_ext -= 1;
         let fp = util::getu64(&starter, 2 + old_ext * 8);
-        self.pp_free(fp);
+        self.ep_free(fp);
         println!("Freed page {}", fp);
       }
       while old_ext < ext
       {
         // Allocate required pages.
-        util::set(&mut starter, 2 + old_ext * 8, self.pp_alloc(), 8);
+        util::set(&mut starter, 2 + old_ext * 8, self.ep_alloc(), 8);
         old_ext += 1;
       }
     }
