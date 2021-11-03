@@ -33,11 +33,11 @@ const EPSIZE: usize = 1024;
 
 pub struct ManagedFile
 {
-  file: fs::File,
-  lp_alloc: u64, // Allocator for logical pages.
-  ep_resvd: u64, // Number of extension pages reserved for starter pages.
-  ep_count: u64, // Number of extension pages allocated.
-  lp_free: u64,  // Freed logical page.
+  file: fs::File, // Underlying file (may want to use a trait instead to make module more general).
+  lp_alloc: u64,  // Allocator for logical pages.
+  ep_resvd: u64,  // Number of extension pages reserved for starter pages.
+  ep_count: u64,  // Number of extension pages allocated.
+  lp_free: u64,   // Start of linked list of free logical pages.
   is_new: bool,
   dirty: bool, // Header needs to be saved ( alternative would be to keep copy of current saved header ).
   ep_free: BTreeSet<u64>, // Set of free extension pages.
