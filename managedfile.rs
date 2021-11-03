@@ -45,6 +45,7 @@ pub struct ManagedFile
 
 impl ManagedFile
 {
+  /// Construct a new ManagedFile.
   pub fn new(filename: &str) -> Self
   {
     let mut file = OpenOptions::new().read(true).write(true).create(true).open(filename).unwrap();
@@ -73,39 +74,42 @@ impl ManagedFile
     x
   }
 
+  /// Read a u64 from the underlying file.
   fn readu64(&mut self, offset: u64) -> u64
   {
-    self.file.seek(SeekFrom::Start(offset)).unwrap();
     let mut bytes = [0; 8];
+    self.read(offset, &mut bytes);
     let _x = self.file.read_exact(&mut bytes);
     u64::from_le_bytes(bytes)
   }
 
+  /// Read a u16 from the underlying file.
   fn readu16(&mut self, offset: u64) -> usize
   {
-    self.file.seek(SeekFrom::Start(offset)).unwrap();
     let mut bytes = [0; 2];
-    let _x = self.file.read_exact(&mut bytes);
+    self.read(offset, &mut bytes);
     u16::from_le_bytes(bytes) as usize
   }
 
+  /// Write a u64 to the underlying file.
   fn writeu64(&mut self, offset: u64, x: u64)
   {
     let bytes = x.to_le_bytes();
-    self.file.seek(SeekFrom::Start(offset)).unwrap();
-    let _ = self.file.write(&bytes);
+    self.write(offset, &bytes);
   }
 
-  fn read(&mut self, off: u64, data: &mut [u8])
+  /// Read bytes from the underlying file.
+  fn read(&mut self, off: u64, bytes: &mut [u8])
   {
     self.file.seek(SeekFrom::Start(off)).unwrap();
-    let _x = self.file.read_exact(data);
+    let _x = self.file.read_exact(bytes);
   }
 
-  fn write(&mut self, off: u64, data: &[u8])
+  /// Write bytes to the underlying file.
+  fn write(&mut self, off: u64, bytes: &[u8])
   {
     self.file.seek(SeekFrom::Start(off)).unwrap();
-    let _x = self.file.write(data);
+    let _x = self.file.write(bytes);
   }
 
   /// Relocate extension page to a new location.
@@ -121,7 +125,7 @@ impl ManagedFile
     self.write(to * EPSIZE as u64, &buffer);
     let lpnum = util::getu64(&buffer, 0);
 
-    // Compute location of array of extension page numbers.
+    // Compute location and length of the array of extension page numbers.
     let mut off = HSIZE + lpnum * SPSIZE as u64;
     let size = self.readu16(off);
     let mut ext = calc_ext(size);
@@ -154,7 +158,7 @@ impl ManagedFile
     self.write(epnum * EPSIZE as u64, &buf);
   }
 
-  // Extend the starter page array so that lpnum is valid.
+  /// Extend the starter page array so that lpnum is valid.
   fn extend_starter_pages(&mut self, lpnum: u64)
   {
     // Check if the end of the starter page array exceeds the reserved amount.
@@ -170,6 +174,7 @@ impl ManagedFile
     }
   }
 
+  /// Allocate an extension page.
   fn ep_alloc(&mut self) -> u64
   {
     self.dirty = true;
@@ -189,6 +194,7 @@ impl ManagedFile
     }
   }
 
+  /// Free an extension page.
   fn ep_free(&mut self, ppnum: u64)
   {
     self.dirty = true;
@@ -217,11 +223,14 @@ impl PagedFile for ManagedFile
       self.writeu64(8, self.ep_resvd);
       self.writeu64(16, self.lp_free);
       self.file.set_len(self.ep_count * EPSIZE as u64).unwrap();
-      println!(
-        "ManagedFile::save lp_alloc={} ep_resvd={} ep_count={}",
-        self.lp_alloc, self.ep_resvd, self.ep_count
-      );
       self.dirty = false;
+      if false
+      {
+        println!(
+          "ManagedFile::save lp_alloc={} ep_resvd={} ep_count={}",
+          self.lp_alloc, self.ep_resvd, self.ep_count
+        );
+      }
     }
   }
 
@@ -333,6 +342,7 @@ impl PagedFile for ManagedFile
     debug_assert!(done == size);
   }
 
+  /// Allocate logical page number.
   fn alloc_page(&mut self) -> u64
   {
     self.dirty = true;
@@ -359,13 +369,16 @@ impl PagedFile for ManagedFile
     self.lp_free = pnum;
   }
 
+  /// Is this a new file?
   fn is_new(&self) -> bool
   {
     self.is_new
   }
 
+  /// ToDo.
   fn rollback(&mut self) {}
 
+  /// Check whether compressing a page is worthwhile.
   fn compress(&self, size: usize, saving: usize) -> bool
   {
     calc_ext(size - saving) < calc_ext(size)
