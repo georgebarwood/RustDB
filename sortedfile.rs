@@ -281,7 +281,7 @@ impl SortedFile
           "Saving page {} root={} count={} node_size={}",
           p.pnum, self.root_page, p.count, p.node_size
         );
-        p.compress();
+        p.compress(db);
         p.write_header();
         p.is_dirty = false;
         db.file.borrow_mut().write_page(p.pnum, &p.data, p.size());

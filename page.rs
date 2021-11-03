@@ -712,9 +712,15 @@ impl Page
   }
 
   /// Reduce page size using free nodes.
-  pub fn compress(&mut self)
+  pub fn compress(&mut self, db: &DB)
   {
-    // if self.alloc - self.count < 10 { return; } // Don't bother to compress if minimal free nodes.
+    let saving = (self.alloc - self.count) * self.node_size;
+    if saving == 0 || !db.file.borrow_mut().compress(self.size(), saving)
+    {
+      return;
+    }
+
+    // println!( "Compressing page {} saving={}", self.pnum, saving );
 
     let mut flist = Vec::new();
     let mut f = self.free;
@@ -742,8 +748,6 @@ impl Page
       if x > self.count
       {
         let to = flist.pop().unwrap();
-        println!("relocating x={} to {}", x, to);
-
         let n = self.node_size;
         let src = self.rec_offset(x);
         let dest = self.rec_offset(to);

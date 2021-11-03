@@ -485,6 +485,10 @@ pub trait PagedFile
   fn is_new(&self) -> bool;
   fn rollback(&mut self) {}
   fn save(&mut self) {}
+  fn compress(&self, _size: usize, _saving: usize) -> bool
+  {
+    false
+  }
 }
 
 /// IO Methods.

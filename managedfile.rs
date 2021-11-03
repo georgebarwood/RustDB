@@ -19,6 +19,7 @@
 //! Layout of extension page: 8 byte logical page number | user data | unused data.
 
 use crate::*;
+use std::collections::BTreeSet;
 use std::{fs, fs::OpenOptions, io::Read, io::Seek, io::SeekFrom, io::Write};
 
 /// = 24. Size of file header.
@@ -39,6 +40,7 @@ pub struct ManagedFile
   lp_free: u64,  // Freed logical page.
   is_new: bool,
   dirty: bool, // Header needs to be saved ( alternative would be to keep copy of current saved header ).
+  pp_free: BTreeSet<u64>, // Set of free extension pages.
 }
 
 impl ManagedFile
@@ -50,7 +52,8 @@ impl ManagedFile
     let pp_count = (fsize + (EPSIZE as u64) - 1) / (EPSIZE as u64);
 
     let is_new = pp_count == 0;
-    let mut x = Self { file, lp_alloc: 0, pp_resvd: 0, pp_count, lp_free: 0, is_new, dirty: false };
+    let mut x =
+      Self { file, lp_alloc: 0, pp_resvd: 0, pp_count, lp_free: 0, is_new, dirty: false, pp_free: BTreeSet::new() };
     if is_new
     {
       x.pp_count = 20; // About 100 starter pages ( 20 x 1k / 400 ).
@@ -78,6 +81,14 @@ impl ManagedFile
     u64::from_le_bytes(bytes)
   }
 
+  fn readu16(&mut self, offset: u64) -> usize
+  {
+    self.file.seek(SeekFrom::Start(offset)).unwrap();
+    let mut bytes = [0; 2];
+    let _x = self.file.read_exact(&mut bytes);
+    u16::from_le_bytes(bytes) as usize
+  }
+
   fn writeu64(&mut self, offset: u64, x: u64)
   {
     let bytes = x.to_le_bytes();
@@ -97,21 +108,6 @@ impl ManagedFile
     let _x = self.file.write(data);
   }
 
-  /// Calculate the number of extension pages needed to store a page of given size.
-  fn calc_ext(size: usize) -> usize
-  {
-    let mut n = 0;
-    if size > SPSIZE - 2
-    {
-      n = (size - SPSIZE) / (EPSIZE - 8);
-      if size + (2 + n * 16) > SPSIZE + n * EPSIZE
-      {
-        n += 1;
-      }
-    }
-    n
-  }
-
   /// Relocate extension page to a new location.
   fn relocate(&mut self, from: u64, to: u64)
   {
@@ -120,17 +116,26 @@ impl ManagedFile
       return;
     }
 
-    // println!( "relocate from={} to={}", from, to );
-
     let mut buffer = vec![0; EPSIZE];
     self.read(from * EPSIZE as u64, &mut buffer);
     self.write(to * EPSIZE as u64, &buffer);
     let lpnum = util::getu64(&buffer, 0);
+
     // Compute location of array of extension page numbers.
-    let mut off = HSIZE + lpnum * SPSIZE as u64 + 2;
-    // Update the matching extension page numner.
+    let mut off = HSIZE + lpnum * SPSIZE as u64;
+    let size = self.readu16(off);
+    let mut ext = calc_ext(size);
+    off += 2;
+
+    println!("relocate page from={} to={} lpnum={} ext={}", from, to, lpnum, ext);
+
+    // Update the matching extension page number.
     loop
     {
+      if ext == 0
+      {
+        panic!("Failed to find matching ep page");
+      }
       let x = self.readu64(off);
       if x == from
       {
@@ -138,6 +143,7 @@ impl ManagedFile
         break;
       }
       off += 8;
+      ext -= 1;
     }
   }
 
@@ -163,12 +169,48 @@ impl ManagedFile
       self.dirty = true;
     }
   }
+
+  fn pp_alloc(&mut self) -> u64
+  {
+    self.dirty = true;
+    if let Some(pp) = self.pp_free.iter().next()
+    {
+      let p = *pp;
+      self.pp_free.remove(&p);
+      println!("pp_alloc re-using freed page {}", p);
+      p
+    }
+    else
+    {
+      let p = self.pp_count;
+      self.pp_count += 1;
+      println!("pp_alloc allocated {}", p);
+      p
+    }
+  }
+
+  fn pp_free(&mut self, ppnum: u64)
+  {
+    self.dirty = true;
+    self.pp_free.insert(ppnum);
+  }
 }
 
 impl PagedFile for ManagedFile
 {
   fn save(&mut self)
   {
+    while !self.pp_free.is_empty()
+    {
+      self.pp_count -= 1;
+      let from = self.pp_count;
+      if !self.pp_free.remove(&from)
+      {
+        let to = self.pp_alloc();
+        self.relocate(from, to);
+      }
+    }
+
     if self.dirty
     {
       self.writeu64(0, self.lp_alloc);
@@ -188,16 +230,16 @@ impl PagedFile for ManagedFile
     assert!(size <= u16::MAX as usize);
     self.extend_starter_pages(lpnum);
     // Calculate number of extension pages needed.
-    let ext = Self::calc_ext(size);
+    let ext = calc_ext(size);
 
-    // println!("write_page pnum={} size={} ext={}", pnum, size, ext);
+    // println!("write_page pnum={} size={} ext={}", lpnum, size, ext);
 
     // Read the current starter info.
     let off: u64 = HSIZE + (SPSIZE as u64) * lpnum;
     let mut starter = vec![0_u8; SPSIZE];
     self.read(off, &mut starter);
     let old_size = util::get(&starter, 0, 2) as usize;
-    let mut old_ext = Self::calc_ext(old_size);
+    let mut old_ext = calc_ext(old_size);
     util::set(&mut starter, 0, size as u64, 2);
 
     if ext != old_ext
@@ -205,17 +247,16 @@ impl PagedFile for ManagedFile
       self.dirty = true;
       while old_ext > ext
       {
-        // Relocate page from end of file to fill freed page.
+        //  Note freed pages.
         old_ext -= 1;
         let fp = util::getu64(&starter, 2 + old_ext * 8);
-        self.pp_count -= 1;
-        self.relocate(self.pp_count, fp);
+        self.pp_free(fp);
+        println!("Freed page {}", fp);
       }
       while old_ext < ext
       {
-        // Allocate page from end of file.
-        util::set(&mut starter, 2 + old_ext * 8, self.pp_count, 8);
-        self.pp_count += 1;
+        // Allocate required pages.
+        util::set(&mut starter, 2 + old_ext * 8, self.pp_alloc(), 8);
         old_ext += 1;
       }
     }
@@ -243,10 +284,11 @@ impl PagedFile for ManagedFile
       let page = util::getu64(&starter, 2 + i * 8) as u64;
       // println!( "write_page page={} done={} amount={}", page, done, amount );
       let woff = page * (EPSIZE as u64);
-      self.writeu64(woff, page);
+      self.writeu64(woff, lpnum);
       self.write(woff + 8, &data[done..done + amount]);
       done += amount;
     }
+    debug_assert!(done == size);
   }
 
   /// Read bytes from logical page into data.
@@ -258,9 +300,9 @@ impl PagedFile for ManagedFile
     let mut starter = vec![0_u8; SPSIZE];
     self.read(off, &mut starter);
     let size = util::get(&starter, 0, 2) as usize; // Number of bytes in page.
-    let ext = Self::calc_ext(size); // Number of extension pages.
+    let ext = calc_ext(size); // Number of extension pages.
 
-    // println!("read_page pnum={} size={} ext={}", pnum, size, ext);
+    // println!("read_page pnum={} size={} ext={}", lpnum, size, ext);
 
     let off = 2 + ext * 8;
     let mut done = size;
@@ -282,10 +324,12 @@ impl PagedFile for ManagedFile
       let roff = page * (EPSIZE as u64);
 
       // println!( "read_page page={} done={} amount={}", page, done, amount );
+      debug_assert!(self.readu64(roff) == lpnum);
 
       self.read(roff + 8, &mut data[done..done + amount]);
       done += amount;
     }
+    debug_assert!(done == size);
   }
 
   fn alloc_page(&mut self) -> u64
@@ -320,4 +364,21 @@ impl PagedFile for ManagedFile
   }
 
   fn rollback(&mut self) {}
+
+  fn compress(&self, size: usize, saving: usize) -> bool
+  {
+    calc_ext(size - saving) < calc_ext(size)
+  }
+}
+
+/// Calculate the number of extension pages needed to store a page of given size.
+fn calc_ext(size: usize) -> usize
+{
+  let mut n = 0;
+  if size > (SPSIZE - 2)
+  {
+    n = ( (size - (SPSIZE  - 2)) + ( EPSIZE-16-1) ) / (EPSIZE - 16);
+  }
+  debug_assert!( 2 + 16*n + size <= SPSIZE + n * EPSIZE );
+  n
 }

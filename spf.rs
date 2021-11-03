@@ -18,11 +18,11 @@ impl PagedFile for SimplePagedFile
     let _x = self.file.read_exact(data);
   }
 
-  fn write_page(&mut self, pnum: u64, data: &[u8], _size: usize)
+  fn write_page(&mut self, pnum: u64, data: &[u8], size: usize)
   {
     let off = pnum * (PAGE_SIZE as u64);
     self.file.seek(SeekFrom::Start(off)).unwrap();
-    let _x = self.file.write(data);
+    let _x = self.file.write(&data[0..size]);
   }
 
   fn alloc_page(&mut self) -> u64
@@ -37,6 +37,11 @@ impl PagedFile for SimplePagedFile
   fn is_new(&self) -> bool
   {
     self.is_new
+  }
+
+  fn compress(&self, _size: usize, _saving: usize) -> bool
+  {
+    false
   }
 }
 
