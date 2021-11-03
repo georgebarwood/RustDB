@@ -3,8 +3,8 @@ use crate::*;
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
 
-/// = 0x4000. The maximum size in bytes of each page.
-pub const PAGE_SIZE: usize = 0x4000;
+/// The maximum size in bytes of each page.
+pub const PAGE_SIZE: usize = /*0x4000;*/ managedfile::LPGOODSIZE;
 
 /// = 3. Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
 const NODE_OVERHEAD: usize = 3;

@@ -19,6 +19,7 @@
 //! Layout of extension page: 8 byte logical page number | user data | unused data.
 
 use crate::*;
+use std::cmp::min;
 use std::collections::BTreeSet;
 use std::{fs, fs::OpenOptions, io::Read, io::Seek, io::SeekFrom, io::Write};
 
@@ -31,17 +32,23 @@ const SPSIZE: usize = 400;
 /// = 1024. Size of extension page.
 const EPSIZE: usize = 1024;
 
+/// Maximum logical page size.
+pub const LPMAX: usize = ((SPSIZE - 2) / 8) * EPSIZE;
+
+/// Good maximum logical page size ( 20 extension pages ).
+pub const LPGOODSIZE: usize = SPSIZE - 2 + 20 * (EPSIZE - 16);
+
 pub struct ManagedFile
 {
-  file: fs::File, // Underlying file (may want to use a trait instead to make module more general).
-  lp_alloc: u64,  // Allocator for logical pages.
-  ep_resvd: u64,  // Number of extension pages reserved for starter pages.
-  ep_count: u64,  // Number of extension pages allocated.
-  lp_first: u64,   // Start of linked list of free logical pages.
-  is_new: bool,
-  dirty: bool, // Header needs to be saved ( alternative would be to keep copy of current saved header ).
+  file: fs::File,         // Underlying file (may want to use a trait instead to make module more general).
+  lp_alloc: u64,          // Allocator for logical pages.
+  ep_resvd: u64,          // Number of extension pages reserved for starter pages.
+  ep_count: u64,          // Number of extension pages allocated.
+  lp_first: u64,          // Start of linked list of free logical pages.
+  is_new: bool,           // File is newly created.
+  dirty: bool,            // Header needs to be saved ( alternative would be to keep copy of current saved header ).
   ep_free: BTreeSet<u64>, // Temporary set of free extension pages.
-  lp_free: Vec<u64>, // Temporary list of free logical pages.
+  lp_free: BTreeSet<u64>, // Temporary set of free logical pages.
 }
 
 impl ManagedFile
@@ -54,9 +61,17 @@ impl ManagedFile
     let ep_count = (fsize + (EPSIZE as u64) - 1) / (EPSIZE as u64);
 
     let is_new = ep_count == 0;
-    let mut x =
-      Self { file, lp_alloc: 0, ep_resvd: 0, ep_count, lp_first: 0, is_new, dirty: false, 
-      lp_free: Vec::new(), ep_free: BTreeSet::new() };
+    let mut x = Self {
+      file,
+      lp_alloc: 0,
+      ep_resvd: 0,
+      ep_count,
+      lp_first: 0,
+      is_new,
+      dirty: false,
+      lp_free: BTreeSet::new(),
+      ep_free: BTreeSet::new(),
+    };
     if is_new
     {
       x.ep_count = 20; // About 100 starter pages ( 20 x 1k / 400 ).
@@ -163,12 +178,17 @@ impl ManagedFile
     self.write(epnum * EPSIZE as u64, &buf);
   }
 
+  fn lp_valid(&mut self, lpnum: u64) -> bool
+  {
+    HSIZE + (lpnum + 1) * (SPSIZE as u64) <= self.ep_resvd * (EPSIZE as u64)
+  }
+
   /// Extend the starter page array so that lpnum is valid.
   fn extend_starter_pages(&mut self, lpnum: u64)
   {
     // Check if the end of the starter page array exceeds the reserved amount.
     // While it does, relocate the first extended page to the end of the file.
-    while HSIZE + (lpnum + 1) * (SPSIZE as u64) > self.ep_resvd * (EPSIZE as u64)
+    while !self.lp_valid(lpnum)
     {
       self.relocate(self.ep_resvd, self.ep_count);
       self.clear(self.ep_resvd);
@@ -181,7 +201,6 @@ impl ManagedFile
   /// Allocate an extension page.
   fn ep_alloc(&mut self) -> u64
   {
-    self.dirty = true;
     if let Some(pp) = self.ep_free.iter().next()
     {
       let p = *pp;
@@ -191,33 +210,40 @@ impl ManagedFile
     else
     {
       let p = self.ep_count;
+      self.dirty = true;
       self.ep_count += 1;
       p
     }
   }
 
-  /// Free an extension page.
-  fn ep_free(&mut self, ppnum: u64)
+  fn _trace(&self)
   {
-    self.dirty = true;
-    self.ep_free.insert(ppnum);
+    println!(
+      "lp_alloc={} ep_count={} ep_resvd={}",
+      self.lp_alloc, self.ep_count, self.ep_resvd
+    );
   }
-
- fn _trace( &self )
- {
-   println!( "lp_alloc={} ep_count={} ep_resvd={}", self.lp_alloc, self.ep_count, self.ep_resvd );
- }
-
 }
 
 impl PagedFile for ManagedFile
 {
   fn save(&mut self)
   {
+    // Free the temporary set of free logical pages.
+    for p in &std::mem::take(&mut self.lp_free)
+    {
+      let p = *p;
+      self.write_page( p, &[], 0 ); // Frees any associated extension pages.
+      self.writeu64(HSIZE + p * SPSIZE as u64, self.lp_first);
+      self.lp_first = p;
+    }
+
+    // Relocate pages to fill any free extension pages.
     while !self.ep_free.is_empty()
     {
       self.ep_count -= 1;
       let from = self.ep_count;
+      // If the last page is not a free page, relocate it using a free page.
       if !self.ep_free.remove(&from)
       {
         let to = self.ep_alloc();
@@ -225,12 +251,7 @@ impl PagedFile for ManagedFile
       }
     }
 
-    while let Some(p) = self.lp_free.pop()
-    {
-      self.writeu64( HSIZE + p*SPSIZE as u64, self.lp_first );
-      self.lp_first = p;
-    }
-
+    // Save the header and set the file size.
     if self.dirty
     {
       self.writeu64(0, self.lp_alloc);
@@ -245,7 +266,7 @@ impl PagedFile for ManagedFile
   /// Write size bytes of data to the specified logical page.
   fn write_page(&mut self, lpnum: u64, data: &[u8], size: usize)
   {
-    assert!(size <= u16::MAX as usize);
+    assert!(size <= LPMAX);
     self.extend_starter_pages(lpnum);
     // Calculate number of extension pages needed.
     let ext = calc_ext(size);
@@ -260,43 +281,35 @@ impl PagedFile for ManagedFile
 
     if ext != old_ext
     {
-      self.dirty = true;
+      // Note freed pages.
       while old_ext > ext
       {
-        //  Note freed pages.
         old_ext -= 1;
         let fp = util::getu64(&starter, 2 + old_ext * 8);
-        self.ep_free(fp);
+        self.ep_free.insert(fp);
       }
+
+      // Allocate new pages.
       while old_ext < ext
       {
-        // Allocate new pages.
         let np = self.ep_alloc();
-        util::set(&mut starter, 2 + old_ext * 8, np, 8);
+        util::setu64(&mut starter[2 + old_ext * 8..], np);
         old_ext += 1;
       }
     }
 
     let off = 2 + ext * 8;
-    let mut done = SPSIZE - off;
-    if done > size
-    {
-      done = size;
-    }
+    let mut done = min(SPSIZE - off, size);
     starter[off..off + done].copy_from_slice(&data[0..done]);
 
     // Save the starter data.
-    let woff: u64 = HSIZE + (SPSIZE as u64) * lpnum;
+    let woff = HSIZE + (SPSIZE as u64) * lpnum;
     self.write(woff, &starter[0..off + done]);
 
     // Write the extension pages.
     for i in 0..ext
     {
-      let mut amount = size - done;
-      if amount > EPSIZE - 8
-      {
-        amount = EPSIZE - 8;
-      }
+      let amount = min(size - done, EPSIZE - 8);
       let page = util::getu64(&starter, 2 + i * 8) as u64;
       let woff = page * (EPSIZE as u64);
       self.writeu64(woff, lpnum);
@@ -309,9 +322,12 @@ impl PagedFile for ManagedFile
   /// Read bytes from logical page into data.
   fn read_page(&mut self, lpnum: u64, data: &mut [u8])
   {
-    self.extend_starter_pages(lpnum);
+    if !self.lp_valid(lpnum)
+    {
+      return;
+    }
 
-    let off: u64 = HSIZE + (SPSIZE as u64) * lpnum;
+    let off = HSIZE + (SPSIZE as u64) * lpnum;
     let mut starter = vec![0_u8; SPSIZE];
     self.read(off, &mut starter);
     let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
@@ -346,29 +362,32 @@ impl PagedFile for ManagedFile
   /// Allocate logical page number.
   fn alloc_page(&mut self) -> u64
   {
-    if let Some(p) = self.lp_free.pop()
+    if let Some(p) = self.lp_free.iter().next()
     {
-      p
-    }
-    else if self.lp_first != u64::MAX
-    {
-      let p = self.lp_first;
-      self.lp_first = self.readu64( HSIZE + p*SPSIZE as u64 );
-      p
+      *p
     }
     else
     {
       self.dirty = true;
-      let p = self.lp_alloc;
-      self.lp_alloc += 1;
-      p
+      if self.lp_first != u64::MAX
+      {
+        let p = self.lp_first;
+        self.lp_first = self.readu64(HSIZE + p * SPSIZE as u64);
+        p
+      }
+      else
+      {
+        let p = self.lp_alloc;
+        self.lp_alloc += 1;
+        p
+      }
     }
   }
 
   /// Free a logical page number.
   fn free_page(&mut self, pnum: u64)
   {
-    self.lp_free.push( pnum );
+    self.lp_free.insert(pnum);
   }
 
   /// Is this a new file?
@@ -377,8 +396,8 @@ impl PagedFile for ManagedFile
     self.is_new
   }
 
-  /// ToDo.
-  fn rollback(&mut self) 
+  /// Restore state back to previous save ( cannot be used once write_page has been called ).
+  fn rollback(&mut self)
   {
     self.lp_free.clear();
     self.ep_free.clear();
