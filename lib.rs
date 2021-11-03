@@ -435,6 +435,12 @@ GO
   {
     self.file.borrow_mut().alloc_page()
   }
+
+  /// Free a pagee of underyling file storage.
+  fn free_page(self: &DB, lpnum: u64 )
+  {
+    self.file.borrow_mut().free_page( lpnum );
+  } 
 } // end impl Database
 
 impl Drop for Database

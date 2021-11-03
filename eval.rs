@@ -298,6 +298,7 @@ impl<'r> EvalEnv<'r>
       DO::Insert(tp, cols, values) => self.insert(tp.clone(), cols, values),
       DO::Delete(tp, wher) => self.delete(tp, wher),
       DO::Update(tp, assigns, wher) => self.update(tp, assigns, wher),
+      DO::DropTable(name) => self.drop_table(name),
       _ => panic!(),
     }
   }
@@ -344,8 +345,9 @@ impl<'r> EvalEnv<'r>
         let p = &*p.borrow();
         let data = &p.data[off..];
         oldrow.load(&self.db, data);
-        t.remove(&self.db, &oldrow);
       }
+      else { panic!() }
+      t.remove(&self.db, &oldrow);
     }
   }
 
@@ -576,4 +578,16 @@ impl<'r> EvalEnv<'r>
       panic!()
     }
   }
+
+  pub fn drop_table(&mut self, name: &ObjRef)
+  {
+    if let Some(t) = sys::get_table(&self.db, name)
+    {
+      let sql = "EXEC sys.DropTable(".to_string() + &t.id.to_string() + ")";
+      self.db.run( &sql, self.qy );
+      self.db.tables.borrow_mut().remove( name );
+      t.free_pages(&self.db);
+    }
+  }
+
 } // impl EvalEnv

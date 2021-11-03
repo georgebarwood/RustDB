@@ -236,12 +236,14 @@ impl PagedFile for ManagedFile
       self.write_page( p, &[], 0 ); // Frees any associated extension pages.
       self.writeu64(HSIZE + p * SPSIZE as u64, self.lp_first);
       self.lp_first = p;
+      self.dirty = true;
     }
 
     // Relocate pages to fill any free extension pages.
     while !self.ep_free.is_empty()
     {
       self.ep_count -= 1;
+      self.dirty = true;
       let from = self.ep_count;
       // If the last page is not a free page, relocate it using a free page.
       if !self.ep_free.remove(&from)

@@ -57,6 +57,15 @@ impl Table
     None
   }
 
+  pub fn free_pages(&self, db: &DB)
+  {
+    self.file.free_pages(db);
+    for (f,_c) in &*self.ixlist.borrow()
+    {
+      f.free_pages(db);
+    }
+  }
+
   /// Get record with specified id.
   pub fn id_get(&self, db: &DB, id: u64) -> Option<(PagePtr, usize)>
   {

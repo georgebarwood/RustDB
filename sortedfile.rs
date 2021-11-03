@@ -57,6 +57,37 @@ impl SortedFile
     }
   }
 
+  pub fn free_pages(&self, db: &DB)
+  {
+    self.free_page(db, self.root_page);
+    // ToDo: mark file as unusable?
+  }
+
+  fn free_page(&self, db: &DB, pnum: u64)
+  {
+    let pp = self.load_page(db,pnum);
+    let p = &*pp.borrow();
+    if p.level != 0
+    {
+      if p.level > 1 { self.free_page(db, p.first_page); }
+      else{ db.free_page(p.first_page); }
+      self.free_node(db, p, p.root); 
+    }
+    db.free_page( pnum );
+  }
+
+  fn free_node(&self, db: &DB, p:&Page, x: usize)
+  {
+    if x != 0
+    {
+      self.free_node( db, p, p.left(x));
+      self.free_node( db, p, p.right(x));
+      let cp = p.child_page(x);
+      if p.level > 1 { self.free_page(db, cp); }
+      else { db.free_page( cp ); }
+    }
+  }
+
   /// Locate a record with matching key. Result is PagePtr and offset of data.
   pub fn get(&self, db: &DB, r: &dyn Record) -> Option<(PagePtr, usize)>
   {
