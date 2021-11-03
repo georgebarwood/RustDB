@@ -356,6 +356,8 @@ GO
       self.functions_dirty.set(false);
     }
     self.file.borrow_mut().save();
+
+    // self.dump_tables();
   }
 
   /// Print the tables ( for debugging ).
@@ -363,7 +365,6 @@ GO
   {
     println!("Byte Storage");
     self.bs.file.dump();
-
     for (n, t) in &*self.tables.borrow()
     {
       println!("Dump Table {} {} {:?}", &n.schema, &n.name, t.info.colnames);

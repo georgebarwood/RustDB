@@ -205,7 +205,7 @@ impl ManagedFile
 
  fn _trace( &self )
  {
-   println!( "lp_alloc={} ep_count={} ep_resvd={} lp_first={}", self.lp_alloc, self.ep_count, self.ep_resvd, self.lp_first );
+   println!( "lp_alloc={} ep_count={} ep_resvd={}", self.lp_alloc, self.ep_count, self.ep_resvd );
  }
 
 }
@@ -227,7 +227,6 @@ impl PagedFile for ManagedFile
 
     while let Some(p) = self.lp_free.pop()
     {
-      println!( "New free lp {}", p );
       self.writeu64( HSIZE + p*SPSIZE as u64, self.lp_first );
       self.lp_first = p;
     }
@@ -239,6 +238,7 @@ impl PagedFile for ManagedFile
       self.writeu64(16, self.lp_first);
       self.file.set_len(self.ep_count * EPSIZE as u64).unwrap();
       self.dirty = false;
+      self._trace();
     }
   }
 

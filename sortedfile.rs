@@ -65,7 +65,7 @@ impl SortedFile
     loop
     {
       let cpnum = {
-        let p = &pp.borrow();
+        let p = &*pp.borrow();
         if p.level == 0
         {
           let x = p.find_equal(db, r);
@@ -101,7 +101,7 @@ impl SortedFile
     let pp = self.load_page(db, pnum);
     let cpnum = {
       // new block to ensure pp borrow is released before recursing.
-      let p = &mut pp.borrow_mut();
+      let p = &mut *pp.borrow_mut();
       if p.level != 0
       {
         p.find_child(db, r)
@@ -150,7 +150,7 @@ impl SortedFile
   fn insert_page(&self, db: &DB, into: &ParentInfo, r: &dyn Record, cpnum: u64)
   {
     let pp = self.load_page(db, into.pnum);
-    let p = &mut pp.borrow_mut();
+    let p = &mut *pp.borrow_mut();
 
     // Need to check if page is full.
     if !p.full()
@@ -199,7 +199,7 @@ impl SortedFile
   fn append_page(&self, db: &DB, into: u64, k: &dyn Record, cpnum: u64)
   {
     let pp = self.load_page(db, into);
-    let p = &mut pp.borrow_mut();
+    let p = &mut *pp.borrow_mut();
     self.set_dirty(p, &pp);
     p.append_page(k, cpnum);
   }
@@ -228,7 +228,7 @@ impl SortedFile
   {
     let pp = util::new(p);
     {
-      let p = &mut pp.borrow_mut();
+      let p = &mut *pp.borrow_mut();
       p.pnum = pnum;
       self.set_dirty(p, &pp);
     }
@@ -274,7 +274,7 @@ impl SortedFile
     let dp = &mut *self.dirty_pages.borrow_mut();
     while let Some(pp) = dp.pop()
     {
-      let p = &mut pp.borrow_mut();
+      let p = &mut *pp.borrow_mut();
       if p.pnum != u64::MAX
       {
         println!(
@@ -294,7 +294,7 @@ impl SortedFile
   {
     for (pnum, pp) in self.pages.borrow().iter()
     {
-      let p = &pp.borrow();
+      let p = &*pp.borrow();
       println!(
         "Cached Page pnum={} count={} level={} size()={}",
         pnum,
@@ -491,7 +491,7 @@ impl Stack
       }
       else
       {
-        let p = &pp.borrow();
+        let p = &*pp.borrow();
         self.add_right(p, &pp, p.left(x));
         if p.level != 0
         {
@@ -513,7 +513,7 @@ impl Stack
   {
     while let Some((pp, x)) = self.v.pop()
     {
-      let p = &pp.borrow();
+      let p = &*pp.borrow();
       self.add_left(p, &pp, p.right(x));
       if p.level != 0
       {
@@ -601,7 +601,7 @@ impl Stack
 
   fn add_page_right(&mut self, file: &SortedFile, pp: PagePtr)
   {
-    let p = &pp.borrow();
+    let p = &*pp.borrow();
     if p.level != 0
     {
       let fp = file.load_page(&self.db, p.first_page);
@@ -623,7 +623,7 @@ impl Stack
     loop
     {
       let pp = file.load_page(&self.db, pnum);
-      let p = &pp.borrow();
+      let p = &*pp.borrow();
       let root = p.root;
       if self.seeking
       {

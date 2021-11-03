@@ -21,7 +21,7 @@ impl ByteStorage
     let start = Fragment::new(u64::MAX);
     if let Some((p, off)) = self.file.clone().dsc(db, Box::new(start)).next()
     {
-      let p = p.borrow();
+      let p = &*p.borrow();
       self.id_gen.set(1 + util::getu64(&p.data, off));
     }
   }
@@ -72,7 +72,7 @@ impl ByteStorage
     let start = Fragment::new(id);
     for (p, off) in self.file.asc(db, Box::new(start))
     {
-      let p = p.borrow();
+      let p = &*p.borrow();
       let xid = util::getu64(&p.data, off);
       debug_assert!(xid == id);
       id += 1;
@@ -93,7 +93,7 @@ impl ByteStorage
     let mut n = 0;
     for (p, off) in self.file.asc(db, Box::new(start))
     {
-      let p = p.borrow();
+      let p = &*p.borrow();
       let xid = util::getu64(&p.data, off);
       debug_assert!(xid == id + n);
       n += 1;

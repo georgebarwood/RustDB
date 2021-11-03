@@ -43,7 +43,7 @@ impl Table
           {
             return Some(CTableExpression::IdGet(self.clone(), c_int(p, e2)));
           }
-          let list = &self.ixlist.borrow();
+          let list = &*self.ixlist.borrow();
           for (index, (_f, c)) in list.iter().enumerate()
           {
             if c[0] == e1.col
@@ -66,12 +66,12 @@ impl Table
   /// Get record with matching key, using specified index.
   pub fn ix_get(&self, db: &DB, key: Vec<Value>, index: usize) -> Option<(PagePtr, usize)>
   {
-    let list = &self.ixlist.borrow();
+    let list = &*self.ixlist.borrow();
     let (f, c) = &list[index];
     let key = IndexKey::new(self, c.clone(), key, Ordering::Equal);
     if let Some((p, off)) = f.get(db, &key)
     {
-      let p = &p.borrow();
+      let p = &*p.borrow();
       let id = util::getu64(&p.data, off);
       let row = Id { id };
       return self.file.get(db, &row);
@@ -101,7 +101,7 @@ impl Table
   /// Get records with matching keys.
   pub fn scan_keys(self: &TablePtr, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan
   {
-    let ixlist = &self.ixlist.borrow();
+    let ixlist = &*self.ixlist.borrow();
     let (f, c) = &ixlist[index];
     let ikey = IndexKey::new(self, c.clone(), keys.clone(), Ordering::Less);
     let ixa = f.asc(db, Box::new(ikey));
@@ -208,7 +208,7 @@ impl Table
         let mut r = self.row();
         for (p, off) in self.file.asc(db, Box::new(Zero {}))
         {
-          let p = &p.borrow();
+          let p = &*p.borrow();
           r.load(db, &p.data[off..]);
           println!("row id={} value={:?}", r.id, r.values);
         }
@@ -642,7 +642,7 @@ impl Iterator for IndexScan
   {
     if let Some((p, off)) = self.ixa.next()
     {
-      let p = &p.borrow();
+      let p = &*p.borrow();
       let data = &p.data[off..];
       if !self.keys_equal(data)
       {
