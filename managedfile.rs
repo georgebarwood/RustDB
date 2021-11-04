@@ -16,6 +16,8 @@
 //!
 //! Layout of starter page: 2 byte logical page size | array of 8 byte page numbers | user data | unused data.
 //!
+//! Note: for a free logical page, the link to the next free page is stored after the page size ( 0 ).
+//!
 //! Layout of extension page: 8 byte logical page number | user data | unused data.
 
 use crate::*;
@@ -234,7 +236,8 @@ impl PagedFile for ManagedFile
     {
       let p = *p;
       self.write_page(p, &[], 0); // Frees any associated extension pages.
-      self.writeu64(HSIZE + p * SPSIZE as u64, self.lp_first);
+      // Store link to old lp_first after size field.
+      self.writeu64(HSIZE + p * SPSIZE as u64 + 2, self.lp_first);
       self.lp_first = p;
       self.dirty = true;
     }
@@ -374,7 +377,7 @@ impl PagedFile for ManagedFile
       if self.lp_first != u64::MAX
       {
         let p = self.lp_first;
-        self.lp_first = self.readu64(HSIZE + p * SPSIZE as u64);
+        self.lp_first = self.readu64(HSIZE + p * SPSIZE as u64 + 2);
         p
       }
       else
