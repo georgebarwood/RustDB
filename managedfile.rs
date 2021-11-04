@@ -116,11 +116,7 @@ impl ManagedFile
   }
 
   /// Write a u64 to the underlying file.
-  fn writeu64(&mut self, offset: u64, x: u64)
-  {
-    let bytes = x.to_le_bytes();
-    self.write(offset, &bytes);
-  }
+  fn writeu64(&mut self, offset: u64, x: u64) { self.write(offset, &x.to_le_bytes()); }
 
   /// Read bytes from the underlying file.
   fn read(&mut self, off: u64, bytes: &mut [u8])
@@ -229,6 +225,7 @@ impl ManagedFile
 
 impl PagedFile for ManagedFile
 {
+  /// Process the temporary sets of free pages and write the file header.
   fn save(&mut self)
   {
     // Free the temporary set of free logical pages.
@@ -236,7 +233,7 @@ impl PagedFile for ManagedFile
     {
       let p = *p;
       self.write_page(p, &[], 0); // Frees any associated extension pages.
-      // Store link to old lp_first after size field.
+                                  // Store link to old lp_first after size field.
       self.writeu64(HSIZE + p * SPSIZE as u64 + 2, self.lp_first);
       self.lp_first = p;
       self.dirty = true;
@@ -390,16 +387,10 @@ impl PagedFile for ManagedFile
   }
 
   /// Free a logical page number.
-  fn free_page(&mut self, pnum: u64)
-  {
-    self.lp_free.insert(pnum);
-  }
+  fn free_page(&mut self, pnum: u64) { self.lp_free.insert(pnum); }
 
   /// Is this a new file?
-  fn is_new(&self) -> bool
-  {
-    self.is_new
-  }
+  fn is_new(&self) -> bool { self.is_new }
 
   /// Restore state back to previous save ( cannot be used once write_page has been called ).
   fn rollback(&mut self)
@@ -411,10 +402,7 @@ impl PagedFile for ManagedFile
   }
 
   /// Check whether compressing a page is worthwhile.
-  fn compress(&self, size: usize, saving: usize) -> bool
-  {
-    calc_ext(size - saving) < calc_ext(size)
-  }
+  fn compress(&self, size: usize, saving: usize) -> bool { calc_ext(size - saving) < calc_ext(size) }
 }
 
 /// Calculate the number of extension pages needed to store a page of given size.

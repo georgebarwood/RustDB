@@ -1,16 +1,10 @@
 use crate::*;
 
 /// Wrap a type in Rc + RefCell.
-pub fn new<T>(x: T) -> std::rc::Rc<std::cell::RefCell<T>>
-{
-  Rc::new(RefCell::new(x))
-}
+pub fn new<T>(x: T) -> std::rc::Rc<std::cell::RefCell<T>> { Rc::new(RefCell::new(x)) }
 
 /// Construct a new map wrapped in a RefCell.
-pub fn newmap<K, T>() -> RefCell<HashMap<K, T>>
-{
-  RefCell::new(HashMap::new())
-}
+pub fn newmap<K, T>() -> RefCell<HashMap<K, T>> { RefCell::new(HashMap::new()) }
 
 /// Extract u64 from byte data.
 pub fn getu64(data: &[u8], off: usize) -> u64
@@ -20,10 +14,7 @@ pub fn getu64(data: &[u8], off: usize) -> u64
 }
 
 /// Store u64 to byte data.
-pub fn setu64(data: &mut [u8], val: u64)
-{
-  data[0..8].copy_from_slice(&val.to_le_bytes());
-}
+pub fn setu64(data: &mut [u8], val: u64) { data[0..8].copy_from_slice(&val.to_le_bytes()); }
 
 /// Extract f64 from byte data.
 pub fn getf64(data: &[u8], off: usize) -> f64

@@ -410,10 +410,7 @@ impl<'a> Parser<'a>
 
   // ****************** Helper functions for parsing.
 
-  fn source_from(&self, start: usize, end: usize) -> String
-  {
-    to_s(&self.source[start..end])
-  }
+  fn source_from(&self, start: usize, end: usize) -> String { to_s(&self.source[start..end]) }
 
   fn read_data_type(&mut self) -> DataType
   {
@@ -509,10 +506,7 @@ impl<'a> Parser<'a>
     (t, t.precedence())
   }
 
-  fn id(&mut self) -> String
-  {
-    to_s(self.id_ref())
-  }
+  fn id(&mut self) -> String { to_s(self.id_ref()) }
 
   fn id_ref(&mut self) -> &'a [u8]
   {
@@ -812,10 +806,7 @@ impl<'a> Parser<'a>
   }
 
   /// Parse an expression.
-  fn exp(&mut self) -> Expr
-  {
-    self.exp_p(0)
-  }
+  fn exp(&mut self) -> Expr { self.exp_p(0) }
 
   /// Parse an expression, with specified operator precedence.
   fn exp_p(&mut self, precedence: i8) -> Expr
@@ -1534,10 +1525,7 @@ impl<'a> Parser<'a>
     result
   }
 
-  fn set_jump(&mut self, jump_id: usize)
-  {
-    self.b.jumps[jump_id] = self.b.ilist.len();
-  }
+  fn set_jump(&mut self, jump_id: usize) { self.b.jumps[jump_id] = self.b.ilist.len(); }
 
   fn get_loop_id(&mut self) -> usize
   {
@@ -1692,13 +1680,7 @@ impl<'a> Parser<'a>
 } // end impl Parser
 
 /// Convert byte ref to &str.
-pub(crate) fn tos(s: &[u8]) -> &str
-{
-  str::from_utf8(s).unwrap()
-}
+pub(crate) fn tos(s: &[u8]) -> &str { str::from_utf8(s).unwrap() }
 
 /// Convert byte ref to String.
-pub(crate) fn to_s(s: &[u8]) -> String
-{
-  str::from_utf8(s).unwrap().to_string()
-}
+pub(crate) fn to_s(s: &[u8]) -> String { str::from_utf8(s).unwrap().to_string() }

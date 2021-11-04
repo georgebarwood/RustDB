@@ -73,10 +73,7 @@ impl WebQuery
   }
 
   /// Append string to output.
-  fn push_str(&mut self, s: &str)
-  {
-    self.output.extend_from_slice(s.as_bytes());
-  }
+  fn push_str(&mut self, s: &str) { self.output.extend_from_slice(s.as_bytes()); }
 }
 
 impl Query for WebQuery
@@ -163,15 +160,9 @@ impl Query for WebQuery
     }
   }
 
-  fn set_error(&mut self, err: String)
-  {
-    self.err = err;
-  }
+  fn set_error(&mut self, err: String) { self.err = err; }
 
-  fn get_error(&mut self) -> String
-  {
-    self.err.to_string()
-  }
+  fn get_error(&mut self) -> String { self.err.to_string() }
 }
 
 /// Parser for http request.

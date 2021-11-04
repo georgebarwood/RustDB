@@ -442,28 +442,16 @@ GO
   }
 
   /// Decode u64 to bytes.
-  fn decode(self: &DB, code: u64) -> Vec<u8>
-  {
-    self.bs.decode(self, code)
-  }
+  fn decode(self: &DB, code: u64) -> Vec<u8> { self.bs.decode(self, code) }
 
   /// Delete encoding.
-  fn delcode(self: &DB, code: u64)
-  {
-    self.bs.delcode(self, code);
-  }
+  fn delcode(self: &DB, code: u64) { self.bs.delcode(self, code); }
 
   /// Allocate a page of underlying file storage.
-  fn alloc_page(self: &DB) -> u64
-  {
-    self.file.borrow_mut().alloc_page()
-  }
+  fn alloc_page(self: &DB) -> u64 { self.file.borrow_mut().alloc_page() }
 
   /// Free a pagee of underyling file storage.
-  fn free_page(self: &DB, lpnum: u64)
-  {
-    self.file.borrow_mut().free_page(lpnum);
-  }
+  fn free_page(self: &DB, lpnum: u64) { self.file.borrow_mut().free_page(lpnum); }
 } // end impl Database
 
 impl Drop for Database
@@ -487,10 +475,7 @@ struct TableBuilder
 
 impl TableBuilder
 {
-  fn new() -> Self
-  {
-    Self { alloc: 1, list: Vec::new() }
-  }
+  fn new() -> Self { Self { alloc: 1, list: Vec::new() } }
 
   fn nt(&mut self, schema: &str, name: &str, ct: &[(&str, DataType)]) -> TablePtr
   {
@@ -515,10 +500,7 @@ pub trait PagedFile
   fn is_new(&self) -> bool;
   fn rollback(&mut self) {}
   fn save(&mut self) {}
-  fn compress(&self, _size: usize, _saving: usize) -> bool
-  {
-    false
-  }
+  fn compress(&self, _size: usize, _saving: usize) -> bool { false }
 }
 
 /// IO Methods.
@@ -528,25 +510,16 @@ pub trait Query
   fn push(&mut self, values: &[Value]);
 
   /// ARG builtin function.
-  fn arg(&mut self, _kind: i64, _name: &str) -> Rc<String>
-  {
-    Rc::new(String::new())
-  }
+  fn arg(&mut self, _kind: i64, _name: &str) -> Rc<String> { Rc::new(String::new()) }
 
   /// GLOBAL builtin function.
-  fn global(&self, _kind: i64) -> i64
-  {
-    0
-  }
+  fn global(&self, _kind: i64) -> i64 { 0 }
 
   /// Set the error string.
   fn set_error(&mut self, err: String);
 
   /// Get the error string.
-  fn get_error(&mut self) -> String
-  {
-    String::new()
-  }
+  fn get_error(&mut self) -> String { String::new() }
 }
 
 /// Query where output is printed to console.

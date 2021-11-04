@@ -26,10 +26,7 @@ impl ByteStorage
     }
   }
 
-  pub fn save(&self, db: &DB, op: SaveOp)
-  {
-    self.file.save(db, op);
-  }
+  pub fn save(&self, db: &DB, op: SaveOp) { self.file.save(db, op); }
 
   pub fn encode(&self, db: &DB, bytes: &[u8]) -> u64
   {
@@ -129,10 +126,7 @@ struct Fragment
 
 impl Fragment
 {
-  pub fn new(id: u64) -> Self
-  {
-    Fragment { id, len: 0, bytes: [0; BPF] }
-  }
+  pub fn new(id: u64) -> Self { Fragment { id, len: 0, bytes: [0; BPF] } }
 }
 
 impl Record for Fragment

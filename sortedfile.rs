@@ -178,16 +178,10 @@ impl SortedFile
   }
 
   /// For iteration in ascending order from start.
-  pub fn asc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Asc
-  {
-    Asc::new(db, start, self)
-  }
+  pub fn asc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Asc { Asc::new(db, start, self) }
 
   /// For iteration in descending order from start.
-  pub fn dsc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Dsc
-  {
-    Dsc::new(db, start, self)
-  }
+  pub fn dsc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Dsc { Dsc::new(db, start, self) }
 
   /// Insert a record into a leaf page.
   fn insert_leaf(&self, db: &DB, pnum: u64, r: &dyn Record, pi: Option<&ParentInfo>) -> bool
@@ -450,10 +444,7 @@ pub trait Record
   fn compare(&self, db: &DB, data: &[u8]) -> std::cmp::Ordering;
 
   /// Load key from bytes ( to store in parent page ).
-  fn key(&self, _db: &DB, data: &[u8]) -> Box<dyn Record>
-  {
-    Box::new(Id { id: util::getu64(data, 0) })
-  }
+  fn key(&self, _db: &DB, data: &[u8]) -> Box<dyn Record> { Box::new(Id { id: util::getu64(data, 0) }) }
 
   /// Drop parent key ( may need to delete codes ).
   /// Only used when pages are being merged ( not yet implemented ).
@@ -473,10 +464,7 @@ impl Record for Id
     let id = util::getu64(data, 0);
     self.id.cmp(&id)
   }
-  fn save(&self, data: &mut [u8])
-  {
-    util::setu64(data, self.id);
-  }
+  fn save(&self, data: &mut [u8]) { util::setu64(data, self.id); }
 }
 
 // *********************************************************************
@@ -503,10 +491,7 @@ impl Asc
 impl Iterator for Asc
 {
   type Item = (PagePtr, usize);
-  fn next(&mut self) -> Option<<Self as Iterator>::Item>
-  {
-    self.stk.next(&self.file)
-  }
+  fn next(&mut self) -> Option<<Self as Iterator>::Item> { self.stk.next(&self.file) }
 }
 
 /// Fetch records from SortedFile in descending order.
@@ -530,10 +515,7 @@ impl Dsc
 impl Iterator for Dsc
 {
   type Item = (PagePtr, usize);
-  fn next(&mut self) -> Option<<Self as Iterator>::Item>
-  {
-    self.stk.prev(&self.file)
-  }
+  fn next(&mut self) -> Option<<Self as Iterator>::Item> { self.stk.prev(&self.file) }
 }
 
 /// Stack for implementing iteration.
@@ -548,15 +530,9 @@ struct Stack
 impl Stack
 {
   /// Create a new Stack with specified start key.
-  fn new(db: &DB, start: Box<dyn Record>) -> Self
-  {
-    Stack { v: Vec::new(), start, seeking: true, db: db.clone() }
-  }
+  fn new(db: &DB, start: Box<dyn Record>) -> Self { Stack { v: Vec::new(), start, seeking: true, db: db.clone() } }
 
-  fn push(&mut self, pp: &PagePtr, off: usize)
-  {
-    self.v.push((pp.clone(), off));
-  }
+  fn push(&mut self, pp: &PagePtr, off: usize) { self.v.push((pp.clone(), off)); }
 
   /// Fetch the next record.
   fn next(&mut self, file: &SortedFile) -> Option<(PagePtr, usize)>

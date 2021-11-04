@@ -159,10 +159,7 @@ impl<'r> EvalEnv<'r>
   }
 
   /// Pop a value from the stack and assign it to a local varaiable.
-  fn pop_to_local(&mut self, local: usize)
-  {
-    self.stack[self.bp + local] = self.stack.pop().unwrap();
-  }
+  fn pop_to_local(&mut self, local: usize) { self.stack[self.bp + local] = self.stack.pop().unwrap(); }
 
   /// Pop string from the stack.
   fn pop_string(&mut self) -> String
@@ -178,10 +175,7 @@ impl<'r> EvalEnv<'r>
   }
 
   /// Push clone of local variable onto the stack.
-  fn push_local(&mut self, local: usize)
-  {
-    self.stack.push(self.stack[self.bp + local].clone());
-  }
+  fn push_local(&mut self, local: usize) { self.stack.push(self.stack[self.bp + local].clone()); }
 
   /// Execute a ForInit instruction. Constructs For state and assigns it to local variable.
   fn for_init(&mut self, for_id: usize, cte: &CTableExpression)

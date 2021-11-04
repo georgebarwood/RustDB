@@ -158,10 +158,7 @@ impl std::cmp::Ord for Value
 
 impl PartialOrd for Value
 {
-  fn partial_cmp(&self, other: &Self) -> Option<Ordering>
-  {
-    Some(self.cmp(other))
-  }
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
 impl PartialEq for Value

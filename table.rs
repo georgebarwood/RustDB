@@ -122,10 +122,7 @@ impl Table
   }
 
   /// Get record with specified id.
-  pub fn id_get(&self, db: &DB, id: u64) -> Option<(PagePtr, usize)>
-  {
-    self.file.get(db, &Id { id })
-  }
+  pub fn id_get(&self, db: &DB, id: u64) -> Option<(PagePtr, usize)> { self.file.get(db, &Id { id }) }
 
   /// Get record with matching key, using specified index.
   pub fn ix_get(&self, db: &DB, key: Vec<Value>, index: usize) -> Option<(PagePtr, usize)>
@@ -144,10 +141,7 @@ impl Table
   }
 
   /// Scan all the records in the table.
-  pub fn scan(&self, db: &DB) -> Asc
-  {
-    self.file.asc(db, Box::new(Zero {}))
-  }
+  pub fn scan(&self, db: &DB) -> Asc { self.file.asc(db, Box::new(Zero {})) }
 
   /// Get a single record with specified id.
   pub fn scan_id(self: &TablePtr, db: &DB, id: i64) -> IdScan
@@ -195,10 +189,7 @@ impl Table
   }
 
   /// Construct a row for the table.
-  pub fn row(&self) -> Row
-  {
-    Row::new(self.info.clone())
-  }
+  pub fn row(&self) -> Row { Row::new(self.info.clone()) }
 
   /// Allocate row id.
   pub fn alloc_id(&self) -> i64
@@ -240,10 +231,7 @@ struct Zero {}
 
 impl Record for Zero
 {
-  fn compare(&self, _db: &DB, _data: &[u8]) -> std::cmp::Ordering
-  {
-    std::cmp::Ordering::Less
-  }
+  fn compare(&self, _db: &DB, _data: &[u8]) -> std::cmp::Ordering { std::cmp::Ordering::Less }
 }
 
 /// Helper class to read byte data using ColInfo.
@@ -256,10 +244,7 @@ pub struct Access<'d, 'i>
 impl<'d, 'i> Access<'d, 'i>
 {
   /// Extract int from byte data for column number colnum.
-  pub fn int(&self, colnum: usize) -> i64
-  {
-    util::get(self.data, self.info.off[colnum], self.info.siz[colnum]) as i64
-  }
+  pub fn int(&self, colnum: usize) -> i64 { util::get(self.data, self.info.off[colnum], self.info.siz[colnum]) as i64 }
 
   /// Extract string from byte data for column number colnum.
   pub fn str(&self, db: &DB, colnum: usize) -> String
@@ -270,10 +255,7 @@ impl<'d, 'i> Access<'d, 'i>
   }
 
   /// Extract Id from byte data.
-  pub fn id(&self) -> i64
-  {
-    util::getu64(self.data, 0) as i64
-  }
+  pub fn id(&self) -> i64 { util::getu64(self.data, 0) as i64 }
 }
 
 /// Helper class to write byte data using ColInfo.

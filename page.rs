@@ -118,10 +118,7 @@ impl Page
 
   /// Construct a new empty page inheriting record size and level from self.
   /// Used when splitting a page that is full.
-  pub fn new_page(&self) -> Page
-  {
-    Page::new(self.rec_size(), self.level, vec![0; PAGE_SIZE], u64::MAX)
-  }
+  pub fn new_page(&self) -> Page { Page::new(self.rec_size(), self.level, vec![0; PAGE_SIZE], u64::MAX) }
 
   /// Find child page number.
   pub fn find_child(&self, db: &DB, r: &dyn Record) -> u64
@@ -224,10 +221,7 @@ impl Page
   }
 
   /// Remove record from this page.
-  pub fn remove(&mut self, db: &DB, r: &dyn Record)
-  {
-    self.root = self.remove_from(db, self.root, r).0;
-  }
+  pub fn remove(&mut self, db: &DB, r: &dyn Record) { self.root = self.remove_from(db, self.root, r).0; }
 
   // Node access functions.
   // Layout of a Node is
@@ -237,22 +231,13 @@ impl Page
   // Node overhead ( 3 bytes )
 
   /// Offset of the 3 byte node overhead  for node x.
-  fn over_off(&self, x: usize) -> usize
-  {
-    (NODE_BASE - NODE_OVERHEAD) + x * self.node_size
-  }
+  fn over_off(&self, x: usize) -> usize { (NODE_BASE - NODE_OVERHEAD) + x * self.node_size }
 
   /// Offset of the client data for node x.
-  pub fn rec_offset(&self, x: usize) -> usize
-  {
-    NODE_BASE + (x - 1) * self.node_size
-  }
+  pub fn rec_offset(&self, x: usize) -> usize { NODE_BASE + (x - 1) * self.node_size }
 
   /// The client data size.
-  pub fn rec_size(&self) -> usize
-  {
-    self.node_size - NODE_OVERHEAD - if self.level != 0 { PAGE_ID_SIZE } else { 0 }
-  }
+  pub fn rec_size(&self) -> usize { self.node_size - NODE_OVERHEAD - if self.level != 0 { PAGE_ID_SIZE } else { 0 } }
 
   /// Get balance for node x.
   fn balance(&self, x: usize) -> Balance
