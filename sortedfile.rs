@@ -18,6 +18,8 @@ pub struct SortedFile
   key_size: usize,
   /// The root page.
   root_page: u64,
+  /// Status
+  ok: Cell<bool>,
 }
 
 impl SortedFile
@@ -25,7 +27,59 @@ impl SortedFile
   /// Create File with specified record size, key size, root page.
   pub fn new(rec_size: usize, key_size: usize, root_page: u64) -> Self
   {
-    SortedFile { pages: util::newmap(), dirty_pages: RefCell::new(Vec::new()), rec_size, key_size, root_page }
+    SortedFile {
+      pages: util::newmap(),
+      dirty_pages: RefCell::new(Vec::new()),
+      rec_size,
+      key_size,
+      root_page,
+      ok: Cell::new(true),
+    }
+  }
+
+  /// Save changes to underlying storage.
+  pub(crate) fn save(&self, db: &DB, op: SaveOp)
+  {
+    if op == SaveOp::RollBack
+    {
+      self.rollback();
+      return;
+    }
+    let dp = &mut *self.dirty_pages.borrow_mut();
+    while let Some(pp) = dp.pop()
+    {
+      let p = &mut *pp.borrow_mut();
+      if p.pnum != u64::MAX
+      {
+        p.compress(db);
+        println!(
+          "Saving page {} root={} count={} node_size={} size={}",
+          p.pnum,
+          self.root_page,
+          p.count,
+          p.node_size,
+          p.size()
+        );
+        p.write_header();
+        p.is_dirty = false;
+        db.file.borrow_mut().write_page(p.pnum, &p.data, p.size());
+      }
+    }
+  }
+
+  /// Clear the cache, changes are discarded instead of being saved.
+  pub(crate) fn rollback(&self)
+  {
+    self.pages.borrow_mut().clear();
+    self.dirty_pages.borrow_mut().clear();
+  }
+
+  /// Free the underlying storage. File is not useable after this.
+  pub fn free_pages(&self, db: &DB, r: &dyn Record)
+  {
+    self.free_page(db, self.root_page, r);
+    self.rollback();
+    self.ok.set(false);
   }
 
   /// Insert a Record. If the key is a duplicate, the record is not saved.
@@ -57,34 +111,43 @@ impl SortedFile
     }
   }
 
-  pub fn free_pages(&self, db: &DB)
+  /// Free a page and any child pages if this is a parent page.
+  fn free_page(&self, db: &DB, pnum: u64, r: &dyn Record)
   {
-    self.free_page(db, self.root_page);
-    // ToDo: mark file as unusable?
-  }
-
-  fn free_page(&self, db: &DB, pnum: u64)
-  {
-    let pp = self.load_page(db,pnum);
+    let pp = self.load_page(db, pnum);
     let p = &*pp.borrow();
     if p.level != 0
     {
-      if p.level > 1 { self.free_page(db, p.first_page); }
-      else{ db.free_page(p.first_page); }
-      self.free_node(db, p, p.root); 
+      if p.level > 1
+      {
+        self.free_page(db, p.first_page, r);
+      }
+      else
+      {
+        db.free_page(p.first_page);
+      }
+      self.free_parent_node(db, p, p.root, r);
     }
-    db.free_page( pnum );
+    db.free_page(pnum);
   }
 
-  fn free_node(&self, db: &DB, p:&Page, x: usize)
+  /// Free a parent node.
+  fn free_parent_node(&self, db: &DB, p: &Page, x: usize, r: &dyn Record)
   {
     if x != 0
     {
-      self.free_node( db, p, p.left(x));
-      self.free_node( db, p, p.right(x));
+      self.free_parent_node(db, p, p.left(x), r);
+      self.free_parent_node(db, p, p.right(x), r);
+      r.drop_key(db, &p.data[p.rec_offset(x)..]);
       let cp = p.child_page(x);
-      if p.level > 1 { self.free_page(db, cp); }
-      else { db.free_page( cp ); }
+      if p.level > 1
+      {
+        self.free_page(db, cp, r);
+      }
+      else
+      {
+        db.free_page(cp);
+      }
     }
   }
 
@@ -269,6 +332,10 @@ impl SortedFile
   /// Get a page from the cache, or if it is not in the cache, load it from external storage.
   fn load_page(&self, db: &DB, pnum: u64) -> PagePtr
   {
+    if !self.ok.get()
+    {
+      panic!()
+    }
     match self.pages.borrow_mut().entry(pnum)
     {
       Entry::Occupied(e) => e.get().clone(),
@@ -300,30 +367,6 @@ impl SortedFile
   }
 
   /// Save any changed pages.
-  pub(crate) fn save(&self, db: &DB)
-  {
-    let dp = &mut *self.dirty_pages.borrow_mut();
-    while let Some(pp) = dp.pop()
-    {
-      let p = &mut *pp.borrow_mut();
-      if p.pnum != u64::MAX
-      {
-        p.compress(db);
-        println!(
-          "Saving page {} root={} count={} node_size={} size={}",
-          p.pnum,
-          self.root_page,
-          p.count,
-          p.node_size,
-          p.size()
-        );
-        p.write_header();
-        p.is_dirty = false;
-        db.file.borrow_mut().write_page(p.pnum, &p.data, p.size());
-      }
-    }
-  }
-
   /// For debugging, dump a summary of each page of the file.
   pub(crate) fn dump(&self)
   {
@@ -414,7 +457,7 @@ pub trait Record
 
   /// Drop parent key ( may need to delete codes ).
   /// Only used when pages are being merged ( not yet implemented ).
-  fn dropkey(&self, _db: &DB, _data: &[u8]) {}
+  fn drop_key(&self, _db: &DB, _data: &[u8]) {}
 }
 
 /// Id record.

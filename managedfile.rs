@@ -74,8 +74,8 @@ impl ManagedFile
     };
     if is_new
     {
-      x.ep_count = 20; // About 100 starter pages ( 20 x 1k / 400 ).
-      x.ep_resvd = 20;
+      x.ep_resvd = 12; // Space for ~30 starter pages.
+      x.ep_count = 12;
       x.lp_first = u64::MAX;
     }
     else
@@ -233,7 +233,7 @@ impl PagedFile for ManagedFile
     for p in &std::mem::take(&mut self.lp_free)
     {
       let p = *p;
-      self.write_page( p, &[], 0 ); // Frees any associated extension pages.
+      self.write_page(p, &[], 0); // Frees any associated extension pages.
       self.writeu64(HSIZE + p * SPSIZE as u64, self.lp_first);
       self.lp_first = p;
       self.dirty = true;

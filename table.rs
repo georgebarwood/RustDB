@@ -3,6 +3,16 @@ use crate::*;
 /// Table Pointer.
 pub type TablePtr = Rc<Table>;
 
+/// List of indexes. Each index has a file and a list of column numbers.
+pub type IxList = Vec<(Rc<SortedFile>, Rc<Vec<usize>>)>;
+
+#[derive(PartialEq, PartialOrd, Clone, Copy)]
+pub enum SaveOp
+{
+  Save,
+  RollBack,
+}
+
 /// Database base table. Underlying file, type information about the columns and id allocation.
 pub struct Table
 {
@@ -25,11 +35,65 @@ pub struct Table
   pub(crate) id_gen_dirty: Cell<bool>,
 }
 
-/// List of indexes. Each index has a file and a list of column numbers.
-pub type IxList = Vec<(Rc<SortedFile>, Rc<Vec<usize>>)>;
-
 impl Table
 {
+  /// Construct a table with specified info.
+  pub(crate) fn new(id: i64, root_page: u64, id_gen: i64, info: Rc<ColInfo>) -> TablePtr
+  {
+    let rec_size = info.total;
+    let key_size = 8;
+    let file = Rc::new(SortedFile::new(rec_size, key_size, root_page));
+    let ixlist = RefCell::new(Vec::new());
+    Rc::new(Table { id, file, info, ixlist, id_gen: Cell::new(id_gen), id_gen_dirty: Cell::new(false) })
+  }
+
+  /// Save or Rollback underlying files.
+  pub(crate) fn save(&self, db: &DB, op: SaveOp)
+  {
+    self.file.save(db, op);
+    for (f, _) in &*self.ixlist.borrow()
+    {
+      f.save(db, op);
+    }
+  }
+
+  /// Drop the underlying file storage ( the table is not useable after this ).
+  pub fn free_pages(&self, db: &DB)
+  {
+    let row = self.row();
+    self.file.free_pages(db, &row);
+    for (f, cols) in &*self.ixlist.borrow()
+    {
+      let ixr = IndexRow::new(self, cols.clone(), &row);
+      f.free_pages(db, &ixr);
+    }
+  }
+
+  /// Insert specified row into the table.
+  pub fn insert(&self, db: &DB, row: &mut Row)
+  {
+    row.encode(db); // Calculate codes for Binary and String values.
+    self.file.insert(db, row);
+    // Update any indexes.
+    for (f, cols) in &*self.ixlist.borrow()
+    {
+      let ixr = IndexRow::new(self, cols.clone(), row);
+      f.insert(db, &ixr);
+    }
+  }
+
+  /// Remove specified loaded row from the table.
+  pub fn remove(&self, db: &DB, row: &Row)
+  {
+    self.file.remove(db, row);
+    for (f, cols) in &*self.ixlist.borrow()
+    {
+      let ixr = IndexRow::new(self, cols.clone(), row);
+      f.remove(db, &ixr);
+    }
+    row.delcodes(db); // Deletes codes for Binary and String values.
+  }
+
   /// Optimise WHERE clause with form "Name = <someconst>".
   pub fn index_from(self: &TablePtr, p: &Parser, we: &mut Expr) -> Option<CTableExpression>
   {
@@ -55,15 +119,6 @@ impl Table
       }
     }
     None
-  }
-
-  pub fn free_pages(&self, db: &DB)
-  {
-    self.file.free_pages(db);
-    for (f,_c) in &*self.ixlist.borrow()
-    {
-      f.free_pages(db);
-    }
   }
 
   /// Get record with specified id.
@@ -117,31 +172,6 @@ impl Table
     IndexScan { ixa, keys, cols: c.clone(), table: self.clone(), db: db.clone() }
   }
 
-  /// Insert specified row into the table.
-  pub fn insert(&self, db: &DB, row: &mut Row)
-  {
-    row.encode(db); // Calculate codes for Binary and String values.
-    self.file.insert(db, row);
-    // Update any indexes.
-    for (f, cols) in &*self.ixlist.borrow()
-    {
-      let ixr = IndexRow::new(self, cols.clone(), row);
-      f.insert(db, &ixr);
-    }
-  }
-
-  /// Remove specified loaded row from the table.
-  pub fn remove(&self, db: &DB, row: &Row)
-  {
-    self.file.remove(db, row);
-    for (f, cols) in &*self.ixlist.borrow()
-    {
-      let ixr = IndexRow::new(self, cols.clone(), row);
-      f.remove(db, &ixr);
-    }
-    row.delcodes(db); // Deletes codes for Binary and String values.
-  }
-
   /// Add the specified index to the table.
   pub fn add_index(&self, root: u64, cols: Vec<usize>)
   {
@@ -170,7 +200,7 @@ impl Table
     Row::new(self.info.clone())
   }
 
-  /// Allocate  row id.
+  /// Allocate row id.
   pub fn alloc_id(&self) -> i64
   {
     let result = self.id_gen.get();
@@ -187,26 +217,6 @@ impl Table
       self.id_gen.set(id + 1);
       self.id_gen_dirty.set(true);
     }
-  }
-
-  /// Save files.
-  pub(crate) fn save(&self, db: &DB)
-  {
-    self.file.save(db);
-    for (f, _) in &*self.ixlist.borrow()
-    {
-      f.save(db);
-    }
-  }
-
-  /// Construct a new table with specified info.
-  pub(crate) fn new(id: i64, root_page: u64, id_gen: i64, info: Rc<ColInfo>) -> TablePtr
-  {
-    let rec_size = info.total;
-    let key_size = 8;
-    let file = Rc::new(SortedFile::new(rec_size, key_size, root_page));
-    let ixlist = RefCell::new(Vec::new());
-    Rc::new(Table { id, file, info, ixlist, id_gen: Cell::new(id_gen), id_gen_dirty: Cell::new(false) })
   }
 
   pub fn _dump(&self, _db: &DB)
@@ -555,7 +565,7 @@ impl Record for IndexRow
     result
   }
 
-  fn dropkey(&self, db: &DB, data: &[u8])
+  fn drop_key(&self, db: &DB, data: &[u8])
   {
     let mut off = 8;
     for col in &*self.cols

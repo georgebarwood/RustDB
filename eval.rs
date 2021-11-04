@@ -346,7 +346,10 @@ impl<'r> EvalEnv<'r>
         let data = &p.data[off..];
         oldrow.load(&self.db, data);
       }
-      else { panic!() }
+      else
+      {
+        panic!()
+      }
       t.remove(&self.db, &oldrow);
     }
   }
@@ -584,10 +587,9 @@ impl<'r> EvalEnv<'r>
     if let Some(t) = sys::get_table(&self.db, name)
     {
       let sql = "EXEC sys.DropTable(".to_string() + &t.id.to_string() + ")";
-      self.db.run( &sql, self.qy );
-      self.db.tables.borrow_mut().remove( name );
+      self.db.run(&sql, self.qy);
+      self.db.tables.borrow_mut().remove(name);
       t.free_pages(&self.db);
     }
   }
-
 } // impl EvalEnv

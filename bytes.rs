@@ -26,9 +26,9 @@ impl ByteStorage
     }
   }
 
-  pub fn save(&self, db: &DB)
+  pub fn save(&self, db: &DB, op: SaveOp)
   {
-    self.file.save(db);
+    self.file.save(db, op);
   }
 
   pub fn encode(&self, db: &DB, bytes: &[u8]) -> u64
