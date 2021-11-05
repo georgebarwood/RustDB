@@ -86,6 +86,7 @@ impl CompactFile
       x.ep_resvd = 12; // Space for ~30 starter pages.
       x.ep_count = 12;
       x.lp_first = u64::MAX;
+      x.writeu64(8, x.ep_resvd);
     }
     else
     {
@@ -104,6 +105,7 @@ impl CompactFile
     self.lp_alloc = self.readu64(0);
     self.ep_resvd = self.readu64(8);
     self.lp_first = self.readu64(16);
+    self._trace();
   }
 
   /// Read a u64 from the underlying file.
@@ -292,6 +294,9 @@ impl CompactFile
     let mut starter = vec![0_u8; SPSIZE];
     self.read(off, &mut starter);
     let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
+
+    // println!( "read_page lpnum={} size={}", lpnum, size );
+
     let ext = calc_ext(size); // Number of extension pages.
     let off = 2 + ext * 8;
     let mut done = size;
