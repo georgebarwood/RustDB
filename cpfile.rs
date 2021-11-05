@@ -1,4 +1,4 @@
-//! Stores logical pages in smaller regions of backing storage.
+//! CompactFile stores logical pages in smaller regions of backing storage.
 //!
 //! Each logical page has a fixed size "starter page".
 //!
@@ -63,7 +63,7 @@ pub struct CompactFile
 
 impl CompactFile
 {
-  /// Construct a new free_parent_nodeFile.
+  /// Construct a new CompactFile.
   pub fn new(mut stg: Box<dyn Storage>) -> Self
   {
     let fsize = stg.size();
@@ -280,6 +280,17 @@ impl CompactFile
       done += amount;
     }
     debug_assert!(done == size);
+  }
+
+  /// Get the current size of the specified logical page.
+  pub fn page_size(&mut self, lpnum: u64) -> usize
+  {
+    if !self.lp_valid(lpnum)
+    {
+      return 0;
+    }
+    let off = HSIZE + (SPSIZE as u64) * lpnum;
+    self.readu16( off )
   }
 
   /// Read bytes from logical page into data.
