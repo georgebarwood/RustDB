@@ -9,7 +9,7 @@
 //!
 //!multipart requests ( for file upload ).
 //!
-//!Implement DROP TABLE(done), DROP INDEX, DROP FUNCTION etc.
+//!Implement DROP TABLE(done), DROP INDEX, DROP FUNCTION(DONE) etc.
 //!
 //!Implement ALTER TABLE.
 //!

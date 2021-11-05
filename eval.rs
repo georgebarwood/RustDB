@@ -299,6 +299,7 @@ impl<'r> EvalEnv<'r>
       | DO::Delete(tp, wher) => self.delete(tp, wher),
       | DO::Update(tp, assigns, wher) => self.update(tp, assigns, wher),
       | DO::DropTable(name) => self.drop_table(name),
+      | DO::DropFunction(name) => self.drop_function(name),     
       | _ => panic!(),
     }
   }
@@ -582,7 +583,7 @@ impl<'r> EvalEnv<'r>
     }
   }
 
-  pub fn drop_table(&mut self, name: &ObjRef)
+  fn drop_table(&mut self, name: &ObjRef)
   {
     if let Some(t) = sys::get_table(&self.db, name)
     {
@@ -596,4 +597,21 @@ impl<'r> EvalEnv<'r>
       panic!("Drop Table not found {}", name.to_str());
     }
   }
+
+  fn drop_function(&mut self, name: &ObjRef)
+  {
+    if let Some(fid) = sys::get_function_id(&self.db, name)
+    {
+      let sql = "DELETE FROM sys.Function WHERE Id = ".to_string() + &fid.to_string();
+      self.db.run(&sql, self.qy);
+      self.db.functions.borrow_mut().remove(name);
+      self.db.functions_dirty.set(true);
+    }
+    else
+    {
+      panic!("Drop Function not found {}", name.to_str());
+    }
+  }
+
+
 } // impl EvalEnv

@@ -270,6 +270,24 @@ pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr>
   None
 }
 
+pub(crate) fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64>
+{
+  if let Some(schema_id) = get_schema(db, &name.schema)
+  {
+    let t = db.get_table(&ObjRef::new("sys", "Function")).unwrap();
+
+    let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
+
+    if let Some((p, off)) = t.ix_get(db, keys, 0)
+    {
+      let p = &*p.borrow();
+      let a = t.access(p, off);
+      return Some(a.id());
+    }
+  }
+  None
+}
+
 /// Parse a function definition.
 fn parse_function(db: &DB, source: Rc<String>) -> FunctionPtr
 {
