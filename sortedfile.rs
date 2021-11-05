@@ -51,7 +51,7 @@ impl SortedFile
       let p = &mut *pp.borrow_mut();
       if p.pnum != u64::MAX
       {
-        p.compress(db);
+        p.compress();
         println!(
           "Saving page {} root={} count={} node_size={} size={}",
           p.pnum,
@@ -178,10 +178,16 @@ impl SortedFile
   }
 
   /// For iteration in ascending order from start.
-  pub fn asc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Asc { Asc::new(db, start, self) }
+  pub fn asc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Asc
+  {
+    Asc::new(db, start, self)
+  }
 
   /// For iteration in descending order from start.
-  pub fn dsc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Dsc { Dsc::new(db, start, self) }
+  pub fn dsc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Dsc
+  {
+    Dsc::new(db, start, self)
+  }
 
   /// Insert a record into a leaf page.
   fn insert_leaf(&self, db: &DB, pnum: u64, r: &dyn Record, pi: Option<&ParentInfo>) -> bool
@@ -212,7 +218,7 @@ impl SortedFile
         let pnum2 = self.alloc_page(db, sp.right);
         match pi
         {
-          None =>
+          | None =>
           {
             // New root page needed.
             // New root re-uses the root page number.
@@ -222,7 +228,7 @@ impl SortedFile
             self.publish_page(self.root_page, new_root);
             self.append_page(db, self.root_page, sk, pnum2);
           }
-          Some(pi) =>
+          | Some(pi) =>
           {
             self.publish_page(pnum, sp.left);
             self.insert_page(db, pi, sk, pnum2);
@@ -266,7 +272,7 @@ impl SortedFile
       let pnum2 = self.alloc_page(db, sp.right);
       match into.parent
       {
-        None =>
+        | None =>
         {
           // New root page needed.
           let mut new_root = self.new_page(p.level + 1);
@@ -274,7 +280,7 @@ impl SortedFile
           self.publish_page(self.root_page, new_root);
           self.append_page(db, self.root_page, sk, pnum2);
         }
-        Some(pi) =>
+        | Some(pi) =>
         {
           self.publish_page(into.pnum, sp.left);
           self.insert_page(db, pi, sk, pnum2);
@@ -332,8 +338,8 @@ impl SortedFile
     }
     match self.pages.borrow_mut().entry(pnum)
     {
-      Entry::Occupied(e) => e.get().clone(),
-      Entry::Vacant(e) =>
+      | Entry::Occupied(e) => e.get().clone(),
+      | Entry::Vacant(e) =>
       {
         let mut data = vec![0; PAGE_SIZE];
         db.file.borrow_mut().read_page(pnum, &mut data);
@@ -444,7 +450,10 @@ pub trait Record
   fn compare(&self, db: &DB, data: &[u8]) -> std::cmp::Ordering;
 
   /// Load key from bytes ( to store in parent page ).
-  fn key(&self, _db: &DB, data: &[u8]) -> Box<dyn Record> { Box::new(Id { id: util::getu64(data, 0) }) }
+  fn key(&self, _db: &DB, data: &[u8]) -> Box<dyn Record>
+  {
+    Box::new(Id { id: util::getu64(data, 0) })
+  }
 
   /// Drop parent key ( may need to delete codes ).
   /// Only used when pages are being merged ( not yet implemented ).
@@ -464,7 +473,10 @@ impl Record for Id
     let id = util::getu64(data, 0);
     self.id.cmp(&id)
   }
-  fn save(&self, data: &mut [u8]) { util::setu64(data, self.id); }
+  fn save(&self, data: &mut [u8])
+  {
+    util::setu64(data, self.id);
+  }
 }
 
 // *********************************************************************
@@ -491,7 +503,10 @@ impl Asc
 impl Iterator for Asc
 {
   type Item = (PagePtr, usize);
-  fn next(&mut self) -> Option<<Self as Iterator>::Item> { self.stk.next(&self.file) }
+  fn next(&mut self) -> Option<<Self as Iterator>::Item>
+  {
+    self.stk.next(&self.file)
+  }
 }
 
 /// Fetch records from SortedFile in descending order.
@@ -507,7 +522,7 @@ impl Dsc
   {
     let root_page = file.root_page;
     let mut result = Dsc { stk: Stack::new(db, start), file: file.clone() };
-    result.stk.add_page_left(file, root_page);
+    result.stk.add_page_dsc(file, root_page);
     result
   }
 }
@@ -515,7 +530,10 @@ impl Dsc
 impl Iterator for Dsc
 {
   type Item = (PagePtr, usize);
-  fn next(&mut self) -> Option<<Self as Iterator>::Item> { self.stk.prev(&self.file) }
+  fn next(&mut self) -> Option<<Self as Iterator>::Item>
+  {
+    self.stk.prev(&self.file)
+  }
 }
 
 /// Stack for implementing iteration.
@@ -530,9 +548,15 @@ struct Stack
 impl Stack
 {
   /// Create a new Stack with specified start key.
-  fn new(db: &DB, start: Box<dyn Record>) -> Self { Stack { v: Vec::new(), start, seeking: true, db: db.clone() } }
+  fn new(db: &DB, start: Box<dyn Record>) -> Self
+  {
+    Stack { v: Vec::new(), start, seeking: true, db: db.clone() }
+  }
 
-  fn push(&mut self, pp: &PagePtr, off: usize) { self.v.push((pp.clone(), off)); }
+  fn push(&mut self, pp: &PagePtr, off: usize)
+  {
+    self.v.push((pp.clone(), off));
+  }
 
   /// Fetch the next record.
   fn next(&mut self, file: &SortedFile) -> Option<(PagePtr, usize)>
@@ -541,17 +565,17 @@ impl Stack
     {
       if x == 0
       {
-        self.add_page_right(file, pp);
+        self.add_page_asc(file, pp);
       }
       else
       {
         let p = &*pp.borrow();
-        self.add_right(p, &pp, p.left(x));
+        self.add_asc(p, &pp, p.left(x));
         if p.level != 0
         {
           let cpnum = p.child_page(x);
           let cpp = file.load_page(&self.db, cpnum);
-          self.add_page_right(file, cpp);
+          self.add_page_asc(file, cpp);
         }
         else
         {
@@ -568,11 +592,11 @@ impl Stack
     while let Some((pp, x)) = self.v.pop()
     {
       let p = &*pp.borrow();
-      self.add_left(p, &pp, p.right(x));
+      self.add_dsc(p, &pp, p.right(x));
       if p.level != 0
       {
         let cpnum = p.child_page(x);
-        self.add_page_left(file, cpnum);
+        self.add_page_dsc(file, cpnum);
       }
       else
       {
@@ -583,67 +607,51 @@ impl Stack
     None
   }
 
-  fn add_right(&mut self, p: &Page, pp: &PagePtr, mut x: usize)
-  {
-    while x != 0
-    {
-      self.push(pp, x);
-      x = p.right(x);
-    }
-  }
-
-  fn add_left(&mut self, p: &Page, pp: &PagePtr, mut x: usize)
-  {
-    while x != 0
-    {
-      self.push(pp, x);
-      x = p.left(x);
-    }
-  }
-
-  fn seek_right(&mut self, p: &Page, pp: &PagePtr, mut x: usize)
+  /// Seek ascending order. Note that smaller keys are in the right sub-tree.
+  fn seek_asc(&mut self, p: &Page, pp: &PagePtr, mut x: usize)
   {
     while x != 0
     {
       match p.compare(&self.db, &*self.start, x)
       {
-        Ordering::Less =>
+        | Ordering::Less =>
         {
+          // Start is less than node key. node needs to be visited, so push it onto stack.
           self.push(pp, x);
           x = p.right(x);
         }
-        Ordering::Equal =>
+        | Ordering::Equal =>
         {
           self.push(pp, x);
           break;
         }
-        Ordering::Greater => x = p.left(x),
+        | Ordering::Greater => x = p.left(x),
       }
     }
   }
 
   /// Returns true if a node is found which is <= start.
   /// This is used to decide whether the the preceding child page is added.
-  fn seek_left(&mut self, p: &Page, pp: &PagePtr, mut x: usize) -> bool
+  fn seek_dsc(&mut self, p: &Page, pp: &PagePtr, mut x: usize) -> bool
   {
     while x != 0
     {
       match p.compare(&self.db, &*self.start, x)
       {
-        Ordering::Less =>
+        | Ordering::Less =>
         {
-          if !self.seek_left(p, pp, p.right(x)) && p.level != 0
+          if !self.seek_dsc(p, pp, p.right(x)) && p.level != 0
           {
             self.push(pp, x);
           }
           return true;
         }
-        Ordering::Equal =>
+        | Ordering::Equal =>
         {
           self.push(pp, x);
           return true;
         }
-        Ordering::Greater =>
+        | Ordering::Greater =>
         {
           self.push(pp, x);
           x = p.left(x);
@@ -653,7 +661,25 @@ impl Stack
     false
   }
 
-  fn add_page_right(&mut self, file: &SortedFile, pp: PagePtr)
+  fn add_asc(&mut self, p: &Page, pp: &PagePtr, mut x: usize)
+  {
+    while x != 0
+    {
+      self.push(pp, x);
+      x = p.right(x);
+    }
+  }
+
+  fn add_dsc(&mut self, p: &Page, pp: &PagePtr, mut x: usize)
+  {
+    while x != 0
+    {
+      self.push(pp, x);
+      x = p.left(x);
+    }
+  }
+
+  fn add_page_asc(&mut self, file: &SortedFile, pp: PagePtr)
   {
     let p = &*pp.borrow();
     if p.level != 0
@@ -664,15 +690,15 @@ impl Stack
     let root = p.root;
     if self.seeking
     {
-      self.seek_right(p, &pp, root);
+      self.seek_asc(p, &pp, root);
     }
     else
     {
-      self.add_right(p, &pp, root);
+      self.add_asc(p, &pp, root);
     }
   }
 
-  fn add_page_left(&mut self, file: &SortedFile, mut pnum: u64)
+  fn add_page_dsc(&mut self, file: &SortedFile, mut pnum: u64)
   {
     loop
     {
@@ -681,14 +707,14 @@ impl Stack
       let root = p.root;
       if self.seeking
       {
-        if self.seek_left(p, &pp, root)
+        if self.seek_dsc(p, &pp, root)
         {
           return;
         }
       }
       else
       {
-        self.add_left(p, &pp, root);
+        self.add_dsc(p, &pp, root);
       }
       if p.level == 0
       {

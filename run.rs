@@ -77,11 +77,11 @@ pub fn default(t: DataType) -> Value
 {
   match data_kind(t)
   {
-    DataKind::Bool => Value::Bool(false),
-    DataKind::Float => Value::Float(0.0),
-    DataKind::String => Value::String(Rc::new(String::new())),
-    DataKind::Binary => Value::Binary(Rc::new(Vec::new())),
-    _ => Value::Int(0),
+    | DataKind::Bool => Value::Bool(false),
+    | DataKind::Float => Value::Float(0.0),
+    | DataKind::String => Value::String(Rc::new(String::new())),
+    | DataKind::Binary => Value::Binary(Rc::new(Vec::new())),
+    | _ => Value::Int(0),
   }
 }
 

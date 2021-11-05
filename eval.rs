@@ -39,43 +39,43 @@ impl<'r> EvalEnv<'r>
       ip += 1;
       match i
       {
-        Inst::PushConst(x) => self.stack.push((*x).clone()),
-        Inst::PushValue(e) =>
+        | Inst::PushConst(x) => self.stack.push((*x).clone()),
+        | Inst::PushValue(e) =>
         {
           let v = e.eval(self, &[]);
           self.stack.push(v);
         }
-        Inst::PushLocal(x) => self.push_local(*x),
-        Inst::PopToLocal(x) => self.pop_to_local(*x),
-        Inst::Jump(x) => ip = *x,
-        Inst::JumpIfFalse(x, e) =>
+        | Inst::PushLocal(x) => self.push_local(*x),
+        | Inst::PopToLocal(x) => self.pop_to_local(*x),
+        | Inst::Jump(x) => ip = *x,
+        | Inst::JumpIfFalse(x, e) =>
         {
           if !e.eval(self, &[])
           {
             ip = *x;
           }
         }
-        Inst::Call(x) => self.call(&*(*x)),
-        Inst::Return => break,
-        Inst::Throw =>
+        | Inst::Call(x) => self.call(&*(*x)),
+        | Inst::Return => break,
+        | Inst::Throw =>
         {
           let s = self.pop_string();
           panic!("{}", s);
         }
-        Inst::Execute => self.execute(),
-        Inst::DataOp(x) => self.exec_do(x),
-        Inst::Select(cse) => self.select(cse),
-        Inst::Set(cse) => self.set(cse),
-        Inst::ForInit(for_id, cte) => self.for_init(*for_id, cte),
-        Inst::ForNext(break_id, info) =>
+        | Inst::Execute => self.execute(),
+        | Inst::DataOp(x) => self.exec_do(x),
+        | Inst::Select(cse) => self.select(cse),
+        | Inst::Set(cse) => self.set(cse),
+        | Inst::ForInit(for_id, cte) => self.for_init(*for_id, cte),
+        | Inst::ForNext(break_id, info) =>
         {
           if !self.for_next(info)
           {
             ip = *break_id;
           }
         }
-        Inst::ForSortInit(for_id, cte) => self.for_sort_init(*for_id, cte),
-        Inst::ForSortNext(break_id, info) =>
+        | Inst::ForSortInit(for_id, cte) => self.for_sort_init(*for_id, cte),
+        | Inst::ForSortNext(break_id, info) =>
         {
           if !self.for_sort_next(info)
           {
@@ -83,17 +83,17 @@ impl<'r> EvalEnv<'r>
           }
         }
         // Special push instructions ( optimisations )
-        Inst::PushInt(e) =>
+        | Inst::PushInt(e) =>
         {
           let v = e.eval(self, &[]);
           self.stack.push(Value::Int(v));
         }
-        Inst::PushFloat(e) =>
+        | Inst::PushFloat(e) =>
         {
           let v = e.eval(self, &[]);
           self.stack.push(Value::Float(v));
         }
-        Inst::PushBool(e) =>
+        | Inst::PushBool(e) =>
         {
           let v = e.eval(self, &[]);
           self.stack.push(Value::Bool(v));
@@ -159,7 +159,10 @@ impl<'r> EvalEnv<'r>
   }
 
   /// Pop a value from the stack and assign it to a local varaiable.
-  fn pop_to_local(&mut self, local: usize) { self.stack[self.bp + local] = self.stack.pop().unwrap(); }
+  fn pop_to_local(&mut self, local: usize)
+  {
+    self.stack[self.bp + local] = self.stack.pop().unwrap();
+  }
 
   /// Pop string from the stack.
   fn pop_string(&mut self) -> String
@@ -175,7 +178,10 @@ impl<'r> EvalEnv<'r>
   }
 
   /// Push clone of local variable onto the stack.
-  fn push_local(&mut self, local: usize) { self.stack.push(self.stack[self.bp + local].clone()); }
+  fn push_local(&mut self, local: usize)
+  {
+    self.stack.push(self.stack[self.bp + local].clone());
+  }
 
   /// Execute a ForInit instruction. Constructs For state and assigns it to local variable.
   fn for_init(&mut self, for_id: usize, cte: &CTableExpression)
@@ -285,15 +291,15 @@ impl<'r> EvalEnv<'r>
   {
     match dop
     {
-      DO::CreateFunction(name, source, alter) => sys::create_function(&self.db, name, source.clone(), *alter),
-      DO::CreateSchema(name) => sys::create_schema(&self.db, name),
-      DO::CreateTable(ti) => sys::create_table(&self.db, ti),
-      DO::CreateIndex(x) => sys::create_index(&self.db, x),
-      DO::Insert(tp, cols, values) => self.insert(tp.clone(), cols, values),
-      DO::Delete(tp, wher) => self.delete(tp, wher),
-      DO::Update(tp, assigns, wher) => self.update(tp, assigns, wher),
-      DO::DropTable(name) => self.drop_table(name),
-      _ => panic!(),
+      | DO::CreateFunction(name, source, alter) => sys::create_function(&self.db, name, source.clone(), *alter),
+      | DO::CreateSchema(name) => sys::create_schema(&self.db, name),
+      | DO::CreateTable(ti) => sys::create_table(&self.db, ti),
+      | DO::CreateIndex(x) => sys::create_index(&self.db, x),
+      | DO::Insert(tp, cols, values) => self.insert(tp.clone(), cols, values),
+      | DO::Delete(tp, wher) => self.delete(tp, wher),
+      | DO::Update(tp, assigns, wher) => self.update(tp, assigns, wher),
+      | DO::DropTable(name) => self.drop_table(name),
+      | _ => panic!(),
     }
   }
 
@@ -380,18 +386,18 @@ impl<'r> EvalEnv<'r>
   {
     match te
     {
-      CTableExpression::Base(t) => Box::new(t.scan(&self.db)),
-      CTableExpression::IdGet(t, idexp) =>
+      | CTableExpression::Base(t) => Box::new(t.scan(&self.db)),
+      | CTableExpression::IdGet(t, idexp) =>
       {
         let id = idexp.eval(self, &[]);
         Box::new(t.scan_id(&self.db, id))
       }
-      CTableExpression::IxGet(t, val, index) =>
+      | CTableExpression::IxGet(t, val, index) =>
       {
         let key = val.eval(self, &[]);
         Box::new(t.scan_key(&self.db, key, *index))
       }
-      _ => panic!(),
+      | _ => panic!(),
     }
   }
 
@@ -493,11 +499,11 @@ impl<'r> EvalEnv<'r>
     let var = &mut self.stack[self.bp + a.0];
     match a.1
     {
-      AssignOp::Assign =>
+      | AssignOp::Assign =>
       {
         *var = val;
       }
-      AssignOp::Append =>
+      | AssignOp::Append =>
       {
         var.append(val);
       }
@@ -584,6 +590,10 @@ impl<'r> EvalEnv<'r>
       self.db.run(&sql, self.qy);
       self.db.tables.borrow_mut().remove(name);
       t.free_pages(&self.db);
+    }
+    else
+    {
+      panic!("Drop Table not found {}", name.to_str());
     }
   }
 } // impl EvalEnv

@@ -99,7 +99,10 @@ pub struct Expr
 
 impl Expr
 {
-  pub fn new(exp: ExprIs) -> Self { Expr { exp, data_type: NONE, is_constant: false, checked: false, col: 0 } }
+  pub fn new(exp: ExprIs) -> Self
+  {
+    Expr { exp, data_type: NONE, is_constant: false, checked: false, col: 0 }
+  }
 }
 
 /// Scalar Expression variants.
@@ -130,9 +133,15 @@ pub struct ObjRef
 
 impl ObjRef
 {
-  pub fn new(s: &str, n: &str) -> Self { Self { schema: s.to_string(), name: n.to_string() } }
+  pub fn new(s: &str, n: &str) -> Self
+  {
+    Self { schema: s.to_string(), name: n.to_string() }
+  }
   /// Used for error messages.
-  pub fn to_str(&self) -> String { format!("[{}].[{}]", &self.schema, &self.name) }
+  pub fn to_str(&self) -> String
+  {
+    format!("[{}].[{}]", &self.schema, &self.name)
+  }
 }
 
 /// Binary=1, String=2, Int=3, Float=4, Bool=5, Decimal=6.
@@ -245,11 +254,11 @@ impl<'a> Block<'a>
     {
       match i
       {
-        Inst::JumpIfFalse(x, _e) => *x = self.jumps[*x],
-        Inst::Jump(x) => *x = self.jumps[*x],
-        Inst::ForNext(x, _y) => *x = self.jumps[*x],
-        Inst::ForSortNext(x, _y) => *x = self.jumps[*x],
-        _ =>
+        | Inst::JumpIfFalse(x, _e) => *x = self.jumps[*x],
+        | Inst::Jump(x) => *x = self.jumps[*x],
+        | Inst::ForNext(x, _y) => *x = self.jumps[*x],
+        | Inst::ForSortNext(x, _y) => *x = self.jumps[*x],
+        | _ =>
         {}
       }
     }

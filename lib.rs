@@ -26,8 +26,10 @@
 //! use database::{Database,spf::SimplePagedFile,web::WebQuery};
 //! fn main()
 //! {
-//!     let file = Box::new( SimplePagedFile::new( "c:\\Users\\pc\\rust\\test01.rustdb" ) );
-//!     let db = Database::new( file, INITSQL );    
+//!     let stg = Box::new(database::stg::SimpleFileStorage::new(
+//!         "c:\\Users\\pc\\rust\\doctest01.rustdb",
+//!     ));
+//!     let db = Database::new( stg, INITSQL );    
 //!     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
 //!     for tcps in listener.incoming()
 //!     {
@@ -54,24 +56,9 @@
 //!
 //!(3) Index storage ( an index record refers back to the main table ).
 
-/* Idea for compressing database file
-
-(1) Scan Table and Index tables for roots.
-(2) Scan parent pages for used pages.
-(3) Now have bitmap with free pages, and also map ( pp -> page,offset for high-numbered pages pp ).
-(4) Use free pages to relocate high-numbered pages (updating Table/Index or parent page).
-(5) Truncate file.
-
-Another idea:
-At beginning of each page, store associated Index or Table Id.
-Now to relocate a page, we find it's parent by starting from the root ( using a key from the page ).
-
-Keep a list of free pages. When not busy, and have a free page, relocate last page in file to free page.
-
-*/
-
 use crate::{
-  bytes::*, compile::*, eval::*, expr::*, page::*, parse::*, run::*, sortedfile::*, table::*, util::newmap, value::*,
+  bytes::*, compile::*, eval::*, expr::*, page::*, parse::*, run::*, sortedfile::*, table::*, 
+  util::newmap, value::*, stg::*, cpfile::*
 };
 use std::{cell::Cell, cell::RefCell, cmp::Ordering, collections::HashMap, panic, rc::Rc};
 
@@ -88,8 +75,8 @@ pub mod expr;
 /// Compile parsed expressions, checking types.
 pub mod compile;
 
-/// Simple Paged File.
-pub mod spf;
+/// Storage.
+pub mod stg;
 
 /// Value.
 pub mod value;
@@ -105,7 +92,7 @@ pub mod page;
 
 // Private modules ( in principle, currently public ).
 
-pub mod managedfile;
+pub mod cpfile;
 
 /// Table, ColInfo, Row and other Table types.
 pub mod table;
@@ -143,7 +130,7 @@ pub type DB = Rc<Database>;
 pub struct Database
 {
   /// Page storage.
-  file: RefCell<Box<dyn PagedFile>>,
+  file: RefCell<CompactFile>,
   sys_schema: TablePtr,
   sys_table: TablePtr,
   sys_column: TablePtr,
@@ -164,14 +151,10 @@ pub struct Database
 impl Database
 {
   /// Construct a new DB, based on the specified file.
-  pub fn new(mut file: Box<dyn PagedFile>, initsql: &str) -> DB
+  pub fn new(mut stg: Box<dyn Storage>, initsql: &str) -> DB
   {
     let mut cq = ConsoleQuery {};
-    let is_new = file.is_new();
-    if is_new
-    {
-      file.alloc_page(); // Allocate page for byte storage.
-    }
+    let is_new = stg.size() == 0;
 
     let mut tb = TableBuilder::new();
 
@@ -206,7 +189,7 @@ impl Database
     sys_index_col.add_index(9, vec![0]);
 
     let db = Rc::new(Database {
-      file: RefCell::new(file),
+      file: RefCell::new( CompactFile::new(stg) ),
       sys_schema,
       sys_table,
       sys_column,
@@ -221,6 +204,11 @@ impl Database
       lastid: Cell::new(0),
       err: Cell::new(false),
     });
+
+    if is_new
+    {
+      db.alloc_page(); // Allocate page for byte storage.
+    }
 
     db.bs.init(&db);
 
@@ -427,9 +415,9 @@ GO
   {
     let bytes = match val
     {
-      Value::Binary(x) => x,
-      Value::String(x) => x.as_bytes(),
-      _ =>
+      | Value::Binary(x) => x,
+      | Value::String(x) => x.as_bytes(),
+      | _ =>
       {
         return u64::MAX;
       }
@@ -442,16 +430,28 @@ GO
   }
 
   /// Decode u64 to bytes.
-  fn decode(self: &DB, code: u64) -> Vec<u8> { self.bs.decode(self, code) }
+  fn decode(self: &DB, code: u64) -> Vec<u8>
+  {
+    self.bs.decode(self, code)
+  }
 
   /// Delete encoding.
-  fn delcode(self: &DB, code: u64) { self.bs.delcode(self, code); }
+  fn delcode(self: &DB, code: u64)
+  {
+    self.bs.delcode(self, code);
+  }
 
   /// Allocate a page of underlying file storage.
-  fn alloc_page(self: &DB) -> u64 { self.file.borrow_mut().alloc_page() }
+  fn alloc_page(self: &DB) -> u64
+  {
+    self.file.borrow_mut().alloc_page()
+  }
 
   /// Free a pagee of underyling file storage.
-  fn free_page(self: &DB, lpnum: u64) { self.file.borrow_mut().free_page(lpnum); }
+  fn free_page(self: &DB, lpnum: u64)
+  {
+    self.file.borrow_mut().free_page(lpnum);
+  }
 } // end impl Database
 
 impl Drop for Database
@@ -475,7 +475,10 @@ struct TableBuilder
 
 impl TableBuilder
 {
-  fn new() -> Self { Self { alloc: 1, list: Vec::new() } }
+  fn new() -> Self
+  {
+    Self { alloc: 1, list: Vec::new() }
+  }
 
   fn nt(&mut self, schema: &str, name: &str, ct: &[(&str, DataType)]) -> TablePtr
   {
@@ -490,19 +493,6 @@ impl TableBuilder
   }
 }
 
-/// Backing storage for database tables.
-pub trait PagedFile
-{
-  fn read_page(&mut self, pnum: u64, data: &mut [u8]);
-  fn write_page(&mut self, pnum: u64, data: &[u8], size: usize);
-  fn alloc_page(&mut self) -> u64;
-  fn free_page(&mut self, pnum: u64);
-  fn is_new(&self) -> bool;
-  fn rollback(&mut self) {}
-  fn save(&mut self) {}
-  fn compress(&self, _size: usize, _saving: usize) -> bool { false }
-}
-
 /// IO Methods.
 pub trait Query
 {
@@ -510,16 +500,25 @@ pub trait Query
   fn push(&mut self, values: &[Value]);
 
   /// ARG builtin function.
-  fn arg(&mut self, _kind: i64, _name: &str) -> Rc<String> { Rc::new(String::new()) }
+  fn arg(&mut self, _kind: i64, _name: &str) -> Rc<String>
+  {
+    Rc::new(String::new())
+  }
 
   /// GLOBAL builtin function.
-  fn global(&self, _kind: i64) -> i64 { 0 }
+  fn global(&self, _kind: i64) -> i64
+  {
+    0
+  }
 
   /// Set the error string.
   fn set_error(&mut self, err: String);
 
   /// Get the error string.
-  fn get_error(&mut self) -> String { String::new() }
+  fn get_error(&mut self) -> String
+  {
+    String::new()
+  }
 }
 
 /// Query where output is printed to console.

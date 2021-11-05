@@ -76,27 +76,27 @@ impl<'a> Parser<'a>
       {
         match id
         {
-          b"ALTER" => self.s_alter(),
-          b"BEGIN" => self.s_begin(),
-          b"BREAK" => self.s_break(),
-          b"CREATE" => self.s_create(),
-          b"DROP" => self.s_drop(),
-          b"DECLARE" => self.s_declare(),
-          b"DELETE" => self.s_delete(),
-          b"EXEC" => self.s_exec(),
-          b"EXECUTE" => self.s_execute(),
-          b"FOR" => self.s_for(),
-          b"GOTO" => self.s_goto(),
-          b"IF" => self.s_if(),
-          b"INSERT" => self.s_insert(),
-          b"RENAME" => self.s_rename(),
-          b"RETURN" => self.s_return(),
-          b"SELECT" => self.s_select(),
-          b"SET" => self.s_set(),
-          b"THROW" => self.s_throw(),
-          b"UPDATE" => self.s_update(),
-          b"WHILE" => self.s_while(),
-          _ => panic!("statement keyword expected, got '{}'", tos(id)),
+          | b"ALTER" => self.s_alter(),
+          | b"BEGIN" => self.s_begin(),
+          | b"BREAK" => self.s_break(),
+          | b"CREATE" => self.s_create(),
+          | b"DROP" => self.s_drop(),
+          | b"DECLARE" => self.s_declare(),
+          | b"DELETE" => self.s_delete(),
+          | b"EXEC" => self.s_exec(),
+          | b"EXECUTE" => self.s_execute(),
+          | b"FOR" => self.s_for(),
+          | b"GOTO" => self.s_goto(),
+          | b"IF" => self.s_if(),
+          | b"INSERT" => self.s_insert(),
+          | b"RENAME" => self.s_rename(),
+          | b"RETURN" => self.s_return(),
+          | b"SELECT" => self.s_select(),
+          | b"SET" => self.s_set(),
+          | b"THROW" => self.s_throw(),
+          | b"UPDATE" => self.s_update(),
+          | b"WHILE" => self.s_while(),
+          | _ => panic!("statement keyword expected, got '{}'", tos(id)),
         }
       }
     }
@@ -224,7 +224,7 @@ impl<'a> Parser<'a>
       cc = self.read_char();
       match sc
       {
-        b'A'..=b'Z' | b'a'..=b'z' | b'@' =>
+        | b'A'..=b'Z' | b'a'..=b'z' | b'@' =>
         {
           token = Token::Id;
           while (b'A'..=b'Z').contains(&cc) || (b'a'..=b'z').contains(&cc)
@@ -233,7 +233,7 @@ impl<'a> Parser<'a>
           }
           self.cs = &self.source[self.token_start..self.source_ix - 1];
         }
-        b'0'..=b'9' =>
+        | b'0'..=b'9' =>
         {
           token = Token::Number;
           let fc = self.source[self.token_start];
@@ -275,7 +275,7 @@ impl<'a> Parser<'a>
           self.cs = &self.source[self.token_start..self.source_ix - 1];
         }
 
-        b'[' =>
+        | b'[' =>
         {
           token = Token::Id;
           let start = self.source_ix - 1;
@@ -291,7 +291,7 @@ impl<'a> Parser<'a>
           self.cs = &self.source[start..self.source_ix - 2];
         }
 
-        b'\'' =>
+        | b'\'' =>
         {
           token = Token::String;
           let mut start = self.source_ix - 1;
@@ -318,7 +318,7 @@ impl<'a> Parser<'a>
           break;
         }
 
-        b'-' =>
+        | b'-' =>
         {
           token = Token::Minus;
           if cc == b'-'
@@ -332,7 +332,7 @@ impl<'a> Parser<'a>
           }
         }
 
-        b'/' =>
+        | b'/' =>
         {
           token = Token::Divide;
           if cc == b'*'
@@ -349,7 +349,7 @@ impl<'a> Parser<'a>
             continue 'skip_space;
           }
         }
-        b'>' =>
+        | b'>' =>
         {
           token = Token::Greater;
           if cc == b'='
@@ -358,7 +358,7 @@ impl<'a> Parser<'a>
             self.read_char();
           }
         }
-        b'<' =>
+        | b'<' =>
         {
           token = Token::Less;
           if cc == b'='
@@ -372,7 +372,7 @@ impl<'a> Parser<'a>
             self.read_char();
           }
         }
-        b'!' =>
+        | b'!' =>
         {
           token = Token::Exclamation;
           if cc == b'='
@@ -381,9 +381,9 @@ impl<'a> Parser<'a>
             self.read_char();
           }
         }
-        b'(' => token = Token::LBra,
-        b')' => token = Token::RBra,
-        b'|' =>
+        | b'(' => token = Token::LBra,
+        | b')' => token = Token::RBra,
+        | b'|' =>
         {
           token = Token::VBar;
           if cc == b'='
@@ -392,15 +392,15 @@ impl<'a> Parser<'a>
             self.read_char();
           }
         }
-        b',' => token = Token::Comma,
-        b'.' => token = Token::Dot,
-        b'=' => token = Token::Equal,
-        b'+' => token = Token::Plus,
-        b':' => token = Token::Colon,
-        b'*' => token = Token::Times,
-        b'%' => token = Token::Percent,
-        0 => token = Token::EndOfFile,
-        _ => token = Token::Unknown,
+        | b',' => token = Token::Comma,
+        | b'.' => token = Token::Dot,
+        | b'=' => token = Token::Equal,
+        | b'+' => token = Token::Plus,
+        | b':' => token = Token::Colon,
+        | b'*' => token = Token::Times,
+        | b'%' => token = Token::Percent,
+        | 0 => token = Token::EndOfFile,
+        | _ => token = Token::Unknown,
       }
       break;
     } // skip_space loop
@@ -410,7 +410,10 @@ impl<'a> Parser<'a>
 
   // ****************** Helper functions for parsing.
 
-  fn source_from(&self, start: usize, end: usize) -> String { to_s(&self.source[start..end]) }
+  fn source_from(&self, start: usize, end: usize) -> String
+  {
+    to_s(&self.source[start..end])
+  }
 
   fn read_data_type(&mut self) -> DataType
   {
@@ -420,16 +423,16 @@ impl<'a> Parser<'a>
     }
     match self.id_ref()
     {
-      b"int" => INT,
-      b"string" => STRING,
-      b"binary" => BINARY,
-      b"tinyint" => TINYINT,
-      b"smallint" => SMALLINT,
-      b"bigint" => BIGINT,
-      b"float" => FLOAT,
-      b"double" => DOUBLE,
-      b"bool" => BOOL,
-      b"decimal" =>
+      | b"int" => INT,
+      | b"string" => STRING,
+      | b"binary" => BINARY,
+      | b"tinyint" => TINYINT,
+      | b"smallint" => SMALLINT,
+      | b"bigint" => BIGINT,
+      | b"float" => FLOAT,
+      | b"double" => DOUBLE,
+      | b"bool" => BOOL,
+      | b"decimal" =>
       {
         let mut p = 0;
         let mut q = 0;
@@ -460,7 +463,7 @@ impl<'a> Parser<'a>
         }
         DECIMAL + ((p as usize) << 3) + ((q as usize) << 8)
       }
-      _ => panic!("Datatype expected"),
+      | _ => panic!("Datatype expected"),
     }
   }
 
@@ -492,10 +495,10 @@ impl<'a> Parser<'a>
       {
         t = match self.cs
         {
-          b"AND" => Token::And,
-          b"OR" => Token::Or,
-          b"IN" => Token::In,
-          _ => return (t, -1),
+          | b"AND" => Token::And,
+          | b"OR" => Token::Or,
+          | b"IN" => Token::In,
+          | _ => return (t, -1),
         }
       }
       else
@@ -506,7 +509,10 @@ impl<'a> Parser<'a>
     (t, t.precedence())
   }
 
-  fn id(&mut self) -> String { to_s(self.id_ref()) }
+  fn id(&mut self) -> String
+  {
+    to_s(self.id_ref())
+  }
 
   fn id_ref(&mut self) -> &'a [u8]
   {
@@ -806,7 +812,10 @@ impl<'a> Parser<'a>
   }
 
   /// Parse an expression.
-  fn exp(&mut self) -> Expr { self.exp_p(0) }
+  fn exp(&mut self) -> Expr
+  {
+    self.exp_p(0)
+  }
 
   /// Parse an expression, with specified operator precedence.
   fn exp_p(&mut self, precedence: i8) -> Expr
@@ -943,9 +952,9 @@ impl<'a> Parser<'a>
   {
     match &exp.exp
     {
-      ExprIs::Local(num) => to_s(self.b.locals[*num]),
-      ExprIs::ColName(name) => name.to_string(),
-      _ => "".to_string(),
+      | ExprIs::Local(num) => to_s(self.b.locals[*num]),
+      | ExprIs::ColName(name) => name.to_string(),
+      | _ => "".to_string(),
     }
   }
 
@@ -962,9 +971,9 @@ impl<'a> Parser<'a>
         let local = self.local();
         let op = match self.token
         {
-          Token::Equal => AssignOp::Assign,
-          Token::VBarEqual => AssignOp::Append,
-          _ => panic!("= or |= expected"),
+          | Token::Equal => AssignOp::Assign,
+          | Token::VBarEqual => AssignOp::Append,
+          | _ => panic!("= or |= expected"),
         };
         self.read_token();
         assigns.push((local, op));
@@ -1348,16 +1357,16 @@ impl<'a> Parser<'a>
   {
     match self.id_ref()
     {
-      b"FUNCTION" => self.create_function(false),
-      b"TABLE" => self.create_table(),
-      b"VIEW" => self.create_view(false),
-      b"SCHEMA" =>
+      | b"FUNCTION" => self.create_function(false),
+      | b"TABLE" => self.create_table(),
+      | b"VIEW" => self.create_view(false),
+      | b"SCHEMA" =>
       {
         let name = self.id();
         self.dop(DO::CreateSchema(name));
       }
-      b"INDEX" => self.create_index(),
-      _ => panic!("Unknown keyword"),
+      | b"INDEX" => self.create_index(),
+      | _ => panic!("Unknown keyword"),
     }
   }
 
@@ -1365,10 +1374,10 @@ impl<'a> Parser<'a>
   {
     match self.id_ref()
     {
-      b"FUNCTION" => self.create_function(true),
-      b"TABLE" => self.s_alter_table(),
-      b"VIEW" => self.create_view(true),
-      _ => panic!("ALTER : TABLE,VIEW.. expected"),
+      | b"FUNCTION" => self.create_function(true),
+      | b"TABLE" => self.s_alter_table(),
+      | b"VIEW" => self.create_view(true),
+      | _ => panic!("ALTER : TABLE,VIEW.. expected"),
     }
   }
 
@@ -1376,39 +1385,39 @@ impl<'a> Parser<'a>
   {
     match self.id_ref()
     {
-      b"TABLE" =>
+      | b"TABLE" =>
       {
         let tr = self.obj_ref();
         self.dop(DO::DropTable(tr));
       }
-      b"VIEW" =>
+      | b"VIEW" =>
       {
         let vr = self.obj_ref();
         self.dop(DO::DropView(vr));
       }
-      b"INDEX" =>
+      | b"INDEX" =>
       {
         let ix = self.id();
         self.read_id(b"ON");
         let tr = self.obj_ref();
         self.dop(DO::DropIndex(tr, ix));
       }
-      b"PROCEDURE" =>
+      | b"PROCEDURE" =>
       {
         let pr = self.obj_ref();
         self.dop(DO::DropProcedure(pr));
       }
-      b"FUNCTION" =>
+      | b"FUNCTION" =>
       {
         let fr = self.obj_ref();
         self.dop(DO::DropFunction(fr));
       }
-      b"SCHEMA" =>
+      | b"SCHEMA" =>
       {
         let s = self.id();
         self.dop(DO::DropSchema(s));
       }
-      _ =>
+      | _ =>
       {
         panic!("DROP : TABLE,VIEW.. expected");
       }
@@ -1419,42 +1428,42 @@ impl<'a> Parser<'a>
   {
     match self.id_ref()
     {
-      b"SCHEMA" =>
+      | b"SCHEMA" =>
       {
         let s = self.id();
         self.read_id(b"TO");
         let t = self.id();
         self.dop(DO::RenameSchema(s, t));
       }
-      b"TABLE" =>
+      | b"TABLE" =>
       {
         let o = self.obj_ref();
         self.read_id(b"TO");
         let n = self.obj_ref();
         self.dop(DO::Renasysble(o, n));
       }
-      b"VIEW" =>
+      | b"VIEW" =>
       {
         let o = self.obj_ref();
         self.read_id(b"TO");
         let n = self.obj_ref();
         self.dop(DO::RenameView(o, n));
       }
-      b"PROCEDURE" =>
+      | b"PROCEDURE" =>
       {
         let o = self.obj_ref();
         self.read_id(b"TO");
         let n = self.obj_ref();
         self.dop(DO::RenameProcedure(o, n));
       }
-      b"FUNCTION" =>
+      | b"FUNCTION" =>
       {
         let o = self.obj_ref();
         self.read_id(b"TO");
         let n = self.obj_ref();
         self.dop(DO::RenameFunction(o, n));
       }
-      _ =>
+      | _ =>
       {
         panic!("RENAME : TABLE,VIEW.. expected");
       }
@@ -1525,7 +1534,10 @@ impl<'a> Parser<'a>
     result
   }
 
-  fn set_jump(&mut self, jump_id: usize) { self.b.jumps[jump_id] = self.b.ilist.len(); }
+  fn set_jump(&mut self, jump_id: usize)
+  {
+    self.b.jumps[jump_id] = self.b.ilist.len();
+  }
 
   fn get_loop_id(&mut self) -> usize
   {
@@ -1680,7 +1692,13 @@ impl<'a> Parser<'a>
 } // end impl Parser
 
 /// Convert byte ref to &str.
-pub(crate) fn tos(s: &[u8]) -> &str { str::from_utf8(s).unwrap() }
+pub(crate) fn tos(s: &[u8]) -> &str
+{
+  str::from_utf8(s).unwrap()
+}
 
 /// Convert byte ref to String.
-pub(crate) fn to_s(s: &[u8]) -> String { str::from_utf8(s).unwrap().to_string() }
+pub(crate) fn to_s(s: &[u8]) -> String
+{
+  str::from_utf8(s).unwrap().to_string()
+}

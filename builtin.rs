@@ -101,7 +101,10 @@ struct LastId {}
 
 impl CExp<i64> for LastId
 {
-  fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> i64 { ee.db.lastid.get() }
+  fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> i64
+  {
+    ee.db.lastid.get()
+  }
 }
 
 /////////////////////////////

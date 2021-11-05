@@ -34,9 +34,15 @@ impl PagedFile for SimplePagedFile
 
   fn free_page(&mut self, _pnum: u64) {}
 
-  fn is_new(&self) -> bool { self.is_new }
+  fn is_new(&self) -> bool
+  {
+    self.is_new
+  }
 
-  fn compress(&self, _size: usize, _saving: usize) -> bool { false }
+  fn compress(&self, _size: usize, _saving: usize) -> bool
+  {
+    false
+  }
 }
 
 impl SimplePagedFile

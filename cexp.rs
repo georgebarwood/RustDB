@@ -80,7 +80,10 @@ pub(crate) struct Or
 
 impl CExp<bool> for Or
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool { self.c1.eval(e, d) || self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool
+  {
+    self.c1.eval(e, d) || self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct And
@@ -91,7 +94,10 @@ pub(crate) struct And
 
 impl CExp<bool> for And
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool { self.c1.eval(e, d) && self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool
+  {
+    self.c1.eval(e, d) && self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct Add<T>
@@ -104,7 +110,10 @@ impl<T> CExp<T> for Add<T>
 where
   T: std::ops::Add<Output = T>,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T { self.c1.eval(e, d) + self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T
+  {
+    self.c1.eval(e, d) + self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct Sub<T>
@@ -117,7 +126,10 @@ impl<T> CExp<T> for Sub<T>
 where
   T: std::ops::Sub<Output = T>,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T { self.c1.eval(e, d) - self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T
+  {
+    self.c1.eval(e, d) - self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct Minus<T>
@@ -129,7 +141,10 @@ impl<T> CExp<T> for Minus<T>
 where
   T: std::ops::Neg<Output = T>,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T { -self.ce.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T
+  {
+    -self.ce.eval(e, d)
+  }
 }
 
 pub(crate) struct Not
@@ -139,7 +154,10 @@ pub(crate) struct Not
 
 impl CExp<bool> for Not
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool { !self.ce.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool
+  {
+    !self.ce.eval(e, d)
+  }
 }
 
 pub(crate) struct Mul<T>
@@ -152,7 +170,10 @@ impl<T> CExp<T> for Mul<T>
 where
   T: std::ops::Mul<Output = T>,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T { self.c1.eval(e, d) * self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T
+  {
+    self.c1.eval(e, d) * self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct Div<T>
@@ -165,7 +186,10 @@ impl<T> CExp<T> for Div<T>
 where
   T: std::ops::Div<Output = T>,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T { self.c1.eval(e, d) / self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T
+  {
+    self.c1.eval(e, d) / self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct Rem<T>
@@ -178,7 +202,10 @@ impl<T> CExp<T> for Rem<T>
 where
   T: std::ops::Rem<Output = T>,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T { self.c1.eval(e, d) % self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T
+  {
+    self.c1.eval(e, d) % self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct Equal<T>
@@ -191,7 +218,10 @@ impl<T> CExp<bool> for Equal<T>
 where
   T: std::cmp::PartialOrd,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool { self.c1.eval(e, d) == self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool
+  {
+    self.c1.eval(e, d) == self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct NotEqual<T>
@@ -204,7 +234,10 @@ impl<T> CExp<bool> for NotEqual<T>
 where
   T: std::cmp::PartialOrd,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool { self.c1.eval(e, d) != self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool
+  {
+    self.c1.eval(e, d) != self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct Less<T>
@@ -217,7 +250,10 @@ impl<T> CExp<bool> for Less<T>
 where
   T: std::cmp::PartialOrd,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool { self.c1.eval(e, d) < self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool
+  {
+    self.c1.eval(e, d) < self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct Greater<T>
@@ -230,7 +266,10 @@ impl<T> CExp<bool> for Greater<T>
 where
   T: std::cmp::PartialOrd,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool { self.c1.eval(e, d) > self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool
+  {
+    self.c1.eval(e, d) > self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct LessEqual<T>
@@ -243,7 +282,10 @@ impl<T> CExp<bool> for LessEqual<T>
 where
   T: std::cmp::PartialOrd,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool { self.c1.eval(e, d) <= self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool
+  {
+    self.c1.eval(e, d) <= self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct GreaterEqual<T>
@@ -256,7 +298,10 @@ impl<T> CExp<bool> for GreaterEqual<T>
 where
   T: std::cmp::PartialOrd,
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool { self.c1.eval(e, d) >= self.c2.eval(e, d) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> bool
+  {
+    self.c1.eval(e, d) >= self.c2.eval(e, d)
+  }
 }
 
 pub(crate) struct ColumnI64
@@ -266,7 +311,10 @@ pub(crate) struct ColumnI64
 
 impl CExp<i64> for ColumnI64
 {
-  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> i64 { util::getu64(data, self.off) as i64 }
+  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> i64
+  {
+    util::getu64(data, self.off) as i64
+  }
 }
 
 pub(crate) struct ColumnI32
@@ -276,7 +324,10 @@ pub(crate) struct ColumnI32
 
 impl CExp<i64> for ColumnI32
 {
-  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> i64 { util::get(data, self.off, 4) as i32 as i64 }
+  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> i64
+  {
+    util::get(data, self.off, 4) as i32 as i64
+  }
 }
 
 pub(crate) struct ColumnI16
@@ -286,7 +337,10 @@ pub(crate) struct ColumnI16
 
 impl CExp<i64> for ColumnI16
 {
-  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> i64 { util::get(data, self.off, 2) as i16 as i64 }
+  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> i64
+  {
+    util::get(data, self.off, 2) as i16 as i64
+  }
 }
 
 pub(crate) struct ColumnI8
@@ -296,7 +350,10 @@ pub(crate) struct ColumnI8
 
 impl CExp<i64> for ColumnI8
 {
-  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> i64 { data[self.off] as i8 as i64 }
+  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> i64
+  {
+    data[self.off] as i8 as i64
+  }
 }
 
 pub(crate) struct ColumnF64
@@ -306,7 +363,10 @@ pub(crate) struct ColumnF64
 
 impl CExp<f64> for ColumnF64
 {
-  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> f64 { util::getf64(data, self.off) as f64 }
+  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> f64
+  {
+    util::getf64(data, self.off) as f64
+  }
 }
 
 pub(crate) struct ColumnF32
@@ -316,7 +376,10 @@ pub(crate) struct ColumnF32
 
 impl CExp<f64> for ColumnF32
 {
-  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> f64 { util::getf32(data, self.off) as f64 }
+  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> f64
+  {
+    util::getf32(data, self.off) as f64
+  }
 }
 
 pub(crate) struct ColumnDecimal
@@ -327,7 +390,10 @@ pub(crate) struct ColumnDecimal
 
 impl CExp<i64> for ColumnDecimal
 {
-  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> i64 { util::iget(data, self.off, self.n) }
+  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> i64
+  {
+    util::iget(data, self.off, self.n)
+  }
 }
 
 pub(crate) struct ColumnBool
@@ -337,7 +403,10 @@ pub(crate) struct ColumnBool
 
 impl CExp<bool> for ColumnBool
 {
-  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> bool { data[self.off] & 1 != 0 }
+  fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> bool
+  {
+    data[self.off] & 1 != 0
+  }
 }
 
 pub(crate) struct ColumnString
@@ -421,7 +490,10 @@ impl CExp<bool> for Local
 
 impl CExp<Value> for Local
 {
-  fn eval(&self, e: &mut EvalEnv, _d: &[u8]) -> Value { e.stack[e.bp + self.num].clone() }
+  fn eval(&self, e: &mut EvalEnv, _d: &[u8]) -> Value
+  {
+    e.stack[e.bp + self.num].clone()
+  }
 }
 
 pub(crate) struct Const<T>
@@ -433,7 +505,10 @@ impl<T> CExp<T> for Const<T>
 where
   T: Clone,
 {
-  fn eval(&self, _e: &mut EvalEnv, _d: &[u8]) -> T { self.value.clone() }
+  fn eval(&self, _e: &mut EvalEnv, _d: &[u8]) -> T
+  {
+    self.value.clone()
+  }
 }
 
 pub(crate) struct ValToInt
@@ -494,7 +569,10 @@ pub(crate) struct IntToVal
 
 impl CExp<Value> for IntToVal
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> Value { Value::Int(self.ce.eval(e, d)) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> Value
+  {
+    Value::Int(self.ce.eval(e, d))
+  }
 }
 
 pub(crate) struct FloatToVal
@@ -504,7 +582,10 @@ pub(crate) struct FloatToVal
 
 impl CExp<Value> for FloatToVal
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> Value { Value::Float(self.ce.eval(e, d)) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> Value
+  {
+    Value::Float(self.ce.eval(e, d))
+  }
 }
 
 pub(crate) struct BoolToVal
@@ -514,5 +595,8 @@ pub(crate) struct BoolToVal
 
 impl CExp<Value> for BoolToVal
 {
-  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> Value { Value::Bool(self.ce.eval(e, d)) }
+  fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> Value
+  {
+    Value::Bool(self.ce.eval(e, d))
+  }
 }

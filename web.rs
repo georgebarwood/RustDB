@@ -73,7 +73,10 @@ impl WebQuery
   }
 
   /// Append string to output.
-  fn push_str(&mut self, s: &str) { self.output.extend_from_slice(s.as_bytes()); }
+  fn push_str(&mut self, s: &str)
+  {
+    self.output.extend_from_slice(s.as_bytes());
+  }
 }
 
 impl Query for WebQuery
@@ -82,9 +85,9 @@ impl Query for WebQuery
   {
     match kind
     {
-      99 => self.method.clone(),
-      0 => self.path.clone(),
-      1 =>
+      | 99 => self.method.clone(),
+      | 0 => self.path.clone(),
+      | 1 =>
       {
         if let Some(s) = self.query.get(s)
         {
@@ -95,7 +98,7 @@ impl Query for WebQuery
           Rc::new(String::new())
         }
       }
-      2 =>
+      | 2 =>
       {
         if let Some(s) = self.form.get(s)
         {
@@ -106,18 +109,18 @@ impl Query for WebQuery
           Rc::new(String::new())
         }
       }
-      10 =>
+      | 10 =>
       {
         self.headers.push_str(s);
         self.headers.push_str("\r\n");
         Rc::new(String::new())
       }
-      11 =>
+      | 11 =>
       {
         self.status_code = s.to_string();
         Rc::new(String::new())
       }
-      _ => panic!(),
+      | _ => panic!(),
     }
   }
 
@@ -125,8 +128,8 @@ impl Query for WebQuery
   {
     match kind
     {
-      0 => self.now,
-      _ => panic!(),
+      | 0 => self.now,
+      | _ => panic!(),
     }
   }
 
@@ -136,23 +139,23 @@ impl Query for WebQuery
     {
       match v
       {
-        Value::String(s) =>
+        | Value::String(s) =>
         {
           self.push_str(s);
         }
-        Value::Int(x) =>
+        | Value::Int(x) =>
         {
           self.push_str(&x.to_string());
         }
-        Value::Float(x) =>
+        | Value::Float(x) =>
         {
           self.push_str(&x.to_string());
         }
-        Value::Binary(x) =>
+        | Value::Binary(x) =>
         {
           self.output.extend_from_slice(x);
         }
-        _ =>
+        | _ =>
         {
           panic!("push bad value={:?}", v)
         }
@@ -160,9 +163,15 @@ impl Query for WebQuery
     }
   }
 
-  fn set_error(&mut self, err: String) { self.err = err; }
+  fn set_error(&mut self, err: String)
+  {
+    self.err = err;
+  }
 
-  fn get_error(&mut self) -> String { self.err.to_string() }
+  fn get_error(&mut self) -> String
+  {
+    self.err.to_string()
+  }
 }
 
 /// Parser for http request.

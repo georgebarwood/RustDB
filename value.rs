@@ -25,21 +25,21 @@ impl Value
     let mut code = u64::MAX;
     let val = match data_kind(typ)
     {
-      DataKind::Bool => Value::Bool(data[off] != 0),
-      DataKind::String =>
+      | DataKind::Bool => Value::Bool(data[off] != 0),
+      | DataKind::String =>
       {
         let (bytes, u) = get_bytes(db, &data[off..]);
         code = u;
         let str = String::from_utf8(bytes).unwrap();
         Value::String(Rc::new(str))
       }
-      DataKind::Binary =>
+      | DataKind::Binary =>
       {
         let (bytes, u) = get_bytes(db, &data[off..]);
         code = u;
         Value::Binary(Rc::new(bytes))
       }
-      _ =>
+      | _ =>
       {
         let size = data_size(typ);
         Value::Int(util::get(data, off, size) as i64)
@@ -53,12 +53,12 @@ impl Value
     let size = data_size(typ);
     match self
     {
-      Value::Bool(x) =>
+      | Value::Bool(x) =>
       {
         data[off] = if *x { 1 } else { 0 };
       }
-      Value::Int(x) => util::set(data, off, *x as u64, size),
-      Value::Float(x) =>
+      | Value::Int(x) => util::set(data, off, *x as u64, size),
+      | Value::Float(x) =>
       {
         if size == 8
         {
@@ -73,15 +73,15 @@ impl Value
           data[off..off + 4].copy_from_slice(&bytes);
         }
       }
-      Value::String(s) =>
+      | Value::String(s) =>
       {
         save_bytes(s.as_bytes(), &mut data[off..], code);
       }
-      Value::Binary(b) =>
+      | Value::Binary(b) =>
       {
         save_bytes(b, &mut data[off..], code);
       }
-      _ =>
+      | _ =>
       {}
     }
   }
@@ -90,11 +90,11 @@ impl Value
   {
     match self
     {
-      Value::String(s) => s.clone(),
-      Value::Int(x) => Rc::new(x.to_string()),
-      Value::Float(x) => Rc::new(x.to_string()),
-      Value::Binary(_x) => Rc::new("ToDo".to_string()),
-      _ => panic!("str not implemented"),
+      | Value::String(s) => s.clone(),
+      | Value::Int(x) => Rc::new(x.to_string()),
+      | Value::Float(x) => Rc::new(x.to_string()),
+      | Value::Binary(_x) => Rc::new("ToDo".to_string()),
+      | _ => panic!("str not implemented"),
     }
   }
 
@@ -128,28 +128,28 @@ impl std::cmp::Ord for Value
   {
     match self
     {
-      Value::String(s1) =>
+      | Value::String(s1) =>
       {
         if let Value::String(s2) = other
         {
           return s1.cmp(s2);
         }
       }
-      Value::Int(x1) =>
+      | Value::Int(x1) =>
       {
         if let Value::Int(x2) = other
         {
           return x1.cmp(x2);
         }
       }
-      Value::Float(x1) =>
+      | Value::Float(x1) =>
       {
         if let Value::Float(x2) = other
         {
           return x1.partial_cmp(x2).unwrap();
         }
       }
-      _ =>
+      | _ =>
       {}
     }
     panic!()
@@ -158,7 +158,10 @@ impl std::cmp::Ord for Value
 
 impl PartialOrd for Value
 {
-  fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering>
+  {
+    Some(self.cmp(other))
+  }
 }
 
 impl PartialEq for Value

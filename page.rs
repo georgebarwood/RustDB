@@ -4,7 +4,7 @@ use crate::*;
 pub type PagePtr = Rc<RefCell<Page>>;
 
 /// The maximum size in bytes of each page.
-pub const PAGE_SIZE: usize = /*0x4000;*/ managedfile::LPGOODSIZE;
+pub const PAGE_SIZE: usize = /*0x4000;*/ cpfile::LPGOODSIZE;
 
 /// = 3. Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
 const NODE_OVERHEAD: usize = 3;
@@ -32,6 +32,7 @@ enum Balance
 use Balance::*;
 
 /// A page in a SortedFile.
+/// Note that left subtree has nodes that compare greater.
 pub struct Page
 {
   /// Data storage.
@@ -40,7 +41,6 @@ pub struct Page
   pub(crate) pnum: u64,
   /// Does page need to be saved to backing storage?
   pub(crate) is_dirty: bool,
-
   /// Number of records currently stored in the page.
   pub(crate) count: usize,
   /// Page level. 0 means a child page, more than 0 a parent page.
@@ -118,7 +118,10 @@ impl Page
 
   /// Construct a new empty page inheriting record size and level from self.
   /// Used when splitting a page that is full.
-  pub fn new_page(&self) -> Page { Page::new(self.rec_size(), self.level, vec![0; PAGE_SIZE], u64::MAX) }
+  pub fn new_page(&self) -> Page
+  {
+    Page::new(self.rec_size(), self.level, vec![0; PAGE_SIZE], u64::MAX)
+  }
 
   /// Find child page number.
   pub fn find_child(&self, db: &DB, r: &dyn Record) -> u64
@@ -130,13 +133,13 @@ impl Page
       let c = self.compare(db, r, x);
       match c
       {
-        Ordering::Greater => x = self.left(x),
-        Ordering::Less =>
+        | Ordering::Greater => x = self.left(x),
+        | Ordering::Less =>
         {
           rx = x;
           x = self.right(x);
         }
-        Ordering::Equal =>
+        | Ordering::Equal =>
         {
           rx = x;
           break;
@@ -162,9 +165,9 @@ impl Page
       let c = self.compare(db, r, x);
       match c
       {
-        Ordering::Greater => x = self.left(x),
-        Ordering::Less => x = self.right(x),
-        Ordering::Equal =>
+        | Ordering::Greater => x = self.left(x),
+        | Ordering::Less => x = self.right(x),
+        | Ordering::Equal =>
         {
           return x;
         }
@@ -221,7 +224,10 @@ impl Page
   }
 
   /// Remove record from this page.
-  pub fn remove(&mut self, db: &DB, r: &dyn Record) { self.root = self.remove_from(db, self.root, r).0; }
+  pub fn remove(&mut self, db: &DB, r: &dyn Record)
+  {
+    self.root = self.remove_from(db, self.root, r).0;
+  }
 
   // Node access functions.
   // Layout of a Node is
@@ -231,13 +237,22 @@ impl Page
   // Node overhead ( 3 bytes )
 
   /// Offset of the 3 byte node overhead  for node x.
-  fn over_off(&self, x: usize) -> usize { (NODE_BASE - NODE_OVERHEAD) + x * self.node_size }
+  fn over_off(&self, x: usize) -> usize
+  {
+    (NODE_BASE - NODE_OVERHEAD) + x * self.node_size
+  }
 
   /// Offset of the client data for node x.
-  pub fn rec_offset(&self, x: usize) -> usize { NODE_BASE + (x - 1) * self.node_size }
+  pub fn rec_offset(&self, x: usize) -> usize
+  {
+    NODE_BASE + (x - 1) * self.node_size
+  }
 
   /// The client data size.
-  pub fn rec_size(&self) -> usize { self.node_size - NODE_OVERHEAD - if self.level != 0 { PAGE_ID_SIZE } else { 0 } }
+  pub fn rec_size(&self) -> usize
+  {
+    self.node_size - NODE_OVERHEAD - if self.level != 0 { PAGE_ID_SIZE } else { 0 }
+  }
 
   /// Get balance for node x.
   fn balance(&self, x: usize) -> Balance
@@ -245,10 +260,10 @@ impl Page
     let off = self.over_off(x);
     match getbits!(self.data[off], 0, 2)
     {
-      0 => LeftHigher,
-      1 => Balanced,
-      2 => RightHigher,
-      _ => panic!(),
+      | 0 => LeftHigher,
+      | 1 => Balanced,
+      | 2 => RightHigher,
+      | _ => panic!(),
     }
   }
 
@@ -387,8 +402,8 @@ impl Page
     {
       let c = match r
       {
-        Some((db, r)) => self.compare(db, r, x),
-        None => Ordering::Less,
+        | Some((db, r)) => self.compare(db, r, x),
+        | None => Ordering::Less,
       };
 
       if c == Ordering::Greater
@@ -697,10 +712,10 @@ impl Page
   }
 
   /// Reduce page size using free nodes.
-  pub fn compress(&mut self, db: &DB)
+  pub fn compress(&mut self)
   {
     let saving = (self.alloc - self.count) * self.node_size;
-    if saving == 0 || !db.file.borrow_mut().compress(self.size(), saving)
+    if saving == 0 || compress(self.size(), saving)
     {
       return;
     }
