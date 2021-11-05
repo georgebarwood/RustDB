@@ -604,7 +604,6 @@ impl<'r> EvalEnv<'r>
     {
       let sql = "DELETE FROM sys.Function WHERE Id = ".to_string() + &fid.to_string();
       self.db.run(&sql, self.qy);
-      self.db.functions.borrow_mut().remove(name);
       self.db.functions_dirty.set(true);
     }
     else
