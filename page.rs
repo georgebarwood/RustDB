@@ -1,10 +1,20 @@
+//! Page for SortedFile.
+//!
+//! A page is up to PAGE_SIZE bytes, logically divided into up to 2047 fixed size nodes, which implement a balanced binary tree.
+//!
+//! Nodes are numbered from 1..2047, with 0 indicating a null ( non-existent ) node.
+//!
+//! Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids.
+//!
+//! Note that the left node has SMALLER not larger records.
+
 use crate::*;
 
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
 
 /// The maximum size in bytes of each page.
-pub const PAGE_SIZE: usize = /*0x4000;*/ cpfile::LPGOODSIZE;
+pub const PAGE_SIZE: usize = /*0x4000;*/ stg::LPGOODSIZE;
 
 /// = 3. Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
 const NODE_OVERHEAD: usize = 3;
@@ -715,12 +725,10 @@ impl Page
   pub fn compress(&mut self)
   {
     let saving = (self.alloc - self.count) * self.node_size;
-    if saving == 0 || compress(self.size(), saving)
+    if saving == 0 || !compress(self.size(), saving)
     {
       return;
     }
-
-    // println!( "Compressing page {} saving={}", self.pnum, saving );
 
     let mut flist = Vec::new();
     let mut f = self.free;

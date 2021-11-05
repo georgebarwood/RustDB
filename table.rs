@@ -1,3 +1,5 @@
+//! Table, ColInfo, Row and other Table types.
+
 use crate::*;
 
 /// Table Pointer.

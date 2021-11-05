@@ -62,7 +62,7 @@ impl SortedFile
         );
         p.write_header();
         p.is_dirty = false;
-        db.file.borrow_mut().write_page(p.pnum, &p.data, p.size());
+        db.file.borrow_mut().set_page(p.pnum, &p.data, p.size());
       }
     }
   }
@@ -342,7 +342,7 @@ impl SortedFile
       | Entry::Vacant(e) =>
       {
         let mut data = vec![0; PAGE_SIZE];
-        db.file.borrow_mut().read_page(pnum, &mut data);
+        db.file.borrow_mut().get_page(pnum, &mut data);
         let level = data[0];
         let p = util::new(Page::new(
           if level != 0 { self.key_size } else { self.rec_size },
