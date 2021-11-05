@@ -1,5 +1,3 @@
-//! Table, ColInfo, Row and other Table types.
-
 use crate::*;
 
 /// Table Pointer.
@@ -137,7 +135,7 @@ impl Table
     let key = IndexKey::new(self, c.clone(), key, Ordering::Equal);
     if let Some((p, off)) = f.get(db, &key)
     {
-      let p = &*p.borrow();
+      let p = &p.borrow();
       let id = util::getu64(&p.data, off);
       let row = Id { id };
       return self.file.get(db, &row);
@@ -229,7 +227,7 @@ impl Table
         let mut r = self.row();
         for (p, off) in self.file.asc(db, Box::new(Zero {}))
         {
-          let p = &*p.borrow();
+          let p = &p.borrow();
           r.load(db, &p.data[off..]);
           println!("row id={} value={:?}", r.id, r.values);
         }
@@ -663,7 +661,7 @@ impl Iterator for IndexScan
   {
     if let Some((p, off)) = self.ixa.next()
     {
-      let p = &*p.borrow();
+      let p = &p.borrow();
       let data = &p.data[off..];
       if !self.keys_equal(data)
       {

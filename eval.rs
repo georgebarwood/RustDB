@@ -102,16 +102,6 @@ impl<'r> EvalEnv<'r>
     }
   } // end fn go
 
-  /// Discard n items from stack.
-  fn discard(&mut self, mut n: usize)
-  {
-    while n > 0
-    {
-      self.stack.pop();
-      n -= 1;
-    }
-  }
-
   /// Call a function.
   pub(crate) fn call(&mut self, r: &Function)
   {
@@ -156,6 +146,16 @@ impl<'r> EvalEnv<'r>
     }
     self.bp = save_bp;
     self.call_depth -= 1;
+  }
+
+  /// Discard n items from stack.
+  fn discard(&mut self, mut n: usize)
+  {
+    while n > 0
+    {
+      self.stack.pop();
+      n -= 1;
+    }
   }
 
   /// Pop a value from the stack and assign it to a local varaiable.
@@ -221,7 +221,7 @@ impl<'r> EvalEnv<'r>
 
       if let Some((p, off)) = next
       {
-        let p = &*p.borrow();
+        let p = &p.borrow();
         let data = &p.data[off..];
 
         // Eval and check WHERE condition, eval expressions and assign to locals.
@@ -299,7 +299,7 @@ impl<'r> EvalEnv<'r>
       | DO::Delete(tp, wher) => self.delete(tp, wher),
       | DO::Update(tp, assigns, wher) => self.update(tp, assigns, wher),
       | DO::DropTable(name) => self.drop_table(name),
-      | DO::DropFunction(name) => self.drop_function(name),     
+      | DO::DropFunction(name) => self.drop_function(name),
       | _ => panic!(),
     }
   }
@@ -310,7 +310,7 @@ impl<'r> EvalEnv<'r>
     let mut idlist = Vec::new();
     for (p, off) in t.scan(&self.db)
     {
-      let p = &*p.borrow();
+      let p = &p.borrow();
       let data = &p.data[off..];
       if w.eval(self, data)
       {
@@ -343,7 +343,7 @@ impl<'r> EvalEnv<'r>
       // Load oldrow so that any codes are deleted.
       if let Some((p, off)) = t.id_get(&self.db, id)
       {
-        let p = &*p.borrow();
+        let p = &p.borrow();
         let data = &p.data[off..];
         oldrow.load(&self.db, data);
       }
@@ -365,7 +365,7 @@ impl<'r> EvalEnv<'r>
       if let Some((p, off)) = t.id_get(&self.db, id)
       {
         let mut newrow = {
-          let p = &*p.borrow();
+          let p = &p.borrow();
           let data = &p.data[off..];
           oldrow.load(&self.db, data);
           let mut newrow = oldrow.clone();
@@ -411,7 +411,7 @@ impl<'r> EvalEnv<'r>
       let mut temp = Vec::new(); // For sorting.
       for (p, off) in self.data_source(te)
       {
-        let p = &*p.borrow();
+        let p = &p.borrow();
         let data = &p.data[off..];
         if self.ok(&cse.wher, data)
         {
@@ -471,7 +471,7 @@ impl<'r> EvalEnv<'r>
     {
       for (p, off) in self.data_source(te)
       {
-        let p = &*p.borrow();
+        let p = &p.borrow();
         let data = &p.data[off..];
         if self.ok(&cse.wher, data)
         {
@@ -555,7 +555,7 @@ impl<'r> EvalEnv<'r>
       let mut temp = Vec::new(); // For sorting.
       for (p, off) in self.data_source(te)
       {
-        let p = &*p.borrow();
+        let p = &p.borrow();
         let data = &p.data[off..];
         if self.ok(&cse.wher, data)
         {
@@ -611,6 +611,4 @@ impl<'r> EvalEnv<'r>
       panic!("Drop Function not found {}", name.to_str());
     }
   }
-
-
 } // impl EvalEnv

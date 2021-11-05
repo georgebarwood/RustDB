@@ -1,5 +1,3 @@
-//! CompactFile stores logical pages in smaller regions of backing storage.
-
 use crate::*;
 use std::cmp::min; //
 use std::collections::BTreeSet;

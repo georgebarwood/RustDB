@@ -159,7 +159,7 @@ fn get_schema(db: &DB, sname: &str) -> Option<i64>
   let t = &db.sys_schema;
   for (p, off) in t.scan(db)
   {
-    let p = &*p.borrow();
+    let p = &p.borrow();
     let a = t.access(p, off);
     if a.str(db, 0) == sname
     {
@@ -183,7 +183,7 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)>
 
     if let Some((p, off)) = t.ix_get(db, keys, 0)
     {
-      let p = &*p.borrow();
+      let p = &p.borrow();
       let a = t.access(p, off);
       return Some((a.id(), a.int(0), a.int(5)));
     }
@@ -203,7 +203,7 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
     let key = Value::Int(table_id);
     for (p, off) in t.scan_key(db, key, 0)
     {
-      let p = &*p.borrow();
+      let p = &p.borrow();
       let a = t.access(p, off);
       debug_assert!(a.int(0) == table_id);
       let cname = a.str(db, 1);
@@ -217,7 +217,7 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
     let key = Value::Int(table_id);
     for (p, off) in t.scan_key(db, key, 0)
     {
-      let p = &*p.borrow();
+      let p = &p.borrow();
       let a = t.access(p, off);
       debug_assert!(a.int(1) == table_id);
       let index_id = a.id();
@@ -228,7 +228,7 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
       let key = Value::Int(index_id);
       for (p, off) in t.scan_key(db, key, 0)
       {
-        let p = &*p.borrow();
+        let p = &p.borrow();
         let a = t.access(p, off);
         debug_assert!(a.int(0) == index_id);
         let cnum = a.int(1) as usize;
@@ -258,7 +258,7 @@ pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr>
 
     if let Some((p, off)) = t.ix_get(db, keys, 0)
     {
-      let p = &*p.borrow();
+      let p = &p.borrow();
       let a = t.access(p, off);
       let source = Rc::new(a.str(db, 2));
       let function = parse_function(db, source);
@@ -280,7 +280,7 @@ pub(crate) fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64>
 
     if let Some((p, off)) = t.ix_get(db, keys, 0)
     {
-      let p = &*p.borrow();
+      let p = &p.borrow();
       let a = t.access(p, off);
       return Some(a.id());
     }
@@ -309,7 +309,7 @@ pub(crate) fn save_id_gen(db: &DB, id: u64, val: i64)
 {
   let t = &db.sys_table;
   let (pp, off) = t.id_get(db, id).unwrap();
-  let p = &mut *pp.borrow_mut();
+  let p = &mut pp.borrow_mut();
   let mut wa = t.write_access(p, off);
   wa.set_int(5, val);
   t.file.set_dirty(p, &pp);
@@ -320,7 +320,7 @@ pub(crate) fn get_id_gen(db: &DB, id: u64) -> i64
 {
   let t = &db.sys_table;
   let (p, off) = t.id_get(db, id).unwrap();
-  let p = &*p.borrow();
+  let p = &p.borrow();
   let a = t.access(p, off);
   a.int(5)
 }

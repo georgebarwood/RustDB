@@ -1,4 +1,3 @@
-//! Page for SortedFile.
 //!
 //! A page is up to PAGE_SIZE bytes, logically divided into up to 2047 fixed size nodes, which implement a balanced binary tree.
 //!

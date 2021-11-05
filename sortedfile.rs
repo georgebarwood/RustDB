@@ -115,7 +115,7 @@ impl SortedFile
   fn free_page(&self, db: &DB, pnum: u64, r: &dyn Record)
   {
     let pp = self.load_page(db, pnum);
-    let p = &*pp.borrow();
+    let p = &pp.borrow();
     if p.level != 0
     {
       if p.level > 1
@@ -159,7 +159,7 @@ impl SortedFile
     loop
     {
       let cpnum = {
-        let p = &*pp.borrow();
+        let p = &pp.borrow();
         if p.level == 0
         {
           let x = p.find_equal(db, r);
@@ -372,7 +372,7 @@ impl SortedFile
   {
     for (pnum, pp) in self.pages.borrow().iter()
     {
-      let p = &*pp.borrow();
+      let p = &pp.borrow();
       println!(
         "Cached Page pnum={} count={} level={} size()={}",
         pnum,
@@ -569,7 +569,7 @@ impl Stack
       }
       else
       {
-        let p = &*pp.borrow();
+        let p = &pp.borrow();
         self.add_asc(p, &pp, p.left(x));
         if p.level != 0
         {
@@ -591,7 +591,7 @@ impl Stack
   {
     while let Some((pp, x)) = self.v.pop()
     {
-      let p = &*pp.borrow();
+      let p = &pp.borrow();
       self.add_dsc(p, &pp, p.right(x));
       if p.level != 0
       {
@@ -681,7 +681,7 @@ impl Stack
 
   fn add_page_asc(&mut self, file: &SortedFile, pp: PagePtr)
   {
-    let p = &*pp.borrow();
+    let p = &pp.borrow();
     if p.level != 0
     {
       let fp = file.load_page(&self.db, p.first_page);
@@ -703,7 +703,7 @@ impl Stack
     loop
     {
       let pp = file.load_page(&self.db, pnum);
-      let p = &*pp.borrow();
+      let p = &pp.borrow();
       let root = p.root;
       if self.seeking
       {

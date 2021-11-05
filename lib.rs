@@ -23,7 +23,7 @@
 //! Example program:
 //! ```
 //! use std::net::TcpListener;
-//! use database::{Database,spf::SimplePagedFile,web::WebQuery};
+//! use database::{Database,web::WebQuery};
 //! fn main()
 //! {
 //!     let stg = Box::new(database::stg::SimpleFileStorage::new(
@@ -57,8 +57,8 @@
 //!(3) Index storage ( an index record refers back to the main table ).
 
 use crate::{
-  bytes::*, compile::*, eval::*, expr::*, page::*, parse::*, run::*, sortedfile::*, stg::*, table::*,
-  util::newmap, value::*,
+  bytes::*, compile::*, eval::*, expr::*, page::*, parse::*, run::*, sortedfile::*, stg::*, table::*, util::newmap,
+  value::*,
 };
 use std::{cell::Cell, cell::RefCell, cmp::Ordering, collections::HashMap, panic, rc::Rc};
 
@@ -69,46 +69,47 @@ mod util;
 /// WebQuery struct for making a http web server.
 pub mod web;
 
-/// Expression (uncompiled) types.
-pub mod expr;
+/// Table, ColInfo, Row and other Table types.
+pub mod table;
 
-/// Compile parsed expressions, checking types.
-pub mod compile;
+/// Sorted Record storage.
+pub mod sortedfile;
 
+/// Storage of logical pages in smaller regions of backing storage.
 pub mod stg;
 
-/// Value.
-pub mod value;
-
+/// Page for SortedFile.
 pub mod page;
 
-// Private modules ( in principle, currently public ).
-
-pub mod table;
+/// Run-time Value.
+pub mod value;
 
 /// Storage of variable length values : ByteStorage.
 mod bytes;
 
+/// System table Schema,Table,Column,Index,IndexColumn,Function) functions.
+mod sys;
+
 /// Parser.
 mod parse;
 
-/// Access to system tables (Schema,Table,Column,Index,IndexColumn,Function).
-mod sys;
+/// Expression types, result of parsing.
+pub mod expr;
 
-/// Low-level sorted Record storage : SortedFile.
-pub mod sortedfile;
-
-/// Execution : Instruction (Inst) and other run time types.
-mod run;
-
-/// Execution : EvalEnv struct.
-mod eval;
-
-/// CExp implementations for basic expressions.
+/// Compiled expressions.
 mod cexp;
 
 /// Compilation of builtin functions.
 mod builtin;
+
+/// Compile parsed expressions, checking types.
+pub mod compile;
+
+/// Instruction (Inst) and other run time types.
+mod run;
+
+/// Instruction execution.
+mod eval;
 
 // End of modules.
 
@@ -483,7 +484,7 @@ impl TableBuilder
   }
 }
 
-/// IO Methods.
+/// Input/Output interface.
 pub trait Query
 {
   /// Append SELECT values to output.
