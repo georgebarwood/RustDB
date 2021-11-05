@@ -57,8 +57,8 @@
 //!(3) Index storage ( an index record refers back to the main table ).
 
 use crate::{
-  bytes::*, compile::*, eval::*, expr::*, page::*, parse::*, run::*, sortedfile::*, table::*, 
-  util::newmap, value::*, stg::*, cpfile::*
+  bytes::*, compile::*, cpfile::*, eval::*, expr::*, page::*, parse::*, run::*, sortedfile::*, stg::*, table::*,
+  util::newmap, value::*,
 };
 use std::{cell::Cell, cell::RefCell, cmp::Ordering, collections::HashMap, panic, rc::Rc};
 
@@ -189,7 +189,7 @@ impl Database
     sys_index_col.add_index(9, vec![0]);
 
     let db = Rc::new(Database {
-      file: RefCell::new( CompactFile::new(stg) ),
+      file: RefCell::new(CompactFile::new(stg)),
       sys_schema,
       sys_table,
       sys_column,

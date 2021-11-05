@@ -86,7 +86,7 @@ impl CompactFile
       x.ep_resvd = 12; // Space for ~30 starter pages.
       x.ep_count = 12;
       x.lp_first = u64::MAX;
-      x.writeu64(8, x.ep_resvd);
+      x.writeu64(0, x.ep_resvd);
     }
     else
     {
@@ -102,8 +102,8 @@ impl CompactFile
   /// Initialise from file header.
   fn init(&mut self)
   {
-    self.lp_alloc = self.readu64(0);
-    self.ep_resvd = self.readu64(8);
+    self.ep_resvd = self.readu64(0);
+    self.lp_alloc = self.readu64(8);
     self.lp_first = self.readu64(16);
     self._trace();
   }
@@ -133,13 +133,13 @@ impl CompactFile
   /// Read bytes from the underlying file.
   fn read(&mut self, off: u64, bytes: &mut [u8])
   {
-    self.stg.read( off, bytes );
+    self.stg.read(off, bytes);
   }
 
   /// Write bytes to the underlying file.
   fn write(&mut self, off: u64, bytes: &[u8])
   {
-    self.stg.write( off, bytes );
+    self.stg.write(off, bytes);
   }
 
   /// Relocate extension page to a new location.
@@ -205,7 +205,7 @@ impl CompactFile
     }
     if save
     {
-      self.writeu64(8, self.ep_resvd);
+      self.writeu64(0, self.ep_resvd);
     }
   }
 
@@ -369,7 +369,7 @@ impl CompactFile
     if self.lp_alloc_dirty
     {
       self.lp_alloc_dirty = false;
-      self.lp_alloc = self.readu64(0);
+      self.lp_alloc = self.readu64(8);
       self.lp_first = self.readu64(16);
     }
   }
@@ -414,7 +414,7 @@ impl CompactFile
     if self.lp_alloc_dirty
     {
       self.lp_alloc_dirty = false;
-      self.writeu64(0, self.lp_alloc);
+      self.writeu64(8, self.lp_alloc);
       self.writeu64(16, self.lp_first);
     }
     if compacted
@@ -427,11 +427,10 @@ impl CompactFile
   fn _trace(&self)
   {
     println!(
-      "lp_alloc={} ep_count={} ep_resvd={} lp_first={}",
-      self.lp_alloc, self.ep_count, self.ep_resvd, self.lp_first
+      "ep_count={} ep_resvd={} lp_alloc={} lp_first={}",
+      self.ep_count, self.ep_resvd, self.lp_alloc, self.lp_first
     );
   }
-
 } // end impl CompactFile
 
 /// Calculate the number of extension pages needed to store a page of given size.
