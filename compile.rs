@@ -1,5 +1,7 @@
 use crate::*;
 use std::{mem, ops};
+use Instruction::*;
+
 /// Compiled expression which yields type T when evaluated.
 pub trait CExp<T>
 {
@@ -641,7 +643,7 @@ pub(crate) fn name_to_colnum(p: &Parser, name: &str) -> (usize, DataType)
 /// Compile ExprCall to CExpPtr<Value>, checking parameter types.
 pub(crate) fn c_call(p: &Parser, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value>
 {
-  let rp: FunctionPtr = function_look(p, name);
+  let fp: FunctionPtr = function_look(p, name);
   let mut pv: Vec<CExpPtr<Value>> = Vec::new();
   let mut pt: Vec<DataType> = Vec::new();
   for e in parms
@@ -651,8 +653,8 @@ pub(crate) fn c_call(p: &Parser, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPt
     let ce = c_value(p, e);
     pv.push(ce);
   }
-  p.check_types(&rp, &pt);
-  Box::new(cexp::Call { rp, pv })
+  p.check_types(&fp, &pt);
+  Box::new(cexp::Call { fp, pv })
 }
 /// Generate code to evaluate expression and push the value onto the stack.
 pub(crate) fn push(p: &mut Parser, e: &mut Expr) -> DataType
@@ -666,29 +668,29 @@ pub(crate) fn push(p: &mut Parser, e: &mut Expr) -> DataType
   {
     | ExprIs::Const(x) =>
     {
-      p.add(Inst::PushConst((*x).clone()));
+      p.add(PushConst((*x).clone()));
     }
     | ExprIs::Binary(_, _, _) => match data_kind(t)
     {
       | DataKind::Int =>
       {
         let ce = c_int(p, e);
-        p.add(Inst::PushInt(ce));
+        p.add(PushInt(ce));
       }
       | DataKind::Float =>
       {
         let ce = c_float(p, e);
-        p.add(Inst::PushFloat(ce));
+        p.add(PushFloat(ce));
       }
       | DataKind::Bool =>
       {
         let ce = c_bool(p, e);
-        p.add(Inst::PushBool(ce));
+        p.add(PushBool(ce));
       }
       | _ =>
       {
         let ce = c_value(p, e);
-        p.add(Inst::PushValue(ce));
+        p.add(PushValue(ce));
       }
     },
     | ExprIs::FuncCall(name, parms) =>
@@ -700,16 +702,16 @@ pub(crate) fn push(p: &mut Parser, e: &mut Expr) -> DataType
           push(p, e);
         }
       }
-      p.add(Inst::Call(rp));
+      p.add(Call(rp));
     }
     | ExprIs::Local(x) =>
     {
-      p.add(Inst::PushLocal(*x));
+      p.add(PushLocal(*x));
     }
     | _ =>
     {
       let ce = c_value(p, e);
-      p.add(Inst::PushValue(ce));
+      p.add(PushValue(ce));
     }
   }
   t

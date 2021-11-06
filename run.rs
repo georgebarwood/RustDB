@@ -2,7 +2,7 @@ use crate::*;
 /// Iterator that yields references to page data.
 pub type DataSource = Box<dyn Iterator<Item = (PagePtr, usize)>>;
 /// Instruction.
-pub enum Inst
+pub enum Instruction
 {
   PushConst(Value),
   PushValue(CExpPtr<Value>),
@@ -139,19 +139,13 @@ pub enum AlterAction
   Modify(String, DataType),
 }
 /// Compiled Function.
-///
-/// When a CREATE FUNCTION statement is executed,
-/// the Function is inserted into the database, but the ilist is not
-/// created. The source has been parsed and checked for syntax correctness
-/// but type checking is delayed until the first call to the Function is compiled.
-/// At that point type checking is performed and instructions are generated.
 pub struct Function
 {
   pub param_count: usize,
   pub return_type: DataType,
   pub local_typ: Vec<DataType>,
   pub source: Rc<String>,
-  pub ilist: RefCell<Vec<Inst>>, // Valid when compiled is true.
+  pub ilist: RefCell<Vec<Instruction>>, // Valid when compiled is true.
   pub compiled: Cell<bool>,
 }
 /// ```Rc<Function>```

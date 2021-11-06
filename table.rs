@@ -195,20 +195,6 @@ impl Table
       self.id_gen_dirty.set(true);
     }
   }
-  pub fn _dump(&self, _db: &DB)
-  {
-    // println!( "table_dump info={:?}", self.info );
-    self.file.dump();
-    /*
-        let mut r = self.row();
-        for (p, off) in self.file.asc(db, Box::new(Zero {}))
-        {
-          let p = &p.borrow();
-          r.load(db, &p.data[off..]);
-          println!("row id={} value={:?}", r.id, r.values);
-        }
-    */
-  }
 }
 /// Dummy record for iterating over whole table.
 struct Zero {}

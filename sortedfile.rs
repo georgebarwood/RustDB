@@ -340,22 +340,6 @@ impl SortedFile
       self.dirty_pages.borrow_mut().push(pp.clone());
     }
   }
-  /// Save any changed pages.
-  /// For debugging, dump a summary of each page of the file.
-  pub(crate) fn dump(&self)
-  {
-    for (pnum, pp) in self.pages.borrow().iter()
-    {
-      let p = &pp.borrow();
-      println!(
-        "Cached Page pnum={} count={} level={} size()={}",
-        pnum,
-        p.count,
-        p.level,
-        p.size()
-      );
-    }
-  }
 } // end impl File
 /// Used to pass parent page number for insert operations.
 struct ParentInfo<'a>

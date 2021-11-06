@@ -1,4 +1,6 @@
 use crate::*;
+use Instruction::*;
+
 /// Holds function name, line, column and message.
 pub struct SqlError
 {
@@ -188,7 +190,7 @@ pub(crate) struct Block<'a>
   pub param_count: usize,
   pub return_type: DataType,
   pub local_typ: Vec<DataType>,
-  pub ilist: Vec<Inst>,
+  pub ilist: Vec<Instruction>,
 
   pub jumps: Vec<usize>,
   pub labels: HashMap<&'a [u8], usize>,
@@ -227,10 +229,10 @@ impl<'a> Block<'a>
     {
       match i
       {
-        | Inst::JumpIfFalse(x, _e) => *x = self.jumps[*x],
-        | Inst::Jump(x) => *x = self.jumps[*x],
-        | Inst::ForNext(x, _y) => *x = self.jumps[*x],
-        | Inst::ForSortNext(x, _y) => *x = self.jumps[*x],
+        | JumpIfFalse(x, _e) => *x = self.jumps[*x],
+        | Jump(x) => *x = self.jumps[*x],
+        | ForNext(x, _y) => *x = self.jumps[*x],
+        | ForSortNext(x, _y) => *x = self.jumps[*x],
         | _ =>
         {}
       }

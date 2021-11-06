@@ -56,7 +56,7 @@
 //!
 //!(3) Index storage ( an index record refers back to the main table ).
 use crate::{
-  bytes::*, compile::*, eval::*, expr::*, page::*, parse::*, run::*, sortedfile::*, stg::*, table::*, util::newmap,
+  bytes::*, compile::*, exec::*, expr::*, page::*, parse::*, run::*, sortedfile::*, stg::*, table::*, util::newmap,
   value::*,
 };
 use std::{cell::Cell, cell::RefCell, cmp::Ordering, collections::HashMap, panic, rc::Rc};
@@ -72,20 +72,20 @@ mod cexp;
 /// Compile parsed expressions, checking types.
 pub mod compile;
 /// Instruction execution.
-mod eval;
+mod exec;
 /// Expression types, result of parsing.
 pub mod expr;
 /// Page for SortedFile.
 pub mod page;
 /// Parser.
 mod parse;
-/// Instruction (Inst) and other run time types.
+/// Instruction and other run time types.
 mod run;
 /// Sorted Record storage.
 pub mod sortedfile;
 /// Storage of logical pages in smaller regions of backing storage.
 pub mod stg;
-/// System table Schema,Table,Column,Index,IndexColumn,Function) functions.
+/// System table functions.
 mod sys;
 /// Table, ColInfo, Row and other Table types.
 pub mod table;
@@ -313,17 +313,6 @@ GO
     self.file.borrow_mut().save();
 
     // self.dump_tables();
-  }
-  /// Print the tables ( for debugging ).
-  pub fn dump_tables(self: &DB)
-  {
-    println!("Byte Storage");
-    self.bs.file.dump();
-    for (n, t) in &*self.tables.borrow()
-    {
-      println!("Dump Table {} {} {:?}", &n.schema, &n.name, t.info.colnames);
-      t._dump(self);
-    }
   }
   /// Get the named table.
   fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr>

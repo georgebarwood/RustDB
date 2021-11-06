@@ -1,5 +1,7 @@
 use crate::*;
 use std::{mem, str};
+use Instruction::*;
+
 /// SQL parser.
 ///
 /// Name convention for methods:
@@ -586,7 +588,7 @@ impl<'a> Parser<'a>
     ObjRef { schema, name }
   }
   /// Add an instruction to the instruction list.
-  pub(crate) fn add(&mut self, s: Inst)
+  pub(crate) fn add(&mut self, s: Instruction)
   {
     if !self.parse_only
     {
@@ -598,7 +600,7 @@ impl<'a> Parser<'a>
   {
     if !self.parse_only
     {
-      self.add(Inst::DataOp(Box::new(dop)));
+      self.add(DataOp(Box::new(dop)));
     }
   }
   // Error handling.
@@ -990,7 +992,7 @@ impl<'a> Parser<'a>
     if !self.parse_only
     {
       let cte = c_select(self, se);
-      self.add(Inst::Select(Box::new(cte)));
+      self.add(Select(Box::new(cte)));
     }
   }
   fn s_set(&mut self)
@@ -999,7 +1001,7 @@ impl<'a> Parser<'a>
     if !self.parse_only
     {
       let cte = c_select(self, se);
-      self.add(Inst::Set(Box::new(cte)));
+      self.add(Set(Box::new(cte)));
     }
   }
   fn s_insert(&mut self)
@@ -1118,7 +1120,7 @@ impl<'a> Parser<'a>
     if !self.parse_only
     {
       push(self, &mut exp);
-      self.add(Inst::Execute);
+      self.add(Execute);
     }
   }
   fn s_exec(&mut self)
@@ -1148,7 +1150,7 @@ impl<'a> Parser<'a>
     {
       let func = function_look(self, &name);
       self.check_types(&func, &ptypes);
-      self.add(Inst::Call(func));
+      self.add(Call(func));
     }
   }
   /// Parse FOR statement.
@@ -1165,24 +1167,24 @@ impl<'a> Parser<'a>
       let orderbylen = cse.orderby.len();
       if orderbylen == 0
       {
-        self.add(Inst::ForInit(for_id, Box::new(cse.from.unwrap())));
+        self.add(ForInit(for_id, Box::new(cse.from.unwrap())));
         start_id = self.get_loop_id();
         let info = Box::new(ForNextInfo { for_id, assigns: cse.assigns, exps: cse.exps, wher: cse.wher });
-        self.add(Inst::ForNext(break_id, info));
+        self.add(ForNext(break_id, info));
       }
       else
       {
         let assigns = mem::take(&mut cse.assigns);
-        self.add(Inst::ForSortInit(for_id, Box::new(cse)));
+        self.add(ForSortInit(for_id, Box::new(cse)));
         start_id = self.get_loop_id();
         let info = Box::new((for_id, orderbylen, assigns));
-        self.add(Inst::ForSortNext(break_id, info));
+        self.add(ForSortNext(break_id, info));
       }
       let save = self.b.break_id;
       self.b.break_id = break_id;
       self.statement();
       self.b.break_id = save;
-      self.add(Inst::Jump(start_id));
+      self.add(Jump(start_id));
       self.set_jump(break_id);
     }
   }
@@ -1521,12 +1523,12 @@ impl<'a> Parser<'a>
     if !self.parse_only
     {
       let exp = c_bool(self, &mut exp);
-      self.add(Inst::JumpIfFalse(break_id, exp));
+      self.add(JumpIfFalse(break_id, exp));
       let save = self.b.break_id;
       self.b.break_id = break_id;
       self.statement();
       self.b.break_id = save;
-      self.add(Inst::Jump(start_id));
+      self.add(Jump(start_id));
       self.set_jump(break_id);
     }
   }
@@ -1537,13 +1539,13 @@ impl<'a> Parser<'a>
     if !self.parse_only
     {
       let exp = c_bool(self, &mut exp);
-      self.add(Inst::JumpIfFalse(false_id, exp));
+      self.add(JumpIfFalse(false_id, exp));
     }
     self.statement();
     if self.test_id(b"ELSE")
     {
       let end_id = self.get_jump_id();
-      self.add(Inst::Jump(end_id)); // Skip over the else clause
+      self.add(Jump(end_id)); // Skip over the else clause
       self.set_jump(false_id);
       self.statement();
       self.set_jump(end_id);
@@ -1557,7 +1559,7 @@ impl<'a> Parser<'a>
   {
     let label = self.id_ref();
     let to = self.get_goto(label);
-    self.add(Inst::Jump(to));
+    self.add(Jump(to));
   }
   fn s_break(&mut self)
   {
@@ -1566,7 +1568,7 @@ impl<'a> Parser<'a>
     {
       panic!("No enclosing loop for break");
     }
-    self.add(Inst::Jump(break_id));
+    self.add(Jump(break_id));
   }
   fn s_return(&mut self)
   {
@@ -1581,10 +1583,10 @@ impl<'a> Parser<'a>
         {
           panic!("Return type mismatch expected {:?} got {:?}", rt, t)
         }
-        self.add(Inst::PopToLocal(self.b.param_count));
+        self.add(PopToLocal(self.b.param_count));
       }
     }
-    self.add(Inst::Return);
+    self.add(Return);
   }
   fn s_throw(&mut self)
   {
@@ -1592,7 +1594,7 @@ impl<'a> Parser<'a>
     if !self.parse_only
     {
       push(self, &mut msg);
-      self.add(Inst::Throw);
+      self.add(Throw);
     }
   }
   fn s_begin(&mut self)
