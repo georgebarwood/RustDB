@@ -1,18 +1,14 @@
 use crate::*;
-
 /// Table Pointer.
 pub type TablePtr = Rc<Table>;
-
 /// List of indexes. Each index has a file and a list of column numbers.
 pub type IxList = Vec<(Rc<SortedFile>, Rc<Vec<usize>>)>;
-
 #[derive(PartialEq, PartialOrd, Clone, Copy)]
 pub enum SaveOp
 {
   Save,
   RollBack,
 }
-
 /// Database base table. Underlying file, type information about the columns and id allocation.
 pub struct Table
 {
@@ -34,7 +30,6 @@ pub struct Table
   /// Row id allocator has changed.
   pub(crate) id_gen_dirty: Cell<bool>,
 }
-
 impl Table
 {
   /// Construct a table with specified info.
@@ -46,7 +41,6 @@ impl Table
     let ixlist = RefCell::new(Vec::new());
     Rc::new(Table { id, file, info, ixlist, id_gen: Cell::new(id_gen), id_gen_dirty: Cell::new(false) })
   }
-
   /// Save or Rollback underlying files.
   pub(crate) fn save(&self, db: &DB, op: SaveOp)
   {
@@ -56,7 +50,6 @@ impl Table
       f.save(db, op);
     }
   }
-
   /// Drop the underlying file storage ( the table is not useable after this ).
   pub fn free_pages(&self, db: &DB)
   {
@@ -68,7 +61,6 @@ impl Table
       f.free_pages(db, &ixr);
     }
   }
-
   /// Insert specified row into the table.
   pub fn insert(&self, db: &DB, row: &mut Row)
   {
@@ -81,7 +73,6 @@ impl Table
       f.insert(db, &ixr);
     }
   }
-
   /// Remove specified loaded row from the table.
   pub fn remove(&self, db: &DB, row: &Row)
   {
@@ -93,7 +84,6 @@ impl Table
     }
     row.delcodes(db); // Deletes codes for Binary and String values.
   }
-
   /// Optimise WHERE clause with form "Name = <someconst>".
   pub fn index_from(self: &TablePtr, p: &Parser, we: &mut Expr) -> Option<CTableExpression>
   {
@@ -120,13 +110,11 @@ impl Table
     }
     None
   }
-
   /// Get record with specified id.
   pub fn id_get(&self, db: &DB, id: u64) -> Option<(PagePtr, usize)>
   {
     self.file.get(db, &Id { id })
   }
-
   /// Get record with matching key, using specified index.
   pub fn ix_get(&self, db: &DB, key: Vec<Value>, index: usize) -> Option<(PagePtr, usize)>
   {
@@ -142,26 +130,22 @@ impl Table
     }
     None
   }
-
   /// Scan all the records in the table.
   pub fn scan(&self, db: &DB) -> Asc
   {
     self.file.asc(db, Box::new(Zero {}))
   }
-
   /// Get a single record with specified id.
   pub fn scan_id(self: &TablePtr, db: &DB, id: i64) -> IdScan
   {
     IdScan { table: self.clone(), db: db.clone(), id, done: false }
   }
-
   /// Get records with matching key.
   pub fn scan_key(self: &TablePtr, db: &DB, key: Value, index: usize) -> IndexScan
   {
     let keys = vec![key];
     self.scan_keys(db, keys, index)
   }
-
   /// Get records with matching keys.
   pub fn scan_keys(self: &TablePtr, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan
   {
@@ -171,35 +155,29 @@ impl Table
     let ixa = f.asc(db, Box::new(ikey));
     IndexScan { ixa, keys, cols: c.clone(), table: self.clone(), db: db.clone() }
   }
-
   /// Add the specified index to the table.
   pub fn add_index(&self, root: u64, cols: Vec<usize>)
   {
     let key_size = self.info.calc_index_key_size(&cols) + 8;
     let file = Rc::new(SortedFile::new(key_size, key_size, root));
-
     let list = &mut self.ixlist.borrow_mut();
     list.push((file, Rc::new(cols)));
   }
-
   /// Utility for accessing fields by number.
   pub fn access<'d, 't>(&'t self, p: &'d Page, off: usize) -> Access<'d, 't>
   {
     Access::<'d, 't> { data: &p.data[off..], info: &self.info }
   }
-
   /// Utility for updating fields by number.
   pub fn write_access<'d, 't>(&'t self, p: &'d mut Page, off: usize) -> WriteAccess<'d, 't>
   {
     WriteAccess::<'d, 't> { data: &mut p.data[off..], info: &self.info }
   }
-
   /// Construct a row for the table.
   pub fn row(&self) -> Row
   {
     Row::new(self.info.clone())
   }
-
   /// Allocate row id.
   pub fn alloc_id(&self) -> i64
   {
@@ -208,7 +186,6 @@ impl Table
     self.id_gen_dirty.set(true);
     result
   }
-
   /// Update id allocator if supplied row id exceeds current value.
   pub fn id_allocated(&self, id: i64)
   {
@@ -218,7 +195,6 @@ impl Table
       self.id_gen_dirty.set(true);
     }
   }
-
   pub fn _dump(&self, _db: &DB)
   {
     // println!( "table_dump info={:?}", self.info );
@@ -234,25 +210,22 @@ impl Table
     */
   }
 }
-
 /// Dummy record for iterating over whole table.
 struct Zero {}
-
 impl Record for Zero
 {
+  /// Always returns `Less`.
   fn compare(&self, _db: &DB, _data: &[u8]) -> std::cmp::Ordering
   {
     std::cmp::Ordering::Less
   }
 }
-
 /// Helper class to read byte data using ColInfo.
 pub struct Access<'d, 'i>
 {
   data: &'d [u8],
   info: &'i ColInfo,
 }
-
 impl<'d, 'i> Access<'d, 'i>
 {
   /// Extract int from byte data for column number colnum.
@@ -260,7 +233,6 @@ impl<'d, 'i> Access<'d, 'i>
   {
     util::get(self.data, self.info.off[colnum], self.info.siz[colnum]) as i64
   }
-
   /// Extract string from byte data for column number colnum.
   pub fn str(&self, db: &DB, colnum: usize) -> String
   {
@@ -268,21 +240,18 @@ impl<'d, 'i> Access<'d, 'i>
     let bytes = get_bytes(db, &self.data[off..]).0;
     String::from_utf8(bytes).unwrap()
   }
-
   /// Extract Id from byte data.
   pub fn id(&self) -> i64
   {
     util::getu64(self.data, 0) as i64
   }
 }
-
 /// Helper class to write byte data using ColInfo.
 pub struct WriteAccess<'d, 'i>
 {
   data: &'d mut [u8],
   info: &'i ColInfo,
 }
-
 impl<'d, 'i> WriteAccess<'d, 'i>
 {
   /// Save int to byte data.
@@ -291,7 +260,6 @@ impl<'d, 'i> WriteAccess<'d, 'i>
     util::set(self.data, self.info.off[colnum], val as u64, self.info.siz[colnum]);
   }
 }
-
 /// Table name and column names/types and other calculated values for a table.
 pub struct ColInfo
 {
@@ -310,7 +278,6 @@ pub struct ColInfo
   /// Total data size, including Id.
   pub total: usize,
 }
-
 impl ColInfo
 {
   /// Construct a new ColInfo struct with no columns.
@@ -326,7 +293,6 @@ impl ColInfo
       total: 8,
     }
   }
-
   pub(crate) fn new(name: ObjRef, ct: &[(&str, DataType)]) -> Self
   {
     let mut result = Self::empty(name);
@@ -336,7 +302,6 @@ impl ColInfo
     }
     result
   }
-
   /// Add a column. If the column already exists ( an error ) the result is true.
   pub fn add(&mut self, name: String, typ: DataType) -> bool
   {
@@ -344,7 +309,6 @@ impl ColInfo
     {
       return true;
     }
-
     let cn = self.typ.len();
     self.typ.push(typ);
     let size = data_size(typ);
@@ -355,7 +319,6 @@ impl ColInfo
     self.colmap.insert(name, cn);
     false
   }
-
   /// Get a column number from a column name.
   /// usize::MAX is returned for "Id".
   pub fn get(&self, name: &str) -> Option<&usize>
@@ -369,7 +332,6 @@ impl ColInfo
       self.colmap.get(name)
     }
   }
-
   fn calc_index_key_size(&self, cols: &[usize]) -> usize
   {
     let mut total = 0;
@@ -380,7 +342,6 @@ impl ColInfo
     total
   }
 }
-
 /// Index information.
 pub struct IndexInfo
 {
@@ -388,7 +349,6 @@ pub struct IndexInfo
   pub iname: String,
   pub cols: Vec<usize>,
 }
-
 /// Row of Values, with type information.
 #[derive(Clone)]
 pub struct Row
@@ -398,7 +358,6 @@ pub struct Row
   pub info: Rc<ColInfo>,
   pub codes: Vec<u64>,
 }
-
 impl Row
 {
   pub fn new(info: Rc<ColInfo>) -> Self
@@ -410,7 +369,6 @@ impl Row
     }
     result
   }
-
   pub fn encode(&mut self, db: &DB)
   {
     self.codes.clear();
@@ -420,7 +378,6 @@ impl Row
       self.codes.push(u);
     }
   }
-
   pub fn delcodes(&self, db: &DB)
   {
     for u in &self.codes
@@ -431,7 +388,6 @@ impl Row
       }
     }
   }
-
   /// Load the row values and codes from data.
   pub fn load(&mut self, db: &DB, data: &[u8])
   {
@@ -448,7 +404,6 @@ impl Row
     }
   }
 }
-
 impl Record for Row
 {
   fn save(&self, data: &mut [u8])
@@ -462,14 +417,12 @@ impl Record for Row
       off += data_size(*typ);
     }
   }
-
   fn compare(&self, _db: &DB, data: &[u8]) -> std::cmp::Ordering
   {
     let id = util::getu64(data, 0) as i64;
     self.id.cmp(&id)
   }
 }
-
 /// Row for inserting into an index.
 struct IndexRow
 {
@@ -479,7 +432,6 @@ struct IndexRow
   pub codes: Vec<u64>,
   pub rowid: i64,
 }
-
 impl IndexRow
 {
   // Construct IndexRow from Row.
@@ -494,7 +446,6 @@ impl IndexRow
     }
     Self { tinfo: table.info.clone(), cols, rowid: row.id, keys, codes }
   }
-
   // Load IndexRow from data ( note: new codes are computed, as old codes may be deleted ).
   // Since it's unusual for long strings to be keys, code computation should be rare.
   fn load(&mut self, db: &DB, data: &[u8])
@@ -512,21 +463,8 @@ impl IndexRow
     }
   }
 }
-
 impl Record for IndexRow
 {
-  fn save(&self, data: &mut [u8])
-  {
-    util::setu64(data, self.rowid as u64);
-    let mut off = 8;
-    for (ix, k) in self.keys.iter().enumerate()
-    {
-      let typ = self.tinfo.typ[self.cols[ix]];
-      k.save(typ, data, off, self.codes[ix]);
-      off += data_size(typ);
-    }
-  }
-
   fn compare(&self, db: &DB, data: &[u8]) -> Ordering
   {
     let mut ix = 0;
@@ -534,7 +472,6 @@ impl Record for IndexRow
     loop
     {
       let typ = self.tinfo.typ[self.cols[ix]];
-
       // Could have special purpose Value method which compares instead of loading to save heap allocations.
       let val = Value::load(db, typ, data, off).0;
       let cf = val.cmp(&self.keys[ix]);
@@ -551,7 +488,17 @@ impl Record for IndexRow
       }
     }
   }
-
+  fn save(&self, data: &mut [u8])
+  {
+    util::setu64(data, self.rowid as u64);
+    let mut off = 8;
+    for (ix, k) in self.keys.iter().enumerate()
+    {
+      let typ = self.tinfo.typ[self.cols[ix]];
+      k.save(typ, data, off, self.codes[ix]);
+      off += data_size(typ);
+    }
+  }
   fn key(&self, db: &DB, data: &[u8]) -> Box<dyn Record>
   {
     let mut result = Box::new(IndexRow {
@@ -564,7 +511,6 @@ impl Record for IndexRow
     result.load(db, data);
     result
   }
-
   fn drop_key(&self, db: &DB, data: &[u8])
   {
     let mut off = 8;
@@ -580,7 +526,6 @@ impl Record for IndexRow
     }
   }
 }
-
 /// Key for searching index.
 pub struct IndexKey
 {
@@ -589,7 +534,6 @@ pub struct IndexKey
   pub key: Vec<Value>,
   pub def: Ordering,
 }
-
 impl IndexKey
 {
   fn new(table: &Table, cols: Rc<Vec<usize>>, key: Vec<Value>, def: Ordering) -> Self
@@ -597,7 +541,6 @@ impl IndexKey
     Self { tinfo: table.info.clone(), key, cols, def }
   }
 }
-
 impl Record for IndexKey
 {
   fn compare(&self, db: &DB, data: &[u8]) -> Ordering
@@ -608,7 +551,6 @@ impl Record for IndexKey
     {
       let typ = self.tinfo.typ[self.cols[ix]];
       let val = Value::load(db, typ, data, off).0;
-
       let cf = val.cmp(&self.key[ix]);
       if cf != Ordering::Equal
       {
@@ -623,7 +565,6 @@ impl Record for IndexKey
     }
   }
 }
-
 /// Fetch records using an index.
 pub struct IndexScan
 {
@@ -633,7 +574,6 @@ pub struct IndexScan
   cols: Rc<Vec<usize>>,
   keys: Vec<Value>,
 }
-
 impl IndexScan
 {
   fn keys_equal(&self, data: &[u8]) -> bool
@@ -653,7 +593,6 @@ impl IndexScan
     true
   }
 }
-
 impl Iterator for IndexScan
 {
   type Item = (PagePtr, usize);
@@ -673,7 +612,6 @@ impl Iterator for IndexScan
     None
   }
 }
-
 /// Fetch record with specified id.
 pub struct IdScan
 {
@@ -682,7 +620,6 @@ pub struct IdScan
   db: DB,
   done: bool,
 }
-
 impl Iterator for IdScan
 {
   type Item = (PagePtr, usize);

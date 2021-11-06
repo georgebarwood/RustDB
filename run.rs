@@ -1,9 +1,7 @@
 use crate::*;
 use core::fmt::Debug;
-
 /// Iterator that yields references to page data.
 pub type DataSource = Box<dyn Iterator<Item = (PagePtr, usize)>>;
-
 /// Instruction.
 pub enum Inst
 {
@@ -29,13 +27,11 @@ pub enum Inst
   PushFloat(CExpPtr<f64>),
   PushBool(CExpPtr<bool>),
 }
-
 /// State for FOR loop (non-sorted case).
 pub struct ForState
 {
   pub(crate) data_source: DataSource,
 }
-
 impl Debug for ForState
 {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error>
@@ -45,14 +41,12 @@ impl Debug for ForState
       .finish()
   }
 }
-
 /// State for FOR loop (sorted case).
 pub struct ForSortState
 {
   pub(crate) ix: usize,
   pub(crate) rows: Vec<Vec<Value>>,
 }
-
 impl Debug for ForSortState
 {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error>
@@ -62,7 +56,6 @@ impl Debug for ForSortState
       .finish()
   }
 }
-
 /// Info for ForNext Inst.
 pub struct ForNextInfo
 {
@@ -71,7 +64,6 @@ pub struct ForNextInfo
   pub(crate) exps: Vec<CExpPtr<Value>>,
   pub(crate) wher: Option<CExpPtr<bool>>,
 }
-
 /// Get the default Value for a DataType.
 pub fn default(t: DataType) -> Value
 {
@@ -84,7 +76,6 @@ pub fn default(t: DataType) -> Value
     | _ => Value::Int(0),
   }
 }
-
 /// Compare table rows.
 pub fn compare(a: &[Value], b: &[Value], desc: &[bool]) -> Ordering
 {
@@ -114,7 +105,6 @@ pub fn compare(a: &[Value], b: &[Value], desc: &[bool]) -> Ordering
     }
   }
 }
-
 /// Compiled Table Expression.
 pub enum CTableExpression
 {
@@ -124,7 +114,6 @@ pub enum CTableExpression
   IxGet(TablePtr, CExpPtr<Value>, usize),
   Values(Vec<Vec<CExpPtr<Value>>>),
 }
-
 /// Compiled Select Expression.
 pub struct CSelectExpression
 {
@@ -136,7 +125,6 @@ pub struct CSelectExpression
   pub(crate) orderby: Vec<CExpPtr<Value>>,
   pub(crate) desc: Vec<bool>,
 }
-
 /// Database Operation
 pub enum DO
 {
@@ -161,7 +149,6 @@ pub enum DO
   Update(TablePtr, Vec<(usize, CExpPtr<Value>)>, CExpPtr<bool>),
   Delete(TablePtr, CExpPtr<bool>),
 }
-
 /// Actions for altering columns of a table.
 pub enum AlterAction
 {
@@ -170,7 +157,6 @@ pub enum AlterAction
   Rename(String, String),
   Modify(String, DataType),
 }
-
 /// Compiled Function.
 ///
 /// When a CREATE FUNCTION statement is executed,
@@ -187,7 +173,6 @@ pub struct Function
   pub ilist: RefCell<Vec<Inst>>, // Valid when compiled is true.
   pub compiled: Cell<bool>,
 }
-
 impl Debug for Function
 {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error>
@@ -198,6 +183,5 @@ impl Debug for Function
       .finish()
   }
 }
-
 /// ```Rc<Function>```
 pub type FunctionPtr = Rc<Function>;

@@ -5,31 +5,25 @@
 //!
 //! Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids.
 //!
-//! Note that the left node has SMALLER not larger records.
-
+//! Note that the left node is greater than the parent node. A tree with numbers 3, 5, 8 looks like this:
+//!
+//!         5
+//!     8       3
 use crate::*;
-
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
-
 /// The maximum size in bytes of each page.
-pub const PAGE_SIZE: usize = /*0x4000;*/ stg::LPGOODSIZE;
-
+pub const PAGE_SIZE: usize = 398 + (1024 - 16) * 16;
 /// = 3. Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
 const NODE_OVERHEAD: usize = 3;
-
 /// = 8. 45 bits ( 1 + 4 x 11 ) needs 6 bytes, but use 8.
 const NODE_BASE: usize = 8;
-
 /// = 6. Number of bytes used to store a page number.
 const PAGE_ID_SIZE: usize = 6;
-
 /// = 11. Node ids are 11 bits.
 const NODE_ID_BITS: usize = 11;
-
 /// = 2047. Largest Node id.
 const MAX_NODE: usize = bitmask!(0, NODE_ID_BITS);
-
 /// Node balance - indicates which child tree is higher.
 #[derive(PartialEq)]
 enum Balance
@@ -39,7 +33,6 @@ enum Balance
   RightHigher = 2,
 }
 use Balance::*;
-
 /// A page in a SortedFile.
 /// Note that left subtree has nodes that compare greater.
 pub struct Page
@@ -65,7 +58,6 @@ pub struct Page
   /// First child page ( for a parent page ).    
   pub(crate) first_page: u64,
 }
-
 impl Page
 {
   /// The size of the page in bytes.
@@ -73,7 +65,6 @@ impl Page
   {
     NODE_BASE + self.alloc * self.node_size + if self.level != 0 { PAGE_ID_SIZE } else { 0 }
   }
-
   /// Construct a new page.
   pub fn new(rec_size: usize, level: u8, data: Vec<u8>, pnum: u64) -> Page
   {
@@ -81,13 +72,11 @@ impl Page
     // Round up to multiple of 8 bytes.
     // node_size = node_size + 7;
     // node_size = node_size - node_size % 8;
-
     let u = util::get(&data, 0, NODE_BASE);
     let root = getbits!(u, 8, NODE_ID_BITS) as usize;
     let count = getbits!(u, 8 + NODE_ID_BITS, NODE_ID_BITS) as usize;
     let free = getbits!(u, 8 + NODE_ID_BITS * 2, NODE_ID_BITS) as usize;
     let alloc = getbits!(u, 8 + NODE_ID_BITS * 3, NODE_ID_BITS) as usize;
-
     let first_page = if level != 0
     {
       util::get(&data, NODE_BASE + alloc * node_size, PAGE_ID_SIZE)
@@ -96,10 +85,8 @@ impl Page
     {
       0
     };
-
     Page { data, node_size, root, count, free, alloc, first_page, level, is_dirty: false, pnum }
   }
-
   /// Sets header and trailer data (if parent). Called just before page is saved to file.
   pub fn write_header(&mut self)
   {
@@ -108,7 +95,6 @@ impl Page
       | ((self.count as u64) << (8 + NODE_ID_BITS))
       | ((self.free as u64) << (8 + 2 * NODE_ID_BITS))
       | ((self.alloc as u64) << (8 + 3 * NODE_ID_BITS));
-
     util::set(&mut self.data, 0, u, NODE_BASE);
     if self.level != 0
     {
@@ -116,7 +102,6 @@ impl Page
       util::set(&mut self.data, off, self.first_page, PAGE_ID_SIZE);
     }
   }
-
   /// Is the page full?
   pub fn full(&self) -> bool
   {
@@ -124,14 +109,12 @@ impl Page
       && (self.alloc == MAX_NODE
         || NODE_BASE + (self.alloc + 1) * self.node_size + if self.level != 0 { PAGE_ID_SIZE } else { 0 } >= PAGE_SIZE)
   }
-
   /// Construct a new empty page inheriting record size and level from self.
   /// Used when splitting a page that is full.
   pub fn new_page(&self) -> Page
   {
     Page::new(self.rec_size(), self.level, vec![0; PAGE_SIZE], u64::MAX)
   }
-
   /// Find child page number.
   pub fn find_child(&self, db: &DB, r: &dyn Record) -> u64
   {
@@ -164,7 +147,6 @@ impl Page
       self.child_page(rx)
     }
   }
-
   /// Returns node id of Record equal to r, or zero if no such node exists.
   pub fn find_equal(&self, db: &DB, r: &dyn Record) -> usize
   {
@@ -184,7 +166,6 @@ impl Page
     }
     0
   }
-
   /// Insert a record into the page ( if the key is a duplicate, nothing happens, and the record is not saved ).
   pub fn insert(&mut self, db: &DB, r: &dyn Record)
   {
@@ -195,7 +176,6 @@ impl Page
       self.set_record(inserted, r);
     }
   }
-
   /// Insert a child page with specified key and number.
   pub fn insert_page(&mut self, db: &DB, r: &dyn Record, cp: u64)
   {
@@ -204,7 +184,6 @@ impl Page
     self.set_record(inserted, r);
     self.set_child_page(inserted, cp);
   }
-
   /// Append a child page with specified key and number.
   pub fn append_page(&mut self, r: &dyn Record, cp: u64)
   {
@@ -213,7 +192,6 @@ impl Page
     self.set_record(inserted, r);
     self.set_child_page(inserted, cp);
   }
-
   /// Append record x from specified page to this page.
   pub fn append_from(&mut self, from: &Page, x: usize)
   {
@@ -231,38 +209,32 @@ impl Page
       self.data[dest_off..dest_off + n].copy_from_slice(&from.data[src_off..src_off + n]);
     }
   }
-
   /// Remove record from this page.
   pub fn remove(&mut self, db: &DB, r: &dyn Record)
   {
     self.root = self.remove_from(db, self.root, r).0;
   }
-
   // Node access functions.
   // Layout of a Node is
   // Client data
   // Possibly padding
   // Child page number ( if parent page ) ( 6 bytes )
   // Node overhead ( 3 bytes )
-
   /// Offset of the 3 byte node overhead  for node x.
   fn over_off(&self, x: usize) -> usize
   {
     (NODE_BASE - NODE_OVERHEAD) + x * self.node_size
   }
-
   /// Offset of the client data for node x.
   pub fn rec_offset(&self, x: usize) -> usize
   {
     NODE_BASE + (x - 1) * self.node_size
   }
-
   /// The client data size.
   pub fn rec_size(&self) -> usize
   {
     self.node_size - NODE_OVERHEAD - if self.level != 0 { PAGE_ID_SIZE } else { 0 }
   }
-
   /// Get balance for node x.
   fn balance(&self, x: usize) -> Balance
   {
@@ -275,28 +247,24 @@ impl Page
       | _ => panic!(),
     }
   }
-
   /// Set balance for node x.
   fn set_balance(&mut self, x: usize, balance: Balance)
   {
     let off = self.over_off(x);
     setbits!(self.data[off], 0, 2, balance as u8);
   }
-
   /// Get the left child node for node x. Result is zero if there is no child.
   pub fn left(&self, x: usize) -> usize
   {
     let off = self.over_off(x);
     self.data[off + 1] as usize | (getbits!(self.data[off] as usize, 2, NODE_ID_BITS - 8) << 8)
   }
-
   /// Get the right child node for node x. Result is zero if there is no child.
   pub fn right(&self, x: usize) -> usize
   {
     let off = self.over_off(x);
     self.data[off + 2] as usize | (getbits!(self.data[off] as usize, 2 + NODE_ID_BITS - 8, NODE_ID_BITS - 8) << 8)
   }
-
   /// Set the left child node for node x.
   fn set_left(&mut self, x: usize, y: usize)
   {
@@ -305,7 +273,6 @@ impl Page
     setbits!(self.data[off], 2, NODE_ID_BITS - 8, (y >> 8) as u8);
     debug_assert!(self.left(x) == y);
   }
-
   /// Set the right child node for node x.
   fn set_right(&mut self, x: usize, y: usize)
   {
@@ -314,7 +281,6 @@ impl Page
     setbits!(self.data[off], 2 + NODE_ID_BITS - 8, NODE_ID_BITS - 8, (y >> 8) as u8);
     debug_assert!(self.right(x) == y);
   }
-
   /// Get the child page number for node x in a parent page.
   pub fn child_page(&self, x: usize) -> u64
   {
@@ -322,7 +288,6 @@ impl Page
     let off = self.over_off(x) - PAGE_ID_SIZE;
     util::get(&self.data, off, PAGE_ID_SIZE)
   }
-
   /// Set the child page for node x.
   fn set_child_page(&mut self, x: usize, pnum: u64)
   {
@@ -330,7 +295,6 @@ impl Page
     let off = self.over_off(x) - PAGE_ID_SIZE;
     util::set(&mut self.data, off, pnum as u64, PAGE_ID_SIZE);
   }
-
   /// Set the record data for node x.
   fn set_record(&mut self, x: usize, r: &dyn Record)
   {
@@ -338,7 +302,6 @@ impl Page
     let size = self.rec_size();
     r.save(&mut self.data[off..off + size]);
   }
-
   /// Compare record data for node x with record r.
   pub fn compare(&self, db: &DB, r: &dyn Record, x: usize) -> Ordering
   {
@@ -346,7 +309,6 @@ impl Page
     let size = self.rec_size();
     r.compare(db, &self.data[off..off + size])
   }
-
   /// Get record key for node x.
   pub fn get_key(&self, db: &DB, x: usize, r: &dyn Record) -> Box<dyn Record>
   {
@@ -354,9 +316,7 @@ impl Page
     let size = self.rec_size();
     r.key(db, &self.data[off..off + size])
   }
-
   // Node Id Allocation.
-
   /// Peek alloc_node.
   fn next_alloc(&self) -> usize
   {
@@ -369,7 +329,6 @@ impl Page
       self.count + 1
     }
   }
-
   /// Allocate a node.
   fn alloc_node(&mut self) -> usize
   {
@@ -386,7 +345,6 @@ impl Page
       result
     }
   }
-
   /// Free node x.
   fn free_node(&mut self, x: usize)
   {
@@ -394,7 +352,6 @@ impl Page
     self.free = x;
     self.count -= 1;
   }
-
   /// Insert into node x. Result is node and whether tree height increased.
   fn insert_into(&mut self, mut x: usize, r: Option<(&DB, &dyn Record)>) -> (usize, bool)
   {
@@ -414,7 +371,6 @@ impl Page
         | Some((db, r)) => self.compare(db, r, x),
         | None => Ordering::Less,
       };
-
       if c == Ordering::Greater
       {
         let p = self.insert_into(self.left(x), r);
@@ -468,7 +424,6 @@ impl Page
     }
     (x, height_increased)
   }
-
   /// Rotate right to rebalance tree.
   fn rotate_right(&mut self, x: usize) -> (usize, bool)
   {
@@ -525,7 +480,6 @@ impl Page
       (y, height_decreased)
     }
   }
-
   /// Rotate left to rebalance tree.
   fn rotate_left(&mut self, x: usize) -> (usize, bool)
   {
@@ -582,7 +536,6 @@ impl Page
       (y, height_decreased)
     }
   }
-
   /// Remove record from tree x.
   fn remove_from(&mut self, db: &DB, mut x: usize, r: &dyn Record) -> (usize, bool) // out bool heightDecreased
   {
@@ -611,7 +564,6 @@ impl Page
         let right = t.0;
         x = t.1;
         height_decreased = t.2;
-
         self.set_left(x, self.left(deleted));
         self.set_right(x, right);
         self.set_balance(x, self.balance(deleted));
@@ -684,7 +636,6 @@ impl Page
     }
     (x, height_decreased)
   }
-
   /// Remove smallest node from tree x. Returns root of tree, removed node and height_decreased.
   fn remove_least(&mut self, x: usize) -> (usize, usize, bool)
   {
@@ -719,16 +670,14 @@ impl Page
       (x, least, height_decreased)
     }
   }
-
   /// Reduce page size using free nodes.
-  pub fn compress(&mut self)
+  pub fn compress(&mut self, db: &DB)
   {
     let saving = (self.alloc - self.count) * self.node_size;
-    if saving == 0 || !compress(self.size(), saving)
+    if saving == 0 || !db.file.borrow().compress(self.size(), saving)
     {
       return;
     }
-
     let mut flist = Vec::new();
     let mut f = self.free;
     while f != 0
@@ -746,7 +695,6 @@ impl Page
     self.free = 0;
     self.alloc = self.count;
   }
-
   /// Relocate node x (or any child of x) if it is greater than page count.
   pub fn relocate(&mut self, mut x: usize, flist: &mut Vec<usize>) -> usize
   {
@@ -762,14 +710,12 @@ impl Page
         self.data[src..src + n].fill(0);
         x = to;
       }
-
       let c = self.left(x);
       let c1 = self.relocate(c, flist);
       if c1 != c
       {
         self.set_left(x, c1);
       }
-
       let c = self.right(x);
       let c1 = self.relocate(c, flist);
       if c1 != c

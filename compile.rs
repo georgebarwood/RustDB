@@ -1,15 +1,12 @@
 use crate::*;
 use std::{mem, ops};
-
 /// Compiled expression which yields type T when evaluated.
 pub trait CExp<T>
 {
   fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> T;
 }
-
 /// Pointer to CExp.
 pub type CExpPtr<T> = Box<dyn CExp<T>>;
-
 /// Function that compiles a builtin function call ( see Database::register ).
 #[derive(Clone, Copy)]
 pub enum CompileFunc
@@ -19,7 +16,6 @@ pub enum CompileFunc
   Decimal(fn(&Parser, &mut [Expr]) -> CExpPtr<i64>),
   Float(fn(&Parser, &mut [Expr]) -> CExpPtr<f64>),
 }
-
 /// Calculate various attributes such as data_type, is_constant etc.
 fn check(p: &Parser, e: &mut Expr)
 {
@@ -54,10 +50,8 @@ fn check(p: &Parser, e: &mut Expr)
       check(p, b1);
       check(p, b2);
       e.is_constant = b1.is_constant && b2.is_constant;
-
       let t1 = b1.data_type;
       let t2 = b2.data_type;
-
       if data_kind(t1) != data_kind(t2) && *op != Token::VBar
       {
         panic!("Binary op type mismatch")
@@ -172,21 +166,18 @@ fn check(p: &Parser, e: &mut Expr)
   }
   e.checked = true;
 }
-
 /// Get DataType of an expression.
 fn get_type(p: &Parser, e: &mut Expr) -> DataType
 {
   check(p, e);
   e.data_type
 }
-
 /// Get DataKind of an expression.
 pub fn get_kind(p: &Parser, e: &mut Expr) -> DataKind
 {
   check(p, e);
   data_kind(e.data_type)
 }
-
 /// Compile a call to a builtin function that returns a Value.
 fn c_builtin_value(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<Value>
 {
@@ -196,7 +187,6 @@ fn c_builtin_value(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<Value>
   }
   panic!()
 }
-
 /// Compile an expression.
 pub fn c_value(p: &Parser, e: &mut Expr) -> CExpPtr<Value>
 {
@@ -237,7 +227,6 @@ pub fn c_value(p: &Parser, e: &mut Expr) -> CExpPtr<Value>
     },
   }
 }
-
 /// Compile int expression.
 pub fn c_int(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
 {
@@ -269,7 +258,6 @@ pub fn c_int(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
     | _ => panic!(),
   }
 }
-
 /// Compile float expression.
 pub fn c_float(p: &Parser, e: &mut Expr) -> CExpPtr<f64>
 {
@@ -298,7 +286,6 @@ pub fn c_float(p: &Parser, e: &mut Expr) -> CExpPtr<f64>
     | _ => panic!(),
   }
 }
-
 /// Compile bool expression.
 pub fn c_bool(p: &Parser, e: &mut Expr) -> CExpPtr<bool>
 {
@@ -345,7 +332,6 @@ pub fn c_bool(p: &Parser, e: &mut Expr) -> CExpPtr<bool>
     | _ => panic!(),
   }
 }
-
 /// Compile decimal expression.
 pub fn c_decimal(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
 {
@@ -387,7 +373,6 @@ pub fn c_decimal(p: &Parser, e: &mut Expr) -> CExpPtr<i64>
     | _ => panic!(),
   }
 }
-
 /// Compile arithmetic.
 fn c_arithmetic<T>(
   p: &Parser, op: Token, e1: &mut Expr, e2: &mut Expr, cexp: fn(&Parser, &mut Expr) -> CExpPtr<T>,
@@ -412,7 +397,6 @@ where
     | _ => panic!(),
   }
 }
-
 /// Compile comparison.
 fn c_compare<T>(
   p: &Parser, op: Token, e1: &mut Expr, e2: &mut Expr, cexp: fn(&Parser, &mut Expr) -> CExpPtr<T>,
@@ -433,7 +417,6 @@ where
     | _ => panic!(),
   }
 }
-
 /// Compile CASE Expression.
 fn c_case<T>(
   p: &Parser, wes: &mut [(Expr, Expr)], els: &mut Expr, cexp: fn(&Parser, &mut Expr) -> CExpPtr<T>,
@@ -451,7 +434,6 @@ where
   let els = cexp(p, els);
   Box::new(cexp::Case::<T> { whens, els })
 }
-
 /// Compile a call to a builtin function that returns an integer.
 fn c_builtin_int(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64>
 {
@@ -461,7 +443,6 @@ fn c_builtin_int(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64>
   }
   panic!()
 }
-
 /// Compile a call to a builtin function that returns a decimal.
 fn c_builtin_decimal(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64>
 {
@@ -471,7 +452,6 @@ fn c_builtin_decimal(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64>
   }
   panic!()
 }
-
 /// Compile a call to a builtin function that returns a float.
 fn c_builtin_float(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<f64>
 {
@@ -481,22 +461,18 @@ fn c_builtin_float(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<f64>
   }
   panic!()
 }
-
 /// Compile SelectExpression to CSelectExpression.
 pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpression
 {
   let mut from = x.from.map(|mut te| c_te(p, &mut te));
-
   let table = match &from
   {
     | Some(CTableExpression::Base(t)) => Some(t.clone()),
     | _ => None,
   };
   let mut index_from = None;
-
   // Is the save necessary?
   let save = mem::replace(&mut p.from, from);
-
   let mut exps = Vec::new();
   for mut e in x.exps
   {
@@ -509,7 +485,6 @@ pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpres
       {
         panic!("WHERE expression must be bool")
       }
-
       if let Some(table) = table
       {
         index_from = table.index_from(p, we);
@@ -528,7 +503,6 @@ pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpres
       None
     }
   };
-
   let mut orderby = Vec::new();
   let mut desc = Vec::new();
   for (e, a) in &mut x.orderby
@@ -537,16 +511,13 @@ pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpres
     orderby.push(e);
     desc.push(*a);
   }
-
   from = mem::replace(&mut p.from, save);
   if index_from.is_some()
   {
     from = index_from;
   }
-
   CSelectExpression { colnames: x.colnames, assigns: x.assigns, exps, from, wher, orderby, desc }
 }
-
 /// Compile a TableExpression to CTableExpression.
 pub(crate) fn c_te(p: &Parser, te: &mut TableExpression) -> CTableExpression
 {
@@ -574,7 +545,6 @@ pub(crate) fn c_te(p: &Parser, te: &mut TableExpression) -> CTableExpression
     }
   }
 }
-
 /// Look for named table in database.
 pub(crate) fn table_look(p: &Parser, name: &ObjRef) -> TablePtr
 {
@@ -587,14 +557,12 @@ pub(crate) fn table_look(p: &Parser, name: &ObjRef) -> TablePtr
     panic!("table {} not found", name.to_str())
   }
 }
-
 /// Look for named function in database and compile it if not already compiled.
 pub(crate) fn function_look(p: &Parser, name: &ObjRef) -> FunctionPtr
 {
   if let Some(r) = p.db.get_function(name)
   {
     let (compiled, src) = { (r.compiled.get(), r.source.clone()) };
-
     if !compiled
     {
       r.compiled.set(true);
@@ -634,7 +602,6 @@ pub(crate) fn function_look(p: &Parser, name: &ObjRef) -> FunctionPtr
     panic!("function {} not found", name.to_str())
   }
 }
-
 /// Lookup the column offset and DataType of a named column.
 pub(crate) fn name_to_col(p: &Parser, name: &str) -> (usize, DataType)
 {
@@ -653,7 +620,6 @@ pub(crate) fn name_to_col(p: &Parser, name: &str) -> (usize, DataType)
   }
   panic!("Name '{}' not found", name)
 }
-
 /// Lookup the column number and DataType of a named column.
 pub(crate) fn name_to_colnum(p: &Parser, name: &str) -> (usize, DataType)
 {
@@ -672,12 +638,10 @@ pub(crate) fn name_to_colnum(p: &Parser, name: &str) -> (usize, DataType)
   }
   panic!("Name '{}' not found", name)
 }
-
 /// Compile ExprCall to CExpPtr<Value>, checking parameter types.
 pub(crate) fn c_call(p: &Parser, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value>
 {
   let rp: FunctionPtr = function_look(p, name);
-
   let mut pv: Vec<CExpPtr<Value>> = Vec::new();
   let mut pt: Vec<DataType> = Vec::new();
   for e in parms
@@ -687,11 +651,9 @@ pub(crate) fn c_call(p: &Parser, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPt
     let ce = c_value(p, e);
     pv.push(ce);
   }
-
   p.check_types(&rp, &pt);
   Box::new(cexp::Call { rp, pv })
 }
-
 /// Generate code to evaluate expression and push the value onto the stack.
 pub(crate) fn push(p: &mut Parser, e: &mut Expr) -> DataType
 {
@@ -699,7 +661,6 @@ pub(crate) fn push(p: &mut Parser, e: &mut Expr) -> DataType
   {
     return NONE;
   }
-
   let t = get_type(p, e);
   match &mut e.exp
   {

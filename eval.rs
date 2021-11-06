@@ -1,5 +1,4 @@
 use crate::*;
-
 /// Evaluation environment - stack of Values, references to DB and Query.
 pub struct EvalEnv<'r>
 {
@@ -9,7 +8,6 @@ pub struct EvalEnv<'r>
   pub qy: &'r mut dyn Query,
   pub call_depth: usize,
 }
-
 impl<'r> EvalEnv<'r>
 {
   /// Construct a new EvalEnv.
@@ -17,7 +15,6 @@ impl<'r> EvalEnv<'r>
   {
     EvalEnv { stack: Vec::new(), bp: 0, db, qy, call_depth: 0 }
   }
-
   /// Allocate and initialise local variables.
   pub(crate) fn alloc_locals(&mut self, dt: &[DataType], param_count: usize)
   {
@@ -27,7 +24,6 @@ impl<'r> EvalEnv<'r>
       self.stack.push(v);
     }
   }
-
   /// Execute list of instructions.
   pub(crate) fn go(&mut self, ilist: &[Inst])
   {
@@ -101,7 +97,6 @@ impl<'r> EvalEnv<'r>
       }
     }
   } // end fn go
-
   /// Call a function.
   pub(crate) fn call(&mut self, r: &Function)
   {
@@ -117,7 +112,6 @@ impl<'r> EvalEnv<'r>
     {
       panic!("Call depth limit of 500 reached");
     }
-
     let save_bp = self.bp;
     self.bp = self.stack.len() - r.param_count;
     self.alloc_locals(&r.local_typ, r.param_count);
@@ -147,7 +141,6 @@ impl<'r> EvalEnv<'r>
     self.bp = save_bp;
     self.call_depth -= 1;
   }
-
   /// Discard n items from stack.
   fn discard(&mut self, mut n: usize)
   {
@@ -157,13 +150,11 @@ impl<'r> EvalEnv<'r>
       n -= 1;
     }
   }
-
   /// Pop a value from the stack and assign it to a local varaiable.
   fn pop_to_local(&mut self, local: usize)
   {
     self.stack[self.bp + local] = self.stack.pop().unwrap();
   }
-
   /// Pop string from the stack.
   fn pop_string(&mut self) -> String
   {
@@ -176,13 +167,11 @@ impl<'r> EvalEnv<'r>
       panic!()
     }
   }
-
   /// Push clone of local variable onto the stack.
   fn push_local(&mut self, local: usize)
   {
     self.stack.push(self.stack[self.bp + local].clone());
   }
-
   /// Execute a ForInit instruction. Constructs For state and assigns it to local variable.
   fn for_init(&mut self, for_id: usize, cte: &CTableExpression)
   {
@@ -190,7 +179,6 @@ impl<'r> EvalEnv<'r>
     let fs = util::new(ForState { data_source });
     self.stack[self.bp + for_id] = Value::For(fs);
   }
-
   /// Evaluate optional where expression.
   fn ok(&mut self, wher: &Option<CExpPtr<bool>>, data: &[u8]) -> bool
   {
@@ -203,7 +191,6 @@ impl<'r> EvalEnv<'r>
       true
     }
   }
-
   /// Execute a ForNext instruction. Fetches a record from underlying file that satisfies the where condition,
   /// evaluates the expressions and assigns the results to local variables.
   fn for_next(&mut self, info: &ForNextInfo) -> bool
@@ -218,12 +205,10 @@ impl<'r> EvalEnv<'r>
       {
         panic!("Jump into FOR loop");
       };
-
       if let Some((p, off)) = next
       {
         let p = &p.borrow();
         let data = &p.data[off..];
-
         // Eval and check WHERE condition, eval expressions and assign to locals.
         if self.ok(&info.wher, data)
         {
@@ -241,14 +226,12 @@ impl<'r> EvalEnv<'r>
       }
     }
   }
-
   /// Execute ForSortInit instruction. Constructs sorted vector of rows.
   fn for_sort_init(&mut self, for_id: usize, cse: &CSelectExpression)
   {
     let rows = self.get_temp(cse);
     self.stack[self.bp + for_id] = Value::ForSort(util::new(ForSortState { ix: 0, rows }));
   }
-
   /// Execute ForSortNext instruction. Assigns locals from current row, moves to next row.
   fn for_sort_next(&mut self, info: &(usize, usize, Assigns)) -> bool
   {
@@ -278,14 +261,12 @@ impl<'r> EvalEnv<'r>
       panic!("Jump into FOR loop");
     }
   }
-
   /// Execute SQL string.
   fn execute(&mut self)
   {
     let s = self.pop_string();
     self.db.run(&s, self.qy);
   }
-
   /// Execute a data operation (DO).
   fn exec_do(&mut self, dop: &DO)
   {
@@ -303,7 +284,6 @@ impl<'r> EvalEnv<'r>
       | _ => panic!(),
     }
   }
-
   /// Get list of record ids for DELETE/UPDATE.
   fn get_id_list(&mut self, t: &TablePtr, w: &CExpPtr<bool>) -> Vec<u64>
   {
@@ -319,7 +299,6 @@ impl<'r> EvalEnv<'r>
     }
     idlist
   }
-
   /// Execute INSERT operation.
   fn insert(&mut self, t: TablePtr, cols: &[usize], src: &CTableExpression)
   {
@@ -332,7 +311,6 @@ impl<'r> EvalEnv<'r>
       panic!();
     }
   }
-
   /// Execute a DELETE operation.
   fn delete(&mut self, t: &TablePtr, w: &CExpPtr<bool>)
   {
@@ -354,7 +332,6 @@ impl<'r> EvalEnv<'r>
       t.remove(&self.db, &oldrow);
     }
   }
-
   /// Execute an UPDATE operation.
   fn update(&mut self, t: &TablePtr, assigns: &[(usize, CExpPtr<Value>)], w: &CExpPtr<bool>)
   {
@@ -381,7 +358,6 @@ impl<'r> EvalEnv<'r>
       }
     }
   }
-
   /// Get DataSource from CTableExpression.
   fn data_source(&mut self, te: &CTableExpression) -> DataSource
   {
@@ -401,7 +377,6 @@ impl<'r> EvalEnv<'r>
       | _ => panic!(),
     }
   }
-
   /// Execute a SELECT operation.
   fn select(&mut self, cse: &CSelectExpression)
   {
@@ -463,7 +438,6 @@ impl<'r> EvalEnv<'r>
       self.qy.push(&values);
     }
   }
-
   /// Execute a SET operation.
   fn set(&mut self, cse: &CSelectExpression)
   {
@@ -493,7 +467,6 @@ impl<'r> EvalEnv<'r>
       }
     }
   }
-
   /// Assign or append to a local variable.
   fn assign_local(&mut self, a: &(usize, AssignOp), val: Value)
   {
@@ -510,7 +483,6 @@ impl<'r> EvalEnv<'r>
       }
     }
   }
-
   /// Insert evaluated values into a table.
   fn insert_values(&mut self, table: TablePtr, ci: &[usize], vals: &[Vec<CExpPtr<Value>>])
   {
@@ -546,7 +518,6 @@ impl<'r> EvalEnv<'r>
       table.insert(&self.db, &mut row);
     }
   }
-
   /// Get sorted temporary table.
   fn get_temp(&mut self, cse: &CSelectExpression) -> Vec<Vec<Value>>
   {
@@ -582,7 +553,6 @@ impl<'r> EvalEnv<'r>
       panic!()
     }
   }
-
   fn drop_table(&mut self, name: &ObjRef)
   {
     if let Some(t) = sys::get_table(&self.db, name)
@@ -597,7 +567,6 @@ impl<'r> EvalEnv<'r>
       panic!("Drop Table not found {}", name.to_str());
     }
   }
-
   fn drop_function(&mut self, name: &ObjRef)
   {
     if let Some(fid) = sys::get_function_id(&self.db, name)

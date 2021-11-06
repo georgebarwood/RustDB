@@ -1,5 +1,4 @@
 use crate::*;
-
 /// Simple value ( Binary, String, Int, Float, Bool ).
 ///
 /// Binary and String values are allocated 16 bytes.
@@ -17,7 +16,6 @@ pub enum Value
   For(Rc<RefCell<run::ForState>>),
   ForSort(Rc<RefCell<run::ForSortState>>),
 }
-
 impl Value
 {
   pub fn load(db: &DB, typ: DataType, data: &[u8], off: usize) -> (Value, u64)
@@ -47,7 +45,6 @@ impl Value
     };
     (val, code)
   }
-
   pub fn save(&self, typ: DataType, data: &mut [u8], off: usize, code: u64)
   {
     let size = data_size(typ);
@@ -85,7 +82,6 @@ impl Value
       {}
     }
   }
-
   pub fn str(&self) -> Rc<String>
   {
     match self
@@ -97,7 +93,6 @@ impl Value
       | _ => panic!("str not implemented"),
     }
   }
-
   pub fn append(&mut self, val: Value)
   {
     if let Value::String(s) = self
@@ -121,7 +116,6 @@ impl Value
     }
   }
 }
-
 impl std::cmp::Ord for Value
 {
   fn cmp(&self, other: &Self) -> Ordering
@@ -155,7 +149,6 @@ impl std::cmp::Ord for Value
     panic!()
   }
 }
-
 impl PartialOrd for Value
 {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering>
@@ -163,7 +156,6 @@ impl PartialOrd for Value
     Some(self.cmp(other))
   }
 }
-
 impl PartialEq for Value
 {
   fn eq(&self, other: &Self) -> bool
@@ -178,9 +170,7 @@ impl PartialEq for Value
     }
   }
 }
-
 impl Eq for Value {}
-
 /// Decode bytes. Result is bytes and code ( or u64::MAX if no code ).
 pub fn get_bytes(db: &DB, data: &[u8]) -> (Vec<u8>, u64)
 {
@@ -199,7 +189,6 @@ pub fn get_bytes(db: &DB, data: &[u8]) -> (Vec<u8>, u64)
     (bytes, code)
   }
 }
-
 /// Save bytes. If more than 15 bytes, a code is needed.
 pub fn save_bytes(bytes: &[u8], data: &mut [u8], code: u64)
 {

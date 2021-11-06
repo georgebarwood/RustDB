@@ -1,6 +1,5 @@
 use crate::*;
 use std::{mem, str};
-
 /// SQL parser.
 ///
 /// Name convention for methods:
@@ -29,7 +28,6 @@ pub struct Parser<'a>
   pub(crate) db: DB,
   pub(crate) from: Option<CTableExpression>,
 }
-
 impl<'a> Parser<'a>
 {
   /// Construct a new parser.
@@ -60,7 +58,6 @@ impl<'a> Parser<'a>
     // println!( "Parsing {}", src );
     result
   }
-
   /// Parse a single statement.
   fn statement(&mut self)
   {
@@ -105,7 +102,6 @@ impl<'a> Parser<'a>
       panic!("statement keyword expected, got '{:?}'", self.token)
     }
   } // end fn statement
-
   /// Parse and execute a batch of statements.
   pub(crate) fn batch(&mut self, rs: &mut dyn Query)
   {
@@ -117,14 +113,10 @@ impl<'a> Parser<'a>
       }
       self.b.resolve_jumps();
       let mut ee = EvalEnv::new(self.db.clone(), rs);
-
       // let start = std::time::Instant::now();
-
       ee.alloc_locals(&self.b.local_typ, 0);
       ee.go(&self.b.ilist);
-
       // println!( "EvalEnv::exec Time elapsed={} micro sec.", start.elapsed().as_micros() );
-
       if self.token == Token::EndOfFile
       {
         break;
@@ -132,7 +124,6 @@ impl<'a> Parser<'a>
       self.b = Block::new();
     }
   }
-
   /// Parse the definition of a function.
   pub(crate) fn parse_function(&mut self)
   {
@@ -165,18 +156,15 @@ impl<'a> Parser<'a>
     {
       NONE
     };
-
     if self.b.return_type != NONE
     {
       self.def_local(b"result", self.b.return_type);
     }
-
     self.read_id(b"AS");
     self.read_id(b"BEGIN");
     self.s_begin();
     self.b.resolve_jumps();
   }
-
   /// Read a byte, adjusting source line/column.
   fn read_char(&mut self) -> u8
   {
@@ -204,7 +192,6 @@ impl<'a> Parser<'a>
     self.cc = cc;
     cc
   }
-
   /// Read the next token.
   fn read_token(&mut self)
   {
@@ -219,7 +206,6 @@ impl<'a> Parser<'a>
         cc = self.read_char();
       }
       self.token_start = self.source_ix - 1;
-
       let sc: u8 = cc;
       cc = self.read_char();
       match sc
@@ -414,7 +400,6 @@ impl<'a> Parser<'a>
   {
     to_s(&self.source[start..end])
   }
-
   fn read_data_type(&mut self) -> DataType
   {
     if self.token != Token::Id
@@ -466,7 +451,6 @@ impl<'a> Parser<'a>
       | _ => panic!("Datatype expected"),
     }
   }
-
   pub(crate) fn check_types(&self, r: &FunctionPtr, ptypes: &[DataType])
   {
     if ptypes.len() != r.param_count
@@ -483,7 +467,6 @@ impl<'a> Parser<'a>
       }
     }
   }
-
   /// Examine current token, determine if it is an operator.
   /// Result is operator token and precedence, or -1 if current token is not an operator.
   fn operator(&mut self) -> (Token, i8)
@@ -508,12 +491,10 @@ impl<'a> Parser<'a>
     }
     (t, t.precedence())
   }
-
   fn id(&mut self) -> String
   {
     to_s(self.id_ref())
   }
-
   fn id_ref(&mut self) -> &'a [u8]
   {
     if self.token != Token::Id
@@ -524,7 +505,6 @@ impl<'a> Parser<'a>
     self.read_token();
     result
   }
-
   fn local(&mut self) -> usize
   {
     let result: usize;
@@ -543,7 +523,6 @@ impl<'a> Parser<'a>
     self.read_token();
     result
   }
-
   fn read_int(&mut self) -> i64
   {
     if self.token != Token::Number
@@ -554,7 +533,6 @@ impl<'a> Parser<'a>
     self.read_token();
     result
   }
-
   /// Checks the token is as expected, and consumes it.
   fn read(&mut self, t: Token)
   {
@@ -567,7 +545,6 @@ impl<'a> Parser<'a>
       self.read_token();
     }
   }
-
   /// Checks the token is the specified Id and consumes it.
   fn read_id(&mut self, s: &[u8])
   {
@@ -580,7 +557,6 @@ impl<'a> Parser<'a>
       self.read_token();
     }
   }
-
   /// Tests whether the token is as specified. If so, it is consumed.
   fn test(&mut self, t: Token) -> bool
   {
@@ -591,7 +567,6 @@ impl<'a> Parser<'a>
     }
     result
   }
-
   /// Tests whether the token is the specified id. If so, it is consumed.
   fn test_id(&mut self, s: &[u8]) -> bool
   {
@@ -605,7 +580,6 @@ impl<'a> Parser<'a>
       true
     }
   }
-
   /// Reads an ObjRef ( schema.name pair ).
   fn obj_ref(&mut self) -> ObjRef
   {
@@ -614,7 +588,6 @@ impl<'a> Parser<'a>
     let name = self.id();
     ObjRef { schema, name }
   }
-
   /// Add an instruction to the instruction list.
   pub(crate) fn add(&mut self, s: Inst)
   {
@@ -623,7 +596,6 @@ impl<'a> Parser<'a>
       self.b.ilist.push(s);
     }
   }
-
   /// Add a Data Operation (DO) to the instruction list.
   fn dop(&mut self, dop: DO)
   {
@@ -632,9 +604,7 @@ impl<'a> Parser<'a>
       self.add(Inst::DataOp(Box::new(dop)));
     }
   }
-
   // Error handling.
-
   /// Get the function name or "batch" if no function.
   fn rname(&self) -> String
   {
@@ -647,7 +617,6 @@ impl<'a> Parser<'a>
       "batch".to_string()
     }
   }
-
   /// Construct SqlError based on current line/column/rname.
   pub(crate) fn make_error(&self, msg: String) -> SqlError
   {
@@ -720,7 +689,6 @@ impl<'a> Parser<'a>
       }
     }
   }
-
   /// Parses a primary expression ( basic expression with no operators ).
   fn exp_primary(&mut self, agg_allowed: bool) -> Expr
   {
@@ -804,26 +772,22 @@ impl<'a> Parser<'a>
     }
     result
   }
-
   fn exp_or_agg(&mut self) -> Expr
   {
     let pri = self.exp_primary(true);
     self.exp_lp(pri, 0)
   }
-
   /// Parse an expression.
   fn exp(&mut self) -> Expr
   {
     self.exp_p(0)
   }
-
   /// Parse an expression, with specified operator precedence.
   fn exp_p(&mut self, precedence: i8) -> Expr
   {
     let pr = self.exp_primary(false);
     self.exp_lp(pr, precedence)
   }
-
   /// Apply binary operator to lhs based on precedence.
   fn exp_lp(&mut self, mut lhs: Expr, precedence: i8) -> Expr
   {
@@ -844,7 +808,6 @@ impl<'a> Parser<'a>
     }
     lhs
   }
-
   /// Parse a CASE expression.
   fn exp_case(&mut self) -> Expr
   {
@@ -865,7 +828,6 @@ impl<'a> Parser<'a>
     self.read_id(b"END");
     Expr::new(ExprIs::Case(list, els))
   }
-
   fn exp_scalar_select(&mut self) -> Expr
   {
     let te = self.select_expression(false);
@@ -886,7 +848,6 @@ impl<'a> Parser<'a>
     // else if self.test_id( b"SELECT" ) { self.expressions() } ...
     self.values(expect)
   }
-
   fn values(&mut self, expect: usize) -> TableExpression
   {
     let mut values = Vec::new();
@@ -919,7 +880,6 @@ impl<'a> Parser<'a>
     }
     TableExpression::Values(values)
   }
-
   fn te_named_table(&mut self) -> TableExpression
   {
     let schema = self.id();
@@ -928,7 +888,6 @@ impl<'a> Parser<'a>
     let name = ObjRef { schema, name };
     TableExpression::Base(name)
   }
-
   fn primary_table_exp(&mut self) -> TableExpression
   {
     /*
@@ -947,7 +906,6 @@ impl<'a> Parser<'a>
     }
     self.te_named_table()
   }
-
   fn exp_name(&self, exp: &Expr) -> String
   {
     match &exp.exp
@@ -957,7 +915,6 @@ impl<'a> Parser<'a>
       | _ => "".to_string(),
     }
   }
-
   /// Parse a SELECT / SET / FOR expression.
   fn select_expression(&mut self, set_or_for: bool) -> SelectExpression
   {
@@ -993,7 +950,6 @@ impl<'a> Parser<'a>
         break;
       }
     }
-
     let from = if self.test_id(b"FROM")
     {
       Some(Box::new(self.primary_table_exp()))
@@ -1003,7 +959,6 @@ impl<'a> Parser<'a>
       None
     };
     let wher = if self.test_id(b"WHERE") { Some(self.exp()) } else { None };
-
     let mut orderby = Vec::new();
     if self.test_id(b"ORDER")
     {
@@ -1041,7 +996,6 @@ impl<'a> Parser<'a>
       self.add(Inst::Select(Box::new(cte)));
     }
   }
-
   fn s_set(&mut self)
   {
     let se = self.select_expression(true);
@@ -1051,7 +1005,6 @@ impl<'a> Parser<'a>
       self.add(Inst::Set(Box::new(cte)));
     }
   }
-
   fn s_insert(&mut self)
   {
     self.read_id(b"INTO");
@@ -1097,7 +1050,6 @@ impl<'a> Parser<'a>
       self.dop(DO::Insert(t, cnums, csrc));
     }
   }
-
   fn s_update(&mut self)
   {
     let t = self.obj_ref();
@@ -1124,7 +1076,6 @@ impl<'a> Parser<'a>
       let t = table_look(self, &t);
       let from = CTableExpression::Base(t.clone());
       let save = mem::replace(&mut self.from, Some(from));
-
       let w = c_bool(self, &mut w);
       let mut se = Vec::new();
       for (name, mut exp) in s
@@ -1143,7 +1094,6 @@ impl<'a> Parser<'a>
       self.dop(DO::Update(t, se, w));
     }
   }
-
   fn s_delete(&mut self)
   {
     self.read_id(b"FROM");
@@ -1153,19 +1103,16 @@ impl<'a> Parser<'a>
       panic!("DELETE must have a WHERE");
     }
     let mut w = self.exp();
-
     if !self.parse_only
     {
       let t = table_look(self, &tname);
       let from = CTableExpression::Base(t.clone());
-
       let save = mem::replace(&mut self.from, Some(from));
       let w = c_bool(self, &mut w);
       self.from = save;
       self.dop(DO::Delete(t, w));
     }
   }
-
   fn s_execute(&mut self)
   {
     self.read(Token::LBra);
@@ -1177,7 +1124,6 @@ impl<'a> Parser<'a>
       self.add(Inst::Execute);
     }
   }
-
   fn s_exec(&mut self)
   {
     let mut pname = self.id();
@@ -1189,7 +1135,6 @@ impl<'a> Parser<'a>
     }
     let name = ObjRef { schema: sname, name: pname };
     self.read(Token::LBra);
-
     let mut ptypes = Vec::new();
     if !self.test(Token::RBra)
     {
@@ -1209,15 +1154,12 @@ impl<'a> Parser<'a>
       self.add(Inst::Call(func));
     }
   }
-
   /// Parse FOR statement.
   fn s_for(&mut self)
   {
     let se: SelectExpression = self.select_expression(true);
-
     let for_id = self.b.local_typ.len();
     self.b.local_typ.push(NONE);
-
     if !self.parse_only
     {
       let start_id;
@@ -1239,7 +1181,6 @@ impl<'a> Parser<'a>
         let info = Box::new((for_id, orderbylen, assigns));
         self.add(Inst::ForSortNext(break_id, info));
       }
-
       let save = self.b.break_id;
       self.b.break_id = break_id;
       self.statement();
@@ -1281,7 +1222,6 @@ impl<'a> Parser<'a>
       self.dop(DO::CreateTable(ti));
     }
   }
-
   fn create_index(&mut self)
   {
     let iname = self.id();
@@ -1320,7 +1260,6 @@ impl<'a> Parser<'a>
       self.dop(DO::CreateIndex(IndexInfo { tname, iname, cols }));
     }
   }
-
   fn create_view(&mut self, alter: bool)
   {
     let r = self.obj_ref();
@@ -1334,7 +1273,6 @@ impl<'a> Parser<'a>
       self.dop(DO::CreateView(r, alter, source));
     }
   }
-
   fn create_function(&mut self, alter: bool)
   {
     let rref: ObjRef = self.obj_ref();
@@ -1345,14 +1283,12 @@ impl<'a> Parser<'a>
     self.parse_function();
     let _cb: Block = mem::replace(&mut self.b, save);
     self.parse_only = save2;
-
     if !self.parse_only
     {
       let source: String = self.source_from(source_start, self.token_start);
       self.dop(DO::CreateFunction(rref, Rc::new(source), alter));
     }
   }
-
   fn s_create(&mut self)
   {
     match self.id_ref()
@@ -1369,7 +1305,6 @@ impl<'a> Parser<'a>
       | _ => panic!("Unknown keyword"),
     }
   }
-
   fn s_alter(&mut self)
   {
     match self.id_ref()
@@ -1380,7 +1315,6 @@ impl<'a> Parser<'a>
       | _ => panic!("ALTER : TABLE,VIEW.. expected"),
     }
   }
-
   fn s_drop(&mut self)
   {
     match self.id_ref()
@@ -1423,7 +1357,6 @@ impl<'a> Parser<'a>
       }
     }
   }
-
   fn s_rename(&mut self)
   {
     match self.id_ref()
@@ -1469,7 +1402,6 @@ impl<'a> Parser<'a>
       }
     }
   }
-
   fn s_alter_table(&mut self)
   {
     let tr = self.obj_ref();
@@ -1511,9 +1443,7 @@ impl<'a> Parser<'a>
     }
     self.dop(DO::AlterTable(tr, list));
   }
-
   // Helper functions for other statements.
-
   /// Define a local variable ( parameter or declared ).
   fn def_local(&mut self, name: &'a [u8], dt: DataType)
   {
@@ -1526,26 +1456,22 @@ impl<'a> Parser<'a>
     }
     self.b.local_map.insert(name, local_id);
   }
-
   fn get_jump_id(&mut self) -> usize
   {
     let result = self.b.jumps.len();
     self.b.jumps.push(usize::MAX);
     result
   }
-
   fn set_jump(&mut self, jump_id: usize)
   {
     self.b.jumps[jump_id] = self.b.ilist.len();
   }
-
   fn get_loop_id(&mut self) -> usize
   {
     let result = self.get_jump_id();
     self.set_jump(result);
     result
   }
-
   fn get_goto(&mut self, s: &'a [u8]) -> usize
   {
     if let Some(jump_id) = self.b.labels.get(s)
@@ -1559,9 +1485,7 @@ impl<'a> Parser<'a>
       jump_id
     }
   }
-
   // Other statements.
-
   fn s_declare(&mut self)
   {
     loop
@@ -1575,7 +1499,6 @@ impl<'a> Parser<'a>
       }
     }
   }
-
   fn s_set_label(&mut self, s: &'a [u8])
   {
     if let Some(jump_id) = self.b.labels.get(s)
@@ -1593,7 +1516,6 @@ impl<'a> Parser<'a>
       self.b.labels.insert(s, jump_id);
     }
   }
-
   fn s_while(&mut self)
   {
     let mut exp = self.exp();
@@ -1611,7 +1533,6 @@ impl<'a> Parser<'a>
       self.set_jump(break_id);
     }
   }
-
   fn s_if(&mut self)
   {
     let mut exp = self.exp();
@@ -1635,14 +1556,12 @@ impl<'a> Parser<'a>
       self.set_jump(false_id);
     }
   }
-
   fn s_goto(&mut self)
   {
     let label = self.id_ref();
     let to = self.get_goto(label);
     self.add(Inst::Jump(to));
   }
-
   fn s_break(&mut self)
   {
     let break_id = self.b.break_id;
@@ -1652,7 +1571,6 @@ impl<'a> Parser<'a>
     }
     self.add(Inst::Jump(break_id));
   }
-
   fn s_return(&mut self)
   {
     if self.b.return_type != NONE
@@ -1671,7 +1589,6 @@ impl<'a> Parser<'a>
     }
     self.add(Inst::Return);
   }
-
   fn s_throw(&mut self)
   {
     let mut msg = self.exp();
@@ -1681,7 +1598,6 @@ impl<'a> Parser<'a>
       self.add(Inst::Throw);
     }
   }
-
   fn s_begin(&mut self)
   {
     while !self.test_id(b"END")
@@ -1690,13 +1606,11 @@ impl<'a> Parser<'a>
     }
   }
 } // end impl Parser
-
 /// Convert byte ref to &str.
 pub(crate) fn tos(s: &[u8]) -> &str
 {
   str::from_utf8(s).unwrap()
 }
-
 /// Convert byte ref to String.
 pub(crate) fn to_s(s: &[u8]) -> String
 {

@@ -1,5 +1,4 @@
 use crate::*;
-
 /// Holds function name, line, column and message.
 pub struct SqlError
 {
@@ -8,7 +7,6 @@ pub struct SqlError
   pub column: usize,
   pub msg: String,
 }
-
 /// Table Expression ( not yet type-checked or compiled against database ).
 // #[derive(Debug)]
 pub enum TableExpression
@@ -17,7 +15,6 @@ pub enum TableExpression
   Base(ObjRef),
   Values(Vec<Vec<Expr>>),
 }
-
 /// Assign or Append.
 #[derive(Clone, Copy, Debug)]
 pub enum AssignOp
@@ -25,10 +22,8 @@ pub enum AssignOp
   Assign,
   Append,
 }
-
 /// Vector of local variable numbers and AssignOp( assign or append ).
 pub type Assigns = Vec<(usize, AssignOp)>;
-
 /// Select Expression ( not yet compiled ).
 // #[derive(Debug)]
 pub struct SelectExpression
@@ -40,7 +35,6 @@ pub struct SelectExpression
   pub wher: Option<Expr>,
   pub orderby: Vec<(Expr, bool)>,
 }
-
 /// Parsing token.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub enum Token
@@ -76,7 +70,6 @@ pub enum Token
   Unknown,
   EndOfFile,
 }
-
 impl Token
 {
   pub fn precedence(self) -> i8
@@ -85,7 +78,6 @@ impl Token
     PA[self as usize]
   }
 }
-
 /// Scalar Expression (uncompiled).
 // #[derive(Debug)]
 pub struct Expr
@@ -96,7 +88,6 @@ pub struct Expr
   pub checked: bool,
   pub col: usize,
 }
-
 impl Expr
 {
   pub fn new(exp: ExprIs) -> Self
@@ -104,7 +95,6 @@ impl Expr
     Expr { exp, data_type: NONE, is_constant: false, checked: false, col: 0 }
   }
 }
-
 /// Scalar Expression variants.
 // #[derive(Debug)]
 pub enum ExprIs
@@ -121,7 +111,6 @@ pub enum ExprIs
   ScalarSelect(Box<SelectExpression>),
   List(Vec<Expr>),
 }
-
 /// Object reference ( Schema.Name ).
 // #[derive(Debug)
 #[derive(PartialEq, PartialOrd, Eq, Hash, Clone)]
@@ -130,7 +119,6 @@ pub struct ObjRef
   pub schema: String,
   pub name: String,
 }
-
 impl ObjRef
 {
   pub fn new(s: &str, n: &str) -> Self
@@ -143,7 +131,6 @@ impl ObjRef
     format!("[{}].[{}]", &self.schema, &self.name)
   }
 }
-
 /// Binary=1, String=2, Int=3, Float=4, Bool=5, Decimal=6.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub enum DataKind
@@ -156,12 +143,9 @@ pub enum DataKind
   Bool = 5,
   Decimal = 6,
 }
-
 /// Low 3 (=KBITS) bits are DataKind, next 5 bits are size in bytes, or p ( for DECIMAL ).
 pub type DataType = usize;
-
 const KBITS: usize = 3;
-
 pub(crate) const NONE: DataType = DataKind::None as usize;
 pub(crate) const BINARY: DataType = DataKind::Binary as usize + (16 << KBITS);
 pub(crate) const STRING: DataType = DataKind::String as usize + (16 << KBITS);
@@ -173,7 +157,6 @@ pub(crate) const FLOAT: DataType = DataKind::Float as usize + (4 << KBITS);
 pub(crate) const DOUBLE: DataType = DataKind::Float as usize + (8 << KBITS);
 pub(crate) const BOOL: DataType = DataKind::Bool as usize + (1 << KBITS);
 pub(crate) const DECIMAL: DataType = DataKind::Decimal as usize;
-
 /// Compute the DataKind of a DataType.
 pub fn data_kind(x: DataType) -> DataKind
 {
@@ -188,7 +171,6 @@ pub fn data_kind(x: DataType) -> DataKind
   ];
   DKLOOK[x % (1 << KBITS)]
 }
-
 /// Compute the number of bytes required to store a value of the specified DataType.
 #[must_use]
 pub fn data_size(x: DataType) -> usize
@@ -205,7 +187,6 @@ pub fn data_size(x: DataType) -> usize
     p
   }
 }
-
 /// Compilation block ( body of function or batch section ).
 pub(crate) struct Block<'a>
 {
@@ -220,7 +201,6 @@ pub(crate) struct Block<'a>
   pub locals: Vec<&'a [u8]>,
   pub break_id: usize,
 }
-
 impl<'a> Block<'a>
 {
   /// Construct a new block.
@@ -238,7 +218,6 @@ impl<'a> Block<'a>
       return_type: NONE,
     }
   }
-
   /// Check labels are all defined and patch jump instructions.
   pub fn resolve_jumps(&mut self)
   {
@@ -249,7 +228,6 @@ impl<'a> Block<'a>
         panic!("Undefined label: {}", parse::tos(k));
       }
     }
-
     for i in &mut self.ilist
     {
       match i

@@ -9,11 +9,11 @@
 //!
 //!multipart requests ( for file upload ).
 //!
-//!Implement DROP TABLE(done), DROP INDEX, DROP FUNCTION(DONE) etc.
+//!Implement DROP TABLE(done), DROP INDEX, DROP FUNCTION(done) etc.
 //!
-//!Implement ALTER TABLE.
+//!Implement ALTER TABLE?
 //!
-//!Fully implement CREATE INDEX.
+//!Fully implement CREATE INDEX?s
 //!
 //!Sort out error handling for PARSEINT etc.
 //!
@@ -55,67 +55,47 @@
 //!(2) Database Table storage. Each record has a 64-bit Id.
 //!
 //!(3) Index storage ( an index record refers back to the main table ).
-
 use crate::{
   bytes::*, compile::*, eval::*, expr::*, page::*, parse::*, run::*, sortedfile::*, stg::*, table::*, util::newmap,
   value::*,
 };
 use std::{cell::Cell, cell::RefCell, cmp::Ordering, collections::HashMap, panic, rc::Rc};
-
 /// Utility functions and macros.
 #[macro_use]
 mod util;
-
-/// WebQuery struct for making a http web server.
-pub mod web;
-
-/// Table, ColInfo, Row and other Table types.
-pub mod table;
-
-/// Sorted Record storage.
-pub mod sortedfile;
-
-/// Storage of logical pages in smaller regions of backing storage.
-pub mod stg;
-
-/// Page for SortedFile.
-pub mod page;
-
-/// Run-time Value.
-pub mod value;
-
-/// Storage of variable length values : ByteStorage.
-mod bytes;
-
-/// System table Schema,Table,Column,Index,IndexColumn,Function) functions.
-mod sys;
-
-/// Parser.
-mod parse;
-
-/// Expression types, result of parsing.
-pub mod expr;
-
-/// Compiled expressions.
-mod cexp;
-
 /// Compilation of builtin functions.
 mod builtin;
-
+/// Storage of variable length values : ByteStorage.
+mod bytes;
+/// Compiled expressions.
+mod cexp;
 /// Compile parsed expressions, checking types.
 pub mod compile;
-
-/// Instruction (Inst) and other run time types.
-mod run;
-
 /// Instruction execution.
 mod eval;
-
+/// Expression types, result of parsing.
+pub mod expr;
+/// Page for SortedFile.
+pub mod page;
+/// Parser.
+mod parse;
+/// Instruction (Inst) and other run time types.
+mod run;
+/// Sorted Record storage.
+pub mod sortedfile;
+/// Storage of logical pages in smaller regions of backing storage.
+pub mod stg;
+/// System table Schema,Table,Column,Index,IndexColumn,Function) functions.
+mod sys;
+/// Table, ColInfo, Row and other Table types.
+pub mod table;
+/// Run-time Value.
+pub mod value;
+/// WebQuery struct for making a http web server.
+pub mod web;
 // End of modules.
-
 /// ```Rc<Database>```
 pub type DB = Rc<Database>;
-
 /// Database with SQL-like interface.
 pub struct Database
 {
@@ -138,7 +118,6 @@ pub struct Database
   /// Has there been an error since last save?
   pub err: Cell<bool>,
 }
-
 impl Database
 {
   /// Construct a new DB, based on the specified file.
@@ -146,11 +125,8 @@ impl Database
   {
     let mut cq = ConsoleQuery {};
     let is_new = stg.size() == 0;
-
     let mut tb = TableBuilder::new();
-
     let sys_schema = tb.nt("sys", "Schema", &[("Name", STRING)]);
-
     let sys_table = tb.nt(
       "sys",
       "Table",
@@ -163,24 +139,19 @@ impl Database
         ("IdGen", BIGINT),
       ],
     );
-
     let sys_column = tb.nt(
       "sys",
       "Column",
       &[("Table", BIGINT), ("Name", STRING), ("Type", BIGINT)],
     );
-
     let sys_index = tb.nt("sys", "Index", &[("Root", BIGINT), ("Table", BIGINT), ("Name", STRING)]);
-
     let sys_index_col = tb.nt("sys", "IndexColumn", &[("Index", BIGINT), ("ColId", BIGINT)]);
-
     sys_table.add_index(6, vec![1, 2]);
     sys_column.add_index(7, vec![0]);
     sys_index.add_index(8, vec![1]);
     sys_index_col.add_index(9, vec![0]);
-
     let db = Rc::new(Database {
-      file: RefCell::new(CompactFile::new(stg)),
+      file: RefCell::new(CompactFile::new(stg, 400, 1024)),
       sys_schema,
       sys_table,
       sys_column,
@@ -195,14 +166,11 @@ impl Database
       lastid: Cell::new(0),
       err: Cell::new(false),
     });
-
     if is_new
     {
       db.alloc_page(); // Allocate page for byte storage.
     }
-
     db.bs.init(&db);
-
     for t in &tb.list
     {
       if !is_new
@@ -211,11 +179,9 @@ impl Database
       }
       db.publish_table(t.clone());
     }
-
     if is_new
     {
       println!("New database... initialising");
-
       // The creation order has to match the order above ( so root values are as predicted ).
       let sysinit = "
 CREATE SCHEMA sys
@@ -244,13 +210,11 @@ GO
     builtin::register_builtins(&db);
     db
   }
-
   /// Register a builtin function.
   pub fn register(self: &DB, name: &str, typ: DataKind, cf: CompileFunc)
   {
     self.builtins.borrow_mut().insert(name.to_string(), (typ, cf));
   }
-
   /// Run a batch of SQL.
   pub fn run(self: &DB, source: &str, qy: &mut dyn Query)
   {
@@ -265,7 +229,6 @@ GO
       self.err.set(true);
     }
   }
-
   /// Run a batch of SQL, printing the execution time.
   pub fn run_timed(self: &DB, source: &str, qy: &mut dyn Query)
   {
@@ -273,16 +236,13 @@ GO
     self.run(source, qy);
     println!("db run time={} micro sec.", start.elapsed().as_micros());
   }
-
   /// Run a batch of SQL.
   fn go(self: &DB, source: &str, qy: &mut dyn Query) -> Option<SqlError>
   {
     let mut p = Parser::new(source, self);
-
     let result = std::panic::catch_unwind(panic::AssertUnwindSafe(|| {
       p.batch(qy);
     }));
-
     if let Err(x) = result
     {
       Some(
@@ -309,7 +269,6 @@ GO
       None
     }
   }
-
   /// Save updated tables to underlying file ( or rollback if there was an error ).
   pub fn save(self: &DB)
   {
@@ -323,9 +282,7 @@ GO
     {
       SaveOp::Save
     };
-
     self.bs.save(self, op);
-
     let tm = &*self.tables.borrow();
     for t in tm.values()
     {
@@ -342,12 +299,10 @@ GO
         t.id_gen_dirty.set(false);
       }
     }
-
     for t in tm.values()
     {
       t.save(self, op);
     }
-
     if self.functions_dirty.get()
     {
       for function in self.functions.borrow().values()
@@ -361,7 +316,6 @@ GO
 
     // self.dump_tables();
   }
-
   /// Print the tables ( for debugging ).
   pub fn dump_tables(self: &DB)
   {
@@ -373,7 +327,6 @@ GO
       t._dump(self);
     }
   }
-
   /// Get the named table.
   fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr>
   {
@@ -383,7 +336,6 @@ GO
     }
     sys::get_table(self, name)
   }
-
   /// Get the named function.
   fn get_function(self: &DB, name: &ObjRef) -> Option<FunctionPtr>
   {
@@ -393,14 +345,12 @@ GO
     }
     sys::get_function(self, name)
   }
-
   /// Insert the table into the map of tables.
   fn publish_table(&self, table: TablePtr)
   {
     let name = table.info.name.clone();
     self.tables.borrow_mut().insert(name, table);
   }
-
   /// Get code for value.
   fn encode(self: &DB, val: &Value) -> u64
   {
@@ -419,32 +369,27 @@ GO
     }
     self.bs.encode(self, &bytes[7..])
   }
-
   /// Decode u64 to bytes.
   fn decode(self: &DB, code: u64) -> Vec<u8>
   {
     self.bs.decode(self, code)
   }
-
   /// Delete encoding.
   fn delcode(self: &DB, code: u64)
   {
     self.bs.delcode(self, code);
   }
-
   /// Allocate a page of underlying file storage.
   fn alloc_page(self: &DB) -> u64
   {
     self.file.borrow_mut().alloc_page()
   }
-
   /// Free a pagee of underyling file storage.
   fn free_page(self: &DB, lpnum: u64)
   {
     self.file.borrow_mut().free_page(lpnum);
   }
 } // end impl Database
-
 impl Drop for Database
 {
   /// Clear function instructions to avoid leaking memory.
@@ -456,21 +401,18 @@ impl Drop for Database
     }
   }
 }
-
 /// For creating system tables.
 struct TableBuilder
 {
   alloc: i64,
   list: Vec<TablePtr>,
 }
-
 impl TableBuilder
 {
   fn new() -> Self
   {
     Self { alloc: 1, list: Vec::new() }
   }
-
   fn nt(&mut self, schema: &str, name: &str, ct: &[(&str, DataType)]) -> TablePtr
   {
     let id = self.alloc;
@@ -483,45 +425,37 @@ impl TableBuilder
     table
   }
 }
-
 /// Input/Output interface.
 pub trait Query
 {
   /// Append SELECT values to output.
   fn push(&mut self, values: &[Value]);
-
   /// ARG builtin function.
   fn arg(&mut self, _kind: i64, _name: &str) -> Rc<String>
   {
     Rc::new(String::new())
   }
-
   /// GLOBAL builtin function.
   fn global(&self, _kind: i64) -> i64
   {
     0
   }
-
   /// Set the error string.
   fn set_error(&mut self, err: String);
-
   /// Get the error string.
   fn get_error(&mut self) -> String
   {
     String::new()
   }
 }
-
 /// Query where output is printed to console.
 pub struct ConsoleQuery {}
-
 impl Query for ConsoleQuery
 {
   fn push(&mut self, values: &[Value])
   {
     println!("{:?}", values);
   }
-
   /// Called when a panic ( error ) occurs.
   fn set_error(&mut self, err: String)
   {

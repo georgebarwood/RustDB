@@ -1,6 +1,5 @@
 use crate::*;
 use std::{io::Read, io::Write, net::TcpStream};
-
 /// Response content is accumulated in result.
 ///
 /// ToDo : cookies, files.
@@ -17,7 +16,6 @@ pub struct WebQuery
   pub headers: String,
   pub now: i64, // Micro-seconds since January 1, 1970 0:00:00 UTC
 }
-
 impl WebQuery
 {
   /// Reads the http request from the TCP stream into a new WebQuery.
@@ -26,7 +24,6 @@ impl WebQuery
     let mut hp = HttpRequestParser::new(s);
     let (method, path, query, _version) = hp.read_request();
     let _input_headers = hp.read_headers();
-
     let mut form = HashMap::new();
     if hp.content_type == "application/x-www-form-urlencoded"
     {
@@ -36,49 +33,40 @@ impl WebQuery
     {
       let _content = hp.read_content();
     }
-
     let now = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap();
     let now = now.as_micros() as i64;
     let output = Vec::with_capacity(10000);
     let headers = String::with_capacity(1000);
     let status_code = "200 OK".to_string();
-
     Self { status_code, output, headers, method, path, query, form, err: String::new(), now }
   }
-
   pub fn trace(&self)
   {
     println!("method={} path={} query={:?}", self.method, self.path, self.query);
   }
-
   /// Writes the http response to the TCP stream.
   pub fn write(&mut self, tcps: &mut TcpStream)
   {
     let contents = &self.output;
     let status_line = "HTTP/1.1 ".to_string() + &self.status_code;
-
     let response = format!(
       "{}\r\n{}Content-Length: {}\r\n\r\n",
       status_line,
       self.headers,
       contents.len()
     );
-
     // println!( "status line={}", status_line );
     // println!( "response={}", response );
-
     tcps.write_all(response.as_bytes()).unwrap();
     tcps.write_all(contents).unwrap();
     tcps.flush().unwrap();
   }
-
   /// Append string to output.
   fn push_str(&mut self, s: &str)
   {
     self.output.extend_from_slice(s.as_bytes());
   }
 }
-
 impl Query for WebQuery
 {
   fn arg(&mut self, kind: i64, s: &str) -> Rc<String>
@@ -123,7 +111,6 @@ impl Query for WebQuery
       | _ => panic!(),
     }
   }
-
   fn global(&self, kind: i64) -> i64
   {
     match kind
@@ -132,7 +119,6 @@ impl Query for WebQuery
       | _ => panic!(),
     }
   }
-
   fn push(&mut self, values: &[Value])
   {
     for v in values
@@ -162,18 +148,15 @@ impl Query for WebQuery
       }
     }
   }
-
   fn set_error(&mut self, err: String)
   {
     self.err = err;
   }
-
   fn get_error(&mut self) -> String
   {
     self.err.to_string()
   }
 }
-
 /// Parser for http request.
 ///
 /// A http request starts with a line with the method, target and protocol version.
@@ -199,7 +182,6 @@ impl Query for WebQuery
 /// See <https://url.spec.whatwg.org/#application/x-www-form-urlencoded>
 ///
 /// (2) multipart/form-data - typically for uploading files, see <https://www.ietf.org/rfc/rfc2388.txt> and <https://www.w3.org/TR/html401/interact/forms.html>.
-
 struct HttpRequestParser<'a>
 {
   buffer: [u8; 512],
@@ -211,7 +193,6 @@ struct HttpRequestParser<'a>
   content_length: usize,
   content_type: String,
 }
-
 impl<'a> HttpRequestParser<'a>
 {
   pub fn new(stream: &'a TcpStream) -> Self
@@ -228,7 +209,6 @@ impl<'a> HttpRequestParser<'a>
       content_type: String::new(),
     }
   }
-
   fn get_byte(&mut self) -> u8
   {
     if self.base + self.index == self.end_content
@@ -246,7 +226,6 @@ impl<'a> HttpRequestParser<'a>
     self.index += 1;
     result
   }
-
   fn skip_white_space(&mut self)
   {
     loop
@@ -259,7 +238,6 @@ impl<'a> HttpRequestParser<'a>
       }
     }
   }
-
   fn read_to(&mut self, to: u8) -> String
   {
     let mut result = Vec::new();
@@ -279,7 +257,6 @@ impl<'a> HttpRequestParser<'a>
     }
     String::from_utf8(result).unwrap()
   }
-
   fn decode(&mut self, b: u8) -> u8
   {
     if b == b'%'
@@ -297,7 +274,6 @@ impl<'a> HttpRequestParser<'a>
       b
     }
   }
-
   fn read_coded_str(&mut self, to: u8) -> String
   {
     let mut result = Vec::new();
@@ -317,7 +293,6 @@ impl<'a> HttpRequestParser<'a>
     }
     String::from_utf8(result).unwrap()
   }
-
   fn read_map(&mut self) -> HashMap<String, Rc<String>>
   {
     let mut result = HashMap::new();
@@ -339,7 +314,6 @@ impl<'a> HttpRequestParser<'a>
     }
     result
   }
-
   fn read_target(&mut self) -> (Rc<String>, HashMap<String, Rc<String>>)
   {
     let mut path = Vec::new();
@@ -366,7 +340,6 @@ impl<'a> HttpRequestParser<'a>
     let path = Rc::new(String::from_utf8(path).unwrap());
     (path, query)
   }
-
   /// Get Method, path, query and protocol version.
   pub fn read_request(&mut self) -> (Rc<String>, Rc<String>, HashMap<String, Rc<String>>, String)
   {
@@ -375,7 +348,6 @@ impl<'a> HttpRequestParser<'a>
     let version = self.read_to(13);
     (method, path, query, version)
   }
-
   fn read_header(&mut self) -> Option<(String, String)>
   {
     assert!(self.get_byte() == 10);
@@ -396,7 +368,6 @@ impl<'a> HttpRequestParser<'a>
     }
     Some((name, value))
   }
-
   pub fn read_headers(&mut self) -> Vec<(String, String)>
   {
     let mut result = Vec::new();
@@ -408,7 +379,6 @@ impl<'a> HttpRequestParser<'a>
     assert!(self.get_byte() == 10);
     result
   }
-
   pub fn read_content(&mut self) -> String
   {
     let mut result = Vec::new();
@@ -420,7 +390,6 @@ impl<'a> HttpRequestParser<'a>
     }
     String::from_utf8(result).unwrap()
   }
-
   pub fn read_form(&mut self) -> HashMap<String, Rc<String>>
   {
     self.end_content = self.base + self.index + self.content_length;

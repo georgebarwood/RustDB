@@ -1,12 +1,10 @@
 use crate::*;
-
 /// Storage of variable size values.
 pub struct ByteStorage
 {
   pub file: Rc<SortedFile>,
   pub id_gen: Cell<u64>,
 }
-
 impl ByteStorage
 {
   pub fn new(root_page: u64) -> Self
@@ -14,7 +12,6 @@ impl ByteStorage
     let file = Rc::new(SortedFile::new(9 + BPF, 8, root_page));
     ByteStorage { file, id_gen: Cell::new(0) }
   }
-
   pub fn init(&self, db: &DB)
   {
     // Initialise id_alloc to id of last record.
@@ -25,12 +22,10 @@ impl ByteStorage
       self.id_gen.set(1 + util::getu64(&p.data, off));
     }
   }
-
   pub fn save(&self, db: &DB, op: SaveOp)
   {
     self.file.save(db, op);
   }
-
   pub fn encode(&self, db: &DB, bytes: &[u8]) -> u64
   {
     let result = self.id_gen.get();
@@ -65,7 +60,6 @@ impl ByteStorage
     // println!( "encode result={} frags={}", &result, &frags );
     result
   }
-
   pub fn decode(&self, db: &DB, mut id: u64) -> Vec<u8>
   {
     let mut result = vec![0_u8; 7]; // First 7 bytes will be filled in from inline data.
@@ -86,7 +80,6 @@ impl ByteStorage
     }
     result
   }
-
   pub fn delcode(&self, db: &DB, id: u64)
   {
     let start = Fragment::new(id);
@@ -112,12 +105,10 @@ impl ByteStorage
     }
   }
 }
-
 /// = 52. Number of bytes stored in each fragment.
 ///
 /// Chosen so that node size is 64 bytes = 52 + 8 (id) + 1 (len) + 3 (node overhead).
 const BPF: usize = 52;
-
 /// Values are split into BPF size fragments.
 struct Fragment
 {
@@ -126,7 +117,6 @@ struct Fragment
   len: u8,
   bytes: [u8; BPF],
 }
-
 impl Fragment
 {
   pub fn new(id: u64) -> Self
@@ -134,19 +124,17 @@ impl Fragment
     Fragment { id, len: 0, bytes: [0; BPF] }
   }
 }
-
 impl Record for Fragment
 {
+  fn compare(&self, _db: &DB, data: &[u8]) -> std::cmp::Ordering
+  {
+    let val = util::getu64(data, 0);
+    self.id.cmp(&val)
+  }
   fn save(&self, data: &mut [u8])
   {
     util::setu64(data, self.id);
     data[8] = self.len;
     data[9..9 + BPF].copy_from_slice(&self.bytes[..BPF]);
-  }
-
-  fn compare(&self, _db: &DB, data: &[u8]) -> std::cmp::Ordering
-  {
-    let val = util::getu64(data, 0);
-    self.id.cmp(&val)
   }
 }
