@@ -55,8 +55,6 @@ impl WebQuery
       self.headers,
       contents.len()
     );
-    // println!( "status line={}", status_line );
-    // println!( "response={}", response );
     tcps.write_all(response.as_bytes()).unwrap();
     tcps.write_all(contents).unwrap();
     tcps.flush().unwrap();
@@ -143,7 +141,7 @@ impl Query for WebQuery
         }
         | _ =>
         {
-          panic!("push bad value={:?}", v)
+          panic!()
         }
       }
     }

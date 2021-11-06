@@ -55,7 +55,6 @@ impl<'a> Parser<'a>
     };
     result.read_char();
     result.read_token();
-    // println!( "Parsing {}", src );
     result
   }
   /// Parse a single statement.
@@ -116,7 +115,6 @@ impl<'a> Parser<'a>
       // let start = std::time::Instant::now();
       ee.alloc_locals(&self.b.local_typ, 0);
       ee.go(&self.b.ilist);
-      // println!( "EvalEnv::exec Time elapsed={} micro sec.", start.elapsed().as_micros() );
       if self.token == Token::EndOfFile
       {
         break;
@@ -391,7 +389,6 @@ impl<'a> Parser<'a>
       break;
     } // skip_space loop
     self.token = token;
-    // println!("Got token {:}", token );
   }
 
   // ****************** Helper functions for parsing.

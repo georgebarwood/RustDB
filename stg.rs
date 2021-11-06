@@ -95,10 +95,6 @@ impl CompactFile
     {
       x.save();
     }
-    else
-    {
-      x._trace();
-    }
     x
   }
 
@@ -175,7 +171,6 @@ impl CompactFile
     let mut starter = vec![0_u8; self.sp_size];
     self.read(off, &mut starter);
     let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
-                                                   // println!( "read_page lpnum={} size={}", lpnum, size );
     let ext = self.calc_ext(size); // Number of extension pages.
     let off = 2 + ext * 8;
     let mut done = min(size, self.sp_size - off);
@@ -269,10 +264,6 @@ impl CompactFile
         let to = self.ep_alloc();
         self.relocate(from, to);
       }
-    }
-    if self.lp_alloc_dirty || compacted
-    {
-      self._trace();
     }
     // Save the lp alloc values and file size.
     if self.lp_alloc_dirty
@@ -422,14 +413,6 @@ impl CompactFile
   pub fn compress(&self, size: usize, saving: usize) -> bool
   {
     self.calc_ext(size - saving) < self.calc_ext(size)
-  }
-  /// Print debug info.
-  fn _trace(&self)
-  {
-    println!(
-      "ep_count={} ep_resvd={} lp_alloc={} lp_first={}",
-      self.ep_count, self.ep_resvd, self.lp_alloc, self.lp_first
-    );
   }
 } // end impl CompactFile
 

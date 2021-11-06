@@ -1,5 +1,4 @@
 use crate::*;
-use core::fmt::Debug;
 /// Iterator that yields references to page data.
 pub type DataSource = Box<dyn Iterator<Item = (PagePtr, usize)>>;
 /// Instruction.
@@ -32,29 +31,11 @@ pub struct ForState
 {
   pub(crate) data_source: DataSource,
 }
-impl Debug for ForState
-{
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error>
-  {
-    f.debug_struct("For")
-      // .field("row", &self.row)
-      .finish()
-  }
-}
 /// State for FOR loop (sorted case).
 pub struct ForSortState
 {
   pub(crate) ix: usize,
   pub(crate) rows: Vec<Vec<Value>>,
-}
-impl Debug for ForSortState
-{
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error>
-  {
-    f.debug_struct("ForSort")
-      // .field("row", &self.row)
-      .finish()
-  }
 }
 /// Info for ForNext Inst.
 pub struct ForNextInfo
@@ -172,16 +153,6 @@ pub struct Function
   pub source: Rc<String>,
   pub ilist: RefCell<Vec<Inst>>, // Valid when compiled is true.
   pub compiled: Cell<bool>,
-}
-impl Debug for Function
-{
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error>
-  {
-    f.debug_struct("Function")
-      // .field("compiled", &self.compiled)
-      // .field("source", &self.source)
-      .finish()
-  }
 }
 /// ```Rc<Function>```
 pub type FunctionPtr = Rc<Function>;

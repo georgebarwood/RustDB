@@ -221,11 +221,9 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
         let cnum = a.int(1) as usize;
         cols.push(cnum);
       }
-      // println!( "got index root={}", root );
       table.add_index(root, cols);
     }
     db.publish_table(table.clone());
-    // println!( "got table {:?}", name.to_str() );
     Some(table)
   }
   else
@@ -247,7 +245,6 @@ pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr>
       let source = Rc::new(a.str(db, 2));
       let function = parse_function(db, source);
       db.functions.borrow_mut().insert(name.clone(), function.clone());
-      // println!( "got function {:?}", name );
       return Some(function);
     }
   }

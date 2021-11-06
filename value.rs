@@ -4,7 +4,7 @@ use crate::*;
 /// Binary and String values are allocated 16 bytes.
 /// If the value is more than 15 bytes, the first 7 bytes are stored inline, and the rest are coded.
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Value
 {
   None,

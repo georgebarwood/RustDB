@@ -8,7 +8,6 @@ pub struct SqlError
   pub msg: String,
 }
 /// Table Expression ( not yet type-checked or compiled against database ).
-// #[derive(Debug)]
 pub enum TableExpression
 {
   // Select( SelectExpression ),
@@ -16,7 +15,7 @@ pub enum TableExpression
   Values(Vec<Vec<Expr>>),
 }
 /// Assign or Append.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub enum AssignOp
 {
   Assign,
@@ -25,7 +24,6 @@ pub enum AssignOp
 /// Vector of local variable numbers and AssignOp( assign or append ).
 pub type Assigns = Vec<(usize, AssignOp)>;
 /// Select Expression ( not yet compiled ).
-// #[derive(Debug)]
 pub struct SelectExpression
 {
   pub colnames: Vec<String>,
@@ -79,7 +77,6 @@ impl Token
   }
 }
 /// Scalar Expression (uncompiled).
-// #[derive(Debug)]
 pub struct Expr
 {
   pub exp: ExprIs,
@@ -96,7 +93,6 @@ impl Expr
   }
 }
 /// Scalar Expression variants.
-// #[derive(Debug)]
 pub enum ExprIs
 {
   Const(Value),
@@ -112,7 +108,6 @@ pub enum ExprIs
   List(Vec<Expr>),
 }
 /// Object reference ( Schema.Name ).
-// #[derive(Debug)
 #[derive(PartialEq, PartialOrd, Eq, Hash, Clone)]
 pub struct ObjRef
 {

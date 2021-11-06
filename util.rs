@@ -50,7 +50,7 @@ pub fn get(data: &[u8], off: usize, n: usize) -> u64
 /// Extract signed value of n bytes from data.
 pub fn iget(data: &[u8], off: usize, n: usize) -> i64
 {
-  let mut x: u64 = get(data,off,n);
+  let mut x: u64 = get(data, off, n);
   if n < 8
   {
     let sign_bit: u64 = 1_u64 << (n * 8 - 1);

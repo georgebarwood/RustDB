@@ -181,7 +181,6 @@ impl Database
     }
     if is_new
     {
-      println!("New database... initialising");
       // The creation order has to match the order above ( so root values are as predicted ).
       let sysinit = "
 CREATE SCHEMA sys
@@ -274,7 +273,6 @@ GO
   {
     let op = if self.err.get()
     {
-      println!("RollBack!!");
       self.err.set(false);
       SaveOp::RollBack
     }
@@ -452,10 +450,7 @@ pub trait Query
 pub struct ConsoleQuery {}
 impl Query for ConsoleQuery
 {
-  fn push(&mut self, values: &[Value])
-  {
-    println!("{:?}", values);
-  }
+  fn push(&mut self, _values: &[Value]) {}
   /// Called when a panic ( error ) occurs.
   fn set_error(&mut self, err: String)
   {

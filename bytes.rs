@@ -57,7 +57,6 @@ impl ByteStorage
         break;
       }
     }
-    // println!( "encode result={} frags={}", &result, &frags );
     result
   }
   pub fn decode(&self, db: &DB, mut id: u64) -> Vec<u8>
@@ -96,7 +95,6 @@ impl ByteStorage
         break;
       }
     }
-    // println!( "delcode code={} frags={}", id, n );
     let mut r = Fragment::new(0);
     for xid in id..id + n
     {
