@@ -14,7 +14,7 @@ impl ByteStorage
   }
   pub fn init(&self, db: &DB)
   {
-    // Initialise id_alloc to id of last record.
+    // Initialise id_gen to id of last record.
     let start = Fragment::new(u64::MAX);
     if let Some((pp, off)) = self.file.clone().dsc(db, Box::new(start)).next()
     {
@@ -103,10 +103,12 @@ impl ByteStorage
     }
   }
 }
+
 /// = 52. Number of bytes stored in each fragment.
 ///
 /// Chosen so that node size is 64 bytes = 52 + 8 (id) + 1 (len) + 3 (node overhead).
 const BPF: usize = 52;
+
 /// Values are split into BPF size fragments.
 struct Fragment
 {
