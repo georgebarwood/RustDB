@@ -374,8 +374,12 @@ impl<'r> EvalEnv<'r>
       }
       | CTableExpression::IxGet(t, val, index) =>
       {
-        let key = val.eval(self, &[]);
-        Box::new(t.scan_key(&self.db, key, *index))
+        let mut keys = Vec::new();
+        for v in val
+        {
+          keys.push(v.eval(self, &[]));
+        }
+        Box::new(t.scan_keys(&self.db, keys, *index))
       }
       | _ => panic!(),
     }

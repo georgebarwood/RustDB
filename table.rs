@@ -91,8 +91,53 @@ impl Table
     row.delcodes(db); // Deletes codes for Binary and String values.
   }
   /// Optimise WHERE clause with form "Name = <someconst>".
+  /*
+     Want to cope with more general cases.
+
+     Example
+
+
+     WHERE f1 = x AND f2 = y AND ( a = b OR c = d )
+
+     Idea:
+
+     Extract potential index key columns, put them in a Vec.
+     Look for indexes.
+     Choose best index.
+     Construct new WHERE based with index key conditions removed ( assign AND node from left or right ).
+
+  */
+
   pub fn index_from(self: &TablePtr, p: &Parser, we: &mut Expr) -> Option<CTableExpression>
   {
+    let mut v = Vec::new();
+    get_potential_keys(we, &mut v);
+
+    let list = &*self.ixlist.borrow();
+
+    let mut best_match = 0;
+    let mut best_index = 0;
+    for (index, (_f, clist)) in list.iter().enumerate()
+    {
+      let m = has(clist, &v);
+      if m > best_match
+      {
+        best_match = m;
+        best_index = index;
+      }
+    }
+    if best_match > 0
+    {
+      // Calculate the key values for the chosen index.
+      let mut keys = Vec::new();
+      for col in list[best_index].1.iter().take(best_match)
+      {
+        keys.push(get_actual_key(p, we, *col).unwrap());
+      }
+      return Some(CTableExpression::IxGet(self.clone(), keys, best_index));
+    }
+
+    // ToDo: check for AND conditions, also Id = x OR Id = y ...  Id in (....) etc.
     if let ExprIs::Binary(op, e1, e2) = &mut we.exp
     {
       if *op == Token::Equal && e2.is_constant
@@ -103,17 +148,10 @@ impl Table
           {
             return Some(CTableExpression::IdGet(self.clone(), c_int(p, e2)));
           }
-          let list = &*self.ixlist.borrow();
-          for (index, (_f, c)) in list.iter().enumerate()
-          {
-            if c[0] == e1.col
-            {
-              return Some(CTableExpression::IxGet(self.clone(), c_value(p, e2), index));
-            }
-          }
         }
       }
     }
+    println!("No index found for table {}", self.info.name.to_str());
     None
   }
   /// Get record with specified id.
@@ -640,5 +678,94 @@ impl Iterator for IdScan
     }
     self.done = true;
     self.table.id_get(&self.db, self.id as u64)
+  }
+}
+
+fn has(clist: &[usize], keys: &[usize]) -> usize
+{
+  let mut result = 0;
+  for c in clist
+  {
+    if !keys.contains(c)
+    {
+      break;
+    }
+    result += 1;
+  }
+  result
+}
+
+fn get_actual_key(p: &Parser, we: &mut Expr, col: usize) -> Option<CExpPtr<Value>>
+{
+  match &mut we.exp
+  {
+    | ExprIs::Binary(Token::Equal, e1, e2) =>
+    {
+      if e2.is_constant
+      {
+        if let ExprIs::ColName(_) = &e1.exp
+        {
+          if col == e1.col
+          {
+            return Some(c_value(p, e2));
+          }
+        }
+      }
+      else if e1.is_constant
+      {
+        if let ExprIs::ColName(_) = &e2.exp
+        {
+          if col == e2.col
+          {
+            return Some(c_value(p, e1));
+          }
+        }
+      }
+    }
+    | ExprIs::Binary(Token::And, e1, e2) =>
+    {
+      if let Some(ce) = get_actual_key(p, e1, col)
+      {
+        return Some(ce);
+      }
+      else
+      {
+        return get_actual_key(p, e2, col);
+      }
+    }
+    | _ =>
+    {}
+  }
+  None
+}
+
+fn get_potential_keys(we: &Expr, v: &mut Vec<usize>)
+{
+  match &we.exp
+  {
+    | ExprIs::Binary(Token::Equal, e1, e2) =>
+    {
+      if e2.is_constant
+      {
+        if let ExprIs::ColName(_) = &e1.exp
+        {
+          v.push(e1.col);
+        }
+      }
+      else if e1.is_constant
+      {
+        if let ExprIs::ColName(_) = &e2.exp
+        {
+          v.push(e2.col);
+        }
+      }
+    }
+    | ExprIs::Binary(Token::And, e1, e2) =>
+    {
+      get_potential_keys(e1, v);
+      get_potential_keys(e2, v);
+    }
+    | _ =>
+    {}
   }
 }

@@ -502,14 +502,8 @@ pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpres
       {
         index_from = table.index_from(p, we);
       }
-      if index_from.is_some()
-      {
-        None
-      }
-      else
-      {
-        Some(c_bool(p, we))
-      }
+      // Note: if an index is found, could try to trim or eliminate where condition, but not yet implemented.
+      Some(c_bool(p, we))
     }
     else
     {

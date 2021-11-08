@@ -92,7 +92,7 @@ pub enum CTableExpression
   // Select( SelectExpression ),
   Base(TablePtr),
   IdGet(TablePtr, CExpPtr<i64>),
-  IxGet(TablePtr, CExpPtr<Value>, usize),
+  IxGet(TablePtr, Vec<CExpPtr<Value>>, usize),
   Values(Vec<Vec<CExpPtr<Value>>>),
 }
 /// Compiled Select Expression.
