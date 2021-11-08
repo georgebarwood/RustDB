@@ -162,7 +162,7 @@ impl PartialEq for Value
   {
     if let Some(eq) = self.partial_cmp(other)
     {
-      eq == std::cmp::Ordering::Equal
+      eq == Ordering::Equal
     }
     else
     {

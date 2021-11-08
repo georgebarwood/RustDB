@@ -103,13 +103,13 @@ impl CompactFile
   {
     self.extend_starter_pages(lpnum);
     // Calculate number of extension pages needed.
-    let ext = self.calc_ext(size);
+    let ext = self.ext(size);
     // Read the current starter info.
     let off: u64 = Self::HSIZE + (self.sp_size as u64) * lpnum;
     let mut starter = vec![0_u8; self.sp_size];
     self.read(off, &mut starter);
     let old_size = util::get(&starter, 0, 2) as usize;
-    let mut old_ext = self.calc_ext(old_size);
+    let mut old_ext = self.ext(old_size);
     util::set(&mut starter, 0, size as u64, 2);
     if ext != old_ext
     {
@@ -128,10 +128,10 @@ impl CompactFile
         old_ext += 1;
       }
     }
+    // Write the starter data.
     let off = 2 + ext * 8;
     let mut done = min(self.sp_size - off, size);
     starter[off..off + done].copy_from_slice(&data[0..done]);
-    // Save the starter data.
     let woff = Self::HSIZE + (self.sp_size as u64) * lpnum;
     self.write(woff, &starter[0..off + done]);
     // Write the extension pages.
@@ -171,7 +171,8 @@ impl CompactFile
     let mut starter = vec![0_u8; self.sp_size];
     self.read(off, &mut starter);
     let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
-    let ext = self.calc_ext(size); // Number of extension pages.
+    let ext = self.ext(size); // Number of extension pages.
+                              // Read the starter data.
     let off = 2 + ext * 8;
     let mut done = min(size, self.sp_size - off);
     data[0..done].copy_from_slice(&starter[off..off + done]);
@@ -332,7 +333,7 @@ impl CompactFile
     // Compute location and length of the array of extension page numbers.
     let mut off = Self::HSIZE + lpnum * self.sp_size as u64;
     let size = self.readu16(off);
-    let mut ext = self.calc_ext(size);
+    let mut ext = self.ext(size);
     off += 2;
     // Update the matching extension page number.
     loop
@@ -398,7 +399,7 @@ impl CompactFile
   }
 
   /// Calculate the number of extension pages needed to store a page of given size.
-  fn calc_ext(&self, size: usize) -> usize
+  fn ext(&self, size: usize) -> usize
   {
     let mut n = 0;
     if size > (self.sp_size - 2)
@@ -412,7 +413,7 @@ impl CompactFile
   /// Check whether compressing a page is worthwhile.
   pub fn compress(&self, size: usize, saving: usize) -> bool
   {
-    self.calc_ext(size - saving) < self.calc_ext(size)
+    self.ext(size - saving) < self.ext(size)
   }
 } // end impl CompactFile
 

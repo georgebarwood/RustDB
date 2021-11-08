@@ -695,8 +695,8 @@ impl Page
     self.free = 0;
     self.alloc = self.count;
   }
-  /// Relocate node x (or any child of x) if it is greater than page count.
-  pub fn relocate(&mut self, mut x: usize, flist: &mut Vec<usize>) -> usize
+  /// Relocate node x (or any child of x) if it is greater than page count ( for fn compress ).
+  fn relocate(&mut self, mut x: usize, flist: &mut Vec<usize>) -> usize
   {
     if x != 0
     {

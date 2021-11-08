@@ -117,7 +117,7 @@ impl<'r> EvalEnv<'r>
     let save_bp = self.bp;
     self.bp = self.stack.len() - r.param_count;
     self.alloc_locals(&r.local_typ, r.param_count);
-    self.go(&*r.ilist.borrow());
+    self.go(&r.ilist.borrow());
     let pop_count = r.local_typ.len();
     if pop_count > 0
     {
@@ -207,9 +207,9 @@ impl<'r> EvalEnv<'r>
       {
         panic!("Jump into FOR loop");
       };
-      if let Some((p, off)) = next
+      if let Some((pp, off)) = next
       {
-        let p = &p.borrow();
+        let p = &pp.borrow();
         let data = &p.data[off..];
         // Eval and check WHERE condition, eval expressions and assign to locals.
         if self.ok(&info.wher, data)
@@ -283,6 +283,7 @@ impl<'r> EvalEnv<'r>
       | DO::Update(tp, assigns, wher) => self.update(tp, assigns, wher),
       | DO::DropTable(name) => self.drop_table(name),
       | DO::DropFunction(name) => self.drop_function(name),
+      | DO::DropSchema(name) => self.drop_schema(name),
       | _ => panic!(),
     }
   }
@@ -290,9 +291,9 @@ impl<'r> EvalEnv<'r>
   fn get_id_list(&mut self, t: &TablePtr, w: &CExpPtr<bool>) -> Vec<u64>
   {
     let mut idlist = Vec::new();
-    for (p, off) in t.scan(&self.db)
+    for (pp, off) in t.scan(&self.db)
     {
-      let p = &p.borrow();
+      let p = &pp.borrow();
       let data = &p.data[off..];
       if w.eval(self, data)
       {
@@ -321,9 +322,9 @@ impl<'r> EvalEnv<'r>
     for id in idlist
     {
       // Load oldrow so that any codes are deleted.
-      if let Some((p, off)) = t.id_get(&self.db, id)
+      if let Some((pp, off)) = t.id_get(&self.db, id)
       {
-        let p = &p.borrow();
+        let p = &pp.borrow();
         let data = &p.data[off..];
         oldrow.load(&self.db, data);
       }
@@ -341,10 +342,10 @@ impl<'r> EvalEnv<'r>
     let mut oldrow = t.row();
     for id in idlist
     {
-      if let Some((p, off)) = t.id_get(&self.db, id)
+      if let Some((pp, off)) = t.id_get(&self.db, id)
       {
         let mut newrow = {
-          let p = &p.borrow();
+          let p = &pp.borrow();
           let data = &p.data[off..];
           oldrow.load(&self.db, data);
           let mut newrow = oldrow.clone();
@@ -386,9 +387,9 @@ impl<'r> EvalEnv<'r>
     {
       let obl = cse.orderby.len();
       let mut temp = Vec::new(); // For sorting.
-      for (p, off) in self.data_source(te)
+      for (pp, off) in self.data_source(te)
       {
-        let p = &p.borrow();
+        let p = &pp.borrow();
         let data = &p.data[off..];
         if self.ok(&cse.wher, data)
         {
@@ -445,9 +446,9 @@ impl<'r> EvalEnv<'r>
   {
     if let Some(te) = &cse.from
     {
-      for (p, off) in self.data_source(te)
+      for (pp, off) in self.data_source(te)
       {
-        let p = &p.borrow();
+        let p = &pp.borrow();
         let data = &p.data[off..];
         if self.ok(&cse.wher, data)
         {
@@ -526,9 +527,9 @@ impl<'r> EvalEnv<'r>
     if let Some(te) = &cse.from
     {
       let mut temp = Vec::new(); // For sorting.
-      for (p, off) in self.data_source(te)
+      for (pp, off) in self.data_source(te)
       {
-        let p = &p.borrow();
+        let p = &pp.borrow();
         let data = &p.data[off..];
         if self.ok(&cse.wher, data)
         {
@@ -575,11 +576,25 @@ impl<'r> EvalEnv<'r>
     {
       let sql = "DELETE FROM sys.Function WHERE Id = ".to_string() + &fid.to_string();
       self.db.run(&sql, self.qy);
-      self.db.functions_dirty.set(true);
+      self.db.function_reset.set(true);
     }
     else
     {
       panic!("Drop Function not found {}", name.to_str());
+    }
+  }
+  fn drop_schema(&mut self, name: &str)
+  {
+    if let Some(sid) = sys::get_schema(&self.db, name)
+    {
+      let sql = "EXEC sys.DropSchema(".to_string() + &sid.to_string() + ")";
+      self.db.run(&sql, self.qy);
+      self.db.schemas.borrow_mut().remove(name);
+      self.db.function_reset.set(true);
+    }
+    else
+    {
+      panic!("Drop Schema not found {}", name);
     }
   }
 } // impl EvalEnv

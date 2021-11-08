@@ -476,9 +476,20 @@ pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpres
   // Is the save necessary?
   let save = mem::replace(&mut p.from, from);
   let mut exps = Vec::new();
-  for mut e in x.exps
+  for (i, e) in x.exps.iter_mut().enumerate()
   {
-    exps.push(c_value(p, &mut e));
+    exps.push(c_value(p, e));
+    if !x.assigns.is_empty()
+    {
+      // Check data kind of assigned local matches data kind of expression.
+      let (lnum, _) = x.assigns[i];
+      let ek = data_kind(p.b.local_typ[lnum]);
+      let ak = data_kind(e.data_type);
+      if ek != ak
+      {
+        panic!("cannot assign {:?} to {:?}", ak, ek);
+      }
+    }
   }
   let wher = {
     if let Some(we) = &mut x.wher

@@ -119,7 +119,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool)
           let newcode = db.encode(&val);
           val.save(STRING, &mut p.data, off, newcode);
           t.file.set_dirty(p, &pp);
-          db.functions_dirty.set(true);
+          db.function_reset.set(true);
         }
         return;
       }
@@ -143,16 +143,16 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool)
   }
 }
 /// Gets the id of a schema from a name.
-fn get_schema(db: &DB, sname: &str) -> Option<i64>
+pub(crate) fn get_schema(db: &DB, sname: &str) -> Option<i64>
 {
   if let Some(id) = db.schemas.borrow().get(sname)
   {
     return Some(*id);
   }
   let t = &db.sys_schema;
-  for (p, off) in t.scan(db)
+  for (pp, off) in t.scan(db)
   {
-    let p = &p.borrow();
+    let p = &pp.borrow();
     let a = t.access(p, off);
     if a.str(db, 0) == sname
     {
@@ -171,9 +171,9 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)>
     let t = &db.sys_table;
     // Columns are root, schema, name, is_view, definition, id_gen
     let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
-    if let Some((p, off)) = t.ix_get(db, keys, 0)
+    if let Some((pp, off)) = t.ix_get(db, keys, 0)
     {
-      let p = &p.borrow();
+      let p = &pp.borrow();
       let a = t.access(p, off);
       return Some((a.id(), a.int(0), a.int(5)));
     }
@@ -189,9 +189,9 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
     // Load columns. Columns are Table, Name, Type
     let t = &db.sys_column;
     let key = Value::Int(table_id);
-    for (p, off) in t.scan_key(db, key, 0)
+    for (pp, off) in t.scan_key(db, key, 0)
     {
-      let p = &p.borrow();
+      let p = &pp.borrow();
       let a = t.access(p, off);
       debug_assert!(a.int(0) == table_id);
       let cname = a.str(db, 1);
@@ -202,9 +202,9 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
     // Load indexes. Columns are Root, Table, Name.
     let t = &db.sys_index;
     let key = Value::Int(table_id);
-    for (p, off) in t.scan_key(db, key, 0)
+    for (pp, off) in t.scan_key(db, key, 0)
     {
-      let p = &p.borrow();
+      let p = &pp.borrow();
       let a = t.access(p, off);
       debug_assert!(a.int(1) == table_id);
       let index_id = a.id();
@@ -213,9 +213,9 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr>
       let t = &db.sys_index_col;
       // Columns are Index, ColIndex
       let key = Value::Int(index_id);
-      for (p, off) in t.scan_key(db, key, 0)
+      for (pp, off) in t.scan_key(db, key, 0)
       {
-        let p = &p.borrow();
+        let p = &pp.borrow();
         let a = t.access(p, off);
         debug_assert!(a.int(0) == index_id);
         let cnum = a.int(1) as usize;
@@ -238,9 +238,9 @@ pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr>
   {
     let t = db.get_table(&ObjRef::new("sys", "Function")).unwrap();
     let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
-    if let Some((p, off)) = t.ix_get(db, keys, 0)
+    if let Some((pp, off)) = t.ix_get(db, keys, 0)
     {
-      let p = &p.borrow();
+      let p = &pp.borrow();
       let a = t.access(p, off);
       let source = Rc::new(a.str(db, 2));
       let function = parse_function(db, source);
@@ -256,9 +256,9 @@ pub(crate) fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64>
   {
     let t = db.get_table(&ObjRef::new("sys", "Function")).unwrap();
     let keys = vec![Value::Int(schema_id), Value::String(Rc::new(name.name.to_string()))];
-    if let Some((p, off)) = t.ix_get(db, keys, 0)
+    if let Some((pp, off)) = t.ix_get(db, keys, 0)
     {
-      let p = &p.borrow();
+      let p = &pp.borrow();
       let a = t.access(p, off);
       return Some(a.id());
     }
@@ -294,8 +294,8 @@ pub(crate) fn save_id_gen(db: &DB, id: u64, val: i64)
 pub(crate) fn get_id_gen(db: &DB, id: u64) -> i64
 {
   let t = &db.sys_table;
-  let (p, off) = t.id_get(db, id).unwrap();
-  let p = &p.borrow();
+  let (pp, off) = t.id_get(db, id).unwrap();
+  let p = &pp.borrow();
   let a = t.access(p, off);
   a.int(5)
 }

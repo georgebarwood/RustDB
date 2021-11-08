@@ -17,6 +17,7 @@ pub struct Parser<'a>
   cc: u8,           // Current input char.
   token: Token,     // Current token.
   token_start: usize,
+  token_space_start: usize,
   cs: &'a [u8], // source slice for current token ( but string literals are in ts )
   ts: String,
   source_column: usize,
@@ -43,6 +44,7 @@ impl<'a> Parser<'a>
       source_ix: 0,
       cc: 0,
       token_start: 0,
+      token_space_start: 0,
       token: Token::EndOfFile,
       cs: source,
       ts: String::new(),
@@ -195,6 +197,7 @@ impl<'a> Parser<'a>
   /// Read the next token.
   fn read_token(&mut self)
   {
+    self.token_space_start = self.source_ix - 1;
     self.prev_source_line = self.source_line;
     self.prev_source_column = self.source_column;
     let mut cc = self.cc;
@@ -850,9 +853,8 @@ impl<'a> Parser<'a>
   fn values(&mut self, expect: usize) -> TableExpression
   {
     let mut values = Vec::new();
-    loop
+    while self.test(Token::LBra)
     {
-      self.read(Token::LBra);
       let mut v = Vec::new();
       loop
       {
@@ -1284,7 +1286,7 @@ impl<'a> Parser<'a>
     self.parse_only = save2;
     if !self.parse_only
     {
-      let source: String = self.source_from(source_start, self.token_start);
+      let source: String = self.source_from(source_start, self.token_space_start);
       self.dop(DO::CreateFunction(rref, Rc::new(source), alter));
     }
   }

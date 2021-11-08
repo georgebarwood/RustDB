@@ -26,7 +26,7 @@ impl SortedFile
   pub fn new(rec_size: usize, key_size: usize, root_page: u64) -> Self
   {
     SortedFile {
-      pages: util::newmap(),
+      pages: newmap(),
       dirty_pages: RefCell::new(Vec::new()),
       rec_size,
       key_size,
@@ -393,7 +393,7 @@ impl Split
 pub trait Record
 {
   /// Compare record with stored bytes.
-  fn compare(&self, db: &DB, data: &[u8]) -> std::cmp::Ordering;
+  fn compare(&self, db: &DB, data: &[u8]) -> Ordering;
   /// Save record as bytes.
   fn save(&self, _data: &mut [u8]) {}
   /// Load key from bytes ( to store in parent page ).
@@ -411,7 +411,7 @@ pub struct Id
 }
 impl Record for Id
 {
-  fn compare(&self, _db: &DB, data: &[u8]) -> std::cmp::Ordering
+  fn compare(&self, _db: &DB, data: &[u8]) -> Ordering
   {
     let id = util::getu64(data, 0);
     self.id.cmp(&id)
