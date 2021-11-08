@@ -1374,7 +1374,7 @@ impl<'a> Parser<'a>
         let o = self.obj_ref();
         self.read_id(b"TO");
         let n = self.obj_ref();
-        self.dop(DO::Renasysble(o, n));
+        self.dop(DO::RenameTsble(o, n));
       }
       | b"VIEW" =>
       {

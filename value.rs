@@ -93,7 +93,7 @@ impl Value
       | _ => panic!("str not implemented"),
     }
   }
-  pub fn append(&mut self, val: Value)
+  pub fn append(&mut self, val: &Value)
   {
     if let Value::String(s) = self
     {
@@ -178,7 +178,7 @@ pub fn get_bytes(db: &DB, data: &[u8]) -> (Vec<u8>, u64)
   if n <= 15
   {
     let mut bytes = vec![0_u8; n];
-    bytes[0..n].copy_from_slice(&data[1..1 + n]);
+    bytes[0..n].copy_from_slice(&data[1..=n]);
     (bytes, u64::MAX)
   }
   else
@@ -196,7 +196,7 @@ pub fn save_bytes(bytes: &[u8], data: &mut [u8], code: u64)
   if n <= 15
   {
     data[0] = n as u8;
-    data[1..1 + n].copy_from_slice(&bytes[0..n]);
+    data[1..=n].copy_from_slice(&bytes[0..n]);
   }
   else
   {

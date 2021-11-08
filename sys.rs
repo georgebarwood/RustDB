@@ -250,6 +250,7 @@ pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr>
   }
   None
 }
+/// Get the id of a function.
 pub(crate) fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64>
 {
   if let Some(schema_id) = get_schema(db, &name.schema)

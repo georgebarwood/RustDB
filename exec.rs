@@ -482,7 +482,7 @@ impl<'r> EvalEnv<'r>
       }
       | AssignOp::Append =>
       {
-        var.append(val);
+        var.append(&val);
       }
     }
   }

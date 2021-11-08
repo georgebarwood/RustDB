@@ -116,7 +116,7 @@ pub enum DO
   CreateView(ObjRef, bool, String),
   AlterTable(ObjRef, Vec<AlterAction>),
   RenameSchema(String, String),
-  Renasysble(ObjRef, ObjRef),
+  RenameTsble(ObjRef, ObjRef),
   RenameView(ObjRef, ObjRef),
   RenameProcedure(ObjRef, ObjRef),
   RenameFunction(ObjRef, ObjRef),

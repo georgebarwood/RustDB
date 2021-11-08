@@ -229,10 +229,10 @@ impl<'a> Block<'a>
     {
       match i
       {
-        | JumpIfFalse(x, _e) => *x = self.jumps[*x],
+        | JumpIfFalse(x, _) => *x = self.jumps[*x],
         | Jump(x) => *x = self.jumps[*x],
-        | ForNext(x, _y) => *x = self.jumps[*x],
-        | ForSortNext(x, _y) => *x = self.jumps[*x],
+        | ForNext(x, _) => *x = self.jumps[*x],
+        | ForSortNext(x, _) => *x = self.jumps[*x],
         | _ =>
         {}
       }
