@@ -5,7 +5,7 @@
 //!
 //!Decimal shifting when scales do not match.
 //!
-//!Multi-column index use from WHERE.
+//!Multi-column index use from WHERE (Done).
 //!
 //!multipart requests ( for file upload ).
 //!
@@ -69,7 +69,14 @@ use crate::{
   bytes::*, compile::*, exec::*, expr::*, page::*, parse::*, run::*, sortedfile::*, stg::*, table::*, util::newmap,
   value::*,
 };
-use std::{cell::Cell, cell::RefCell, cmp::Ordering, collections::HashMap, panic, rc::Rc};
+use std::{
+  cell::Cell,
+  cell::RefCell,
+  cmp::Ordering,
+  collections::{HashMap, HashSet},
+  panic,
+  rc::Rc,
+};
 /// Utility functions and macros.
 #[macro_use]
 mod util;

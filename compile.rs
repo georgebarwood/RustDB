@@ -638,7 +638,7 @@ pub(crate) fn name_to_colnum(p: &Parser, name: &str) -> (usize, DataType)
       let colnum = *num;
       if colnum == usize::MAX
       {
-        return (0, BIGINT);
+        return (colnum, BIGINT);
       }
       return (colnum, info.typ[colnum]);
     }

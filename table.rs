@@ -93,8 +93,8 @@ impl Table
   /// Optimise WHERE clause with form "Name = <someconst>".
   pub fn index_from(self: &TablePtr, p: &Parser, we: &mut Expr) -> Option<CTableExpression>
   {
-    let mut v = Vec::new();
-    get_potential_keys(we, &mut v);
+    let mut kc = HashSet::new(); // Set of known columns.
+    get_known_cols(we, &mut kc);
 
     let list = &*self.ixlist.borrow();
 
@@ -102,7 +102,7 @@ impl Table
     let mut best_index = 0;
     for (index, (_f, clist)) in list.iter().enumerate()
     {
-      let m = has(clist, &v);
+      let m = covered(clist, &kc);
       if m > best_match
       {
         best_match = m;
@@ -112,10 +112,18 @@ impl Table
     if best_match > 0
     {
       // Calculate the key values for the chosen index.
-      let mut keys = Vec::new();
-      for col in list[best_index].1.iter().take(best_match)
+      let clist = &list[best_index].1;
+      let mut cols = HashSet::<usize>::new();
+      for col in clist.iter().take(best_match)
       {
-        keys.push(get_actual_key(p, we, *col).unwrap());
+        cols.insert(*col);
+      }
+      let mut kmap = HashMap::new();
+      get_keys(p, we, &mut kmap, &mut cols);
+      let mut keys = Vec::new();
+      for col in clist.iter().take(best_match)
+      {
+        keys.push(kmap.remove(col).unwrap());
       }
       return Some(CTableExpression::IxGet(self.clone(), keys, best_index));
     }
@@ -125,9 +133,10 @@ impl Table
     {
       if *op == Token::Equal && e2.is_constant
       {
-        if let ExprIs::ColName(name) = &e1.exp
+        if let ExprIs::ColName(_) = &e1.exp
         {
-          if name == "Id"
+          if e1.col == usize::MAX
+          // Id column.
           {
             return Some(CTableExpression::IdGet(self.clone(), c_int(p, e2)));
           }
@@ -664,12 +673,13 @@ impl Iterator for IdScan
   }
 }
 
-fn has(clist: &[usize], keys: &[usize]) -> usize
+/// Counts the number of index columns that are known.
+fn covered(clist: &[usize], kc: &HashSet<usize>) -> usize
 {
   let mut result = 0;
   for c in clist
   {
-    if !keys.contains(c)
+    if !kc.contains(c)
     {
       break;
     }
@@ -678,7 +688,7 @@ fn has(clist: &[usize], keys: &[usize]) -> usize
   result
 }
 
-fn get_actual_key(p: &Parser, we: &mut Expr, col: usize) -> Option<CExpPtr<Value>>
+fn get_keys(p: &Parser, we: &mut Expr, keys: &mut HashMap<usize, CExpPtr<Value>>, cols: &mut HashSet<usize>)
 {
   match &mut we.exp
   {
@@ -688,9 +698,9 @@ fn get_actual_key(p: &Parser, we: &mut Expr, col: usize) -> Option<CExpPtr<Value
       {
         if let ExprIs::ColName(_) = &e1.exp
         {
-          if col == e1.col
+          if cols.remove(&e1.col)
           {
-            return Some(c_value(p, e2));
+            keys.insert(e1.col, c_value(p, e2));
           }
         }
       }
@@ -698,31 +708,25 @@ fn get_actual_key(p: &Parser, we: &mut Expr, col: usize) -> Option<CExpPtr<Value
       {
         if let ExprIs::ColName(_) = &e2.exp
         {
-          if col == e2.col
+          if cols.remove(&e2.col)
           {
-            return Some(c_value(p, e1));
+            keys.insert(e2.col, c_value(p, e1));
           }
         }
       }
     }
     | ExprIs::Binary(Token::And, e1, e2) =>
     {
-      if let Some(ce) = get_actual_key(p, e1, col)
-      {
-        return Some(ce);
-      }
-      else
-      {
-        return get_actual_key(p, e2, col);
-      }
+      get_keys(p, e1, keys, cols);
+      get_keys(p, e2, keys, cols);
     }
     | _ =>
     {}
   }
-  None
 }
 
-fn get_potential_keys(we: &Expr, v: &mut Vec<usize>)
+/// Gets the list of columns that are known from a WHERE condition.
+fn get_known_cols(we: &Expr, kc: &mut HashSet<usize>)
 {
   match &we.exp
   {
@@ -730,23 +734,23 @@ fn get_potential_keys(we: &Expr, v: &mut Vec<usize>)
     {
       if e2.is_constant
       {
-        if let ExprIs::ColName(_) = &e1.exp
+        if let ExprIs::ColName(_name) = &e1.exp
         {
-          v.push(e1.col);
+          kc.insert(e1.col);
         }
       }
       else if e1.is_constant
       {
-        if let ExprIs::ColName(_) = &e2.exp
+        if let ExprIs::ColName(_name) = &e2.exp
         {
-          v.push(e2.col);
+          kc.insert(e2.col);
         }
       }
     }
     | ExprIs::Binary(Token::And, e1, e2) =>
     {
-      get_potential_keys(e1, v);
-      get_potential_keys(e2, v);
+      get_known_cols(e1, kc);
+      get_known_cols(e2, kc);
     }
     | _ =>
     {}
