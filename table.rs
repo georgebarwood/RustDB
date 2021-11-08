@@ -91,23 +91,6 @@ impl Table
     row.delcodes(db); // Deletes codes for Binary and String values.
   }
   /// Optimise WHERE clause with form "Name = <someconst>".
-  /*
-     Want to cope with more general cases.
-
-     Example
-
-
-     WHERE f1 = x AND f2 = y AND ( a = b OR c = d )
-
-     Idea:
-
-     Extract potential index key columns, put them in a Vec.
-     Look for indexes.
-     Choose best index.
-     Construct new WHERE based with index key conditions removed ( assign AND node from left or right ).
-
-  */
-
   pub fn index_from(self: &TablePtr, p: &Parser, we: &mut Expr) -> Option<CTableExpression>
   {
     let mut v = Vec::new();
