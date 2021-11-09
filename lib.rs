@@ -66,14 +66,23 @@
 //!Each page is implemented as a binary tree ( so there is a tree of trees ).
 
 use crate::{
-  bytes::*, compile::*, exec::*, expr::*, page::*, parse::*, run::*, sortedfile::*, stg::*, table::*, util::newmap,
-  value::*,
+  bytes::ByteStorage,
+  compile::*,
+  exec::EvalEnv,
+  expr::*,
+  page::{Page, PagePtr, PAGE_SIZE},
+  parse::Parser,
+  run::*,
+  sortedfile::{Asc, Id, Record, SortedFile},
+  stg::{CompactFile, Storage},
+  table::{ColInfo, IndexInfo, Row, SaveOp, Table, TablePtr},
+  util::newmap,
+  value::{get_bytes, Value},
 };
 use std::{
-  cell::Cell,
-  cell::RefCell,
+  cell::{Cell, RefCell},
   cmp::Ordering,
-  collections::{HashMap},
+  collections::HashMap,
   panic,
   rc::Rc,
 };
@@ -113,8 +122,10 @@ pub mod value;
 /// WebQuery struct for making a http web server.
 pub mod web;
 // End of modules.
+
 /// ```Rc<Database>```
 pub type DB = Rc<Database>;
+
 /// Database with SQL-like interface.
 pub struct Database
 {
@@ -396,6 +407,7 @@ GO
     self.file.borrow_mut().free_page(lpnum);
   }
 } // end impl Database
+
 impl Drop for Database
 {
   /// Clear function instructions to avoid leaking memory.
@@ -407,6 +419,7 @@ impl Drop for Database
     }
   }
 }
+
 /// For creating system tables.
 struct TableBuilder
 {

@@ -1,5 +1,5 @@
 use crate::*;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Table Pointer.
 pub type TablePtr = Rc<Table>;
@@ -119,7 +119,7 @@ impl Table
       {
         cols.insert(*col);
       }
-      let mut kmap = HashMap::new();
+      let mut kmap = BTreeMap::new();
       get_keys(p, we, &mut kmap, &mut cols);
       let mut keys = Vec::new();
       for col in clist.iter().take(best_match)
@@ -296,7 +296,7 @@ pub struct ColInfo
   /// Table name.
   pub name: ObjRef,
   /// Map from column name to column number.
-  pub colmap: HashMap<String, usize>,
+  pub colmap: BTreeMap<String, usize>,
   /// Column names.
   pub colnames: Vec<String>,
   /// Column types.
@@ -312,7 +312,7 @@ impl ColInfo
   /// Construct an empty ColInfo struct with no columns.
   pub fn empty(name: ObjRef) -> Self
   {
-    ColInfo { name, colmap: HashMap::new(), typ: Vec::new(), colnames: Vec::new(), off: Vec::new(), total: 8 }
+    ColInfo { name, colmap: BTreeMap::new(), typ: Vec::new(), colnames: Vec::new(), off: Vec::new(), total: 8 }
   }
   /// Construct a new ColInfo struct using supplied list of column names and types.
   pub(crate) fn new(name: ObjRef, ct: &[(&str, DataType)]) -> Self
@@ -689,7 +689,7 @@ fn covered(clist: &[usize], kc: &BTreeSet<usize>) -> usize
   result
 }
 
-fn get_keys(p: &Parser, we: &mut Expr, keys: &mut HashMap<usize, CExpPtr<Value>>, cols: &mut BTreeSet<usize>)
+fn get_keys(p: &Parser, we: &mut Expr, keys: &mut BTreeMap<usize, CExpPtr<Value>>, cols: &mut BTreeSet<usize>)
 {
   match &mut we.exp
   {
