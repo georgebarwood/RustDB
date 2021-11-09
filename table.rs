@@ -91,7 +91,7 @@ impl Table
     }
     row.delcodes(db); // Deletes codes for Binary and String values.
   }
-  /// Optimise WHERE clause with form "Name = <someconst>".
+  /// Look for indexed table expression based on supplied WHERE expression (we).
   pub fn index_from(self: &TablePtr, p: &Parser, we: &mut Expr) -> (Option<CExpPtr<bool>>, Option<CTableExpression>)
   {
     let mut kc = BTreeSet::new(); // Set of known columns.
@@ -112,24 +112,16 @@ impl Table
     }
     if best_match > 0
     {
-      // Calculate the key values for the chosen index.
-      let clist = &list[best_index].1;
-      let mut cols = BTreeSet::<usize>::new();
-      for col in clist.iter().take(best_match)
-      {
-        cols.insert(*col);
-      }
+      // Get the key values for the chosen index.
+      let clist: &[usize] = &list[best_index].1;
+      let mut cols = BTreeSet::from_iter(clist.iter().take(best_match).copied());
       let mut kmap = BTreeMap::new();
-      let cwe = get_keys(p, we, &mut kmap, &mut cols);
-      let mut keys = Vec::new();
-      for col in clist.iter().take(best_match)
-      {
-        keys.push(kmap.remove(col).unwrap());
-      }
+      let cwe = get_keys(p, we, &mut cols, &mut kmap);
+      let keys = clist.iter().take(best_match).map(|col| kmap.remove(col).unwrap()).collect();
       return (cwe, Some(CTableExpression::IxGet(self.clone(), keys, best_index)));
     }
 
-    // ToDo: check for AND conditions, also Id = x OR Id = y ...  Id in (....) etc.
+    // ToDo: check for mirror expression, AND conditions, also Id = x OR Id = y ...  Id in (....) etc.
     if let ExprIs::Binary(op, e1, e2) = &mut we.exp
     {
       if *op == Token::Equal && e2.is_constant
@@ -674,6 +666,38 @@ impl Iterator for IdScan
   }
 }
 
+/// Gets the list of columns that are known from a WHERE condition.
+fn get_known_cols(we: &Expr, kc: &mut BTreeSet<usize>)
+{
+  match &we.exp
+  {
+    | ExprIs::Binary(Token::Equal, e1, e2) =>
+    {
+      if e2.is_constant
+      {
+        if let ExprIs::ColName(_) = &e1.exp
+        {
+          kc.insert(e1.col);
+        }
+      }
+      else if e1.is_constant
+      {
+        if let ExprIs::ColName(_) = &e2.exp
+        {
+          kc.insert(e2.col);
+        }
+      }
+    }
+    | ExprIs::Binary(Token::And, e1, e2) =>
+    {
+      get_known_cols(e1, kc);
+      get_known_cols(e2, kc);
+    }
+    | _ =>
+    {}
+  }
+}
+
 /// Counts the number of index columns that are known.
 fn covered(clist: &[usize], kc: &BTreeSet<usize>) -> usize
 {
@@ -689,9 +713,9 @@ fn covered(clist: &[usize], kc: &BTreeSet<usize>) -> usize
   result
 }
 
-/// Get keys. Returns compile bool expression ( taking into account conditions satisfied by index ).
+/// Get keys. Returns compiled bool expression ( taking into account conditions satisfied by index ).
 fn get_keys(
-  p: &Parser, we: &mut Expr, keys: &mut BTreeMap<usize, CExpPtr<Value>>, cols: &mut BTreeSet<usize>,
+  p: &Parser, we: &mut Expr, cols: &mut BTreeSet<usize>, keys: &mut BTreeMap<usize, CExpPtr<Value>>,
 ) -> Option<CExpPtr<bool>>
 {
   match &mut we.exp
@@ -723,8 +747,8 @@ fn get_keys(
     }
     | ExprIs::Binary(Token::And, e1, e2) =>
     {
-      let x1 = get_keys(p, e1, keys, cols);
-      let x2 = get_keys(p, e2, keys, cols);
+      let x1 = get_keys(p, e1, cols, keys);
+      let x2 = get_keys(p, e2, cols, keys);
 
       return if let Some(c1) = x1
       {
@@ -746,36 +770,4 @@ fn get_keys(
     {}
   }
   return Some(c_bool(p, we));
-}
-
-/// Gets the list of columns that are known from a WHERE condition.
-fn get_known_cols(we: &Expr, kc: &mut BTreeSet<usize>)
-{
-  match &we.exp
-  {
-    | ExprIs::Binary(Token::Equal, e1, e2) =>
-    {
-      if e2.is_constant
-      {
-        if let ExprIs::ColName(_name) = &e1.exp
-        {
-          kc.insert(e1.col);
-        }
-      }
-      else if e1.is_constant
-      {
-        if let ExprIs::ColName(_name) = &e2.exp
-        {
-          kc.insert(e2.col);
-        }
-      }
-    }
-    | ExprIs::Binary(Token::And, e1, e2) =>
-    {
-      get_known_cols(e1, kc);
-      get_known_cols(e2, kc);
-    }
-    | _ =>
-    {}
-  }
 }
