@@ -143,7 +143,7 @@ impl Table
         }
       }
     }
-    println!("No index found for table {}", self.info.name.to_str());
+    // println!("No index found for table {}", self.info.name.to_str());
     None
   }
   /// Get record with specified id.
