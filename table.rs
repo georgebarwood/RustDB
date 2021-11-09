@@ -92,7 +92,7 @@ impl Table
     row.delcodes(db); // Deletes codes for Binary and String values.
   }
   /// Optimise WHERE clause with form "Name = <someconst>".
-  pub fn index_from(self: &TablePtr, p: &Parser, we: &mut Expr) -> Option<CTableExpression>
+  pub fn index_from(self: &TablePtr, p: &Parser, we: &mut Expr) -> (Option<CExpPtr<bool>>, Option<CTableExpression>)
   {
     let mut kc = BTreeSet::new(); // Set of known columns.
     get_known_cols(we, &mut kc);
@@ -120,13 +120,13 @@ impl Table
         cols.insert(*col);
       }
       let mut kmap = BTreeMap::new();
-      get_keys(p, we, &mut kmap, &mut cols);
+      let cwe = get_keys(p, we, &mut kmap, &mut cols);
       let mut keys = Vec::new();
       for col in clist.iter().take(best_match)
       {
         keys.push(kmap.remove(col).unwrap());
       }
-      return Some(CTableExpression::IxGet(self.clone(), keys, best_index));
+      return (cwe, Some(CTableExpression::IxGet(self.clone(), keys, best_index)));
     }
 
     // ToDo: check for AND conditions, also Id = x OR Id = y ...  Id in (....) etc.
@@ -139,13 +139,13 @@ impl Table
           if e1.col == usize::MAX
           // Id column.
           {
-            return Some(CTableExpression::IdGet(self.clone(), c_int(p, e2)));
+            return (None, Some(CTableExpression::IdGet(self.clone(), c_int(p, e2))));
           }
         }
       }
     }
     // println!("No index found for table {}", self.info.name.to_str());
-    None
+    (Some(c_bool(p, we)), None)
   }
   /// Get record with specified id.
   pub fn id_get(&self, db: &DB, id: u64) -> Option<(PagePtr, usize)>
@@ -689,7 +689,10 @@ fn covered(clist: &[usize], kc: &BTreeSet<usize>) -> usize
   result
 }
 
-fn get_keys(p: &Parser, we: &mut Expr, keys: &mut BTreeMap<usize, CExpPtr<Value>>, cols: &mut BTreeSet<usize>)
+/// Get keys. Returns compile bool expression ( taking into account conditions satisfied by index ).
+fn get_keys(
+  p: &Parser, we: &mut Expr, keys: &mut BTreeMap<usize, CExpPtr<Value>>, cols: &mut BTreeSet<usize>,
+) -> Option<CExpPtr<bool>>
 {
   match &mut we.exp
   {
@@ -702,6 +705,7 @@ fn get_keys(p: &Parser, we: &mut Expr, keys: &mut BTreeMap<usize, CExpPtr<Value>
           if cols.remove(&e1.col)
           {
             keys.insert(e1.col, c_value(p, e2));
+            return None;
           }
         }
       }
@@ -712,18 +716,36 @@ fn get_keys(p: &Parser, we: &mut Expr, keys: &mut BTreeMap<usize, CExpPtr<Value>
           if cols.remove(&e2.col)
           {
             keys.insert(e2.col, c_value(p, e1));
+            return None;
           }
         }
       }
     }
     | ExprIs::Binary(Token::And, e1, e2) =>
     {
-      get_keys(p, e1, keys, cols);
-      get_keys(p, e2, keys, cols);
+      let x1 = get_keys(p, e1, keys, cols);
+      let x2 = get_keys(p, e2, keys, cols);
+
+      return if let Some(c1) = x1
+      {
+        if let Some(c2) = x2
+        {
+          Some(Box::new(cexp::And { c1, c2 }))
+        }
+        else
+        {
+          Some(c1)
+        }
+      }
+      else
+      {
+        x2
+      };
     }
     | _ =>
     {}
   }
+  return Some(c_bool(p, we));
 }
 
 /// Gets the list of columns that are known from a WHERE condition.
