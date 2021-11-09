@@ -1,4 +1,5 @@
 use crate::*;
+use std::collections::BTreeSet;
 
 /// Table Pointer.
 pub type TablePtr = Rc<Table>;
@@ -93,7 +94,7 @@ impl Table
   /// Optimise WHERE clause with form "Name = <someconst>".
   pub fn index_from(self: &TablePtr, p: &Parser, we: &mut Expr) -> Option<CTableExpression>
   {
-    let mut kc = HashSet::new(); // Set of known columns.
+    let mut kc = BTreeSet::new(); // Set of known columns.
     get_known_cols(we, &mut kc);
 
     let list = &*self.ixlist.borrow();
@@ -113,7 +114,7 @@ impl Table
     {
       // Calculate the key values for the chosen index.
       let clist = &list[best_index].1;
-      let mut cols = HashSet::<usize>::new();
+      let mut cols = BTreeSet::<usize>::new();
       for col in clist.iter().take(best_match)
       {
         cols.insert(*col);
@@ -674,7 +675,7 @@ impl Iterator for IdScan
 }
 
 /// Counts the number of index columns that are known.
-fn covered(clist: &[usize], kc: &HashSet<usize>) -> usize
+fn covered(clist: &[usize], kc: &BTreeSet<usize>) -> usize
 {
   let mut result = 0;
   for c in clist
@@ -688,7 +689,7 @@ fn covered(clist: &[usize], kc: &HashSet<usize>) -> usize
   result
 }
 
-fn get_keys(p: &Parser, we: &mut Expr, keys: &mut HashMap<usize, CExpPtr<Value>>, cols: &mut HashSet<usize>)
+fn get_keys(p: &Parser, we: &mut Expr, keys: &mut HashMap<usize, CExpPtr<Value>>, cols: &mut BTreeSet<usize>)
 {
   match &mut we.exp
   {
@@ -726,7 +727,7 @@ fn get_keys(p: &Parser, we: &mut Expr, keys: &mut HashMap<usize, CExpPtr<Value>>
 }
 
 /// Gets the list of columns that are known from a WHERE condition.
-fn get_known_cols(we: &Expr, kc: &mut HashSet<usize>)
+fn get_known_cols(we: &Expr, kc: &mut BTreeSet<usize>)
 {
   match &we.exp
   {

@@ -460,7 +460,7 @@ BEGIN
  
   DECLARE day int, year int
   SET day = PARSEINT( SUBSTRING( s, six+1, ssix - six - 1) )
-  IF day < 1 OR day > 31 THROW 'Day must be 1..31 parsing date ' | htm.Attr(day)
+  IF day < 1 OR day > 31 THROW 'Day must be 1..31 parsing date ' | htm.Attr(''|day)
   SET year = PARSEINT( SUBSTRING( s, ssix + 1, LEN(s) ) )
   RETURN date.YearMonthDayToDays( date.YearMonthDay( year, month, day ) )
 END
