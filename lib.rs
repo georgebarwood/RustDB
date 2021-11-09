@@ -88,17 +88,17 @@ use std::{
 };
 /// Utility functions and macros.
 #[macro_use]
-mod util;
+pub mod util;
 /// Compilation of builtin functions.
-mod builtin;
+pub mod builtin;
 /// Storage of variable length values : ByteStorage.
-mod bytes;
+pub mod bytes;
 /// Compiled expressions.
-mod cexp;
+pub mod cexp;
 /// Compile parsed expressions, checking types.
 pub mod compile;
 /// Instruction execution.
-mod exec;
+pub mod exec;
 /// Expression types, result of parsing.
 pub mod expr;
 /// Initial SQL
@@ -106,15 +106,15 @@ pub mod init;
 /// Page for SortedFile.
 pub mod page;
 /// Parser.
-mod parse;
+pub mod parse;
 /// Instruction and other run time types.
-mod run;
+pub mod run;
 /// Sorted Record storage.
 pub mod sortedfile;
 /// Storage of logical pages in smaller regions of backing storage.
 pub mod stg;
 /// System table functions.
-mod sys;
+pub mod sys;
 /// Table, ColInfo, Row and other Table types.
 pub mod table;
 /// Run-time Value.

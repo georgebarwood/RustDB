@@ -1,5 +1,6 @@
 use crate::*;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use util::SmallSet;
 
 /// Table Pointer.
 pub type TablePtr = Rc<Table>;
@@ -92,7 +93,7 @@ impl Table {
         p: &Parser,
         we: &mut Expr,
     ) -> (Option<CExpPtr<bool>>, Option<CTableExpression>) {
-        let mut kc = BTreeSet::new(); // Set of known columns.
+        let mut kc = SmallSet::new(); // Set of known columns.
         get_known_cols(we, &mut kc);
 
         let list = &*self.ixlist.borrow();
@@ -109,7 +110,10 @@ impl Table {
         if best_match > 0 {
             // Get the key values for the chosen index.
             let clist: &[usize] = &list[best_index].1;
-            let mut cols = BTreeSet::from_iter(clist.iter().take(best_match).copied());
+            let mut cols = SmallSet::new();
+            for col in clist.iter().take(best_match) {
+                cols.insert(*col);
+            }
             let mut kmap = BTreeMap::new();
             let cwe = get_keys(p, we, &mut cols, &mut kmap);
             let keys = clist
@@ -623,7 +627,7 @@ impl Iterator for IdScan {
 }
 
 /// Gets the list of columns that are known from a WHERE condition.
-fn get_known_cols(we: &Expr, kc: &mut BTreeSet<usize>) {
+fn get_known_cols(we: &Expr, kc: &mut SmallSet) {
     match &we.exp {
         ExprIs::Binary(Token::Equal, e1, e2) => {
             if e2.is_constant {
@@ -645,10 +649,10 @@ fn get_known_cols(we: &Expr, kc: &mut BTreeSet<usize>) {
 }
 
 /// Counts the number of index columns that are known.
-fn covered(clist: &[usize], kc: &BTreeSet<usize>) -> usize {
+fn covered(clist: &[usize], kc: &SmallSet) -> usize {
     let mut result = 0;
     for c in clist {
-        if !kc.contains(c) {
+        if !kc.contains(*c) {
             break;
         }
         result += 1;
@@ -660,21 +664,21 @@ fn covered(clist: &[usize], kc: &BTreeSet<usize>) -> usize {
 fn get_keys(
     p: &Parser,
     we: &mut Expr,
-    cols: &mut BTreeSet<usize>,
+    cols: &mut SmallSet,
     keys: &mut BTreeMap<usize, CExpPtr<Value>>,
 ) -> Option<CExpPtr<bool>> {
     match &mut we.exp {
         ExprIs::Binary(Token::Equal, e1, e2) => {
             if e2.is_constant {
                 if let ExprIs::ColName(_) = &e1.exp {
-                    if cols.remove(&e1.col) {
+                    if cols.remove(e1.col) {
                         keys.insert(e1.col, c_value(p, e2));
                         return None;
                     }
                 }
             } else if e1.is_constant {
                 if let ExprIs::ColName(_) = &e2.exp {
-                    if cols.remove(&e2.col) {
+                    if cols.remove(e2.col) {
                         keys.insert(e2.col, c_value(p, e1));
                         return None;
                     }

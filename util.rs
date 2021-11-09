@@ -1,4 +1,5 @@
 use crate::*;
+use std::collections::BTreeSet;
 
 /// Wrap a type in Rc + RefCell.
 pub fn new<T>(x: T) -> std::rc::Rc<std::cell::RefCell<T>> {
@@ -102,4 +103,50 @@ pub fn parse_hex(s: &[u8]) -> Vec<u8> {
         result.push(hex(s[i]) * 16 + hex(s[i + 1]));
     }
     result
+}
+
+/// Set of usize, optimised for elements < 64.
+pub struct SmallSet {
+    bitset: u64,
+    overflow: BTreeSet<usize>,
+}
+
+impl SmallSet {
+    pub fn new() -> Self {
+        Self {
+            bitset: 0,
+            overflow: BTreeSet::new(),
+        }
+    }
+    pub fn insert(&mut self, x: usize) {
+        if x < 64 {
+            self.bitset |= 1 << x;
+        } else {
+            self.overflow.insert(x);
+        }
+    }
+    pub fn contains(&self, x: usize) -> bool {
+        if x < 64 {
+            self.bitset & (1 << x) != 0
+        } else {
+            self.overflow.contains(&x)
+        }
+    }
+
+    pub fn remove(&mut self, x: usize) -> bool {
+        if x < 64 {
+            let bit: u64 = 1 << x;
+            let result = self.bitset & bit != 0;
+            self.bitset &= u64::MAX - bit;
+            result
+        } else {
+            self.overflow.remove(&x)
+        }
+    }
+}
+
+impl Default for SmallSet {
+    fn default() -> Self {
+        Self::new()
+    }
 }

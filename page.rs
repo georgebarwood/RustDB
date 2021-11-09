@@ -162,6 +162,8 @@ impl Page {
         self.root = self.insert_into(self.root, Some((db, r))).0;
         if inserted != self.next_alloc() {
             self.set_record(inserted, r);
+        } else {
+            panic!("Duplicate key");
         }
     }
     /// Insert a child page with specified key and number.
@@ -366,6 +368,7 @@ impl Page {
                     }
                 }
             } else {
+                // Maybe should panic here, duplicate keys should not happen.
                 height_increased = false; // Duplicate key
             }
         }
