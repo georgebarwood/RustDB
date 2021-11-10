@@ -23,7 +23,7 @@ impl<'r> EvalEnv<'r> {
     /// Allocate and initialise local variables.
     pub(crate) fn alloc_locals(&mut self, dt: &[DataType], param_count: usize) {
         for d in dt.iter().skip(param_count) {
-            let v = default(*d);
+            let v = Value::default(*d);
             self.stack.push(v);
         }
     }
@@ -349,7 +349,7 @@ impl<'r> EvalEnv<'r> {
             }
             if obl > 0 {
                 // Sort then output the rows.
-                temp.sort_by(|a, b| compare(a, b, &cse.desc));
+                temp.sort_by(|a, b| table::row_compare(a, b, &cse.desc));
                 for r in &temp {
                     self.qy.push(&r[obl..]);
                 }
@@ -442,7 +442,7 @@ impl<'r> EvalEnv<'r> {
                 }
             }
             // Sort the rows.
-            temp.sort_by(|a, b| compare(a, b, &cse.desc));
+            temp.sort_by(|a, b| table::row_compare(a, b, &cse.desc));
             temp
         } else {
             panic!()

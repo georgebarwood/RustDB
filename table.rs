@@ -381,7 +381,7 @@ impl Row {
             codes: Vec::new(),
         };
         for t in &result.info.typ {
-            result.values.push(default(*t));
+            result.values.push(Value::default(*t));
         }
         result
     }
@@ -702,4 +702,26 @@ fn get_keys(
         _ => {}
     }
     return Some(c_bool(p, we));
+}
+
+/// Compare table rows.
+pub fn row_compare(a: &[Value], b: &[Value], desc: &[bool]) -> Ordering {
+    let mut ix = 0;
+    loop {
+        let cmp = a[ix].cmp(&b[ix]);
+        if cmp != Ordering::Equal {
+            if !desc[ix] {
+                return cmp;
+            };
+            return if cmp == Ordering::Less {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            };
+        }
+        ix += 1;
+        if ix == desc.len() {
+            return Ordering::Equal;
+        }
+    }
 }

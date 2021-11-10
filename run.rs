@@ -41,37 +41,6 @@ pub struct ForNextInfo {
     pub(crate) exps: Vec<CExpPtr<Value>>,
     pub(crate) wher: Option<CExpPtr<bool>>,
 }
-/// Get the default Value for a DataType.
-pub fn default(t: DataType) -> Value {
-    match data_kind(t) {
-        DataKind::Bool => Value::Bool(false),
-        DataKind::Float => Value::Float(0.0),
-        DataKind::String => Value::String(Rc::new(String::new())),
-        DataKind::Binary => Value::Binary(Rc::new(Vec::new())),
-        _ => Value::Int(0),
-    }
-}
-/// Compare table rows.
-pub fn compare(a: &[Value], b: &[Value], desc: &[bool]) -> Ordering {
-    let mut ix = 0;
-    loop {
-        let cmp = a[ix].cmp(&b[ix]);
-        if cmp != Ordering::Equal {
-            if !desc[ix] {
-                return cmp;
-            };
-            return if cmp == Ordering::Less {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            };
-        }
-        ix += 1;
-        if ix == desc.len() {
-            return Ordering::Equal;
-        }
-    }
-}
 /// Compiled Table Expression.
 pub enum CTableExpression {
     // Select( SelectExpression ),

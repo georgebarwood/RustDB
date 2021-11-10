@@ -16,6 +16,17 @@ pub enum Value {
     ForSort(Rc<RefCell<run::ForSortState>>),
 }
 impl Value {
+    /// Get the default Value for a DataType.
+    pub fn default(t: DataType) -> Value {
+        match data_kind(t) {
+            DataKind::Bool => Value::Bool(false),
+            DataKind::Float => Value::Float(0.0),
+            DataKind::String => Value::String(Rc::new(String::new())),
+            DataKind::Binary => Value::Binary(Rc::new(Vec::new())),
+            _ => Value::Int(0),
+        }
+    }
+    /// Get a Value from byte data.
     pub fn load(db: &DB, typ: DataType, data: &[u8], off: usize) -> (Value, u64) {
         let mut code = u64::MAX;
         let val = match data_kind(typ) {
@@ -38,6 +49,7 @@ impl Value {
         };
         (val, code)
     }
+    /// Save a Value to byte data.
     pub fn save(&self, typ: DataType, data: &mut [u8], off: usize, code: u64) {
         let size = data_size(typ);
         match self {
@@ -65,6 +77,7 @@ impl Value {
             _ => {}
         }
     }
+    /// Convert a Value to a String.
     pub fn str(&self) -> Rc<String> {
         match self {
             Value::String(s) => s.clone(),
@@ -74,6 +87,7 @@ impl Value {
             _ => panic!("str not implemented"),
         }
     }
+    /// Append a String.
     pub fn append(&mut self, val: &Value) {
         if let Value::String(s) = self {
             let val = val.str();
@@ -90,6 +104,7 @@ impl Value {
         }
     }
 }
+/// Value comparison.
 impl std::cmp::Ord for Value {
     fn cmp(&self, other: &Self) -> Ordering {
         match self {
