@@ -446,7 +446,7 @@ impl<'a> Parser<'a> {
         }
     }
     /// Add a Data Operation (DO) to the instruction list.
-    fn dop(&mut self, dop: DO) {
+    pub(crate) fn dop(&mut self, dop: DO) {
         if !self.parse_only {
             self.add(DataOp(Box::new(dop)));
         }
@@ -809,14 +809,14 @@ impl<'a> Parser<'a> {
         }
     }
     fn s_update(&mut self) {
-        let t = self.obj_ref();
+        let tname = self.obj_ref();
         self.read_id(b"SET");
-        let mut s = Vec::new();
+        let mut assigns = Vec::new();
         loop {
             let name = self.id();
             self.read(Token::Equal);
             let exp = self.exp();
-            s.push((name, exp));
+            assigns.push((name, exp));
             if !self.test(Token::Comma) {
                 break;
             }
@@ -824,23 +824,9 @@ impl<'a> Parser<'a> {
         if !self.test_id(b"WHERE") {
             panic!("UPDATE must have a WHERE");
         }
-        let mut w = Some(self.exp());
+        let mut wher = Some(self.exp());
         if !self.parse_only {
-            let t = table_look(self, &t);
-            let from = CTableExpression::Base(t.clone());
-            let save = mem::replace(&mut self.from, Some(from));
-            let mut se = Vec::new();
-            for (name, mut exp) in s {
-                if let Some(cnum) = t.info.colmap.get(&name) {
-                    let exp = c_value(self, &mut exp);
-                    se.push((*cnum, exp));
-                } else {
-                    panic!("update column name not found");
-                }
-            }
-            let (w, index_from) = c_where(self, Some(t.clone()), &mut w);
-            self.from = save;
-            self.dop(DO::Update(t, se, index_from, w));
+            c_update(self, &tname, &mut assigns, &mut wher);
         }
     }
     fn s_delete(&mut self) {
@@ -849,14 +835,9 @@ impl<'a> Parser<'a> {
         if !self.test_id(b"WHERE") {
             panic!("DELETE must have a WHERE");
         }
-        let mut w = Some(self.exp());
+        let mut wher = Some(self.exp());
         if !self.parse_only {
-            let t = table_look(self, &tname);
-            let from = CTableExpression::Base(t.clone());
-            let save = mem::replace(&mut self.from, Some(from));
-            let (w, index_from) = c_where(self, Some(t.clone()), &mut w);
-            self.from = save;
-            self.dop(DO::Delete(t, index_from, w));
+            c_delete(self, &tname, &mut wher);
         }
     }
     fn s_execute(&mut self) {
@@ -896,7 +877,6 @@ impl<'a> Parser<'a> {
             self.add(Call(func));
         }
     }
-    /// Parse FOR statement.
     fn s_for(&mut self) {
         let se: SelectExpression = self.select_expression(true);
         let for_id = self.b.local_typ.len();

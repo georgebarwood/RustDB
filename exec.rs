@@ -225,8 +225,8 @@ impl<'r> EvalEnv<'r> {
             DO::CreateTable(ti) => sys::create_table(&self.db, ti),
             DO::CreateIndex(x) => sys::create_index(&self.db, x),
             DO::Insert(tp, cols, values) => self.insert(tp.clone(), cols, values),
-            DO::Delete(tp, from, wher) => self.delete(tp, from, wher),
-            DO::Update(tp, assigns, from, wher) => self.update(tp, assigns, from, wher),
+            DO::Delete(from, wher) => self.delete(from, wher),
+            DO::Update(assigns, from, wher) => self.update(assigns, from, wher),
             DO::DropTable(name) => self.drop_table(name),
             DO::DropFunction(name) => self.drop_function(name),
             DO::DropSchema(name) => self.drop_schema(name),
@@ -234,29 +234,14 @@ impl<'r> EvalEnv<'r> {
         }
     }
     /// Get list of record ids for DELETE/UPDATE.
-    fn get_id_list(
-        &mut self,
-        t: &TablePtr,
-        from: &Option<CTableExpression>,
-        w: &Option<CExpPtr<bool>>,
-    ) -> Vec<u64> {
+    fn get_id_list(&mut self, te: &CTableExpression, w: &Option<CExpPtr<bool>>) -> Vec<u64> {
         let mut idlist = Vec::new();
 
-        if let Some(te) = from {
-            for (pp, off) in self.data_source(te) {
-                let p = &pp.borrow();
-                let data = &p.data[off..];
-                if self.ok(w, data) {
-                    idlist.push(util::getu64(data, 0));
-                }
-            }
-        } else {
-            for (pp, off) in t.scan(&self.db) {
-                let p = &pp.borrow();
-                let data = &p.data[off..];
-                if self.ok(w, data) {
-                    idlist.push(util::getu64(data, 0));
-                }
+        for (pp, off) in self.data_source(te) {
+            let p = &pp.borrow();
+            let data = &p.data[off..];
+            if self.ok(w, data) {
+                idlist.push(util::getu64(data, 0));
             }
         }
         idlist
@@ -270,8 +255,9 @@ impl<'r> EvalEnv<'r> {
         }
     }
     /// Execute a DELETE operation.
-    fn delete(&mut self, t: &TablePtr, from: &Option<CTableExpression>, w: &Option<CExpPtr<bool>>) {
-        let idlist = self.get_id_list(t, from, w);
+    fn delete(&mut self, from: &CTableExpression, w: &Option<CExpPtr<bool>>) {
+        let idlist = self.get_id_list(from, w);
+        let t = from.table();
         let mut oldrow = t.row();
         for id in idlist {
             // Load oldrow so that any codes are deleted.
@@ -288,12 +274,12 @@ impl<'r> EvalEnv<'r> {
     /// Execute an UPDATE operation.
     fn update(
         &mut self,
-        t: &TablePtr,
         assigns: &[(usize, CExpPtr<Value>)],
-        from: &Option<CTableExpression>,
+        from: &CTableExpression,
         w: &Option<CExpPtr<bool>>,
     ) {
-        let idlist = self.get_id_list(t, from, w);
+        let idlist = self.get_id_list(from, w);
+        let t = from.table();
         let mut oldrow = t.row();
         for id in idlist {
             if let Some((pp, off)) = t.id_get(&self.db, id) {

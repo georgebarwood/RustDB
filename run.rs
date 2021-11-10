@@ -80,6 +80,16 @@ pub enum CTableExpression {
     IxGet(TablePtr, Vec<CExpPtr<Value>>, usize),
     Values(Vec<Vec<CExpPtr<Value>>>),
 }
+impl CTableExpression {
+    pub fn table(&self) -> TablePtr {
+        match self {
+            CTableExpression::Base(t) => t.clone(),
+            CTableExpression::IdGet(t, _) => t.clone(),
+            CTableExpression::IxGet(t, _, _) => t.clone(),
+            _ => panic!(),
+        }
+    }
+}
 /// Compiled Select Expression.
 pub struct CSelectExpression {
     pub colnames: Vec<String>,
@@ -111,12 +121,11 @@ pub enum DO {
     DropFunction(ObjRef),
     Insert(TablePtr, Vec<usize>, CTableExpression),
     Update(
-        TablePtr,
         Vec<(usize, CExpPtr<Value>)>,
-        Option<CTableExpression>,
+        CTableExpression,
         Option<CExpPtr<bool>>,
     ),
-    Delete(TablePtr, Option<CTableExpression>, Option<CExpPtr<bool>>),
+    Delete(CTableExpression, Option<CExpPtr<bool>>),
 }
 /// Actions for altering columns of a table.
 pub enum AlterAction {

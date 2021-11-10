@@ -361,6 +361,47 @@ fn c_builtin_float(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<f64> {
     }
     panic!()
 }
+
+/// Compile UPDATE statement.
+pub(crate) fn c_update(
+    p: &mut Parser,
+    tname: &ObjRef,
+    assigns: &mut Vec<(String, Expr)>,
+    wher: &mut Option<Expr>,
+) {
+    let t = table_look(p, tname);
+    let from = CTableExpression::Base(t.clone());
+    let save = mem::replace(&mut p.from, Some(from));
+    let mut se = Vec::new();
+    for (name, exp) in assigns.iter_mut() {
+        if let Some(cnum) = t.info.colmap.get(name) {
+            let exp = c_value(p, exp);
+            se.push((*cnum, exp));
+        } else {
+            panic!("update column name not found");
+        }
+    }
+    let (w, index_from) = c_where(p, Some(t), wher);
+    let mut from = mem::replace(&mut p.from, save);
+    if index_from.is_some() {
+        from = index_from;
+    }
+    p.dop(DO::Update(se, from.unwrap(), w));
+}
+
+/// Complete DELETE statement.
+pub(crate) fn c_delete(p: &mut Parser, tname: &ObjRef, wher: &mut Option<Expr>) {
+    let t = table_look(p, tname);
+    let from = Some(CTableExpression::Base(t.clone()));
+    let save = mem::replace(&mut p.from, from);
+    let (w, index_from) = c_where(p, Some(t), wher);
+    let mut from = mem::replace(&mut p.from, save);
+    if index_from.is_some() {
+        from = index_from;
+    }
+    p.dop(DO::Delete(from.unwrap(), w));
+}
+
 /// Compile SelectExpression to CSelectExpression.
 pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpression {
     let mut from = x.from.map(|mut te| c_te(p, &mut te));
@@ -406,6 +447,7 @@ pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpres
     }
 }
 
+/// Compile WHERE clause, using table index if possible.
 pub fn c_where(
     p: &Parser,
     table: Option<TablePtr>,

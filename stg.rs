@@ -169,7 +169,7 @@ impl CompactFile {
         debug_assert!(done == size);
         size
     }
-    /// Allocate logical page number. Page are numbered 0,1,2... Pages can be used before they are allocated, but freed pages must not be used until they are re-allocated.
+    /// Allocate logical page number. Page are numbered 0,1,2...
     pub fn alloc_page(&mut self) -> u64 {
         if let Some(p) = self.lp_free.iter().next() {
             *p
