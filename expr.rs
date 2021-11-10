@@ -121,7 +121,7 @@ impl ObjRef {
         format!("[{}].[{}]", &self.schema, &self.name)
     }
 }
-/// Binary=1, String=2, Int=3, Float=4, Bool=5, Decimal=6.
+/// Binary=1, String=2, Int=3, Float=4, Bool=5.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub enum DataKind {
     None = 0,

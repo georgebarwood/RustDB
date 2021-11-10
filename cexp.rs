@@ -266,15 +266,6 @@ impl CExp<f64> for ColumnF32 {
         util::getf32(data, self.off) as f64
     }
 }
-pub(crate) struct ColumnDecimal {
-    pub off: usize,
-    pub n: usize,
-}
-impl CExp<i64> for ColumnDecimal {
-    fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> i64 {
-        util::iget(data, self.off, self.n)
-    }
-}
 pub(crate) struct ColumnBool {
     pub off: usize,
 }

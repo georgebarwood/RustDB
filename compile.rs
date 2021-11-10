@@ -13,7 +13,6 @@ pub type CExpPtr<T> = Box<dyn CExp<T>>;
 pub enum CompileFunc {
     Value(fn(&Parser, &mut [Expr]) -> CExpPtr<Value>),
     Int(fn(&Parser, &mut [Expr]) -> CExpPtr<i64>),
-    Decimal(fn(&Parser, &mut [Expr]) -> CExpPtr<i64>),
     Float(fn(&Parser, &mut [Expr]) -> CExpPtr<f64>),
 }
 /// Calculate various attributes such as data_type, is_constant etc.

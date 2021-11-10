@@ -5,15 +5,15 @@ CREATE FUNCTION [sys].[TypeName]( t int ) RETURNS string AS
 BEGIN 
   RETURN CASE 
     WHEN t = 0 THEN 'none'
-    WHEN t = 129 THEN 'binary'
-    WHEN t = 130 THEN 'string' 
-    WHEN t = 67 THEN 'bigint'
-    WHEN t = 35 THEN 'int'
-    WHEN t = 19 THEN 'smallint'
     WHEN t = 11 THEN 'tinyint'
-    WHEN t = 68 THEN 'double'
-    WHEN t = 46 THEN 'float'
     WHEN t = 13 THEN 'bool'
+    WHEN t = 19 THEN 'smallint'
+    WHEN t = 35 THEN 'int'
+    WHEN t = 36 THEN 'float' 
+    WHEN t = 67 THEN 'bigint'
+    WHEN t = 68 THEN 'double'
+    WHEN t = 129 THEN 'binary'
+    WHEN t = 130 THEN 'string'
     ELSE '??type??'
   END
 END
