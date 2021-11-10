@@ -1,4 +1,6 @@
 pub const INITSQL : &str = "
+
+
 CREATE FUNCTION [sys].[TypeName]( t int ) RETURNS string AS 
 BEGIN 
   RETURN CASE 
@@ -12,7 +14,6 @@ BEGIN
     WHEN t = 68 THEN 'double'
     WHEN t = 46 THEN 'float'
     WHEN t = 13 THEN 'bool'
-    WHEN t % 8 = 6 THEN 'decimal(' | ( t / 8 ) % 32 | ',' | t / 256 | ')'
     ELSE '??type??'
   END
 END
@@ -664,6 +665,7 @@ BEGIN
 END
 GO
 INSERT INTO [web].[File](Id,[Path],[ContentType],[ContentLength],[Content]) VALUES 
+(1,'/favicon.ico','image/x-icon',1086,0x00000100010010100000010020002804000016000000280000001000000020000000010020000000000000000000000000000000000000000000000000000000ffbf0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ffff0000ffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ffff0000ffff0000ffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ffff0000ffff0000ffff0000ffff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ffff0000ffff0000ffff0000ffff0000ffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ffff0000ffff0000ffff0000ffff0000ffff0000ffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000000000000000000000000000000000000000000000000000000000000000000000000000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff00000000000000000000000000000000000000000000000000000000000000000000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff000000000000000000000000000000000000000000000000000000000000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000000000000000000000000000000000000000000000000000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff00000000000000000000000000000000000000000000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff000000000000000000000000000000000000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000000000000000000000000000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff00000000000000000000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff000000000000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffbf)
 GO
 
 --############################################
@@ -840,16 +842,6 @@ BEGIN
   RETURN '<input id=\"' | cn | '\" name=\"' | cn | '\" size=\"' | size | '\"' | ' value=\"' | value | '\">'
 END
 GO
-CREATE FUNCTION [browse].[InputDecimal]( colId int, value decimal(10,2) ) RETURNS string AS 
-BEGIN 
-  DECLARE cn string SET cn = Name FROM sys.Column WHERE Id = colId 
-  DECLARE cols int, description string
-  SET cols = InputCols, description = Description
-  FROM browse.Column WHERE Id = colId
-  IF cols = 0 SET cols = 50
-  RETURN '<input id=\"' | cn | '\" name=\"' | cn | '\" size=\"' | cols | '\"' | ' value=' | htm.Attr(''|value) | '>'
-END
-GO
 CREATE FUNCTION [browse].[InputBool]( colId int, value bool ) RETURNS string AS
 BEGIN
   DECLARE cn string 
@@ -912,7 +904,6 @@ BEGIN
   WHEN type % 8 = 1 THEN 'browse.InputBinary'
   WHEN type % 8 = 4 THEN 'browse.InputDouble'
   WHEN type % 8 = 5 THEN 'browse.InputBool'
-  WHEN type % 8 = 6 THEN 'browse.InputDecimal'
   ELSE 'browse.InputString'
   END
 END
@@ -968,7 +959,6 @@ BEGIN
     WHEN type % 8 = 3 THEN 'PARSEINT(' | f |')'
     WHEN type % 8 = 4 THEN 'PARSEFLOAT(' | f | ')'
     WHEN type % 8 = 5 THEN 'browse.ParseBool(' | f | ')'
-    WHEN type % 8 = 6 THEN 'PARSEDECIMAL(' | f | ',' | type | ')'
     ELSE f
   END
 END
@@ -1127,18 +1117,17 @@ SELECT '<h1>Manual</h1>
 <ul>
 <li>tinyint, smallint, int, bigint : signed integers of size 1, 2, 4 and 8 bytes respectively.</li>
 <li>float, double : floating point numbers of size 4 and 8 bytes respectively.</li>
-<li>decimal(p,s) : a number with p decimal digits, with s digits after the decimal point. The maximum value of p is 18.</li>
 <li>string : a string of unicode characters.</li>
 <li>binary : a string of bytes.</li>
 <li>bool : boolean ( true or false ).</li>
 </ul>
-<p>Each data type has a default value : zero for numbers, a zero length string for string and binary, and false for the boolean type. The variable length data types are stored in special system tables, and are automatically encoded so that only one copy of a given string or binary value is stored.
+<p>Each data type has a default value : zero for numbers, a zero length string for string and binary, and false for the boolean type. The variable length data types are stored in a special system tables.
 <h3>ALTER TABLE</h3>
 <p>ALTER TABLE schema.tablename action1, action2 .... <p>The actions are as follows:
 <ul>
 <li>ADD Colname Coltype : a new column is added to the table.</li>
 <li>RENAME Colname TO NewColname : the column is renamed.</li>
-<li>MODIFY Colname Coltype : the datatype of an existing column is changed. The only changes allowed are between the different sizes of integers, between float and double, and decimals with the same scale.</li>
+<li>MODIFY Colname Coltype : the datatype of an existing column is changed. The only changes allowed are between the different sizes of integers, and between float and double.</li>
 <li>DROP Colname : the column is removed from the table.</li>
 </ul>
 <h2>Data manipulation statements</h2>
@@ -1199,7 +1188,7 @@ SELECT '<h1>Manual</h1>
 <h2>Expressions</h2>
 <p>Expressions are composed from literals, named local variables, local parameters and named columns from tables or views. These may be combined using operators, stored functions, pre-defined functions. There is also the CASE expression, which has syntax CASE WHEN bool1 THEN exp1 WHEN bool2 THEN exp2 .... ELSE exp END - the result is the expression associated with the first bool expression which evaluates to true.
 <h3>Literals</h3>
-<p>String literals are written enclosed in single quotes. If a single quote is needed in a string literal, it is written as two single quotes. Binary literals are written in hexadecimal preceded by 0x. Integers are a list of digits (0-9), decimals have a decimal point. The bool literals are true and false.
+<p>String literals are written enclosed in single quotes. If a single quote is needed in a string literal, it is written as two single quotes. Binary literals are written in hexadecimal preceded by 0x. Integers are a list of digits (0-9). The bool literals are true and false.
 <h3>Names</h3><p>Names are enclosed in square brackets and are case sensitive ( although language keywords such as CREATE SELECT are case insensitive, and are written without the square brackets, often in upper case only by convention ). The square brackets can be omitted if the name consists of only letters (A-Z,a-z).
 <h3>Operators</h3>
 <p>The operators ( all binary, except for - which can be unary, and NOT which is only unary ) in order of precedence, high to low, are as follows:
@@ -1223,12 +1212,11 @@ SELECT '<h1>Manual</h1>
 <li>LASTID() : returns the last Id value allocated by an INSERT statement.</li>
 <li>PARSEINT( s string ) : parses an integer from s.</li>
 <li>PARSEFLOAT( s string ) : parses a floating point number from s.</li>
-<li>PARSEDECIMAL( s string, scale int ) : parses a decimal number from s with the specified scale. The result should be assigned to a decimal variable or table column of matching scale.</li>
 <li>EXCEPTION() returns a string with any error that occurred during an EXECUTE statement.</li>
 <li>See the web schema for functions that can be used to access http requests.</li>
 </ul>
 <h3>Conversions</h3>
-<p>Any type will implicitly convert to string where required. Integers will convert to float and decimal numbers, and float and decimal will convert to each other as required. ToDo: what about conversions to integer? Truncation vs Rounding etc.
+<p>To be decided. Currently the only implicit conversion is to string for operands of string concatenation.
 <h2>Views</h2>
 <h3>CREATE VIEW</h3>
 <p>CREATE VIEW schema.viewname AS SELECT expressions FROM table [WHERE bool-exp ] [GROUP BY expressions]<p>Creates a new view. Every expression must have a unique name.
@@ -1524,7 +1512,7 @@ CREATE TABLE [dbo].[Cust]([FirstName] string,[LastName] string,[Age] int,[Postco
 GO
 CREATE INDEX [ByLastName] ON [dbo].[Cust]([LastName])
 GO
-CREATE TABLE [dbo].[Order]([Cust] int,[Total] decimal(9,2),[Date] int) 
+CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int) 
 GO
 CREATE INDEX [ByCust] ON [dbo].[Order]([Cust])
 GO
@@ -1537,7 +1525,7 @@ BEGIN
   SET @I=0 
   WHILE @I < 50 -- Use 5000000 to stress system a bit!
   BEGIN 
-    INSERT INTO dbo.[Order](Cust,Total) VALUES(1+@I%7, ( 501.00 * (@I%11+@I%7) ) / 100 ) 
+    INSERT INTO dbo.[Order](Cust,Total) VALUES(1+@I%7, ( 501 * (@I%11+@I%7) ) / 100 ) 
     SET @I=@I+1 
   END
 END
@@ -1567,10 +1555,11 @@ INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode]) VALUES
 (2,'Clare','Smith',29,'GL3')
 (3,'Ron','Jones',45,'')
 (4,'Peter','Perfect',36,'')
-(5,'George','Washington',25,'WC1')
+(5,'George','Washington',26,'WC1')
 (6,'Ron','Williams',49,'')
 (7,'Adam','Baker',0,'')
 (8,'George','Barwood',62,'GL2 4LZ')
+(9,'Fred','Flintstone',88,'XYZ')
 GO
 
 INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES 
@@ -1632,7 +1621,7 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (106,1,0,1034273)
 (107,1,56,1034273)
 (108,5,99,1034273)
-(109,5,67,1034273)
+(109,5,67,1034274)
 (110,5,29,1034273)
 (111,1,99,1034273)
 (112,4,19,1034273)

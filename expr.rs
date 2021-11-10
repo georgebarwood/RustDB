@@ -53,7 +53,6 @@ pub enum Token {
     VBarEqual,
     Id,
     Number,
-    Decimal,
     Hex,
     String,
     LBra,
@@ -118,7 +117,7 @@ impl ObjRef {
         }
     }
     /// Used for error messages.
-    pub fn to_str(&self) -> String {
+    pub fn str(&self) -> String {
         format!("[{}].[{}]", &self.schema, &self.name)
     }
 }
@@ -131,7 +130,6 @@ pub enum DataKind {
     Int = 3,
     Float = 4,
     Bool = 5,
-    Decimal = 6,
 }
 /// Low 3 (=KBITS) bits are DataKind, next 5 bits are size in bytes, or p ( for DECIMAL ).
 pub type DataType = usize;
@@ -146,31 +144,22 @@ pub(crate) const TINYINT: DataType = DataKind::Int as usize + (1 << KBITS);
 pub(crate) const FLOAT: DataType = DataKind::Float as usize + (4 << KBITS);
 pub(crate) const DOUBLE: DataType = DataKind::Float as usize + (8 << KBITS);
 pub(crate) const BOOL: DataType = DataKind::Bool as usize + (1 << KBITS);
-pub(crate) const DECIMAL: DataType = DataKind::Decimal as usize;
 /// Compute the DataKind of a DataType.
 pub fn data_kind(x: DataType) -> DataKind {
-    const DKLOOK: [DataKind; 7] = [
+    const DKLOOK: [DataKind; 6] = [
         DataKind::None,
         DataKind::Binary,
         DataKind::String,
         DataKind::Int,
         DataKind::Float,
         DataKind::Bool,
-        DataKind::Decimal,
     ];
     DKLOOK[x % (1 << KBITS)]
 }
 /// Compute the number of bytes required to store a value of the specified DataType.
 #[must_use]
 pub fn data_size(x: DataType) -> usize {
-    let p = (x >> KBITS) & 31;
-    if data_kind(x) == DataKind::Decimal {
-        /// Number of bytes needed to store a Decimal of index digits.
-        const DECSIZE: [u8; 19] = [0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 8, 8];
-        DECSIZE[p] as usize
-    } else {
-        p
-    }
+    (x >> KBITS) & 31
 }
 /// Compilation block ( body of function or batch section ).
 pub(crate) struct Block<'a> {

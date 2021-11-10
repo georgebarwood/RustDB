@@ -194,7 +194,7 @@ impl<'a> Parser<'a> {
                         cc = self.read_char();
                         token = Token::Hex;
                         while (b'0'..=b'9').contains(&cc)
-                            || (b'A'..b'F').contains(&cc)
+                            || (b'A'..=b'F').contains(&cc)
                             || (b'a'..=b'f').contains(&cc)
                         {
                             cc = self.read_char();
@@ -206,18 +206,6 @@ impl<'a> Parser<'a> {
                         let part1 = self.source_ix - 1;
                         let s = str::from_utf8(&self.source[self.token_start..part1]).unwrap();
                         self.decimal_int = s.parse().unwrap();
-                        if cc == b'.' && token == Token::Number {
-                            token = Token::Decimal;
-                            cc = self.read_char();
-                            while (b'0'..=b'9').contains(&cc) {
-                                cc = self.read_char();
-                            }
-                            // DecimalScale = source_ix - ( part1 + 1 );
-                            // DecimalFrac = long.Parse( Source.Substring( part1 + 1, DecimalScale ) );
-                        } else {
-                            // DecimalScale = 0;
-                            // DecimalFrac = 0;
-                        }
                     }
                     self.cs = &self.source[self.token_start..self.source_ix - 1];
                 }
@@ -354,30 +342,6 @@ impl<'a> Parser<'a> {
             b"float" => FLOAT,
             b"double" => DOUBLE,
             b"bool" => BOOL,
-            b"decimal" => {
-                let mut p = 0;
-                let mut q = 0;
-                if self.test(Token::LBra) {
-                    p = self.read_int();
-                    if p < 1 {
-                        panic!("Minimum precision is 1")
-                    }
-                    if p > 18 {
-                        panic!("Maxiumum decimal precision is 18")
-                    }
-                    if self.test(Token::Comma) {
-                        q = self.read_int();
-                    }
-                    if q < 0 {
-                        panic!("Scale cannot be negative")
-                    }
-                    if q > p {
-                        panic!("Scale cannot be greater than precision")
-                    }
-                    self.read(Token::RBra);
-                }
-                DECIMAL + ((p as usize) << 3) + ((q as usize) << 8)
-            }
             _ => panic!("Datatype expected"),
         }
     }
@@ -432,14 +396,6 @@ impl<'a> Parser<'a> {
         } else {
             panic!("Undeclared local: {}", tos(self.cs))
         }
-        self.read_token();
-        result
-    }
-    fn read_int(&mut self) -> i64 {
-        if self.token != Token::Number {
-            panic!("Number expected");
-        }
-        let result = tos(self.cs).parse::<i64>().unwrap();
         self.read_token();
         result
     }
@@ -600,10 +556,8 @@ impl<'a> Parser<'a> {
         } else if self.token == Token::String {
             result = Expr::new(ExprIs::Const(Value::String(Rc::new(self.ts.clone()))));
             self.read_token();
-        } else if self.token == Token::Number || self.token == Token::Decimal {
+        } else if self.token == Token::Number {
             let value = self.decimal_int;
-            // if ( DecimalScale > 0 ) value = value * (long)Util.PowerTen( DecimalScale ) + DecimalFrac;
-            // result = new Ok( Constant( value, DecimalScale > 0  DTI.Decimal( 18, DecimalScale ) : DataType.Bigint );
             result = Expr::new(ExprIs::Const(Value::Int(value)));
             self.read_token();
         } else if self.token == Token::Hex {
@@ -1306,10 +1260,12 @@ impl<'a> Parser<'a> {
         }
     }
 } // end impl Parser
+
 /// Convert byte ref to &str.
 pub(crate) fn tos(s: &[u8]) -> &str {
     str::from_utf8(s).unwrap()
 }
+
 /// Convert byte ref to String.
 pub(crate) fn to_s(s: &[u8]) -> String {
     str::from_utf8(s).unwrap().to_string()

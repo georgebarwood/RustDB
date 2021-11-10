@@ -3,13 +3,9 @@
 //!
 //!Optimise WHERE condition for UPDATE and DELETE.
 //!
-//!Decimal shifting when scales do not match.
-//!
-//!Multi-column index use from WHERE (Done).
-//!
 //!multipart requests ( for file upload ).
 //!
-//!Implement DROP TABLE(done), DROP INDEX, DROP FUNCTION(done) etc.
+//!Implement DROP INDEX.
 //!
 //!Implement ALTER TABLE?
 //!

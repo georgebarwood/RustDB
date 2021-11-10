@@ -70,7 +70,7 @@ impl Value {
             Value::String(s) => s.clone(),
             Value::Int(x) => Rc::new(x.to_string()),
             Value::Float(x) => Rc::new(x.to_string()),
-            Value::Binary(_x) => Rc::new("ToDo".to_string()),
+            Value::Binary(x) => Rc::new(util::to_hex(x)),
             _ => panic!("str not implemented"),
         }
     }

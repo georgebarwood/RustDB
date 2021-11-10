@@ -447,7 +447,7 @@ impl<'r> EvalEnv<'r> {
             self.db.tables.borrow_mut().remove(name);
             t.free_pages(&self.db);
         } else {
-            panic!("Drop Table not found {}", name.to_str());
+            panic!("Drop Table not found {}", name.str());
         }
     }
     fn drop_function(&mut self, name: &ObjRef) {
@@ -456,7 +456,7 @@ impl<'r> EvalEnv<'r> {
             self.db.run(&sql, self.qy);
             self.db.function_reset.set(true);
         } else {
-            panic!("Drop Function not found {}", name.to_str());
+            panic!("Drop Function not found {}", name.str());
         }
     }
     fn drop_schema(&mut self, name: &str) {

@@ -100,9 +100,23 @@ pub fn parse_hex(s: &[u8]) -> Vec<u8> {
     let n = s.len() / 2;
     let mut result = Vec::<u8>::with_capacity(n);
     for i in 0..n {
-        result.push(hex(s[i]) * 16 + hex(s[i + 1]));
+        result.push(hex(s[i*2]) * 16 + hex(s[i*2 + 1]));
     }
     result
+}
+
+/// Convert bytes to hex string.
+pub fn to_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut s = Vec::<u8>::new();
+    s.push(b'0');
+    s.push(b'x');
+    for b in bytes {
+        let b = *b as usize;
+        s.push(HEX[b / 16]);
+        s.push(HEX[b % 16]);
+    }
+    String::from_utf8(s).unwrap()
 }
 
 /// Set of usize, optimised for elements < 64.

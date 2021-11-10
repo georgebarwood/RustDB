@@ -18,11 +18,6 @@ pub fn register_builtins(db: &DB) {
             CompileFunc::Float(c_parse_float),
         ),
         (
-            "PARSEDECIMAL",
-            DataKind::Decimal,
-            CompileFunc::Decimal(c_parse_decimal),
-        ),
-        (
             "EXCEPTION",
             DataKind::String,
             CompileFunc::Value(c_exception),
@@ -120,25 +115,6 @@ struct ParseInt {
 impl CExp<i64> for ParseInt {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> i64 {
         let s = self.s.eval(e, d).str();
-        s.parse().unwrap()
-    }
-}
-/////////////////////////////
-/// Compile call to PARSEDECIMAL.
-fn c_parse_decimal(p: &Parser, args: &mut [Expr]) -> CExpPtr<i64> {
-    check_types(p, args, &[DataKind::String, DataKind::Int]);
-    let s = c_value(p, &mut args[0]);
-    let t = c_int(p, &mut args[1]);
-    Box::new(ParseDecimal { s, t })
-}
-struct ParseDecimal {
-    s: CExpPtr<Value>,
-    t: CExpPtr<i64>,
-}
-impl CExp<i64> for ParseDecimal {
-    fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> i64 {
-        let s = self.s.eval(e, d).str();
-        let _t = self.t.eval(e, d);
         s.parse().unwrap()
     }
 }

@@ -13,7 +13,7 @@ pub fn create_schema(db: &DB, name: &str) {
 /// Create a new table in the database by writing to the system Table and Column tables.
 pub fn create_table(db: &DB, info: &ColInfo) {
     if let Some(_t) = get_table(db, &info.name) {
-        panic!("Table {} already exists", info.name.to_str());
+        panic!("Table {} already exists", info.name.str());
     }
     let tid = {
         let schema = &info.name.schema;
@@ -80,7 +80,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
             table.add_index(root, info.cols.clone());
         }
     } else {
-        panic!("table not found: {}", &info.tname.to_str());
+        panic!("table not found: {}", &info.tname.str());
     }
 }
 /// Creates or alters a function in the database by saving the source into the Function system table.
@@ -107,7 +107,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool) 
                 }
                 return;
             }
-            panic!("function {} not found", &name.to_str());
+            panic!("function {} not found", &name.str());
         } else {
             // Create new function.
             let mut row = t.row();

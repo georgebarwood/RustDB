@@ -160,9 +160,6 @@ pub fn c_value(p: &Parser, e: &mut Expr) -> CExpPtr<Value> {
         DataKind::Bool => Box::new(cexp::BoolToVal { ce: c_bool(p, e) }),
         DataKind::Int => Box::new(cexp::IntToVal { ce: c_int(p, e) }),
         DataKind::Float => Box::new(cexp::FloatToVal { ce: c_float(p, e) }),
-        DataKind::Decimal => Box::new(cexp::IntToVal {
-            ce: c_decimal(p, e),
-        }),
         _ => match &mut e.exp {
             ExprIs::ColName(x) => {
                 let (off, typ) = name_to_col(p, x);
@@ -282,42 +279,6 @@ pub fn c_bool(p: &Parser, e: &mut Expr) -> CExpPtr<bool> {
         _ => panic!(),
     }
 }
-/// Compile decimal expression.
-pub fn c_decimal(p: &Parser, e: &mut Expr) -> CExpPtr<i64> {
-    if get_kind(p, e) != DataKind::Decimal {
-        panic!("Decimal type expected")
-    }
-    match &mut e.exp {
-        ExprIs::ColName(x) => {
-            let (off, typ) = name_to_col(p, x);
-            let n = data_size(typ);
-            Box::new(cexp::ColumnDecimal { off, n })
-        }
-        ExprIs::Local(x) => Box::new(cexp::Local { num: *x }),
-        ExprIs::Binary(op, b1, b2) => {
-            let c1 = c_decimal(p, b1);
-            let c2 = c_decimal(p, b2);
-            match op {
-                Token::Plus => Box::new(cexp::Add::<i64> { c1, c2 }),
-                Token::Minus => Box::new(cexp::Sub::<i64> { c1, c2 }),
-                Token::Times => Box::new(cexp::Mul::<i64> { c1, c2 }),
-                Token::Divide => Box::new(cexp::Div::<i64> { c1, c2 }),
-                Token::Percent => Box::new(cexp::Rem::<i64> { c1, c2 }),
-                _ => panic!(),
-            }
-        }
-        ExprIs::Minus(u) => {
-            let ce = c_decimal(p, u);
-            Box::new(cexp::Minus::<i64> { ce })
-        }
-        ExprIs::Case(list, els) => c_case(p, list, els, c_decimal),
-        ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToInt {
-            ce: c_call(p, name, parms),
-        }),
-        ExprIs::BuiltinCall(n, a) => c_builtin_decimal(p, n, a),
-        _ => panic!(),
-    }
-}
 /// Compile arithmetic.
 fn c_arithmetic<T>(
     p: &Parser,
@@ -390,13 +351,6 @@ where
 /// Compile a call to a builtin function that returns an integer.
 fn c_builtin_int(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64> {
     if let Some((_dk, CompileFunc::Int(cf))) = p.db.builtins.borrow().get(name) {
-        return cf(p, args);
-    }
-    panic!()
-}
-/// Compile a call to a builtin function that returns a decimal.
-fn c_builtin_decimal(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64> {
-    if let Some((_dk, CompileFunc::Decimal(cf))) = p.db.builtins.borrow().get(name) {
         return cf(p, args);
     }
     panic!()
@@ -494,7 +448,7 @@ pub(crate) fn table_look(p: &Parser, name: &ObjRef) -> TablePtr {
     if let Some(t) = p.db.get_table(name) {
         t
     } else {
-        panic!("table {} not found", name.to_str())
+        panic!("table {} not found", name.str())
     }
 }
 /// Look for named function in database and compile it if not already compiled.
@@ -529,7 +483,7 @@ pub(crate) fn function_look(p: &Parser, name: &ObjRef) -> FunctionPtr {
         }
         r
     } else {
-        panic!("function {} not found", name.to_str())
+        panic!("function {} not found", name.str())
     }
 }
 /// Lookup the column offset and DataType of a named column.
