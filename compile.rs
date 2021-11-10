@@ -368,7 +368,6 @@ pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpres
         Some(CTableExpression::Base(t)) => Some(t.clone()),
         _ => None,
     };
-    let mut index_from = None;
     // Is the save necessary?
     let save = mem::replace(&mut p.from, from);
     let mut exps = Vec::new();
@@ -384,22 +383,7 @@ pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpres
             }
         }
     }
-    let wher = {
-        if let Some(we) = &mut x.wher {
-            if get_kind(p, we) != DataKind::Bool {
-                panic!("WHERE expression must be bool")
-            }
-            if let Some(table) = table {
-                let x = table.index_from(p, we);
-                index_from = x.1;
-                x.0
-            } else {
-                Some(c_bool(p, we))
-            }
-        } else {
-            None
-        }
-    };
+    let (wher, index_from) = c_where(p, table, &mut x.wher);
     let mut orderby = Vec::new();
     let mut desc = Vec::new();
     for (e, a) in &mut x.orderby {
@@ -421,6 +405,26 @@ pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpres
         desc,
     }
 }
+
+pub fn c_where(
+    p: &Parser,
+    table: Option<TablePtr>,
+    wher: &mut Option<Expr>,
+) -> (Option<CExpPtr<bool>>, Option<CTableExpression>) {
+    if let Some(we) = wher {
+        if get_kind(p, we) != DataKind::Bool {
+            panic!("WHERE expression must be bool")
+        }
+        if let Some(table) = table {
+            table.index_from(p, we)
+        } else {
+            (Some(c_bool(p, we)), None)
+        }
+    } else {
+        (None, None)
+    }
+}
+
 /// Compile a TableExpression to CTableExpression.
 pub(crate) fn c_te(p: &Parser, te: &mut TableExpression) -> CTableExpression {
     match te {

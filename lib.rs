@@ -1,23 +1,15 @@
 //!
 //!ToDo List:
 //!
-//!Optimise WHERE condition for UPDATE and DELETE.
-//!
 //!multipart requests ( for file upload ).
 //!
-//!Implement DROP INDEX.
-//!
-//!Implement ALTER TABLE?
-//!
-//!Fully implement CREATE INDEX?
+//!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
 //!
 //!Sort out error handling for PARSEINT etc.
 //!
 //!Handle HTTP IO in parallel. Read-only transactions.
 //!
-//!Allow new data types to be registered?
-//!
-//!Work on improving SQL code, browse schema. Scripting of individual schemas, preservation of browse data.
+//!Work on improving/testing SQL code, browse schema, float I/O.
 //!
 //! Database with SQL-like language.
 //! Example program:

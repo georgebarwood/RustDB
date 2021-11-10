@@ -824,12 +824,11 @@ impl<'a> Parser<'a> {
         if !self.test_id(b"WHERE") {
             panic!("UPDATE must have a WHERE");
         }
-        let mut w = self.exp();
+        let mut w = Some(self.exp());
         if !self.parse_only {
             let t = table_look(self, &t);
             let from = CTableExpression::Base(t.clone());
             let save = mem::replace(&mut self.from, Some(from));
-            let w = c_bool(self, &mut w);
             let mut se = Vec::new();
             for (name, mut exp) in s {
                 if let Some(cnum) = t.info.colmap.get(&name) {
@@ -839,8 +838,9 @@ impl<'a> Parser<'a> {
                     panic!("update column name not found");
                 }
             }
+            let (w, index_from) = c_where(self, Some(t.clone()), &mut w);
             self.from = save;
-            self.dop(DO::Update(t, se, w));
+            self.dop(DO::Update(t, se, index_from, w));
         }
     }
     fn s_delete(&mut self) {
@@ -849,14 +849,14 @@ impl<'a> Parser<'a> {
         if !self.test_id(b"WHERE") {
             panic!("DELETE must have a WHERE");
         }
-        let mut w = self.exp();
+        let mut w = Some(self.exp());
         if !self.parse_only {
             let t = table_look(self, &tname);
             let from = CTableExpression::Base(t.clone());
             let save = mem::replace(&mut self.from, Some(from));
-            let w = c_bool(self, &mut w);
+            let (w, index_from) = c_where(self, Some(t.clone()), &mut w);
             self.from = save;
-            self.dop(DO::Delete(t, w));
+            self.dop(DO::Delete(t, index_from, w));
         }
     }
     fn s_execute(&mut self) {

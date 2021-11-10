@@ -110,8 +110,13 @@ pub enum DO {
     DropProcedure(ObjRef),
     DropFunction(ObjRef),
     Insert(TablePtr, Vec<usize>, CTableExpression),
-    Update(TablePtr, Vec<(usize, CExpPtr<Value>)>, CExpPtr<bool>),
-    Delete(TablePtr, CExpPtr<bool>),
+    Update(
+        TablePtr,
+        Vec<(usize, CExpPtr<Value>)>,
+        Option<CTableExpression>,
+        Option<CExpPtr<bool>>,
+    ),
+    Delete(TablePtr, Option<CTableExpression>, Option<CExpPtr<bool>>),
 }
 /// Actions for altering columns of a table.
 pub enum AlterAction {
