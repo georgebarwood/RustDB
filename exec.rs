@@ -169,7 +169,7 @@ impl<'r> EvalEnv<'r> {
                 panic!("Jump into FOR loop");
             };
             if let Some((pp, off)) = next {
-                let p = &pp.borrow();
+                let p = pp.borrow();
                 let data = &p.data[off..];
                 // Eval and check WHERE condition, eval expressions and assign to locals.
                 if self.ok(&info.wher, data) {
@@ -238,7 +238,7 @@ impl<'r> EvalEnv<'r> {
         let mut idlist = Vec::new();
 
         for (pp, off) in self.data_source(te) {
-            let p = &pp.borrow();
+            let p = pp.borrow();
             let data = &p.data[off..];
             if self.ok(w, data) {
                 idlist.push(util::getu64(data, 0));
@@ -262,7 +262,7 @@ impl<'r> EvalEnv<'r> {
         for id in idlist {
             // Load oldrow so that any codes are deleted.
             if let Some((pp, off)) = t.id_get(&self.db, id) {
-                let p = &pp.borrow();
+                let p = pp.borrow();
                 let data = &p.data[off..];
                 oldrow.load(&self.db, data);
             } else {
@@ -284,7 +284,7 @@ impl<'r> EvalEnv<'r> {
         for id in idlist {
             if let Some((pp, off)) = t.id_get(&self.db, id) {
                 let mut newrow = {
-                    let p = &pp.borrow();
+                    let p = pp.borrow();
                     let data = &p.data[off..];
                     oldrow.load(&self.db, data);
                     let mut newrow = oldrow.clone();
@@ -323,7 +323,7 @@ impl<'r> EvalEnv<'r> {
             let obl = cse.orderby.len();
             let mut temp = Vec::new(); // For sorting.
             for (pp, off) in self.data_source(te) {
-                let p = &pp.borrow();
+                let p = pp.borrow();
                 let data = &p.data[off..];
                 if self.ok(&cse.wher, data) {
                     let mut values = Vec::new();
@@ -367,7 +367,7 @@ impl<'r> EvalEnv<'r> {
     fn set(&mut self, cse: &CSelectExpression) {
         if let Some(te) = &cse.from {
             for (pp, off) in self.data_source(te) {
-                let p = &pp.borrow();
+                let p = pp.borrow();
                 let data = &p.data[off..];
                 if self.ok(&cse.wher, data) {
                     for (i, ce) in cse.exps.iter().enumerate() {
@@ -426,7 +426,7 @@ impl<'r> EvalEnv<'r> {
         if let Some(te) = &cse.from {
             let mut temp = Vec::new(); // For sorting.
             for (pp, off) in self.data_source(te) {
-                let p = &pp.borrow();
+                let p = pp.borrow();
                 let data = &p.data[off..];
                 if self.ok(&cse.wher, data) {
                     let mut values = Vec::new();

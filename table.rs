@@ -155,7 +155,7 @@ impl Table {
         let (sf, cols) = &list[index];
         let key = IndexKey::new(self, cols.clone(), key, Ordering::Equal);
         if let Some((pp, off)) = sf.get(db, &key) {
-            let p = &pp.borrow();
+            let p = pp.borrow();
             let id = util::getu64(&p.data, off);
             let row = Id { id };
             return self.file.get(db, &row);
@@ -595,7 +595,7 @@ impl Iterator for IndexScan {
     type Item = (PagePtr, usize);
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         if let Some((pp, off)) = self.ixa.next() {
-            let p = &pp.borrow();
+            let p = pp.borrow();
             let data = &p.data[off..];
             if !self.keys_equal(data) {
                 return None;

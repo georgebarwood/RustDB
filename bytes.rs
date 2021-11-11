@@ -16,7 +16,7 @@ impl ByteStorage {
         // Initialise id_gen to id of last record.
         let start = Fragment::new(u64::MAX);
         if let Some((pp, off)) = self.file.clone().dsc(db, Box::new(start)).next() {
-            let p = &pp.borrow();
+            let p = pp.borrow();
             self.id_gen.set(1 + util::getu64(&p.data, off));
         }
     }
@@ -54,7 +54,7 @@ impl ByteStorage {
         let mut result = vec![0_u8; 7]; // First 7 bytes will be filled in from inline data.
         let start = Fragment::new(id);
         for (pp, off) in self.file.asc(db, Box::new(start)) {
-            let p = &pp.borrow();
+            let p = pp.borrow();
             let xid = util::getu64(&p.data, off);
             debug_assert!(xid == id);
             id += 1;
@@ -71,7 +71,7 @@ impl ByteStorage {
         let start = Fragment::new(id);
         let mut n = 0;
         for (pp, off) in self.file.asc(db, Box::new(start)) {
-            let p = &pp.borrow();
+            let p = pp.borrow();
             let xid = util::getu64(&p.data, off);
             debug_assert!(xid == id + n);
             n += 1;

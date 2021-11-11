@@ -123,7 +123,7 @@ impl SortedFile {
         let off;
         loop {
             let cpnum = {
-                let p = &pp.borrow();
+                let p = pp.borrow();
                 if p.level == 0 {
                     let x = p.find_equal(db, r);
                     if x == 0 {
