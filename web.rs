@@ -133,7 +133,9 @@ impl Query for WebQuery {
         self.err = err;
     }
     fn get_error(&mut self) -> String {
-        self.err.to_string()
+        let result = self.err.to_string();
+        self.err = String::new();
+        result
     }
 }
 /// Parser for http request.

@@ -1098,6 +1098,7 @@ BEGIN
 <p><a href=/ListFile>Files</a>
 <p><a href=/FileUpload>File Upload</a>
 <p><a target=_blank href=/Dump>Dump</a>
+<p><a href=/CheckAll>Check all functions compile ok</a>
 <h1>Schemas</h1>'
    SELECT '<p><a href=ShowSchema?s=' | Name | '>' | Name | '</a>' FROM sys.Schema ORDER BY Name
    EXEC web.Trailer()
@@ -1406,6 +1407,23 @@ BEGIN
     EXEC sys.ScriptSchemaBrowse(s)
 END
 GO
+CREATE FN [handler].[/CheckAll]() AS 
+BEGIN
+  EXEC web.Head('Check All Functions compile')
+  DECLARE sid int, sname string, fname string
+  FOR sid = Id, sname = sys.QuoteName(Name) FROM sys.Schema
+  BEGIN
+    FOR fname = sys . QuoteName(Name) FROM sys.Function WHERE Schema = sid
+    BEGIN
+      -- SELECT '<br>Checking ' | sname | '.' | fname
+      EXECUTE( 'CHECK ' | sname | '.' | fname )
+      DECLARE ex string SET ex = EXCEPTION()
+      IF ex != '' SELECT '<br>Error : ' | htm.Encode(ex)
+    END
+  END
+  EXEC web.Trailer()
+END
+GO
 CREATE FN [handler].[/BrowseInfo]() AS 
 BEGIN 
   DECLARE k int SET k = PARSEINT( web.Query( 'k' ) )
@@ -1516,7 +1534,11 @@ CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int)
 GO
 CREATE INDEX [ByCust] ON [dbo].[Order]([Cust])
 GO
-CREATE FN [dbo].[test]() AS BEGIN END
+CREATE FN [dbo].[testx]() AS
+BEGIN
+  DECLARE x int
+  SET x = 'hello'
+END
 GO
 CREATE FN [dbo].[MakeOrders]() AS
 BEGIN 
@@ -1558,7 +1580,7 @@ INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode]) VALUES
 (5,'George','Washington',26,'WC1')
 (6,'Ron','Williams',49,'')
 (7,'Adam','Baker',0,'')
-(8,'George','Barwood',63,'GL2 4LZ')
+(8,'George','Barwood',-63,'GL2 4LZ')
 (9,'Fred','Flintstone',88,'XYZ')
 GO
 

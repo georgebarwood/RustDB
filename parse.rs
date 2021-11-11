@@ -79,6 +79,7 @@ impl<'a> Parser<'a> {
                     b"DECLARE" => self.s_declare(),
                     b"DELETE" => self.s_delete(),
                     b"EXEC" => self.s_exec(),
+                    b"CHECK" => self.s_check(),
                     b"EXECUTE" => self.s_execute(),
                     b"FOR" => self.s_for(),
                     b"GOTO" => self.s_goto(),
@@ -824,6 +825,12 @@ impl<'a> Parser<'a> {
         if !self.b.parse_only {
             push(&mut self.b, &mut exp);
             self.b.add(Execute);
+        }
+    }
+    fn s_check(&mut self) {
+        let name = self.obj_ref();
+        if !self.b.parse_only {
+            function_look(&self.b, &name);
         }
     }
     fn s_exec(&mut self) {

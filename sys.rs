@@ -109,6 +109,10 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool) 
             }
             panic!("function {} not found", &name.str());
         } else {
+            if get_function_id( db, name ).is_some()
+            {
+              panic!( "function already exists" );
+            }    
             // Create new function.
             let mut row = t.row();
             // Columns are Schema, Name, Definition
