@@ -240,7 +240,7 @@ pub(crate) fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64> {
 /// Parse a function definition.
 fn parse_function(db: &DB, source: Rc<String>) -> FunctionPtr {
     let mut p = Parser::new(&source, db);
-    p.parse_only = true;
+    p.b.parse_only = true;
     p.parse_function();
     Rc::new(Function {
         compiled: Cell::new(false),

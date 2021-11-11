@@ -29,12 +29,12 @@ pub fn register_builtins(db: &DB) {
     }
 }
 /// Check number and kinds of arguments.
-fn check_types(p: &Parser, args: &mut [Expr], dk: &[DataKind]) {
+fn check_types(b: &Block, args: &mut [Expr], dk: &[DataKind]) {
     if args.len() != dk.len() {
         panic!("Wrong number of args");
     }
     for (i, e) in args.iter_mut().enumerate() {
-        let k = get_kind(p, e);
+        let k = get_kind(b, e);
         if k != dk[i] {
             panic!(
                 "Builtin function arg {} type mismatch expected {:?} got {:?}",
@@ -47,8 +47,8 @@ fn check_types(p: &Parser, args: &mut [Expr], dk: &[DataKind]) {
 }
 /////////////////////////////
 /// Compile call to EXCEPTION().
-fn c_exception(p: &Parser, args: &mut [Expr]) -> CExpPtr<Value> {
-    check_types(p, args, &[]);
+fn c_exception(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
+    check_types(b, args, &[]);
     Box::new(Exception {})
 }
 struct Exception {}
@@ -60,9 +60,9 @@ impl CExp<Value> for Exception {
 }
 /////////////////////////////
 /// Compile call to LEN.
-fn c_len(p: &Parser, args: &mut [Expr]) -> CExpPtr<i64> {
-    check_types(p, args, &[DataKind::String]);
-    let s = c_value(p, &mut args[0]);
+fn c_len(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[DataKind::String]);
+    let s = c_value(b, &mut args[0]);
     Box::new(Len { s })
 }
 struct Len {
@@ -76,8 +76,8 @@ impl CExp<i64> for Len {
 }
 /////////////////////////////
 /// Compile call to LASTID.
-fn c_lastid(p: &Parser, args: &mut [Expr]) -> CExpPtr<i64> {
-    check_types(p, args, &[]);
+fn c_lastid(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[]);
     Box::new(LastId {})
 }
 struct LastId {}
@@ -88,9 +88,9 @@ impl CExp<i64> for LastId {
 }
 /////////////////////////////
 /// Compile call to GLOBAL.
-fn c_global(p: &Parser, args: &mut [Expr]) -> CExpPtr<i64> {
-    check_types(p, args, &[DataKind::Int]);
-    let x = c_int(p, &mut args[0]);
+fn c_global(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[DataKind::Int]);
+    let x = c_int(b, &mut args[0]);
     Box::new(Global { x })
 }
 struct Global {
@@ -104,9 +104,9 @@ impl CExp<i64> for Global {
 }
 /////////////////////////////
 /// Compile call to PARSEINT.
-fn c_parse_int(p: &Parser, args: &mut [Expr]) -> CExpPtr<i64> {
-    check_types(p, args, &[DataKind::String]);
-    let s = c_value(p, &mut args[0]);
+fn c_parse_int(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[DataKind::String]);
+    let s = c_value(b, &mut args[0]);
     Box::new(ParseInt { s })
 }
 struct ParseInt {
@@ -120,9 +120,9 @@ impl CExp<i64> for ParseInt {
 }
 /////////////////////////////
 /// Compile call to PARSEFLOAT.
-fn c_parse_float(p: &Parser, args: &mut [Expr]) -> CExpPtr<f64> {
-    check_types(p, args, &[DataKind::String]);
-    let s = c_value(p, &mut args[0]);
+fn c_parse_float(b: &Block, args: &mut [Expr]) -> CExpPtr<f64> {
+    check_types(b, args, &[DataKind::String]);
+    let s = c_value(b, &mut args[0]);
     Box::new(ParseFloat { s })
 }
 struct ParseFloat {
@@ -136,15 +136,15 @@ impl CExp<f64> for ParseFloat {
 }
 /////////////////////////////
 /// Compile call to REPLACE.
-fn c_replace(p: &Parser, args: &mut [Expr]) -> CExpPtr<Value> {
+fn c_replace(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(
-        p,
+        b,
         args,
         &[DataKind::String, DataKind::String, DataKind::String],
     );
-    let s = c_value(p, &mut args[0]);
-    let pat = c_value(p, &mut args[1]);
-    let sub = c_value(p, &mut args[2]);
+    let s = c_value(b, &mut args[0]);
+    let pat = c_value(b, &mut args[1]);
+    let sub = c_value(b, &mut args[2]);
     Box::new(Replace { s, pat, sub })
 }
 struct Replace {
@@ -163,11 +163,11 @@ impl CExp<Value> for Replace {
 }
 /////////////////////////////
 /// Compile call to SUBSTRING.
-fn c_substring(p: &Parser, args: &mut [Expr]) -> CExpPtr<Value> {
-    check_types(p, args, &[DataKind::String, DataKind::Int, DataKind::Int]);
-    let s = c_value(p, &mut args[0]);
-    let f = c_int(p, &mut args[1]);
-    let n = c_int(p, &mut args[2]);
+fn c_substring(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
+    check_types(b, args, &[DataKind::String, DataKind::Int, DataKind::Int]);
+    let s = c_value(b, &mut args[0]);
+    let f = c_int(b, &mut args[1]);
+    let n = c_int(b, &mut args[2]);
     Box::new(Substring { s, f, n })
 }
 struct Substring {
@@ -190,10 +190,10 @@ impl CExp<Value> for Substring {
 }
 /////////////////////////////
 /// Compile call to ARG.
-fn c_arg(p: &Parser, args: &mut [Expr]) -> CExpPtr<Value> {
-    check_types(p, args, &[DataKind::Int, DataKind::String]);
-    let k = c_int(p, &mut args[0]);
-    let s = c_value(p, &mut args[1]);
+fn c_arg(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
+    check_types(b, args, &[DataKind::Int, DataKind::String]);
+    let k = c_int(b, &mut args[0]);
+    let s = c_value(b, &mut args[1]);
     Box::new(Arg { k, s })
 }
 struct Arg {

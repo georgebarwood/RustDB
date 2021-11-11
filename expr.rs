@@ -162,21 +162,26 @@ pub fn data_size(x: DataType) -> usize {
     (x >> KBITS) & 31
 }
 /// Compilation block ( body of function or batch section ).
-pub(crate) struct Block<'a> {
+pub struct Block<'a> {
     pub param_count: usize,
     pub return_type: DataType,
     pub local_typ: Vec<DataType>,
     pub ilist: Vec<Instruction>,
 
-    pub jumps: Vec<usize>,
-    pub labels: HashMap<&'a [u8], usize>,
-    pub local_map: HashMap<&'a [u8], usize>,
+    jumps: Vec<usize>,
+    labels: HashMap<&'a [u8], usize>,
+    local_map: HashMap<&'a [u8], usize>,
     pub locals: Vec<&'a [u8]>,
     pub break_id: usize,
+    /// Database.
+    pub(crate) db: DB,
+    /// Current table in scope by FROM clause( or UPDATE statment ).
+    pub(crate) from: Option<CTableExpression>,
+    pub(crate) parse_only: bool,
 }
 impl<'a> Block<'a> {
     /// Construct a new block.
-    pub fn new() -> Self {
+    pub fn new(db: DB) -> Self {
         Block {
             ilist: Vec::new(),
             jumps: Vec::new(),
@@ -187,6 +192,9 @@ impl<'a> Block<'a> {
             break_id: 0,
             param_count: 0,
             return_type: NONE,
+            from: None,
+            db,
+            parse_only: false,
         }
     }
     /// Check labels are all defined and patch jump instructions.
@@ -204,6 +212,78 @@ impl<'a> Block<'a> {
                 ForSortNext(x, _) => *x = self.jumps[*x],
                 _ => {}
             }
+        }
+    }
+    /// Add an instruction to the instruction list.
+    pub(crate) fn add(&mut self, s: Instruction) {
+        if !self.parse_only {
+            self.ilist.push(s);
+        }
+    }
+    /// Add a Data Operation (DO) to the instruction list.
+    pub(crate) fn dop(&mut self, dop: DO) {
+        if !self.parse_only {
+            self.add(DataOp(Box::new(dop)));
+        }
+    }
+    pub(crate) fn check_types(&self, r: &FunctionPtr, ptypes: &[DataType]) {
+        if ptypes.len() != r.param_count {
+            panic!("param count mismatch");
+        }
+        for (i, pt) in ptypes.iter().enumerate() {
+            let ft = data_kind(r.local_typ[i]);
+            let et = data_kind(*pt);
+            if ft != et {
+                panic!("param type mismatch expected {:?} got {:?}", ft, et);
+            }
+        }
+    }
+    // Helper functions for other statements.
+    /// Define a local variable ( parameter or declared ).
+    pub fn def_local(&mut self, name: &'a [u8], dt: DataType) {
+        let local_id = self.local_typ.len();
+        self.local_typ.push(dt);
+        self.locals.push(name);
+        if self.local_map.contains_key(name) {
+            panic!("Duplicate variable name");
+        }
+        self.local_map.insert(name, local_id);
+    }
+    pub fn get_local(&self, name: &[u8]) -> Option<&usize> {
+        self.local_map.get(name)
+    }
+    pub fn get_jump_id(&mut self) -> usize {
+        let result = self.jumps.len();
+        self.jumps.push(usize::MAX);
+        result
+    }
+    pub fn set_jump(&mut self, jump_id: usize) {
+        self.jumps[jump_id] = self.ilist.len();
+    }
+    pub fn get_loop_id(&mut self) -> usize {
+        let result = self.get_jump_id();
+        self.set_jump(result);
+        result
+    }
+    pub fn get_goto_label(&mut self, s: &'a [u8]) -> usize {
+        if let Some(jump_id) = self.labels.get(s) {
+            *jump_id
+        } else {
+            let jump_id = self.get_jump_id();
+            self.labels.insert(s, jump_id);
+            jump_id
+        }
+    }
+    pub fn set_goto_label(&mut self, s: &'a [u8]) {
+        if let Some(jump_id) = self.labels.get(s) {
+            let j = *jump_id;
+            if self.jumps[j] != usize::MAX {
+                panic!("Label already set");
+            }
+            self.set_jump(j);
+        } else {
+            let jump_id = self.get_loop_id();
+            self.labels.insert(s, jump_id);
         }
     }
 }

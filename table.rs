@@ -90,7 +90,7 @@ impl Table {
     /// Look for indexed table expression based on supplied WHERE expression (we).
     pub fn index_from(
         self: &TablePtr,
-        p: &Parser,
+        b: &Block,
         we: &mut Expr,
     ) -> (Option<CExpPtr<bool>>, Option<CTableExpression>) {
         let mut kc = SmallSet::new(); // Set of known columns.
@@ -115,7 +115,7 @@ impl Table {
                 cols.insert(*col);
             }
             let mut kmap = BTreeMap::new();
-            let cwe = get_keys(p, we, &mut cols, &mut kmap);
+            let cwe = get_keys(b, we, &mut cols, &mut kmap);
             let keys = clist
                 .iter()
                 .take(best_match)
@@ -136,14 +136,14 @@ impl Table {
                     {
                         return (
                             None,
-                            Some(CTableExpression::IdGet(self.clone(), c_int(p, e2))),
+                            Some(CTableExpression::IdGet(self.clone(), c_int(b, e2))),
                         );
                     }
                 }
             }
         }
         // println!("No index found for table {}", self.info.name.to_str());
-        (Some(c_bool(p, we)), None)
+        (Some(c_bool(b, we)), None)
     }
     /// Get record with specified id.
     pub fn id_get(&self, db: &DB, id: u64) -> Option<(PagePtr, usize)> {
@@ -662,7 +662,7 @@ fn covered(clist: &[usize], kc: &SmallSet) -> usize {
 
 /// Get keys. Returns compiled bool expression ( taking into account conditions satisfied by index ).
 fn get_keys(
-    p: &Parser,
+    b: &Block,
     we: &mut Expr,
     cols: &mut SmallSet,
     keys: &mut BTreeMap<usize, CExpPtr<Value>>,
@@ -672,22 +672,22 @@ fn get_keys(
             if e2.is_constant {
                 if let ExprIs::ColName(_) = &e1.exp {
                     if cols.remove(e1.col) {
-                        keys.insert(e1.col, c_value(p, e2));
+                        keys.insert(e1.col, c_value(b, e2));
                         return None;
                     }
                 }
             } else if e1.is_constant {
                 if let ExprIs::ColName(_) = &e2.exp {
                     if cols.remove(e2.col) {
-                        keys.insert(e2.col, c_value(p, e1));
+                        keys.insert(e2.col, c_value(b, e1));
                         return None;
                     }
                 }
             }
         }
         ExprIs::Binary(Token::And, e1, e2) => {
-            let x1 = get_keys(p, e1, cols, keys);
-            let x2 = get_keys(p, e2, cols, keys);
+            let x1 = get_keys(b, e1, cols, keys);
+            let x2 = get_keys(b, e2, cols, keys);
 
             return if let Some(c1) = x1 {
                 if let Some(c2) = x2 {
@@ -701,7 +701,7 @@ fn get_keys(
         }
         _ => {}
     }
-    return Some(c_bool(p, we));
+    return Some(c_bool(b, we));
 }
 
 /// Compare table rows.

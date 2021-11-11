@@ -3,17 +3,17 @@ use std::{mem, ops};
 use Instruction::*;
 
 /// Calculate various attributes such as data_type, is_constant etc.
-fn check(p: &Parser, e: &mut Expr) {
+fn check(b: &Block, e: &mut Expr) {
     if e.checked {
         return;
     }
     e.is_constant = true;
     match &mut e.exp {
         ExprIs::BuiltinCall(name, args) => {
-            if let Some((dk, _cf)) = p.db.builtins.borrow().get(name) {
+            if let Some((dk, _cf)) = b.db.builtins.borrow().get(name) {
                 e.data_type = *dk as DataType;
                 for pe in args {
-                    check(p, pe);
+                    check(b, pe);
                     if !pe.is_constant {
                         e.is_constant = false;
                     }
@@ -23,8 +23,8 @@ fn check(p: &Parser, e: &mut Expr) {
             }
         }
         ExprIs::Binary(op, b1, b2) => {
-            check(p, b1);
-            check(p, b2);
+            check(b, b1);
+            check(b, b2);
             e.is_constant = b1.is_constant && b2.is_constant;
             let t1 = b1.data_type;
             let t2 = b2.data_type;
@@ -50,7 +50,7 @@ fn check(p: &Parser, e: &mut Expr) {
             }
         }
         ExprIs::Local(x) => {
-            e.data_type = p.b.local_typ[*x];
+            e.data_type = b.local_typ[*x];
         }
         ExprIs::Const(x) => {
             e.data_type = match *x {
@@ -63,17 +63,17 @@ fn check(p: &Parser, e: &mut Expr) {
             }
         }
         ExprIs::Case(x, els) => {
-            check(p, els);
+            check(b, els);
             if !els.is_constant {
                 e.is_constant = false;
             }
             e.data_type = els.data_type;
             for (w, t) in x {
-                check(p, w);
+                check(b, w);
                 if !w.is_constant {
                     e.is_constant = false;
                 }
-                check(p, t);
+                check(b, t);
                 if !t.is_constant {
                     e.is_constant = false;
                 }
@@ -83,17 +83,17 @@ fn check(p: &Parser, e: &mut Expr) {
             }
         }
         ExprIs::Not(x) => {
-            check(p, x);
+            check(b, x);
             e.is_constant = x.is_constant;
             e.data_type = BOOL;
         }
         ExprIs::Minus(x) => {
-            check(p, x);
+            check(b, x);
             e.is_constant = x.is_constant;
             e.data_type = x.data_type;
         }
         ExprIs::FuncCall(name, parms) => {
-            let f = function_look(p, name);
+            let f = function_look(b, name);
             e.data_type = f.return_type;
             if parms.len() != f.param_count {
                 panic!(
@@ -103,7 +103,7 @@ fn check(p: &Parser, e: &mut Expr) {
                 );
             }
             for (i, a) in parms.iter_mut().enumerate() {
-                check(p, a);
+                check(b, a);
                 let (t, et) = (data_kind(a.data_type), data_kind(f.local_typ[i]));
                 if t != et {
                     panic!("function param type mismatch expected {:?} got {:?}", et, t);
@@ -115,7 +115,7 @@ fn check(p: &Parser, e: &mut Expr) {
         }
         ExprIs::ColName(x) => {
             e.is_constant = false;
-            let (col, data_type) = name_to_colnum(p, x);
+            let (col, data_type) = name_to_colnum(b, x);
             e.col = col;
             e.data_type = data_type;
         }
@@ -124,31 +124,31 @@ fn check(p: &Parser, e: &mut Expr) {
     e.checked = true;
 }
 /// Get DataType of an expression.
-fn get_type(p: &Parser, e: &mut Expr) -> DataType {
-    check(p, e);
+fn get_type(b: &Block, e: &mut Expr) -> DataType {
+    check(b, e);
     e.data_type
 }
 /// Get DataKind of an expression.
-pub fn get_kind(p: &Parser, e: &mut Expr) -> DataKind {
-    check(p, e);
+pub fn get_kind(b: &Block, e: &mut Expr) -> DataKind {
+    check(b, e);
     data_kind(e.data_type)
 }
 /// Compile a call to a builtin function that returns a Value.
-fn c_builtin_value(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<Value> {
-    if let Some((_dk, CompileFunc::Value(cf))) = p.db.builtins.borrow().get(name) {
-        return cf(p, args);
+fn c_builtin_value(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<Value> {
+    if let Some((_dk, CompileFunc::Value(cf))) = b.db.builtins.borrow().get(name) {
+        return cf(b, args);
     }
     panic!()
 }
 /// Compile an expression.
-pub fn c_value(p: &Parser, e: &mut Expr) -> CExpPtr<Value> {
-    match get_kind(p, e) {
-        DataKind::Bool => Box::new(cexp::BoolToVal { ce: c_bool(p, e) }),
-        DataKind::Int => Box::new(cexp::IntToVal { ce: c_int(p, e) }),
-        DataKind::Float => Box::new(cexp::FloatToVal { ce: c_float(p, e) }),
+pub fn c_value(b: &Block, e: &mut Expr) -> CExpPtr<Value> {
+    match get_kind(b, e) {
+        DataKind::Bool => Box::new(cexp::BoolToVal { ce: c_bool(b, e) }),
+        DataKind::Int => Box::new(cexp::IntToVal { ce: c_int(b, e) }),
+        DataKind::Float => Box::new(cexp::FloatToVal { ce: c_float(b, e) }),
         _ => match &mut e.exp {
             ExprIs::ColName(x) => {
-                let (off, typ) = name_to_col(p, x);
+                let (off, typ) = name_to_col(b, x);
                 match typ {
                     STRING => Box::new(cexp::ColumnString { off }),
                     BINARY => Box::new(cexp::ColumnBinary { off }),
@@ -160,28 +160,28 @@ pub fn c_value(p: &Parser, e: &mut Expr) -> CExpPtr<Value> {
             }),
             ExprIs::Local(x) => Box::new(cexp::Local { num: *x }),
             ExprIs::Binary(op, b1, b2) => {
-                let c1 = c_value(p, b1);
-                let c2 = c_value(p, b2);
+                let c1 = c_value(b, b1);
+                let c2 = c_value(b, b2);
                 match op {
                     Token::VBar => Box::new(cexp::Concat { c1, c2 }),
                     _ => panic!(),
                 }
             }
-            ExprIs::FuncCall(name, parms) => c_call(p, name, parms),
-            ExprIs::Case(list, els) => c_case(p, list, els, c_value),
-            ExprIs::BuiltinCall(name, parms) => c_builtin_value(p, name, parms),
+            ExprIs::FuncCall(name, parms) => c_call(b, name, parms),
+            ExprIs::Case(list, els) => c_case(b, list, els, c_value),
+            ExprIs::BuiltinCall(name, parms) => c_builtin_value(b, name, parms),
             _ => panic!(),
         },
     }
 }
 /// Compile int expression.
-pub fn c_int(p: &Parser, e: &mut Expr) -> CExpPtr<i64> {
-    if get_kind(p, e) != DataKind::Int {
+pub fn c_int(b: &Block, e: &mut Expr) -> CExpPtr<i64> {
+    if get_kind(b, e) != DataKind::Int {
         panic!("Integer type expected")
     }
     match &mut e.exp {
         ExprIs::ColName(x) => {
-            let (off, typ) = name_to_col(p, x);
+            let (off, typ) = name_to_col(b, x);
             match data_size(typ) {
                 8 => Box::new(cexp::ColumnI64 { off }),
                 4 => Box::new(cexp::ColumnI32 { off }),
@@ -192,24 +192,24 @@ pub fn c_int(p: &Parser, e: &mut Expr) -> CExpPtr<i64> {
         }
         ExprIs::Const(Value::Int(b)) => Box::new(cexp::Const::<i64> { value: *b }),
         ExprIs::Local(num) => Box::new(cexp::Local { num: *num }),
-        ExprIs::Binary(op, b1, b2) => c_arithmetic(p, *op, b1, b2, c_int),
-        ExprIs::Minus(x) => Box::new(cexp::Minus::<i64> { ce: c_int(p, x) }),
-        ExprIs::Case(w, e) => c_case(p, w, e, c_int),
+        ExprIs::Binary(op, b1, b2) => c_arithmetic(b, *op, b1, b2, c_int),
+        ExprIs::Minus(x) => Box::new(cexp::Minus::<i64> { ce: c_int(b, x) }),
+        ExprIs::Case(w, e) => c_case(b, w, e, c_int),
         ExprIs::FuncCall(n, a) => Box::new(cexp::ValToInt {
-            ce: c_call(p, n, a),
+            ce: c_call(b, n, a),
         }),
-        ExprIs::BuiltinCall(n, a) => c_builtin_int(p, n, a),
+        ExprIs::BuiltinCall(n, a) => c_builtin_int(b, n, a),
         _ => panic!(),
     }
 }
 /// Compile float expression.
-pub fn c_float(p: &Parser, e: &mut Expr) -> CExpPtr<f64> {
-    if get_kind(p, e) != DataKind::Float {
+pub fn c_float(b: &Block, e: &mut Expr) -> CExpPtr<f64> {
+    if get_kind(b, e) != DataKind::Float {
         panic!("Float type expected")
     }
     match &mut e.exp {
         ExprIs::ColName(x) => {
-            let (off, typ) = name_to_col(p, x);
+            let (off, typ) = name_to_col(b, x);
             match data_size(typ) {
                 8 => Box::new(cexp::ColumnF64 { off }),
                 4 => Box::new(cexp::ColumnF32 { off }),
@@ -217,61 +217,61 @@ pub fn c_float(p: &Parser, e: &mut Expr) -> CExpPtr<f64> {
             }
         }
         ExprIs::Local(num) => Box::new(cexp::Local { num: *num }),
-        ExprIs::Binary(op, b1, b2) => c_arithmetic(p, *op, b1, b2, c_float),
-        ExprIs::Minus(x) => Box::new(cexp::Minus::<f64> { ce: c_float(p, x) }),
-        ExprIs::Case(w, e) => c_case(p, w, e, c_float),
+        ExprIs::Binary(op, b1, b2) => c_arithmetic(b, *op, b1, b2, c_float),
+        ExprIs::Minus(x) => Box::new(cexp::Minus::<f64> { ce: c_float(b, x) }),
+        ExprIs::Case(w, e) => c_case(b, w, e, c_float),
         ExprIs::FuncCall(n, a) => Box::new(cexp::ValToFloat {
-            ce: c_call(p, n, a),
+            ce: c_call(b, n, a),
         }),
-        ExprIs::BuiltinCall(n, a) => c_builtin_float(p, n, a),
+        ExprIs::BuiltinCall(n, a) => c_builtin_float(b, n, a),
         _ => panic!(),
     }
 }
 /// Compile bool expression.
-pub fn c_bool(p: &Parser, e: &mut Expr) -> CExpPtr<bool> {
-    if get_kind(p, e) != DataKind::Bool {
+pub fn c_bool(b: &Block, e: &mut Expr) -> CExpPtr<bool> {
+    if get_kind(b, e) != DataKind::Bool {
         panic!("Bool type expected")
     }
     match &mut e.exp {
         ExprIs::ColName(x) => {
-            let (off, _typ) = name_to_col(p, x);
+            let (off, _typ) = name_to_col(b, x);
             Box::new(cexp::ColumnBool { off })
         }
         ExprIs::Const(Value::Bool(b)) => Box::new(cexp::Const::<bool> { value: *b }),
         ExprIs::Local(x) => Box::new(cexp::Local { num: *x }),
         ExprIs::Binary(op, b1, b2) => {
             if *op == Token::Or || *op == Token::And {
-                let c1 = c_bool(p, b1);
-                let c2 = c_bool(p, b2);
+                let c1 = c_bool(b, b1);
+                let c2 = c_bool(b, b2);
                 match op {
                     Token::Or => Box::new(cexp::Or { c1, c2 }),
                     Token::And => Box::new(cexp::And { c1, c2 }),
                     _ => panic!(),
                 }
             } else {
-                match get_kind(p, b1) {
-                    DataKind::Bool => c_compare(p, *op, b1, b2, c_bool),
-                    DataKind::Int => c_compare(p, *op, b1, b2, c_int),
-                    DataKind::Float => c_compare(p, *op, b1, b2, c_float),
-                    _ => c_compare(p, *op, b1, b2, c_value),
+                match get_kind(b, b1) {
+                    DataKind::Bool => c_compare(b, *op, b1, b2, c_bool),
+                    DataKind::Int => c_compare(b, *op, b1, b2, c_int),
+                    DataKind::Float => c_compare(b, *op, b1, b2, c_float),
+                    _ => c_compare(b, *op, b1, b2, c_value),
                 }
             }
         }
-        ExprIs::Not(x) => Box::new(cexp::Not { ce: c_bool(p, x) }),
+        ExprIs::Not(x) => Box::new(cexp::Not { ce: c_bool(b, x) }),
         ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToBool {
-            ce: c_call(p, name, parms),
+            ce: c_call(b, name, parms),
         }),
-        ExprIs::Case(list, els) => c_case(p, list, els, c_bool),
+        ExprIs::Case(list, els) => c_case(b, list, els, c_bool),
         _ => panic!(),
     }
 }
 /// Compile arithmetic.
 fn c_arithmetic<T>(
-    p: &Parser,
+    b: &Block,
     op: Token,
     e1: &mut Expr,
     e2: &mut Expr,
-    cexp: fn(&Parser, &mut Expr) -> CExpPtr<T>,
+    cexp: fn(&Block, &mut Expr) -> CExpPtr<T>,
 ) -> CExpPtr<T>
 where
     T: 'static
@@ -281,8 +281,8 @@ where
         + ops::Div<Output = T>
         + ops::Rem<Output = T>,
 {
-    let c1 = cexp(p, e1);
-    let c2 = cexp(p, e2);
+    let c1 = cexp(b, e1);
+    let c2 = cexp(b, e2);
     match op {
         Token::Plus => Box::new(cexp::Add::<T> { c1, c2 }),
         Token::Minus => Box::new(cexp::Sub::<T> { c1, c2 }),
@@ -294,17 +294,17 @@ where
 }
 /// Compile comparison.
 fn c_compare<T>(
-    p: &Parser,
+    b: &Block,
     op: Token,
     e1: &mut Expr,
     e2: &mut Expr,
-    cexp: fn(&Parser, &mut Expr) -> CExpPtr<T>,
+    cexp: fn(&Block, &mut Expr) -> CExpPtr<T>,
 ) -> CExpPtr<bool>
 where
     T: 'static + std::cmp::PartialOrd,
 {
-    let c1 = cexp(p, e1);
-    let c2 = cexp(p, e2);
+    let c1 = cexp(b, e1);
+    let c2 = cexp(b, e2);
     match op {
         Token::Equal => Box::new(cexp::Equal::<T> { c1, c2 }),
         Token::NotEqual => Box::new(cexp::NotEqual::<T> { c1, c2 }),
@@ -317,109 +317,109 @@ where
 }
 /// Compile CASE Expression.
 fn c_case<T>(
-    p: &Parser,
+    b: &Block,
     wes: &mut [(Expr, Expr)],
     els: &mut Expr,
-    cexp: fn(&Parser, &mut Expr) -> CExpPtr<T>,
+    cexp: fn(&Block, &mut Expr) -> CExpPtr<T>,
 ) -> CExpPtr<T>
 where
     T: 'static,
 {
     let mut whens = Vec::new();
     for (be, ve) in wes {
-        let b = c_bool(p, be);
-        let v = cexp(p, ve);
-        whens.push((b, v));
+        let cb = c_bool(b, be);
+        let v = cexp(b, ve);
+        whens.push((cb, v));
     }
-    let els = cexp(p, els);
+    let els = cexp(b, els);
     Box::new(cexp::Case::<T> { whens, els })
 }
 /// Compile a call to a builtin function that returns an integer.
-fn c_builtin_int(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<i64> {
-    if let Some((_dk, CompileFunc::Int(cf))) = p.db.builtins.borrow().get(name) {
-        return cf(p, args);
+fn c_builtin_int(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<i64> {
+    if let Some((_dk, CompileFunc::Int(cf))) = b.db.builtins.borrow().get(name) {
+        return cf(b, args);
     }
     panic!()
 }
 /// Compile a call to a builtin function that returns a float.
-fn c_builtin_float(p: &Parser, name: &str, args: &mut [Expr]) -> CExpPtr<f64> {
-    if let Some((_dk, CompileFunc::Float(cf))) = p.db.builtins.borrow().get(name) {
-        return cf(p, args);
+fn c_builtin_float(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<f64> {
+    if let Some((_dk, CompileFunc::Float(cf))) = b.db.builtins.borrow().get(name) {
+        return cf(b, args);
     }
     panic!()
 }
 
 /// Compile UPDATE statement.
 pub(crate) fn c_update(
-    p: &mut Parser,
+    b: &mut Block,
     tname: &ObjRef,
     assigns: &mut Vec<(String, Expr)>,
     wher: &mut Option<Expr>,
 ) {
-    let t = table_look(p, tname);
+    let t = table_look(b, tname);
     let from = CTableExpression::Base(t.clone());
-    let save = mem::replace(&mut p.from, Some(from));
+    let save = mem::replace(&mut b.from, Some(from));
     let mut se = Vec::new();
     for (name, exp) in assigns.iter_mut() {
         if let Some(cnum) = t.info.colmap.get(name) {
-            let exp = c_value(p, exp);
+            let exp = c_value(b, exp);
             se.push((*cnum, exp));
         } else {
             panic!("update column name not found");
         }
     }
-    let (w, index_from) = c_where(p, Some(t), wher);
-    let mut from = mem::replace(&mut p.from, save);
+    let (w, index_from) = c_where(b, Some(t), wher);
+    let mut from = mem::replace(&mut b.from, save);
     if index_from.is_some() {
         from = index_from;
     }
-    p.dop(DO::Update(se, from.unwrap(), w));
+    b.dop(DO::Update(se, from.unwrap(), w));
 }
 
 /// Compile DELETE statement.
-pub(crate) fn c_delete(p: &mut Parser, tname: &ObjRef, wher: &mut Option<Expr>) {
-    let t = table_look(p, tname);
+pub(crate) fn c_delete(b: &mut Block, tname: &ObjRef, wher: &mut Option<Expr>) {
+    let t = table_look(b, tname);
     let from = Some(CTableExpression::Base(t.clone()));
-    let save = mem::replace(&mut p.from, from);
-    let (w, index_from) = c_where(p, Some(t), wher);
-    let mut from = mem::replace(&mut p.from, save);
+    let save = mem::replace(&mut b.from, from);
+    let (w, index_from) = c_where(b, Some(t), wher);
+    let mut from = mem::replace(&mut b.from, save);
     if index_from.is_some() {
         from = index_from;
     }
-    p.dop(DO::Delete(from.unwrap(), w));
+    b.dop(DO::Delete(from.unwrap(), w));
 }
 
 /// Compile SelectExpression to CSelectExpression.
-pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpression {
-    let mut from = x.from.map(|mut te| c_te(p, &mut te));
+pub(crate) fn c_select(b: &mut Block, mut x: SelectExpression) -> CSelectExpression {
+    let mut from = x.from.map(|mut te| c_te(b, &mut te));
     let table = match &from {
         Some(CTableExpression::Base(t)) => Some(t.clone()),
         _ => None,
     };
     // Is the save necessary?
-    let save = mem::replace(&mut p.from, from);
+    let save = mem::replace(&mut b.from, from);
     let mut exps = Vec::new();
     for (i, e) in x.exps.iter_mut().enumerate() {
-        exps.push(c_value(p, e));
+        exps.push(c_value(b, e));
         if !x.assigns.is_empty() {
             // Check data kind of assigned local matches data kind of expression.
             let (lnum, _) = x.assigns[i];
-            let ek = data_kind(p.b.local_typ[lnum]);
+            let ek = data_kind(b.local_typ[lnum]);
             let ak = data_kind(e.data_type);
             if ek != ak {
                 panic!("cannot assign {:?} to {:?}", ak, ek);
             }
         }
     }
-    let (wher, index_from) = c_where(p, table, &mut x.wher);
+    let (wher, index_from) = c_where(b, table, &mut x.wher);
     let mut orderby = Vec::new();
     let mut desc = Vec::new();
     for (e, a) in &mut x.orderby {
-        let e = c_value(p, e);
+        let e = c_value(b, e);
         orderby.push(e);
         desc.push(*a);
     }
-    from = mem::replace(&mut p.from, save);
+    from = mem::replace(&mut b.from, save);
     if index_from.is_some() {
         from = index_from;
     }
@@ -436,18 +436,18 @@ pub(crate) fn c_select(p: &mut Parser, mut x: SelectExpression) -> CSelectExpres
 
 /// Compile WHERE clause, using table index if possible.
 pub fn c_where(
-    p: &Parser,
+    b: &Block,
     table: Option<TablePtr>,
     wher: &mut Option<Expr>,
 ) -> (Option<CExpPtr<bool>>, Option<CTableExpression>) {
     if let Some(we) = wher {
-        if get_kind(p, we) != DataKind::Bool {
+        if get_kind(b, we) != DataKind::Bool {
             panic!("WHERE expression must be bool")
         }
         if let Some(table) = table {
-            table.index_from(p, we)
+            table.index_from(b, we)
         } else {
-            (Some(c_bool(p, we)), None)
+            (Some(c_bool(b, we)), None)
         }
     } else {
         (None, None)
@@ -455,14 +455,14 @@ pub fn c_where(
 }
 
 /// Compile a TableExpression to CTableExpression.
-pub(crate) fn c_te(p: &Parser, te: &mut TableExpression) -> CTableExpression {
+pub(crate) fn c_te(b: &Block, te: &mut TableExpression) -> CTableExpression {
     match te {
         TableExpression::Values(x) => {
             let mut cm = Vec::new();
             for r in x {
                 let mut cr = Vec::new();
                 for e in r {
-                    let ce = c_value(p, e);
+                    let ce = c_value(b, e);
                     cr.push(ce);
                 }
                 cm.push(cr);
@@ -470,26 +470,26 @@ pub(crate) fn c_te(p: &Parser, te: &mut TableExpression) -> CTableExpression {
             CTableExpression::Values(cm)
         }
         TableExpression::Base(x) => {
-            let t = table_look(p, x);
+            let t = table_look(b, x);
             CTableExpression::Base(t)
         }
     }
 }
 /// Look for named table in database.
-pub(crate) fn table_look(p: &Parser, name: &ObjRef) -> TablePtr {
-    if let Some(t) = p.db.get_table(name) {
+pub(crate) fn table_look(b: &Block, name: &ObjRef) -> TablePtr {
+    if let Some(t) = b.db.get_table(name) {
         t
     } else {
         panic!("table {} not found", name.str())
     }
 }
 /// Look for named function in database and compile it if not already compiled.
-pub(crate) fn function_look(p: &Parser, name: &ObjRef) -> FunctionPtr {
-    if let Some(r) = p.db.get_function(name) {
+pub(crate) fn function_look(b: &Block, name: &ObjRef) -> FunctionPtr {
+    if let Some(r) = b.db.get_function(name) {
         let (compiled, src) = { (r.compiled.get(), r.source.clone()) };
         if !compiled {
             r.compiled.set(true);
-            let mut p = Parser::new(&src, &p.db);
+            let mut p = Parser::new(&src, &b.db);
             p.function_name = Some(name);
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 p.parse_function();
@@ -519,8 +519,8 @@ pub(crate) fn function_look(p: &Parser, name: &ObjRef) -> FunctionPtr {
     }
 }
 /// Lookup the column offset and DataType of a named column.
-pub(crate) fn name_to_col(p: &Parser, name: &str) -> (usize, DataType) {
-    if let Some(CTableExpression::Base(t)) = &p.from {
+pub(crate) fn name_to_col(b: &Block, name: &str) -> (usize, DataType) {
+    if let Some(CTableExpression::Base(t)) = &b.from {
         let info = &t.info;
         if let Some(num) = info.get(name) {
             let colnum = *num;
@@ -533,8 +533,8 @@ pub(crate) fn name_to_col(p: &Parser, name: &str) -> (usize, DataType) {
     panic!("Name '{}' not found", name)
 }
 /// Lookup the column number and DataType of a named column.
-pub(crate) fn name_to_colnum(p: &Parser, name: &str) -> (usize, DataType) {
-    if let Some(CTableExpression::Base(t)) = &p.from {
+pub(crate) fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
+    if let Some(CTableExpression::Base(t)) = &b.from {
         let info = &t.info;
         if let Some(num) = info.get(name) {
             let colnum = *num;
@@ -547,62 +547,62 @@ pub(crate) fn name_to_colnum(p: &Parser, name: &str) -> (usize, DataType) {
     panic!("Name '{}' not found", name)
 }
 /// Compile ExprCall to CExpPtr<Value>, checking parameter types.
-pub(crate) fn c_call(p: &Parser, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value> {
-    let fp: FunctionPtr = function_look(p, name);
+pub(crate) fn c_call(b: &Block, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value> {
+    let fp: FunctionPtr = function_look(b, name);
     let mut pv: Vec<CExpPtr<Value>> = Vec::new();
     let mut pt: Vec<DataType> = Vec::new();
     for e in parms {
-        let t: DataType = get_type(p, e);
+        let t: DataType = get_type(b, e);
         pt.push(t);
-        let ce = c_value(p, e);
+        let ce = c_value(b, e);
         pv.push(ce);
     }
-    p.check_types(&fp, &pt);
+    b.check_types(&fp, &pt);
     Box::new(cexp::Call { fp, pv })
 }
 /// Generate code to evaluate expression and push the value onto the stack.
-pub(crate) fn push(p: &mut Parser, e: &mut Expr) -> DataType {
-    if p.parse_only {
+pub(crate) fn push(b: &mut Block, e: &mut Expr) -> DataType {
+    if b.parse_only {
         return NONE;
     }
-    let t = get_type(p, e);
+    let t = get_type(b, e);
     match &mut e.exp {
         ExprIs::Const(x) => {
-            p.add(PushConst((*x).clone()));
+            b.add(PushConst((*x).clone()));
         }
         ExprIs::Binary(_, _, _) => match data_kind(t) {
             DataKind::Int => {
-                let ce = c_int(p, e);
-                p.add(PushInt(ce));
+                let ce = c_int(b, e);
+                b.add(PushInt(ce));
             }
             DataKind::Float => {
-                let ce = c_float(p, e);
-                p.add(PushFloat(ce));
+                let ce = c_float(b, e);
+                b.add(PushFloat(ce));
             }
             DataKind::Bool => {
-                let ce = c_bool(p, e);
-                p.add(PushBool(ce));
+                let ce = c_bool(b, e);
+                b.add(PushBool(ce));
             }
             _ => {
-                let ce = c_value(p, e);
-                p.add(PushValue(ce));
+                let ce = c_value(b, e);
+                b.add(PushValue(ce));
             }
         },
         ExprIs::FuncCall(name, parms) => {
-            let rp = function_look(p, name);
+            let rp = function_look(b, name);
             {
                 for e in parms.iter_mut() {
-                    push(p, e);
+                    push(b, e);
                 }
             }
-            p.add(Call(rp));
+            b.add(Call(rp));
         }
         ExprIs::Local(x) => {
-            p.add(PushLocal(*x));
+            b.add(PushLocal(*x));
         }
         _ => {
-            let ce = c_value(p, e);
-            p.add(PushValue(ce));
+            let ce = c_value(b, e);
+            b.add(PushValue(ce));
         }
     }
     t

@@ -10,6 +10,9 @@ use Instruction::*;
 ///
 /// exp_ parses an expression.
 pub struct Parser<'a> {
+    /// Block information - local labels, jumps, instructions etc.
+    pub(crate) b: Block<'a>,
+    /// Name of function being compiled ( None if batch ).
     pub(crate) function_name: Option<&'a ObjRef>,
     /// Source SQL.
     source: &'a [u8],
@@ -25,20 +28,14 @@ pub struct Parser<'a> {
     token_space_start: usize,
     /// source slice for current token ( but string literals are in ts )
     cs: &'a [u8],
+    /// String literal.
     ts: String,
     source_column: usize,
     source_line: usize,
     decimal_int: i64,
+    /// May be able to get rid of this.
     prev_source_column: usize,
     prev_source_line: usize,
-
-    pub(crate) parse_only: bool,
-    /// Block information - local labels, jumps, instructions etc.
-    pub(crate) b: Block<'a>,
-    /// Database.
-    pub(crate) db: DB,
-    /// Current table in scope by FROM clause( or UPDATE statment ).
-    pub(crate) from: Option<CTableExpression>,
 }
 impl<'a> Parser<'a> {
     /// Construct a new parser.
@@ -46,7 +43,6 @@ impl<'a> Parser<'a> {
         let source = src.as_bytes();
         let mut result = Self {
             source,
-            db: db.clone(),
             function_name: None,
             source_ix: 0,
             cc: 0,
@@ -60,9 +56,7 @@ impl<'a> Parser<'a> {
             prev_source_column: 1,
             prev_source_line: 1,
             decimal_int: 0,
-            b: Block::new(),
-            parse_only: false,
-            from: None,
+            b: Block::new(db.clone()),
         };
         result.read_char();
         result.read_token();
@@ -74,7 +68,7 @@ impl<'a> Parser<'a> {
             let id = self.cs;
             self.read_token();
             if self.test(Token::Colon) {
-                self.s_set_label(id);
+                self.b.set_goto_label(id);
             } else {
                 match id {
                     b"ALTER" => self.s_alter(),
@@ -111,14 +105,14 @@ impl<'a> Parser<'a> {
                 self.statement();
             }
             self.b.resolve_jumps();
-            let mut ee = EvalEnv::new(self.db.clone(), rs);
+            let mut ee = EvalEnv::new(self.b.db.clone(), rs);
             // let start = std::time::Instant::now();
             ee.alloc_locals(&self.b.local_typ, 0);
             ee.go(&self.b.ilist);
             if self.token == Token::EndOfFile {
                 break;
             }
-            self.b = Block::new();
+            self.b = Block::new(self.b.db.clone());
         }
     }
     /// Parse the definition of a function.
@@ -127,7 +121,7 @@ impl<'a> Parser<'a> {
         while self.token == Token::Id {
             let name = self.id_ref();
             let typ = self.read_data_type();
-            self.def_local(name, typ);
+            self.b.def_local(name, typ);
             self.b.param_count += 1;
             if self.token == Token::RBra {
                 break;
@@ -147,7 +141,7 @@ impl<'a> Parser<'a> {
             NONE
         };
         if self.b.return_type != NONE {
-            self.def_local(b"result", self.b.return_type);
+            self.b.def_local(b"result", self.b.return_type);
         }
         self.read_id(b"AS");
         self.read_id(b"BEGIN");
@@ -355,18 +349,6 @@ impl<'a> Parser<'a> {
             _ => panic!("Datatype expected"),
         }
     }
-    pub(crate) fn check_types(&self, r: &FunctionPtr, ptypes: &[DataType]) {
-        if ptypes.len() != r.param_count {
-            panic!("param count mismatch");
-        }
-        for (i, pt) in ptypes.iter().enumerate() {
-            let ft = data_kind(r.local_typ[i]);
-            let et = data_kind(*pt);
-            if ft != et {
-                panic!("param type mismatch expected {:?} got {:?}", ft, et);
-            }
-        }
-    }
     /// Examine current token, determine if it is an operator.
     /// Result is operator token and precedence, or -1 if current token is not an operator.
     fn operator(&mut self) -> (Token, i8) {
@@ -401,8 +383,8 @@ impl<'a> Parser<'a> {
         if self.token != Token::Id {
             panic!("Name expected");
         }
-        if let Some(local) = self.b.local_map.get(self.cs) {
-            result = *local;
+        if let Some(lnum) = self.b.get_local(self.cs) {
+            result = *lnum;
         } else {
             panic!("Undeclared local: {}", tos(self.cs))
         }
@@ -451,13 +433,13 @@ impl<'a> Parser<'a> {
     }
     /// Add an instruction to the instruction list.
     pub(crate) fn add(&mut self, s: Instruction) {
-        if !self.parse_only {
+        if !self.b.parse_only {
             self.b.ilist.push(s);
         }
     }
     /// Add a Data Operation (DO) to the instruction list.
     pub(crate) fn dop(&mut self, dop: DO) {
-        if !self.parse_only {
+        if !self.b.parse_only {
             self.add(DataOp(Box::new(dop)));
         }
     }
@@ -521,13 +503,10 @@ impl<'a> Parser<'a> {
             Expr::new(ExprIs::Const(Value::Bool(true)))
         } else if name == b"false" {
             Expr::new(ExprIs::Const(Value::Bool(false)))
+        } else if let Some(lnum) = self.b.get_local(name) {
+            Expr::new(ExprIs::Local(*lnum))
         } else {
-            let look = self.b.local_map.get(&name);
-            if let Some(lnum) = look {
-                Expr::new(ExprIs::Local(*lnum))
-            } else {
-                Expr::new(ExprIs::ColName(to_s(name)))
-            }
+            Expr::new(ExprIs::ColName(to_s(name)))
         }
     }
     /// Parses a primary expression ( basic expression with no operators ).
@@ -771,15 +750,15 @@ impl<'a> Parser<'a> {
 
     fn s_select(&mut self) {
         let se = self.select_expression(false);
-        if !self.parse_only {
-            let cte = c_select(self, se);
+        if !self.b.parse_only {
+            let cte = c_select(&mut self.b, se);
             self.add(Select(Box::new(cte)));
         }
     }
     fn s_set(&mut self) {
         let se = self.select_expression(true);
-        if !self.parse_only {
-            let cte = c_select(self, se);
+        if !self.b.parse_only {
+            let cte = c_select(&mut self.b, se);
             self.add(Set(Box::new(cte)));
         }
     }
@@ -802,8 +781,8 @@ impl<'a> Parser<'a> {
             }
         }
         let mut src = self.insert_expression(cnames.len());
-        if !self.parse_only {
-            let t = table_look(self, &tr);
+        if !self.b.parse_only {
+            let t = table_look(&self.b, &tr);
             let mut cnums: Vec<usize> = Vec::new();
             {
                 for cname in &cnames {
@@ -814,7 +793,7 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
-            let csrc = c_te(self, &mut src);
+            let csrc = c_te(&self.b, &mut src);
             self.dop(DO::Insert(t, cnums, csrc));
         }
     }
@@ -835,8 +814,8 @@ impl<'a> Parser<'a> {
             panic!("UPDATE must have a WHERE");
         }
         let mut wher = Some(self.exp());
-        if !self.parse_only {
-            c_update(self, &tname, &mut assigns, &mut wher);
+        if !self.b.parse_only {
+            c_update(&mut self.b, &tname, &mut assigns, &mut wher);
         }
     }
     fn s_delete(&mut self) {
@@ -846,16 +825,16 @@ impl<'a> Parser<'a> {
             panic!("DELETE must have a WHERE");
         }
         let mut wher = Some(self.exp());
-        if !self.parse_only {
-            c_delete(self, &tname, &mut wher);
+        if !self.b.parse_only {
+            c_delete(&mut self.b, &tname, &mut wher);
         }
     }
     fn s_execute(&mut self) {
         self.read(Token::LBra);
         let mut exp = self.exp();
         self.read(Token::RBra);
-        if !self.parse_only {
-            push(self, &mut exp);
+        if !self.b.parse_only {
+            push(&mut self.b, &mut exp);
             self.add(Execute);
         }
     }
@@ -874,16 +853,16 @@ impl<'a> Parser<'a> {
         let mut ptypes = Vec::new();
         if !self.test(Token::RBra) {
             let mut e = self.exp();
-            ptypes.push(push(self, &mut e));
+            ptypes.push(push(&mut self.b, &mut e));
             while self.test(Token::Comma) {
                 let mut e = self.exp();
-                ptypes.push(push(self, &mut e));
+                ptypes.push(push(&mut self.b, &mut e));
             }
             self.read(Token::RBra);
         }
-        if !self.parse_only {
-            let func = function_look(self, &name);
-            self.check_types(&func, &ptypes);
+        if !self.b.parse_only {
+            let func = function_look(&self.b, &name);
+            self.b.check_types(&func, &ptypes);
             self.add(Call(func));
         }
     }
@@ -891,14 +870,14 @@ impl<'a> Parser<'a> {
         let se: SelectExpression = self.select_expression(true);
         let for_id = self.b.local_typ.len();
         self.b.local_typ.push(NONE);
-        if !self.parse_only {
+        if !self.b.parse_only {
             let start_id;
-            let break_id = self.get_jump_id();
-            let mut cse = c_select(self, se);
+            let break_id = self.b.get_jump_id();
+            let mut cse = c_select(&mut self.b, se);
             let orderbylen = cse.orderby.len();
             if orderbylen == 0 {
                 self.add(ForInit(for_id, Box::new(cse.from.unwrap())));
-                start_id = self.get_loop_id();
+                start_id = self.b.get_loop_id();
                 let info = Box::new(ForNextInfo {
                     for_id,
                     assigns: cse.assigns,
@@ -909,7 +888,7 @@ impl<'a> Parser<'a> {
             } else {
                 let assigns = mem::take(&mut cse.assigns);
                 self.add(ForSortInit(for_id, Box::new(cse)));
-                start_id = self.get_loop_id();
+                start_id = self.b.get_loop_id();
                 let info = Box::new((for_id, orderbylen, assigns));
                 self.add(ForSortNext(break_id, info));
             }
@@ -918,7 +897,7 @@ impl<'a> Parser<'a> {
             self.statement();
             self.b.break_id = save;
             self.add(Jump(start_id));
-            self.set_jump(break_id);
+            self.b.set_jump(break_id);
         }
     }
 
@@ -943,7 +922,7 @@ impl<'a> Parser<'a> {
             }
             self.read_token();
         }
-        if !self.parse_only {
+        if !self.b.parse_only {
             let _source = self.source_from(source_start, self.token_start);
             self.dop(DO::CreateTable(ti));
         }
@@ -964,9 +943,9 @@ impl<'a> Parser<'a> {
             };
             self.read_token();
         }
-        if !self.parse_only {
+        if !self.b.parse_only {
             let mut cols = Vec::new();
-            let table = table_look(self, &tname);
+            let table = table_look(&self.b, &tname);
             for cname in &cnames {
                 if let Some(cnum) = table.info.colmap.get(cname) {
                     cols.push(*cnum);
@@ -984,20 +963,21 @@ impl<'a> Parser<'a> {
         self.read_id(b"SELECT");
         let _se = self.select_expression(false);
         let source = self.source_from(source_start, self.token_start);
-        if !self.parse_only {
+        if !self.b.parse_only {
             self.dop(DO::CreateView(r, alter, source));
         }
     }
     fn create_function(&mut self, alter: bool) {
         let rref: ObjRef = self.obj_ref();
         let source_start: usize = self.source_ix - 2;
-        let save: Block = mem::replace(&mut self.b, Block::new());
-        let save2: bool = self.parse_only;
-        self.parse_only = true;
+        let db = self.b.db.clone();
+        let save: Block = mem::replace(&mut self.b, Block::new(db));
+        let save2: bool = self.b.parse_only;
+        self.b.parse_only = true;
         self.parse_function();
         let _cb: Block = mem::replace(&mut self.b, save);
-        self.parse_only = save2;
-        if !self.parse_only {
+        self.b.parse_only = save2;
+        if !self.b.parse_only {
             let source: String = self.source_from(source_start, self.token_space_start);
             self.dop(DO::CreateFunction(rref, Rc::new(source), alter));
         }
@@ -1112,98 +1092,53 @@ impl<'a> Parser<'a> {
         }
         self.dop(DO::AlterTable(tr, list));
     }
-    // Helper functions for other statements.
-    /// Define a local variable ( parameter or declared ).
-    fn def_local(&mut self, name: &'a [u8], dt: DataType) {
-        let local_id = self.b.local_typ.len();
-        self.b.local_typ.push(dt);
-        self.b.locals.push(name);
-        if self.b.local_map.contains_key(name) {
-            panic!("Duplicate variable name");
-        }
-        self.b.local_map.insert(name, local_id);
-    }
-    fn get_jump_id(&mut self) -> usize {
-        let result = self.b.jumps.len();
-        self.b.jumps.push(usize::MAX);
-        result
-    }
-    fn set_jump(&mut self, jump_id: usize) {
-        self.b.jumps[jump_id] = self.b.ilist.len();
-    }
-    fn get_loop_id(&mut self) -> usize {
-        let result = self.get_jump_id();
-        self.set_jump(result);
-        result
-    }
-    fn get_goto(&mut self, s: &'a [u8]) -> usize {
-        if let Some(jump_id) = self.b.labels.get(s) {
-            *jump_id
-        } else {
-            let jump_id = self.get_jump_id();
-            self.b.labels.insert(s, jump_id);
-            jump_id
-        }
-    }
     // Other statements.
     fn s_declare(&mut self) {
         loop {
             let name = self.id_ref();
             let dt = self.read_data_type();
-            self.def_local(name, dt);
+            self.b.def_local(name, dt);
             if !self.test(Token::Comma) {
                 break;
             }
         }
     }
-    fn s_set_label(&mut self, s: &'a [u8]) {
-        if let Some(jump_id) = self.b.labels.get(s) {
-            let j = *jump_id;
-            if self.b.jumps[j] != usize::MAX {
-                panic!("Label already set");
-            }
-            self.set_jump(j);
-        } else {
-            let jump_id = self.get_loop_id();
-            self.b.labels.insert(s, jump_id);
-        }
-    }
     fn s_while(&mut self) {
         let mut exp = self.exp();
-        let start_id = self.get_loop_id();
-        let break_id = self.get_jump_id();
-        if !self.parse_only {
-            let exp = c_bool(self, &mut exp);
+        let start_id = self.b.get_loop_id();
+        let break_id = self.b.get_jump_id();
+        if !self.b.parse_only {
+            let exp = c_bool(&self.b, &mut exp);
             self.add(JumpIfFalse(break_id, exp));
             let save = self.b.break_id;
             self.b.break_id = break_id;
             self.statement();
             self.b.break_id = save;
             self.add(Jump(start_id));
-            self.set_jump(break_id);
+            self.b.set_jump(break_id);
         }
     }
     fn s_if(&mut self) {
         let mut exp = self.exp();
-        let false_id = self.get_jump_id();
-        if !self.parse_only {
-            let exp = c_bool(self, &mut exp);
+        let false_id = self.b.get_jump_id();
+        if !self.b.parse_only {
+            let exp = c_bool(&self.b, &mut exp);
             self.add(JumpIfFalse(false_id, exp));
         }
         self.statement();
         if self.test_id(b"ELSE") {
-            let end_id = self.get_jump_id();
+            let end_id = self.b.get_jump_id();
             self.add(Jump(end_id)); // Skip over the else clause
-            self.set_jump(false_id);
+            self.b.set_jump(false_id);
             self.statement();
-            self.set_jump(end_id);
+            self.b.set_jump(end_id);
         } else {
-            self.set_jump(false_id);
+            self.b.set_jump(false_id);
         }
     }
     fn s_goto(&mut self) {
         let label = self.id_ref();
-        let to = self.get_goto(label);
+        let to = self.b.get_goto_label(label);
         self.add(Jump(to));
     }
     fn s_break(&mut self) {
@@ -1216,8 +1151,8 @@ impl<'a> Parser<'a> {
     fn s_return(&mut self) {
         if self.b.return_type != NONE {
             let mut e = self.exp();
-            if !self.parse_only {
-                let t = data_kind(push(self, &mut e));
+            if !self.b.parse_only {
+                let t = data_kind(push(&mut self.b, &mut e));
                 let rt = data_kind(self.b.return_type);
                 if t != rt {
                     panic!("Return type mismatch expected {:?} got {:?}", rt, t)
@@ -1229,8 +1164,8 @@ impl<'a> Parser<'a> {
     }
     fn s_throw(&mut self) {
         let mut msg = self.exp();
-        if !self.parse_only {
-            push(self, &mut msg);
+        if !self.b.parse_only {
+            push(&mut self.b, &mut msg);
             self.add(Throw);
         }
     }

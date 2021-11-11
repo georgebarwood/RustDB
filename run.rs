@@ -35,9 +35,9 @@ pub type CExpPtr<T> = Box<dyn CExp<T>>;
 /// Function that compiles a builtin function call ( see Database::register ).
 #[derive(Clone, Copy)]
 pub enum CompileFunc {
-    Value(fn(&Parser, &mut [Expr]) -> CExpPtr<Value>),
-    Int(fn(&Parser, &mut [Expr]) -> CExpPtr<i64>),
-    Float(fn(&Parser, &mut [Expr]) -> CExpPtr<f64>),
+    Value(fn(&Block, &mut [Expr]) -> CExpPtr<Value>),
+    Int(fn(&Block, &mut [Expr]) -> CExpPtr<i64>),
+    Float(fn(&Block, &mut [Expr]) -> CExpPtr<f64>),
 }
 
 /// Iterator that yields references to page data.
