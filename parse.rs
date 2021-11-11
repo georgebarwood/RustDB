@@ -1004,7 +1004,7 @@ impl<'a> Parser<'a> {
     }
     fn s_create(&mut self) {
         match self.id_ref() {
-            b"FUNCTION" => self.create_function(false),
+            b"FN" => self.create_function(false),
             b"TABLE" => self.create_table(),
             b"VIEW" => self.create_view(false),
             b"SCHEMA" => {
@@ -1017,7 +1017,7 @@ impl<'a> Parser<'a> {
     }
     fn s_alter(&mut self) {
         match self.id_ref() {
-            b"FUNCTION" => self.create_function(true),
+            b"FN" => self.create_function(true),
             b"TABLE" => self.s_alter_table(),
             b"VIEW" => self.create_view(true),
             _ => panic!("ALTER : TABLE,VIEW.. expected"),
@@ -1039,7 +1039,7 @@ impl<'a> Parser<'a> {
                 let tr = self.obj_ref();
                 self.dop(DO::DropIndex(tr, ix));
             }
-            b"FUNCTION" => {
+            b"FN" => {
                 let fr = self.obj_ref();
                 self.dop(DO::DropFunction(fr));
             }
@@ -1072,13 +1072,7 @@ impl<'a> Parser<'a> {
                 let n = self.obj_ref();
                 self.dop(DO::RenameView(o, n));
             }
-            b"PROCEDURE" => {
-                let o = self.obj_ref();
-                self.read_id(b"TO");
-                let n = self.obj_ref();
-                self.dop(DO::RenameProcedure(o, n));
-            }
-            b"FUNCTION" => {
+            b"FN" => {
                 let o = self.obj_ref();
                 self.read_id(b"TO");
                 let n = self.obj_ref();

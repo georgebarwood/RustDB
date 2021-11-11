@@ -98,7 +98,6 @@ pub enum DO {
     RenameSchema(String, String),
     RenameTsble(ObjRef, ObjRef),
     RenameView(ObjRef, ObjRef),
-    RenameProcedure(ObjRef, ObjRef),
     RenameFunction(ObjRef, ObjRef),
     DropSchema(String),
     DropTable(ObjRef),

@@ -1,7 +1,7 @@
 pub const INITSQL : &str = "
 
 
-CREATE FUNCTION [sys].[TypeName]( t int ) RETURNS string AS 
+CREATE FN [sys].[TypeName]( t int ) RETURNS string AS 
 BEGIN 
   RETURN CASE 
     WHEN t = 0 THEN 'none'
@@ -18,7 +18,7 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [sys].[TableName]( table int ) RETURNS string AS
+CREATE FN [sys].[TableName]( table int ) RETURNS string AS
 BEGIN
   DECLARE schema int, name string
   SET schema = Schema, name = Name FROM sys.Table WHERE Id = table
@@ -26,12 +26,12 @@ BEGIN
   SET result = sys.Dot( Name, name ) FROM sys.Schema WHERE Id = schema
 END
 GO
-CREATE FUNCTION [sys].[SingleQuote]( s string ) RETURNS string AS
+CREATE FN [sys].[SingleQuote]( s string ) RETURNS string AS
 BEGIN
   RETURN '''' | REPLACE( s, '''', '''''' ) | ''''
 END
 GO
-CREATE FUNCTION [sys].[ScriptTable]( t int ) AS
+CREATE FN [sys].[ScriptTable]( t int ) AS
 BEGIN
   SELECT '
 CREATE TABLE ' | sys.TableName(t) | sys.Cols(t) | ' 
@@ -45,7 +45,7 @@ GO'
   END
 END
 GO
-CREATE FUNCTION [sys].[ScriptSchemaBrowse]( s int ) AS
+CREATE FN [sys].[ScriptSchemaBrowse]( s int ) AS
 BEGIN
   DECLARE t int
   FOR t = Id FROM sys.Table WHERE Schema = s ORDER BY Name
@@ -54,7 +54,7 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [sys].[ScriptSchema]( s int ) AS
+CREATE FN [sys].[ScriptSchema]( s int ) AS
 BEGIN
   DECLARE sname string SET sname = sys.SchemaName(s)
 
@@ -76,7 +76,7 @@ CREATE SCHEMA ' | sys.QuoteName( sname )
   /******* Script functions *******/
 
   SELECT '
-CREATE FUNCTION ' | sys.Dot( sname,Name) | Def | '
+CREATE FN ' | sys.Dot( sname,Name) | Def | '
 GO' 
   FROM sys.Function  WHERE Schema = s 
 
@@ -100,7 +100,7 @@ INSERT INTO ' | sys.TableName(Id) | sys.ColNames(Id) | ' VALUES
   END
 END
 GO
-CREATE FUNCTION [sys].[ScriptBrowse]( t int ) AS
+CREATE FN [sys].[ScriptBrowse]( t int ) AS
 BEGIN
   -- Script browse information for Table t.
   -- Looks up Table and Column Id values (tid,cid) by name in case they change.
@@ -137,12 +137,12 @@ VALUES (cid, '
 GO'
 END
 GO
-CREATE FUNCTION [sys].[SchemaName]( schema int) RETURNS string AS 
+CREATE FN [sys].[SchemaName]( schema int) RETURNS string AS 
 BEGIN 
   SET result = Name FROM sys.Schema WHERE Id = schema
 END
 GO
-CREATE FUNCTION [sys].[RecreateModifiedIndexes]() AS 
+CREATE FN [sys].[RecreateModifiedIndexes]() AS 
 BEGIN
   DECLARE table int, name string, cols string
   FOR table = Table, name = Name, cols = sys.IndexCols( Id )
@@ -153,22 +153,22 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [sys].[QuoteName]( s string ) RETURNS string AS
+CREATE FN [sys].[QuoteName]( s string ) RETURNS string AS
 BEGIN
   RETURN '[' | REPLACE( s, ']', ']]' ) | ']'
 END
 GO
-CREATE FUNCTION [sys].[ModifiedColumn]( t int, colId int ) AS 
+CREATE FN [sys].[ModifiedColumn]( t int, colId int ) AS 
 BEGIN
   UPDATE sys.Index SET Modified = 1 WHERE Id IN ( SELECT Index FROM sys.IndexColumn WHERE Table = t AND ColId = colId )
 END
 GO
-CREATE FUNCTION [sys].[IndexName]( index int ) RETURNS string AS
+CREATE FN [sys].[IndexName]( index int ) RETURNS string AS
 BEGIN
   SET result = sys.QuoteName(Name) FROM sys.Index WHERE Id = index
 END
 GO
-CREATE FUNCTION [sys].[IndexCols]( index int ) RETURNS string AS
+CREATE FN [sys].[IndexCols]( index int ) RETURNS string AS
 BEGIN
   DECLARE table int, list string, col string
   SET table = Table FROM sys.Index WHERE Id = index
@@ -177,7 +177,7 @@ BEGIN
   RETURN '(' | list | ')'
 END
 GO
-CREATE FUNCTION [sys].[DroppedColumn]( t int, colId int ) AS 
+CREATE FN [sys].[DroppedColumn]( t int, colId int ) AS 
 BEGIN 
   /* Called internally during ALTER TABLE */
   DECLARE index int
@@ -191,7 +191,7 @@ BEGIN
   UPDATE sys.IndexColumn SET ColId = ColId - 1 WHERE Table = t AND ColId >= colId
 END
 GO
-CREATE FUNCTION [sys].[DropTable]( t int ) AS 
+CREATE FN [sys].[DropTable]( t int ) AS 
 /* Note: this should not be called directly, instead use DROP TABLE statement */
 BEGIN
   DECLARE id int
@@ -212,23 +212,23 @@ BEGIN
   DELETE FROM sys.Table WHERE Id = t
 END
 GO
-CREATE FUNCTION [sys].[DropSchema]( sid int ) AS
+CREATE FN [sys].[DropSchema]( sid int ) AS
 /* Note: this should not be called directly, instead use DROP SCHEMA statement */
 BEGIN
   DECLARE schema string, name string
   SET schema = Name FROM sys.Schema WHERE Id = sid
-  FOR name = Name FROM sys.Function WHERE Schema = sid EXECUTE( 'DROP FUNCTION ' | sys.Dot(schema,name) )
+  FOR name = Name FROM sys.Function WHERE Schema = sid EXECUTE( 'DROP FN ' | sys.Dot(schema,name) )
   -- FOR name = Name FROM sys.Table WHERE Schema = sid AND IsView = 1 EXECUTE( 'DROP VIEW ' | sys.Dot(schema,name) )
   FOR name = Name FROM sys.Table WHERE Schema = sid AND IsView = 0 EXECUTE( 'DROP TABLE ' | sys.Dot(schema,name) )
   DELETE FROM sys.Schema WHERE Id = sid
 END
 GO
-CREATE FUNCTION [sys].[Dot]( schema string, name string ) RETURNS string AS
+CREATE FN [sys].[Dot]( schema string, name string ) RETURNS string AS
 BEGIN
   RETURN sys.QuoteName( schema ) | '.' | sys.QuoteName( name )
 END
 GO
-CREATE FUNCTION [sys].[Cols]( table int ) RETURNS string AS
+CREATE FN [sys].[Cols]( table int ) RETURNS string AS
 BEGIN
   DECLARE col string, list string
   FOR col = sys.QuoteName(Name) | ' ' | sys.TypeName(Type)
@@ -237,7 +237,7 @@ BEGIN
   RETURN '(' | list | ')'
 END
 GO
-CREATE FUNCTION [sys].[ColValues]( table int ) RETURNS string AS
+CREATE FN [sys].[ColValues]( table int ) RETURNS string AS
 BEGIN
   DECLARE col string
   SET result = 'Id'
@@ -250,7 +250,7 @@ BEGIN
   RETURN result
 END
 GO
-CREATE FUNCTION [sys].[ColNames]( table int ) RETURNS string AS
+CREATE FN [sys].[ColNames]( table int ) RETURNS string AS
 BEGIN
   DECLARE col string
   SET result = '(Id'
@@ -259,7 +259,7 @@ BEGIN
   RETURN result | ')'
 END
 GO
-CREATE FUNCTION [sys].[ColName]( table int, colId int ) RETURNS string AS
+CREATE FN [sys].[ColName]( table int, colId int ) RETURNS string AS
 BEGIN
   DECLARE i int
   SET i = 0
@@ -273,7 +273,7 @@ END
 GO
 --############################################
 CREATE SCHEMA [date]
-CREATE FUNCTION [date].[YearMonthDayToYearDay]( ymd int ) RETURNS int AS
+CREATE FN [date].[YearMonthDayToYearDay]( ymd int ) RETURNS int AS
 BEGIN
   DECLARE y int, m int, d int
   -- Extract y, m, d from ymd
@@ -299,7 +299,7 @@ BEGIN
   RETURN date.YearDay( y, d )
 END
 GO
-CREATE FUNCTION [date].[YearMonthDayToString]( ymd int ) RETURNS string AS
+CREATE FN [date].[YearMonthDayToString]( ymd int ) RETURNS string AS
 BEGIN
   DECLARE y int, m int, d int
   SET d = ymd % 32
@@ -309,17 +309,17 @@ BEGIN
   RETURN date.MonthToString(m) | ' ' | d | ' ' |  y
 END
 GO
-CREATE FUNCTION [date].[YearMonthDayToDays]( ymd int ) RETURNS int AS
+CREATE FN [date].[YearMonthDayToDays]( ymd int ) RETURNS int AS
 BEGIN
   RETURN date.YearDayToDays( date.YearMonthDayToYearDay( ymd ) )
 END
 GO
-CREATE FUNCTION [date].[YearMonthDay]( year int, month int, day int ) RETURNS int AS
+CREATE FN [date].[YearMonthDay]( year int, month int, day int ) RETURNS int AS
 BEGIN
   RETURN year * 512 + month * 32 + day
 END
 GO
-CREATE FUNCTION [date].[YearDayToYearMonthDay]( yd int ) RETURNS int AS
+CREATE FN [date].[YearDayToYearMonthDay]( yd int ) RETURNS int AS
 BEGIN
   DECLARE y int, d int, leap bool, fdm int, m int, dim int
   SET y = yd / 512
@@ -346,12 +346,12 @@ BEGIN
   RETURN date.YearMonthDay( y, m+1, dim+1 )
 END
 GO
-CREATE FUNCTION [date].[YearDayToString]( yd int ) RETURNS string AS
+CREATE FN [date].[YearDayToString]( yd int ) RETURNS string AS
 BEGIN
    RETURN date.YearMonthDayToString( date.YearDayToYearMonthDay( yd ) )  
 END
 GO
-CREATE FUNCTION [date].[YearDayToDays]( yd int ) RETURNS int AS
+CREATE FN [date].[YearDayToDays]( yd int ) RETURNS int AS
 BEGIN
   -- Given a date in Year/Day representation stored as y * 512 + d where 1 <= d <= 366 ( so d is day in year )
   -- returns the number of days since \"day zero\" (1 Jan 0000)
@@ -369,12 +369,12 @@ BEGIN
     + d
 END
 GO
-CREATE FUNCTION [date].[YearDay]( year int, day int ) RETURNS int AS
+CREATE FN [date].[YearDay]( year int, day int ) RETURNS int AS
 BEGIN
   RETURN year * 512 + day
 END
 GO
-CREATE FUNCTION [date].[WeekDayToString]( wd int ) RETURNS string AS
+CREATE FN [date].[WeekDayToString]( wd int ) RETURNS string AS
 BEGIN
   RETURN CASE
     WHEN wd = 1 THEN 'Mon'
@@ -388,7 +388,7 @@ BEGIN
     END
 END
 GO
-CREATE FUNCTION [date].[Today]() RETURNS int AS
+CREATE FN [date].[Today]() RETURNS int AS
 BEGIN
   DECLARE sec int, day int
   SET sec = date.Ticks() / 1000000
@@ -396,13 +396,13 @@ BEGIN
   RETURN day
 END
 GO
-CREATE FUNCTION [date].[Ticks]() RETURNS int AS
+CREATE FN [date].[Ticks]() RETURNS int AS
 BEGIN
   -- Microseconds since 1 Jan 0000
   RETURN GLOBAL(0) + 62135596800000000 /* 719162 * 24 * 3600 * 1000000 */
 END
 GO
-CREATE FUNCTION [date].[Test]( y int, m int, d int, n int ) AS 
+CREATE FN [date].[Test]( y int, m int, d int, n int ) AS 
 BEGIN
   DECLARE ymd int, days int
   SET ymd = date.YearMonthDay( y, m, d )
@@ -416,12 +416,12 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [date].[StringToYearMonthDay]( s string ) RETURNS int AS
+CREATE FN [date].[StringToYearMonthDay]( s string ) RETURNS int AS
 BEGIN
   RETURN date.DaysToYearMonthDay( date.StringToDays( s ) )
 END
 GO
-CREATE FUNCTION [date].[StringToDays]( s string ) RETURNS int AS
+CREATE FN [date].[StringToDays]( s string ) RETURNS int AS
 BEGIN
   -- Typical input is 'Feb 2 2020'
   DECLARE ms string, month int
@@ -466,7 +466,7 @@ BEGIN
   RETURN date.YearMonthDayToDays( date.YearMonthDay( year, month, day ) )
 END
 GO
-CREATE FUNCTION [date].[NowString]() RETURNS string AS
+CREATE FN [date].[NowString]() RETURNS string AS
 BEGIN
   DECLARE day int, sec int, min int, hour int
   SET sec = date.Ticks() / 1000000
@@ -479,7 +479,7 @@ BEGIN
   RETURN date.DaysToString(  day ) | ' ' | hour | ':' | min | ':' | sec
 END
 GO
-CREATE FUNCTION [date].[MonthToString]( m int ) RETURNS string AS
+CREATE FN [date].[MonthToString]( m int ) RETURNS string AS
 BEGIN
   RETURN CASE
     WHEN m = 1 THEN 'Jan'
@@ -498,17 +498,17 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [date].[IsLeapYear]( y int ) RETURNS bool AS
+CREATE FN [date].[IsLeapYear]( y int ) RETURNS bool AS
 BEGIN
   RETURN y % 4 = 0 AND ( y % 100 != 0 OR y % 400 = 0 )
 END
 GO
-CREATE FUNCTION [date].[DaysToYearMonthDay]( days int ) RETURNS int AS
+CREATE FN [date].[DaysToYearMonthDay]( days int ) RETURNS int AS
 BEGIN
   RETURN date.YearDayToYearMonthDay( date.DaysToYearDay( days ) )
 END
 GO
-CREATE FUNCTION [date].[DaysToYearDay]( days int ) RETURNS int AS
+CREATE FN [date].[DaysToYearDay]( days int ) RETURNS int AS
 BEGIN
   -- Given a date represented by the number of days since 1 Jan 0000
   -- calculate a date in Year/Day representation stored as
@@ -533,21 +533,21 @@ BEGIN
   RETURN 512 * ( cycle * 400 + year ) + day + 1
 END
 GO
-CREATE FUNCTION [date].[DaysToString]( date int ) RETURNS string AS
+CREATE FN [date].[DaysToString]( date int ) RETURNS string AS
 BEGIN
   RETURN date.WeekDayToString( 1 + (date+5) % 7 ) | ' ' | date.YearMonthDayToString( date.DaysToYearMonthDay( date ) )
 END
 GO
 --############################################
 CREATE SCHEMA [htm]
-CREATE FUNCTION [htm].[Encode]( s string ) RETURNS string AS
+CREATE FN [htm].[Encode]( s string ) RETURNS string AS
 BEGIN
   SET s = REPLACE( s,'&', '&amp;' )
   SET s = REPLACE( s, '<', '&lt;' )
   RETURN s
 END
 GO
-CREATE FUNCTION [htm].[Attr]( s string ) RETURNS string AS
+CREATE FN [htm].[Attr]( s string ) RETURNS string AS
 BEGIN
   SET s = REPLACE( s, '&', '&amp;' )
   SET s = REPLACE( s, '\"', '&quot;' )
@@ -558,47 +558,47 @@ GO
 CREATE SCHEMA [web]
 CREATE TABLE [web].[File]([Path] string,[ContentType] string,[ContentLength] int,[Content] binary) 
 GO
-CREATE FUNCTION [web].[Trailer]() AS
+CREATE FN [web].[Trailer]() AS
 BEGIN
   SELECT '</body></html>'
 END
 GO
-CREATE FUNCTION [web].[SetCookie]( name string, value string, expires string ) AS
+CREATE FN [web].[SetCookie]( name string, value string, expires string ) AS
 BEGIN
   -- SELECT 16, name, value, expires /* e.g. 01 Jan 2050 */
   THROW 'SetCookie is ToDo'
 END
 GO
-CREATE FUNCTION [web].[SetContentType]( ct string ) AS
+CREATE FN [web].[SetContentType]( ct string ) AS
 BEGIN
   DECLARE dummy string
   SET dummy = ARG( 10, 'ContentType: ' | ct )
 END
 GO
-CREATE FUNCTION [web].[SendBinary]( contenttype string, content binary ) AS
+CREATE FN [web].[SendBinary]( contenttype string, content binary ) AS
 BEGIN
   EXEC web.SetContentType( contenttype )
   SELECT 11, content
 END
 GO
-CREATE FUNCTION [web].[Redirect]( url string ) AS
+CREATE FN [web].[Redirect]( url string ) AS
 BEGIN
   DECLARE dummy string
   SET dummy = ARG( 10, 'Location: ' | url )
   SET dummy = ARG( 11, '303 Redirect' )
 END
 GO
-CREATE FUNCTION [web].[Query]( name string ) RETURNS string AS
+CREATE FN [web].[Query]( name string ) RETURNS string AS
 BEGIN
   RETURN ARG( 1, name )
 END
 GO
-CREATE FUNCTION [web].[Path]() RETURNS string AS
+CREATE FN [web].[Path]() RETURNS string AS
 BEGIN
   RETURN ARG(0,'')
 END
 GO
-CREATE FUNCTION [web].[Main]() AS 
+CREATE FN [web].[Main]() AS 
 BEGIN 
   DECLARE path string SET path = web.Path()
   DECLARE ok string SET ok = Name FROM sys.Procedure WHERE Name = path AND Schema = 2
@@ -633,7 +633,7 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [web].[Head]( title string ) AS 
+CREATE FN [web].[Head]( title string ) AS 
 BEGIN 
   EXEC web.SetContentType( 'text/html;charset=utf-8' )
   SELECT '<html>
@@ -654,12 +654,12 @@ BEGIN
 | <a target=_blank href=\"EditFunc?s=handler&n=' | web.Path() | '\">Code</a> ' | date.NowString() | ' UTC</div>'
 END
 GO
-CREATE FUNCTION [web].[Form]( name string ) RETURNS string AS
+CREATE FN [web].[Form]( name string ) RETURNS string AS
 BEGIN
   RETURN ARG( 2, name )
 END
 GO
-CREATE FUNCTION [web].[Cookie]( name string ) RETURNS string AS
+CREATE FN [web].[Cookie]( name string ) RETURNS string AS
 BEGIN
   RETURN ARG( 3, name )
 END
@@ -676,7 +676,7 @@ CREATE INDEX [ByRefersTo] ON [browse].[Column]([RefersTo])
 GO
 CREATE TABLE [browse].[Table]([NameFunction] string,[SelectFunction] string,[DefaultOrder] string,[Title] string,[Description] string,[Role] int) 
 GO
-CREATE FUNCTION [browse].[UpdateSql]( table int, k int ) RETURNS string AS
+CREATE FN [browse].[UpdateSql]( table int, k int ) RETURNS string AS
 BEGIN
   DECLARE alist string, col string, type int, colId int
   FOR colId = Id, col = Name, type = Type FROM sys.Column WHERE Table = table
@@ -688,13 +688,13 @@ BEGIN
   RETURN 'UPDATE ' | sys.TableName( table ) | ' SET ' | alist | ' WHERE Id =' | k
 END
 GO
-CREATE FUNCTION [browse].[TableTitle]( table int ) RETURNS string AS
+CREATE FN [browse].[TableTitle]( table int ) RETURNS string AS
 BEGIN
   SET result = Title FROM browse.Table WHERE Id = table
   IF result = '' SET result = Name FROM sys.Table WHERE Id = table
 END
 GO
-CREATE FUNCTION [browse].[TableSelect]( colId int, sel int ) RETURNS string AS
+CREATE FN [browse].[TableSelect]( colId int, sel int ) RETURNS string AS
 BEGIN
   DECLARE col string SET col = Name FROM sys.Column WHERE Id = colId
   DECLARE opt string, options string
@@ -708,7 +708,7 @@ BEGIN
      | '</select>'
 END
 GO
-CREATE FUNCTION [browse].[ShowSql]( table int, k int ) RETURNS string AS
+CREATE FN [browse].[ShowSql]( table int, k int ) RETURNS string AS
 BEGIN
   DECLARE cols string, col string, colname string, colid int
   FOR colid = Id, colname = Name, col = CASE 
@@ -756,7 +756,7 @@ BEGIN
 '
 END
 GO
-CREATE FUNCTION [browse].[SchemaSelect]( colId int, sel int ) RETURNS string AS
+CREATE FN [browse].[SchemaSelect]( colId int, sel int ) RETURNS string AS
 BEGIN
   DECLARE col string SET col = Name FROM sys.Column WHERE Id = colId
   DECLARE opt string, options string, sels string
@@ -772,12 +772,12 @@ BEGIN
      | '</select>'
 END
 GO
-CREATE FUNCTION [browse].[ParseBool]( s string ) RETURNS bool AS
+CREATE FN [browse].[ParseBool]( s string ) RETURNS bool AS
 BEGIN
   RETURN s = 'on'
 END
 GO
-CREATE FUNCTION [browse].[InsertSql]( table int, pc int, p int ) RETURNS string AS
+CREATE FN [browse].[InsertSql]( table int, pc int, p int ) RETURNS string AS
 BEGIN
   DECLARE vlist string, f string, type int, colId int
   FOR f = 'web.Form(' | sys.SingleQuote(Name) | ')', type = Type, colId = Id
@@ -790,7 +790,7 @@ BEGIN
   RETURN 'INSERT INTO ' | sys.TableName( table ) | browse.InsertNames( table ) | ' VALUES (' | vlist | ')'
 END
 GO
-CREATE FUNCTION [browse].[InsertNames]( table int ) RETURNS string AS
+CREATE FN [browse].[InsertNames]( table int ) RETURNS string AS
 BEGIN
   DECLARE col string
   FOR col = Name FROM sys.Column WHERE Table = table
@@ -798,7 +798,7 @@ BEGIN
   RETURN '(' | result | ')'
 END
 GO
-CREATE FUNCTION [browse].[InputYearMonthDay]( colId int, value int) RETURNS string AS 
+CREATE FN [browse].[InputYearMonthDay]( colId int, value int) RETURNS string AS 
 BEGIN 
   DECLARE cn string 
   SET cn = Name FROM sys.Column WHERE Id = colId
@@ -808,7 +808,7 @@ BEGIN
   RETURN '<input id=\"' | cn | '\" name=\"' | cn | '\" size=' | size | ' value=' | htm.Attr(date.YearMonthDayToString(value)) | '>'
 END
 GO
-CREATE FUNCTION [browse].[InputString]( colId int, value string ) RETURNS string AS 
+CREATE FN [browse].[InputString]( colId int, value string ) RETURNS string AS 
 BEGIN 
   DECLARE cn string SET cn = Name FROM sys.Column WHERE Id = colId 
   DECLARE cols int, rows int, description string
@@ -823,7 +823,7 @@ BEGIN
     RETURN '<input id=\"' | cn | '\" name=\"' | cn | '\" size=\"' | cols | '\"' | ' value=' | htm.Attr(value) | '>'
 END
 GO
-CREATE FUNCTION [browse].[InputInt]( colId int, value int) RETURNS string AS 
+CREATE FN [browse].[InputInt]( colId int, value int) RETURNS string AS 
 BEGIN 
   DECLARE cn string 
   SET cn = Name FROM sys.Column WHERE Id = colId
@@ -833,7 +833,7 @@ BEGIN
   RETURN '<input type=number id=\"' | cn | '\" name=\"' | cn | '\" size=' | size | ' value=' | value | '>'
 END
 GO
-CREATE FUNCTION [browse].[InputDouble]( colId int, value double ) RETURNS string AS 
+CREATE FN [browse].[InputDouble]( colId int, value double ) RETURNS string AS 
 BEGIN 
   DECLARE cn string SET cn = Name FROM sys.Column WHERE Id = colId
   DECLARE size int 
@@ -842,14 +842,14 @@ BEGIN
   RETURN '<input id=\"' | cn | '\" name=\"' | cn | '\" size=\"' | size | '\"' | ' value=\"' | value | '\">'
 END
 GO
-CREATE FUNCTION [browse].[InputBool]( colId int, value bool ) RETURNS string AS
+CREATE FN [browse].[InputBool]( colId int, value bool ) RETURNS string AS
 BEGIN
   DECLARE cn string 
   SET cn = Name FROM sys.Column WHERE Id = colId
   RETURN '<input type=checkbox id=\"' | cn | '\" name=\"' | cn | '\"' | CASE WHEN value THEN ' checked' ELSE '' END | '>'
 END
 GO
-CREATE FUNCTION [browse].[InputBinary]( colId int, value binary ) RETURNS string AS 
+CREATE FN [browse].[InputBinary]( colId int, value binary ) RETURNS string AS 
 BEGIN 
   DECLARE cn string SET cn = Name FROM sys.Column WHERE Id = colId
   DECLARE size int SET size = InputCols FROM browse.Column WHERE Id = colId
@@ -857,7 +857,7 @@ BEGIN
   RETURN '<input id=\"' | cn | '\" name=\"' | cn | '\" size=' | size | ' value=\"' | value | '\">'
 END
 GO
-CREATE FUNCTION [browse].[FormUpdateSql]( table int, k int ) RETURNS string AS
+CREATE FN [browse].[FormUpdateSql]( table int, k int ) RETURNS string AS
 BEGIN
   DECLARE sql string, col string, colId int, type int
   FOR col = Name, colId = Id, type = Type FROM sys.Column WHERE Table = table
@@ -876,7 +876,7 @@ BEGIN
   RETURN 'SELECT ' | sql | ' FROM ' | sys.TableName( table ) | ' WHERE Id =' | k
 END
 GO
-CREATE FUNCTION [browse].[FormInsertSql]( table int, pc int ) RETURNS string AS
+CREATE FN [browse].[FormInsertSql]( table int, pc int ) RETURNS string AS
 BEGIN
   DECLARE sql string, col string, type int, colId int
   FOR col = Name, type = Type, colId = Id FROM sys.Column 
@@ -897,7 +897,7 @@ BEGIN
   RETURN 'SELECT ' | sql
 END
 GO
-CREATE FUNCTION [browse].[DefaultInput]( type int ) RETURNS string AS
+CREATE FN [browse].[DefaultInput]( type int ) RETURNS string AS
 BEGIN
   RETURN CASE 
   WHEN type % 8 = 3 THEN 'browse.InputInt'
@@ -908,7 +908,7 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [browse].[DefaultDefault]( type int, ref int ) RETURNS string AS
+CREATE FN [browse].[DefaultDefault]( type int, ref int ) RETURNS string AS
 BEGIN
   RETURN CASE
     WHEN type % 8 = 2 THEN ''''''
@@ -918,7 +918,7 @@ BEGIN
     END
 END
 GO
-CREATE FUNCTION [browse].[ColValues]( table int ) RETURNS string AS
+CREATE FN [browse].[ColValues]( table int ) RETURNS string AS
 BEGIN
   DECLARE col string, colid int
   FOR colid = Id, col = CASE 
@@ -942,14 +942,14 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [browse].[ColPos]( c int ) RETURNS int AS
+CREATE FN [browse].[ColPos]( c int ) RETURNS int AS
 BEGIN
   DECLARE pos int
   SET pos = Position FROM browse.Column WHERE Id = c
   RETURN pos
 END
 GO
-CREATE FUNCTION [browse].[ColParser]( colId int, type int, f string ) RETURNS string AS
+CREATE FN [browse].[ColParser]( colId int, type int, f string ) RETURNS string AS
 BEGIN
   -- ColId not currently used, but in future user-specified parser could be fetched from Parse.Column
   DECLARE pf string
@@ -963,7 +963,7 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [browse].[ColNames]( table int ) RETURNS string AS
+CREATE FN [browse].[ColNames]( table int ) RETURNS string AS
 BEGIN
   DECLARE col string
   FOR col = '<a href=\"/BrowseColInfo?k=' | Id | '\">' | Name | '</a>' 
@@ -975,7 +975,7 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [browse].[ChildSql]( colId int, k int ) RETURNS string AS 
+CREATE FN [browse].[ChildSql]( colId int, k int ) RETURNS string AS 
 BEGIN 
   /* Returns SQL to display a child table, with hyperlinks where a column refers to another table */
   DECLARE col string, colid int, colName string, type int, th string, ob string
@@ -1009,7 +1009,7 @@ BEGIN
    | ' SELECT ''</TABLE>'''
 END
 GO
-CREATE FUNCTION [browse].[BrowseColumnName]( k int ) RETURNS string AS 
+CREATE FN [browse].[BrowseColumnName]( k int ) RETURNS string AS 
 BEGIN
   SET result = sys.TableName( Table ) | '.' | sys.QuoteName( Name )
   FROM sys.Column WHERE Id = k
@@ -1017,7 +1017,7 @@ END
 GO
 --############################################
 CREATE SCHEMA [handler]
-CREATE FUNCTION [handler].[/ShowTable]() AS 
+CREATE FN [handler].[/ShowTable]() AS 
 BEGIN 
   DECLARE t int SET t = PARSEINT( web.Query('k') )
   DECLARE title string SET title = browse.TableTitle( t )
@@ -1043,7 +1043,7 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/ShowSchema]() AS
+CREATE FN [handler].[/ShowSchema]() AS
 BEGIN
   DECLARE s string SET s = web.Query('s')
   DECLARE sid int SET sid = Id FROM sys.Schema WHERE Name = s
@@ -1063,14 +1063,14 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/ShowRow]() AS 
+CREATE FN [handler].[/ShowRow]() AS 
 BEGIN
   DECLARE t int SET t = PARSEINT( web.Query('t') )
   DECLARE k int SET k = PARSEINT( web.Query('k') )
   EXECUTE( browse.ShowSql( t, k ) )
 END
 GO
-CREATE FUNCTION [handler].[/OrderSummary]() AS
+CREATE FN [handler].[/OrderSummary]() AS
 BEGIN
   EXEC web.Head( 'Order Summary' )
   SELECT '<table><tr><th>Cust<th>Total<th>#<th>Avg<th>Min<th>Max</tr>'
@@ -1087,7 +1087,7 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/Menu]() AS
+CREATE FN [handler].[/Menu]() AS
 BEGIN
    EXEC web.Head('Menu')
    SELECT '
@@ -1103,7 +1103,7 @@ BEGIN
    EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/Manual]() AS BEGIN
+CREATE FN [handler].[/Manual]() AS BEGIN
 EXEC web.Head('Manual')
 SELECT '<h1>Manual</h1>
 <p>This manual describes the various SQL statements that are available. Where syntax is described, optional elements are enclosed in square brackets.
@@ -1171,7 +1171,7 @@ SELECT '<h1>Manual</h1>
 <p>Evaluates the string expression, and then executes the result ( which should be a list of SQL statements ).
 <p>Note that database objects ( tables, views, stored routines ) must be created in a prior batch before being used. A GO statement may be used to signify the start of a new batch.
 <h2>Stored Functions</h2>
-<h3>CREATE FUNCTION</h3><p>CREATE FUNCTION schema.name ( param1 type1, param2 type2... ) AS BEGIN statements END
+<h3>CREATE FN</h3><p>CREATE FN schema.name ( param1 type1, param2 type2... ) AS BEGIN statements END
 <p>A stored function ( no return value ) is created, which can later be called by an EXEC statement.
 <h3>EXEC</h3><p>EXEC schema.name( exp1, exp2 ... )
 <p>The stored function is called with the supplied parameters.
@@ -1179,7 +1179,7 @@ SELECT '<h1>Manual</h1>
 <h3>THROW</h3>
 <p>THROW string-expression 
 <p>An exception is raised, with the error message being set to the string.
-<h3>CREATE FUNCTION</h3><p>CREATE FUNCTION schema.name ( param1 type1, param2 type2... ) RETURNS type AS BEGIN statements END
+<h3>CREATE FN</h3><p>CREATE FN schema.name ( param1 type1, param2 type2... ) RETURNS type AS BEGIN statements END
 <p>A stored function is created which can later be used in expressions.
 <h3>RETURN</h3>
 <p>RETURN expression
@@ -1259,7 +1259,7 @@ SELECT '<h1>Manual</h1>
 EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/ListFile]() AS
+CREATE FN [handler].[/ListFile]() AS
 BEGIN
   EXEC web.Head( 'Files' )
   SELECT '<h1>Files</h1>' 
@@ -1269,7 +1269,7 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/FileUpload]() AS
+CREATE FN [handler].[/FileUpload]() AS
 BEGIN
   EXEC web.Head( 'File upload' )
   IF FILEATTR(0,0) = 'file' 
@@ -1284,7 +1284,7 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/Execute]() AS 
+CREATE FN [handler].[/Execute]() AS 
 BEGIN
   DECLARE sql string SET sql = web.Form('sql')
   EXEC web.Head( 'Execute' )
@@ -1308,11 +1308,11 @@ BEGIN
      | '<br>CREATE TABLE dbo.Cust( LastName string, Age int )'
      | '<br>CREATE INDEX ByLastName on dbo.Cust(LastName)'
      | '<br>CREATE VIEW dbo.OrderSummary AS SELECT Cust, SUM(Total) as Total, COUNT() as Count FROM dbo.Order GROUP BY Cust'
-     | '<br>CREATE FUNCTION handler.[/MyPage]() AS BEGIN END'
+     | '<br>CREATE FN handler.[/MyPage]() AS BEGIN END'
    EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/EditView]() AS
+CREATE FN [handler].[/EditView]() AS
 BEGIN
   DECLARE s string SET s = web.Query('s')
   DECLARE n string SET n = web.Query('n')
@@ -1335,7 +1335,7 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/EditRow]() AS 
+CREATE FN [handler].[/EditRow]() AS 
 BEGIN 
   DECLARE t int SET t = PARSEINT( web.Query('t') )
   DECLARE k int SET k = PARSEINT( web.Query('k') )
@@ -1360,7 +1360,7 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/EditFunc]() AS
+CREATE FN [handler].[/EditFunc]() AS
 BEGIN
   DECLARE s string SET s = web.Query('s')
   DECLARE n string SET n = web.Query('n')
@@ -1368,7 +1368,7 @@ BEGIN
   DECLARE def string, ex string SET def = web.Form('def')
   IF def != '' 
   BEGIN
-    EXECUTE( 'ALTER FUNCTION ' | sys.Dot(s,n) | def )
+    EXECUTE( 'ALTER FN ' | sys.Dot(s,n) | def )
     SET ex = EXCEPTION()
   END
   ELSE SET def = Def FROM sys.Function WHERE Schema = sid AND Name = n 
@@ -1383,7 +1383,7 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/EditFile]() AS
+CREATE FN [handler].[/EditFile]() AS
 BEGIN
   DECLARE k int SET k = PARSEINT( web.Query('k') )
   DECLARE path string SET path = web.Form('path')
@@ -1396,7 +1396,7 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/Dump]() AS 
+CREATE FN [handler].[/Dump]() AS 
 BEGIN 
   EXEC web.SetContentType( 'text/plain;charset=utf-8' )
   DECLARE s int
@@ -1406,7 +1406,7 @@ BEGIN
     EXEC sys.ScriptSchemaBrowse(s)
 END
 GO
-CREATE FUNCTION [handler].[/BrowseInfo]() AS 
+CREATE FN [handler].[/BrowseInfo]() AS 
 BEGIN 
   DECLARE k int SET k = PARSEINT( web.Query( 'k' ) )
   DECLARE tid int SET tid = 9
@@ -1428,7 +1428,7 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [handler].[/BrowseColInfo]() AS 
+CREATE FN [handler].[/BrowseColInfo]() AS 
 BEGIN 
   DECLARE tid int SET tid = 8
   DECLARE c int SET c = PARSEINT( web.Query( 'k' ) )
@@ -1452,7 +1452,7 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [handler].[/AddRow]() AS 
+CREATE FN [handler].[/AddRow]() AS 
 BEGIN 
   DECLARE t int SET t = PARSEINT( web.Query('t') )
   DECLARE ex string
@@ -1477,7 +1477,7 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
-CREATE FUNCTION [handler].[/AddChild]() AS
+CREATE FN [handler].[/AddChild]() AS
 BEGIN
   DECLARE c int SET c = PARSEINT( web.Query('c') )
   DECLARE p int SET p = PARSEINT( web.Query('p') )
@@ -1516,9 +1516,9 @@ CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int)
 GO
 CREATE INDEX [ByCust] ON [dbo].[Order]([Cust])
 GO
-CREATE FUNCTION [dbo].[test]() AS BEGIN END
+CREATE FN [dbo].[test]() AS BEGIN END
 GO
-CREATE FUNCTION [dbo].[MakeOrders]() AS
+CREATE FN [dbo].[MakeOrders]() AS
 BEGIN 
   DELETE FROM dbo.Order WHERE 1 = 1
   DECLARE @I int 
@@ -1530,7 +1530,7 @@ BEGIN
   END
 END
 GO
-CREATE FUNCTION [dbo].[CustSelect]( colId int, sel int ) RETURNS string AS
+CREATE FN [dbo].[CustSelect]( colId int, sel int ) RETURNS string AS
 BEGIN
   DECLARE col string SET col = Name FROM sys.Column WHERE Id = colId
   DECLARE opt string, options string
@@ -1544,7 +1544,7 @@ BEGIN
     | '</select>'
 END
 GO
-CREATE FUNCTION [dbo].[CustName]( cust int ) RETURNS string AS
+CREATE FN [dbo].[CustName]( cust int ) RETURNS string AS
 BEGIN
   SET result = 'Cust ' | cust -- default in case Cust row does not exist
   SET result = FirstName | ' ' | LastName FROM dbo.Cust WHERE Id = cust
@@ -1558,7 +1558,7 @@ INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode]) VALUES
 (5,'George','Washington',26,'WC1')
 (6,'Ron','Williams',49,'')
 (7,'Adam','Baker',0,'')
-(8,'George','Barwood',62,'GL2 4LZ')
+(8,'George','Barwood',63,'GL2 4LZ')
 (9,'Fred','Flintstone',88,'XYZ')
 GO
 
@@ -1581,7 +1581,6 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (66,2,25,1034273)
 (67,3,35,1034273)
 (68,4,45,1034273)
-(69,5,7,1034273)
 (70,6,65,1035809)
 (71,7,75,1036097)
 (72,1,50,1034273)
@@ -1630,11 +1629,14 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (115,1,77,1034273)
 (116,1,99,1034461)
 (117,1,99,1034465)
+(118,5,999,1035114)
+(120,8,0,1035114)
+(121,5,9999,1035114)
 GO
 
 --############################################
 CREATE SCHEMA [ft]
-CREATE FUNCTION [ft].[PersonName]( id int ) RETURNS string AS
+CREATE FN [ft].[PersonName]( id int ) RETURNS string AS
 BEGIN
   SET result = Firstname | ' ' | Surname | ' ' 
    | CASE WHEN BirthYear > 0 THEN '' | BirthYear ELSE '' END 
@@ -1643,7 +1645,7 @@ BEGIN
   FROM ft.Person WHERE Id = id
 END
 GO
-CREATE FUNCTION [ft].[MotherSelect]( colId int, sel int ) RETURNS string AS
+CREATE FN [ft].[MotherSelect]( colId int, sel int ) RETURNS string AS
 BEGIN
   DECLARE col string SET col = Name FROM sys.Column WHERE Id = colId
   DECLARE opt string, options string
@@ -1662,7 +1664,7 @@ BEGIN
     | '</select>'
 END
 GO
-CREATE FUNCTION [ft].[FatherSelect]( colId int, sel int ) RETURNS string AS
+CREATE FN [ft].[FatherSelect]( colId int, sel int ) RETURNS string AS
 BEGIN
   DECLARE col string SET col = Name FROM sys.Column WHERE Id = colId
   DECLARE opt string, options string
