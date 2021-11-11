@@ -123,7 +123,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool) 
     }
 }
 /// Gets the id of a schema from a name.
-pub(crate) fn get_schema(db: &DB, sname: &str) -> Option<i64> {
+pub fn get_schema(db: &DB, sname: &str) -> Option<i64> {
     if let Some(id) = db.schemas.borrow().get(sname) {
         return Some(*id);
     }
@@ -157,7 +157,7 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)> {
     None
 }
 /// Gets a table from the database.
-pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr> {
+pub fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr> {
     if let Some((table_id, root, id_gen)) = get_table0(db, name) {
         let mut info = ColInfo::empty(name.clone());
         // Load columns. Columns are Table, Name, Type
@@ -201,7 +201,7 @@ pub(crate) fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr> {
     }
 }
 /// Gets then parses a function from the database.
-pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr> {
+pub fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr> {
     if let Some(schema_id) = get_schema(db, &name.schema) {
         let t = db.get_table(&ObjRef::new("sys", "Function")).unwrap();
         let keys = vec![
@@ -222,7 +222,7 @@ pub(crate) fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr> {
     None
 }
 /// Get the id of a function.
-pub(crate) fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64> {
+pub fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64> {
     if let Some(schema_id) = get_schema(db, &name.schema) {
         let t = db.get_table(&ObjRef::new("sys", "Function")).unwrap();
         let keys = vec![
@@ -252,7 +252,7 @@ fn parse_function(db: &DB, source: Rc<String>) -> FunctionPtr {
     })
 }
 /// Update IdGen field for a table.
-pub(crate) fn save_id_gen(db: &DB, id: u64, val: i64) {
+pub fn save_id_gen(db: &DB, id: u64, val: i64) {
     let t = &db.sys_table;
     let (pp, off) = t.id_get(db, id).unwrap();
     let p = &mut pp.borrow_mut();
@@ -261,7 +261,7 @@ pub(crate) fn save_id_gen(db: &DB, id: u64, val: i64) {
     t.file.set_dirty(p, &pp);
 }
 /// Get the IdGen field for a table. This is only needed to initialise system tables.
-pub(crate) fn get_id_gen(db: &DB, id: u64) -> i64 {
+pub fn get_id_gen(db: &DB, id: u64) -> i64 {
     let t = &db.sys_table;
     let (pp, off) = t.id_get(db, id).unwrap();
     let p = &pp.borrow();

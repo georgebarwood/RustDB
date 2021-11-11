@@ -29,7 +29,7 @@ pub fn register_builtins(db: &DB) {
     }
 }
 /// Check number and kinds of arguments.
-fn check_types(b: &Block, args: &mut [Expr], dk: &[DataKind]) {
+pub fn check_types(b: &Block, args: &mut [Expr], dk: &[DataKind]) {
     if args.len() != dk.len() {
         panic!("Wrong number of args");
     }

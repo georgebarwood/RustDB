@@ -134,16 +134,16 @@ pub enum DataKind {
 /// Low 3 (=KBITS) bits are DataKind, next 5 bits are size in bytes, or p ( for DECIMAL ).
 pub type DataType = usize;
 const KBITS: usize = 3;
-pub(crate) const NONE: DataType = DataKind::None as usize;
-pub(crate) const BINARY: DataType = DataKind::Binary as usize + (16 << KBITS);
-pub(crate) const STRING: DataType = DataKind::String as usize + (16 << KBITS);
-pub(crate) const BIGINT: DataType = DataKind::Int as usize + (8 << KBITS);
-pub(crate) const INT: DataType = DataKind::Int as usize + (4 << KBITS);
-pub(crate) const SMALLINT: DataType = DataKind::Int as usize + (2 << KBITS);
-pub(crate) const TINYINT: DataType = DataKind::Int as usize + (1 << KBITS);
-pub(crate) const FLOAT: DataType = DataKind::Float as usize + (4 << KBITS);
-pub(crate) const DOUBLE: DataType = DataKind::Float as usize + (8 << KBITS);
-pub(crate) const BOOL: DataType = DataKind::Bool as usize + (1 << KBITS);
+pub const NONE: DataType = DataKind::None as usize;
+pub const BINARY: DataType = DataKind::Binary as usize + (16 << KBITS);
+pub const STRING: DataType = DataKind::String as usize + (16 << KBITS);
+pub const BIGINT: DataType = DataKind::Int as usize + (8 << KBITS);
+pub const INT: DataType = DataKind::Int as usize + (4 << KBITS);
+pub const SMALLINT: DataType = DataKind::Int as usize + (2 << KBITS);
+pub const TINYINT: DataType = DataKind::Int as usize + (1 << KBITS);
+pub const FLOAT: DataType = DataKind::Float as usize + (4 << KBITS);
+pub const DOUBLE: DataType = DataKind::Float as usize + (8 << KBITS);
+pub const BOOL: DataType = DataKind::Bool as usize + (1 << KBITS);
 /// Compute the DataKind of a DataType.
 pub fn data_kind(x: DataType) -> DataKind {
     const DKLOOK: [DataKind; 6] = [
@@ -167,17 +167,16 @@ pub struct Block<'a> {
     pub return_type: DataType,
     pub local_typ: Vec<DataType>,
     pub ilist: Vec<Instruction>,
-
+    pub break_id: usize,
+    /// Database.
+    pub db: DB,
+    /// Current table in scope by FROM clause( or UPDATE statment ).
+    pub from: Option<CTableExpression>,
+    pub parse_only: bool,
     jumps: Vec<usize>,
     labels: HashMap<&'a [u8], usize>,
     local_map: HashMap<&'a [u8], usize>,
-    pub locals: Vec<&'a [u8]>,
-    pub break_id: usize,
-    /// Database.
-    pub(crate) db: DB,
-    /// Current table in scope by FROM clause( or UPDATE statment ).
-    pub(crate) from: Option<CTableExpression>,
-    pub(crate) parse_only: bool,
+    locals: Vec<&'a [u8]>,
 }
 impl<'a> Block<'a> {
     /// Construct a new block.
@@ -215,18 +214,18 @@ impl<'a> Block<'a> {
         }
     }
     /// Add an instruction to the instruction list.
-    pub(crate) fn add(&mut self, s: Instruction) {
+    pub fn add(&mut self, s: Instruction) {
         if !self.parse_only {
             self.ilist.push(s);
         }
     }
     /// Add a Data Operation (DO) to the instruction list.
-    pub(crate) fn dop(&mut self, dop: DO) {
+    pub fn dop(&mut self, dop: DO) {
         if !self.parse_only {
             self.add(DataOp(Box::new(dop)));
         }
     }
-    pub(crate) fn check_types(&self, r: &FunctionPtr, ptypes: &[DataType]) {
+    pub fn check_types(&self, r: &FunctionPtr, ptypes: &[DataType]) {
         if ptypes.len() != r.param_count {
             panic!("param count mismatch");
         }
@@ -251,6 +250,9 @@ impl<'a> Block<'a> {
     }
     pub fn get_local(&self, name: &[u8]) -> Option<&usize> {
         self.local_map.get(name)
+    }
+    pub fn local_name(&self, num: usize) -> &[u8] {
+        self.locals[num]
     }
     pub fn get_jump_id(&mut self) -> usize {
         let result = self.jumps.len();

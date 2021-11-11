@@ -38,23 +38,23 @@ pub struct Page {
     /// Data storage.
     pub data: Vec<u8>,
     /// Page number in file where page is saved.
-    pub(crate) pnum: u64,
+    pub pnum: u64,
     /// Does page need to be saved to backing storage?
-    pub(crate) is_dirty: bool,
+    pub is_dirty: bool,
     /// Number of records currently stored in the page.
-    pub(crate) count: usize,
+    pub count: usize,
     /// Page level. 0 means a child page, more than 0 a parent page.
-    pub(crate) level: u8,
+    pub level: u8,
     /// Number of bytes required for each node.
-    pub(crate) node_size: usize,
+    pub node_size: usize,
     /// Root node for the page.
-    pub(crate) root: usize,
+    pub root: usize,
     /// First Free node.
     free: usize,
     /// Number of Nodes currently allocated.     
     alloc: usize,
     /// First child page ( for a parent page ).    
-    pub(crate) first_page: u64,
+    pub first_page: u64,
 }
 impl Page {
     /// The size of the page in bytes.

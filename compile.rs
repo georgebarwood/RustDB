@@ -350,7 +350,7 @@ fn c_builtin_float(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<f64> {
 }
 
 /// Compile UPDATE statement.
-pub(crate) fn c_update(
+pub fn c_update(
     b: &mut Block,
     tname: &ObjRef,
     assigns: &mut Vec<(String, Expr)>,
@@ -377,7 +377,7 @@ pub(crate) fn c_update(
 }
 
 /// Compile DELETE statement.
-pub(crate) fn c_delete(b: &mut Block, tname: &ObjRef, wher: &mut Option<Expr>) {
+pub fn c_delete(b: &mut Block, tname: &ObjRef, wher: &mut Option<Expr>) {
     let t = table_look(b, tname);
     let from = Some(CTableExpression::Base(t.clone()));
     let save = mem::replace(&mut b.from, from);
@@ -390,7 +390,7 @@ pub(crate) fn c_delete(b: &mut Block, tname: &ObjRef, wher: &mut Option<Expr>) {
 }
 
 /// Compile SelectExpression to CSelectExpression.
-pub(crate) fn c_select(b: &mut Block, mut x: SelectExpression) -> CSelectExpression {
+pub fn c_select(b: &mut Block, mut x: SelectExpression) -> CSelectExpression {
     let mut from = x.from.map(|mut te| c_te(b, &mut te));
     let table = match &from {
         Some(CTableExpression::Base(t)) => Some(t.clone()),
@@ -455,7 +455,7 @@ pub fn c_where(
 }
 
 /// Compile a TableExpression to CTableExpression.
-pub(crate) fn c_te(b: &Block, te: &mut TableExpression) -> CTableExpression {
+pub fn c_te(b: &Block, te: &mut TableExpression) -> CTableExpression {
     match te {
         TableExpression::Values(x) => {
             let mut cm = Vec::new();
@@ -476,7 +476,7 @@ pub(crate) fn c_te(b: &Block, te: &mut TableExpression) -> CTableExpression {
     }
 }
 /// Look for named table in database.
-pub(crate) fn table_look(b: &Block, name: &ObjRef) -> TablePtr {
+pub fn table_look(b: &Block, name: &ObjRef) -> TablePtr {
     if let Some(t) = b.db.get_table(name) {
         t
     } else {
@@ -484,7 +484,7 @@ pub(crate) fn table_look(b: &Block, name: &ObjRef) -> TablePtr {
     }
 }
 /// Look for named function in database and compile it if not already compiled.
-pub(crate) fn function_look(b: &Block, name: &ObjRef) -> FunctionPtr {
+pub fn function_look(b: &Block, name: &ObjRef) -> FunctionPtr {
     if let Some(r) = b.db.get_function(name) {
         let (compiled, src) = { (r.compiled.get(), r.source.clone()) };
         if !compiled {
@@ -519,7 +519,7 @@ pub(crate) fn function_look(b: &Block, name: &ObjRef) -> FunctionPtr {
     }
 }
 /// Lookup the column offset and DataType of a named column.
-pub(crate) fn name_to_col(b: &Block, name: &str) -> (usize, DataType) {
+pub fn name_to_col(b: &Block, name: &str) -> (usize, DataType) {
     if let Some(CTableExpression::Base(t)) = &b.from {
         let info = &t.info;
         if let Some(num) = info.get(name) {
@@ -533,7 +533,7 @@ pub(crate) fn name_to_col(b: &Block, name: &str) -> (usize, DataType) {
     panic!("Name '{}' not found", name)
 }
 /// Lookup the column number and DataType of a named column.
-pub(crate) fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
+pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
     if let Some(CTableExpression::Base(t)) = &b.from {
         let info = &t.info;
         if let Some(num) = info.get(name) {
@@ -547,7 +547,7 @@ pub(crate) fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
     panic!("Name '{}' not found", name)
 }
 /// Compile ExprCall to CExpPtr<Value>, checking parameter types.
-pub(crate) fn c_call(b: &Block, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value> {
+pub fn c_call(b: &Block, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value> {
     let fp: FunctionPtr = function_look(b, name);
     let mut pv: Vec<CExpPtr<Value>> = Vec::new();
     let mut pt: Vec<DataType> = Vec::new();
@@ -561,7 +561,7 @@ pub(crate) fn c_call(b: &Block, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr
     Box::new(cexp::Call { fp, pv })
 }
 /// Generate code to evaluate expression and push the value onto the stack.
-pub(crate) fn push(b: &mut Block, e: &mut Expr) -> DataType {
+pub fn push(b: &mut Block, e: &mut Expr) -> DataType {
     if b.parse_only {
         return NONE;
     }

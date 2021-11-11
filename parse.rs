@@ -11,9 +11,9 @@ use Instruction::*;
 /// exp_ parses an expression.
 pub struct Parser<'a> {
     /// Block information - local labels, jumps, instructions etc.
-    pub(crate) b: Block<'a>,
+    pub b: Block<'a>,
     /// Name of function being compiled ( None if batch ).
-    pub(crate) function_name: Option<&'a ObjRef>,
+    pub function_name: Option<&'a ObjRef>,
     /// Source SQL.
     source: &'a [u8],
     /// Index into source.
@@ -39,7 +39,7 @@ pub struct Parser<'a> {
 }
 impl<'a> Parser<'a> {
     /// Construct a new parser.
-    pub(crate) fn new(src: &'a str, db: &DB) -> Self {
+    pub fn new(src: &'a str, db: &DB) -> Self {
         let source = src.as_bytes();
         let mut result = Self {
             source,
@@ -99,7 +99,7 @@ impl<'a> Parser<'a> {
         }
     } // end fn statement
     /// Parse and execute a batch of statements.
-    pub(crate) fn batch(&mut self, rs: &mut dyn Query) {
+    pub fn batch(&mut self, rs: &mut dyn Query) {
         loop {
             while self.token != Token::EndOfFile && !self.test_id(b"GO") {
                 self.statement();
@@ -116,7 +116,7 @@ impl<'a> Parser<'a> {
         }
     }
     /// Parse the definition of a function.
-    pub(crate) fn parse_function(&mut self) {
+    pub fn parse_function(&mut self) {
         self.read(Token::LBra);
         while self.token == Token::Id {
             let name = self.id_ref();
@@ -431,18 +431,6 @@ impl<'a> Parser<'a> {
         let name = self.id();
         ObjRef { schema, name }
     }
-    /// Add an instruction to the instruction list.
-    pub(crate) fn add(&mut self, s: Instruction) {
-        if !self.b.parse_only {
-            self.b.ilist.push(s);
-        }
-    }
-    /// Add a Data Operation (DO) to the instruction list.
-    pub(crate) fn dop(&mut self, dop: DO) {
-        if !self.b.parse_only {
-            self.add(DataOp(Box::new(dop)));
-        }
-    }
     // Error handling.
     /// Get the function name or "batch" if no function.
     fn rname(&self) -> String {
@@ -453,7 +441,7 @@ impl<'a> Parser<'a> {
         }
     }
     /// Construct SqlError based on current line/column/rname.
-    pub(crate) fn make_error(&self, msg: String) -> SqlError {
+    pub fn make_error(&self, msg: String) -> SqlError {
         SqlError {
             line: self.prev_source_line,
             column: self.prev_source_column,
@@ -677,7 +665,7 @@ impl<'a> Parser<'a> {
     }
     fn exp_name(&self, exp: &Expr) -> String {
         match &exp.exp {
-            ExprIs::Local(num) => to_s(self.b.locals[*num]),
+            ExprIs::Local(num) => to_s(self.b.local_name(*num)),
             ExprIs::ColName(name) => name.to_string(),
             _ => "".to_string(),
         }
@@ -752,14 +740,14 @@ impl<'a> Parser<'a> {
         let se = self.select_expression(false);
         if !self.b.parse_only {
             let cte = c_select(&mut self.b, se);
-            self.add(Select(Box::new(cte)));
+            self.b.add(Select(Box::new(cte)));
         }
     }
     fn s_set(&mut self) {
         let se = self.select_expression(true);
         if !self.b.parse_only {
             let cte = c_select(&mut self.b, se);
-            self.add(Set(Box::new(cte)));
+            self.b.add(Set(Box::new(cte)));
         }
     }
     fn s_insert(&mut self) {
@@ -794,7 +782,7 @@ impl<'a> Parser<'a> {
                 }
             }
             let csrc = c_te(&self.b, &mut src);
-            self.dop(DO::Insert(t, cnums, csrc));
+            self.b.dop(DO::Insert(t, cnums, csrc));
         }
     }
     fn s_update(&mut self) {
@@ -835,7 +823,7 @@ impl<'a> Parser<'a> {
         self.read(Token::RBra);
         if !self.b.parse_only {
             push(&mut self.b, &mut exp);
-            self.add(Execute);
+            self.b.add(Execute);
         }
     }
     fn s_exec(&mut self) {
@@ -863,7 +851,7 @@ impl<'a> Parser<'a> {
         if !self.b.parse_only {
             let func = function_look(&self.b, &name);
             self.b.check_types(&func, &ptypes);
-            self.add(Call(func));
+            self.b.add(Call(func));
         }
     }
     fn s_for(&mut self) {
@@ -876,7 +864,7 @@ impl<'a> Parser<'a> {
             let mut cse = c_select(&mut self.b, se);
             let orderbylen = cse.orderby.len();
             if orderbylen == 0 {
-                self.add(ForInit(for_id, Box::new(cse.from.unwrap())));
+                self.b.add(ForInit(for_id, Box::new(cse.from.unwrap())));
                 start_id = self.b.get_loop_id();
                 let info = Box::new(ForNextInfo {
                     for_id,
@@ -884,19 +872,19 @@ impl<'a> Parser<'a> {
                     exps: cse.exps,
                     wher: cse.wher,
                 });
-                self.add(ForNext(break_id, info));
+                self.b.add(ForNext(break_id, info));
             } else {
                 let assigns = mem::take(&mut cse.assigns);
-                self.add(ForSortInit(for_id, Box::new(cse)));
+                self.b.add(ForSortInit(for_id, Box::new(cse)));
                 start_id = self.b.get_loop_id();
                 let info = Box::new((for_id, orderbylen, assigns));
-                self.add(ForSortNext(break_id, info));
+                self.b.add(ForSortNext(break_id, info));
             }
             let save = self.b.break_id;
             self.b.break_id = break_id;
             self.statement();
             self.b.break_id = save;
-            self.add(Jump(start_id));
+            self.b.add(Jump(start_id));
             self.b.set_jump(break_id);
         }
     }
@@ -924,7 +912,7 @@ impl<'a> Parser<'a> {
         }
         if !self.b.parse_only {
             let _source = self.source_from(source_start, self.token_start);
-            self.dop(DO::CreateTable(ti));
+            self.b.dop(DO::CreateTable(ti));
         }
     }
     fn create_index(&mut self) {
@@ -953,7 +941,8 @@ impl<'a> Parser<'a> {
                     panic!("index column name not found {}", cname);
                 }
             }
-            self.dop(DO::CreateIndex(IndexInfo { tname, iname, cols }));
+            self.b
+                .dop(DO::CreateIndex(IndexInfo { tname, iname, cols }));
         }
     }
     fn create_view(&mut self, alter: bool) {
@@ -964,7 +953,7 @@ impl<'a> Parser<'a> {
         let _se = self.select_expression(false);
         let source = self.source_from(source_start, self.token_start);
         if !self.b.parse_only {
-            self.dop(DO::CreateView(r, alter, source));
+            self.b.dop(DO::CreateView(r, alter, source));
         }
     }
     fn create_function(&mut self, alter: bool) {
@@ -979,7 +968,7 @@ impl<'a> Parser<'a> {
         self.b.parse_only = save2;
         if !self.b.parse_only {
             let source: String = self.source_from(source_start, self.token_space_start);
-            self.dop(DO::CreateFunction(rref, Rc::new(source), alter));
+            self.b.dop(DO::CreateFunction(rref, Rc::new(source), alter));
         }
     }
     fn s_create(&mut self) {
@@ -989,7 +978,7 @@ impl<'a> Parser<'a> {
             b"VIEW" => self.create_view(false),
             b"SCHEMA" => {
                 let name = self.id();
-                self.dop(DO::CreateSchema(name));
+                self.b.dop(DO::CreateSchema(name));
             }
             b"INDEX" => self.create_index(),
             _ => panic!("Unknown keyword"),
@@ -1007,25 +996,25 @@ impl<'a> Parser<'a> {
         match self.id_ref() {
             b"TABLE" => {
                 let tr = self.obj_ref();
-                self.dop(DO::DropTable(tr));
+                self.b.dop(DO::DropTable(tr));
             }
             b"VIEW" => {
                 let vr = self.obj_ref();
-                self.dop(DO::DropView(vr));
+                self.b.dop(DO::DropView(vr));
             }
             b"INDEX" => {
                 let ix = self.id();
                 self.read_id(b"ON");
                 let tr = self.obj_ref();
-                self.dop(DO::DropIndex(tr, ix));
+                self.b.dop(DO::DropIndex(tr, ix));
             }
             b"FN" => {
                 let fr = self.obj_ref();
-                self.dop(DO::DropFunction(fr));
+                self.b.dop(DO::DropFunction(fr));
             }
             b"SCHEMA" => {
                 let s = self.id();
-                self.dop(DO::DropSchema(s));
+                self.b.dop(DO::DropSchema(s));
             }
             _ => {
                 panic!("DROP : TABLE,VIEW.. expected");
@@ -1038,25 +1027,25 @@ impl<'a> Parser<'a> {
                 let s = self.id();
                 self.read_id(b"TO");
                 let t = self.id();
-                self.dop(DO::RenameSchema(s, t));
+                self.b.dop(DO::RenameSchema(s, t));
             }
             b"TABLE" => {
                 let o = self.obj_ref();
                 self.read_id(b"TO");
                 let n = self.obj_ref();
-                self.dop(DO::RenameTsble(o, n));
+                self.b.dop(DO::RenameTsble(o, n));
             }
             b"VIEW" => {
                 let o = self.obj_ref();
                 self.read_id(b"TO");
                 let n = self.obj_ref();
-                self.dop(DO::RenameView(o, n));
+                self.b.dop(DO::RenameView(o, n));
             }
             b"FN" => {
                 let o = self.obj_ref();
                 self.read_id(b"TO");
                 let n = self.obj_ref();
-                self.dop(DO::RenameFunction(o, n));
+                self.b.dop(DO::RenameFunction(o, n));
             }
             _ => {
                 panic!("RENAME : TABLE,VIEW.. expected");
@@ -1090,7 +1079,7 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        self.dop(DO::AlterTable(tr, list));
+        self.b.dop(DO::AlterTable(tr, list));
     }
     // Other statements.
     fn s_declare(&mut self) {
@@ -1109,12 +1098,12 @@ impl<'a> Parser<'a> {
         let break_id = self.b.get_jump_id();
         if !self.b.parse_only {
             let exp = c_bool(&self.b, &mut exp);
-            self.add(JumpIfFalse(break_id, exp));
+            self.b.add(JumpIfFalse(break_id, exp));
             let save = self.b.break_id;
             self.b.break_id = break_id;
             self.statement();
             self.b.break_id = save;
-            self.add(Jump(start_id));
+            self.b.add(Jump(start_id));
             self.b.set_jump(break_id);
         }
     }
@@ -1123,12 +1112,12 @@ impl<'a> Parser<'a> {
         let false_id = self.b.get_jump_id();
         if !self.b.parse_only {
             let exp = c_bool(&self.b, &mut exp);
-            self.add(JumpIfFalse(false_id, exp));
+            self.b.add(JumpIfFalse(false_id, exp));
         }
         self.statement();
         if self.test_id(b"ELSE") {
             let end_id = self.b.get_jump_id();
-            self.add(Jump(end_id)); // Skip over the else clause
+            self.b.add(Jump(end_id)); // Skip over the else clause
             self.b.set_jump(false_id);
             self.statement();
             self.b.set_jump(end_id);
@@ -1139,14 +1128,14 @@ impl<'a> Parser<'a> {
     fn s_goto(&mut self) {
         let label = self.id_ref();
         let to = self.b.get_goto_label(label);
-        self.add(Jump(to));
+        self.b.add(Jump(to));
     }
     fn s_break(&mut self) {
         let break_id = self.b.break_id;
         if break_id == usize::MAX {
             panic!("No enclosing loop for break");
         }
-        self.add(Jump(break_id));
+        self.b.add(Jump(break_id));
     }
     fn s_return(&mut self) {
         if self.b.return_type != NONE {
@@ -1157,16 +1146,16 @@ impl<'a> Parser<'a> {
                 if t != rt {
                     panic!("Return type mismatch expected {:?} got {:?}", rt, t)
                 }
-                self.add(PopToLocal(self.b.param_count));
+                self.b.add(PopToLocal(self.b.param_count));
             }
         }
-        self.add(Return);
+        self.b.add(Return);
     }
     fn s_throw(&mut self) {
         let mut msg = self.exp();
         if !self.b.parse_only {
             push(&mut self.b, &mut msg);
-            self.add(Throw);
+            self.b.add(Throw);
         }
     }
     fn s_begin(&mut self) {
@@ -1177,11 +1166,11 @@ impl<'a> Parser<'a> {
 } // end impl Parser
 
 /// Convert byte ref to &str.
-pub(crate) fn tos(s: &[u8]) -> &str {
+pub fn tos(s: &[u8]) -> &str {
     str::from_utf8(s).unwrap()
 }
 
 /// Convert byte ref to String.
-pub(crate) fn to_s(s: &[u8]) -> String {
+pub fn to_s(s: &[u8]) -> String {
     str::from_utf8(s).unwrap().to_string()
 }

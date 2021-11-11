@@ -11,7 +11,7 @@ pub struct EvalEnv<'r> {
 }
 impl<'r> EvalEnv<'r> {
     /// Construct a new EvalEnv.
-    pub(crate) fn new(db: DB, qy: &'r mut dyn Query) -> Self {
+    pub fn new(db: DB, qy: &'r mut dyn Query) -> Self {
         EvalEnv {
             stack: Vec::new(),
             bp: 0,
@@ -21,14 +21,14 @@ impl<'r> EvalEnv<'r> {
         }
     }
     /// Allocate and initialise local variables.
-    pub(crate) fn alloc_locals(&mut self, dt: &[DataType], param_count: usize) {
+    pub fn alloc_locals(&mut self, dt: &[DataType], param_count: usize) {
         for d in dt.iter().skip(param_count) {
             let v = Value::default(*d);
             self.stack.push(v);
         }
     }
     /// Execute list of instructions.
-    pub(crate) fn go(&mut self, ilist: &[Instruction]) {
+    pub fn go(&mut self, ilist: &[Instruction]) {
         let n = ilist.len();
         let mut ip = 0;
         while ip < n {
@@ -87,7 +87,7 @@ impl<'r> EvalEnv<'r> {
         }
     } // end fn go
     /// Call a function.
-    pub(crate) fn call(&mut self, r: &Function) {
+    pub fn call(&mut self, r: &Function) {
         self.call_depth += 1;
         /*
             if let Some(n) = stacker::remaining_stack()

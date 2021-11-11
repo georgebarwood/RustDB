@@ -21,24 +21,24 @@ pub struct Table {
     pub file: Rc<SortedFile>,
 
     /// Type information about the columns.
-    pub(crate) info: Rc<ColInfo>,
+    pub info: Rc<ColInfo>,
 
     /// List of indexes.
     ixlist: RefCell<IxList>,
 
     /// Table id in sys.Table.
-    pub(crate) id: i64,
+    pub id: i64,
 
     /// Row id allocator.
-    pub(crate) id_gen: Cell<i64>,
+    pub id_gen: Cell<i64>,
 
     /// Row id allocator has changed.
-    pub(crate) id_gen_dirty: Cell<bool>,
+    pub id_gen_dirty: Cell<bool>,
 }
 
 impl Table {
     /// Construct a table with specified info.
-    pub(crate) fn new(id: i64, root_page: u64, id_gen: i64, info: Rc<ColInfo>) -> TablePtr {
+    pub fn new(id: i64, root_page: u64, id_gen: i64, info: Rc<ColInfo>) -> TablePtr {
         let rec_size = info.total;
         let key_size = 8;
         let file = Rc::new(SortedFile::new(rec_size, key_size, root_page));
@@ -53,7 +53,7 @@ impl Table {
         })
     }
     /// Save or Rollback underlying files.
-    pub(crate) fn save(&self, db: &DB, op: SaveOp) {
+    pub fn save(&self, db: &DB, op: SaveOp) {
         self.file.save(db, op);
         for (f, _) in &*self.ixlist.borrow() {
             f.save(db, op);
@@ -315,7 +315,7 @@ impl ColInfo {
         }
     }
     /// Construct a new ColInfo struct using supplied list of column names and types.
-    pub(crate) fn new(name: ObjRef, ct: &[(&str, DataType)]) -> Self {
+    pub fn new(name: ObjRef, ct: &[(&str, DataType)]) -> Self {
         let mut result = Self::empty(name);
         for (n, t) in ct {
             result.add((*n).to_string(), *t);

@@ -44,7 +44,7 @@ impl Value {
             }
             _ => {
                 let size = data_size(typ);
-                Value::Int(util::get(data, off, size) as i64)
+                Value::Int(util::iget(data, off, size) as i64)
             }
         };
         (val, code)

@@ -32,7 +32,7 @@ impl SortedFile {
         }
     }
     /// Save changes to underlying storage.
-    pub(crate) fn save(&self, db: &DB, op: SaveOp) {
+    pub fn save(&self, db: &DB, op: SaveOp) {
         if op == SaveOp::RollBack {
             self.rollback();
             return;
@@ -57,7 +57,7 @@ impl SortedFile {
         }
     }
     /// Clear the cache, changes are discarded instead of being saved.
-    pub(crate) fn rollback(&self) {
+    pub fn rollback(&self) {
         self.pages.borrow_mut().clear();
         self.dirty_pages.borrow_mut().clear();
     }

@@ -45,19 +45,19 @@ pub type DataSource = Box<dyn Iterator<Item = (PagePtr, usize)>>;
 
 /// State for FOR loop (non-sorted case).
 pub struct ForState {
-    pub(crate) data_source: DataSource,
+    pub data_source: DataSource,
 }
 /// State for FOR loop (sorted case).
 pub struct ForSortState {
-    pub(crate) ix: usize,
-    pub(crate) rows: Vec<Vec<Value>>,
+    pub ix: usize,
+    pub rows: Vec<Vec<Value>>,
 }
 /// Info for ForNext Inst.
 pub struct ForNextInfo {
-    pub(crate) for_id: usize,
-    pub(crate) assigns: Assigns,
-    pub(crate) exps: Vec<CExpPtr<Value>>,
-    pub(crate) wher: Option<CExpPtr<bool>>,
+    pub for_id: usize,
+    pub assigns: Assigns,
+    pub exps: Vec<CExpPtr<Value>>,
+    pub wher: Option<CExpPtr<bool>>,
 }
 /// Compiled Table Expression.
 pub enum CTableExpression {
@@ -80,12 +80,12 @@ impl CTableExpression {
 /// Compiled Select Expression.
 pub struct CSelectExpression {
     pub colnames: Vec<String>,
-    pub(crate) assigns: Assigns,
-    pub(crate) exps: Vec<CExpPtr<Value>>,
-    pub(crate) from: Option<CTableExpression>,
-    pub(crate) wher: Option<CExpPtr<bool>>,
-    pub(crate) orderby: Vec<CExpPtr<Value>>,
-    pub(crate) desc: Vec<bool>,
+    pub assigns: Assigns,
+    pub exps: Vec<CExpPtr<Value>>,
+    pub from: Option<CTableExpression>,
+    pub wher: Option<CExpPtr<bool>>,
+    pub orderby: Vec<CExpPtr<Value>>,
+    pub desc: Vec<bool>,
 }
 /// Database Operation
 pub enum DO {
