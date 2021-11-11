@@ -11,13 +11,20 @@ use Instruction::*;
 /// exp_ parses an expression.
 pub struct Parser<'a> {
     pub(crate) function_name: Option<&'a ObjRef>,
-    source: &'a [u8], // Source SQL.
-    source_ix: usize, // Index into source.
-    cc: u8,           // Current input char.
-    token: Token,     // Current token.
+    /// Source SQL.
+    source: &'a [u8],
+    /// Index into source.
+    source_ix: usize,
+    /// Current input byte (char).
+    cc: u8,
+    /// Current token.
+    token: Token,
+    /// Source index of start of current token.
     token_start: usize,
+    /// Source index of start of current token (including spacce).
     token_space_start: usize,
-    cs: &'a [u8], // source slice for current token ( but string literals are in ts )
+    /// source slice for current token ( but string literals are in ts )
+    cs: &'a [u8],
     ts: String,
     source_column: usize,
     source_line: usize,
@@ -26,8 +33,11 @@ pub struct Parser<'a> {
     prev_source_line: usize,
 
     pub(crate) parse_only: bool,
+    /// Block information - local labels, jumps, instructions etc.
     pub(crate) b: Block<'a>,
+    /// Database.
     pub(crate) db: DB,
+    /// Current table in scope by FROM clause( or UPDATE statment ).
     pub(crate) from: Option<CTableExpression>,
 }
 impl<'a> Parser<'a> {
@@ -1028,10 +1038,6 @@ impl<'a> Parser<'a> {
                 self.read_id(b"ON");
                 let tr = self.obj_ref();
                 self.dop(DO::DropIndex(tr, ix));
-            }
-            b"PROCEDURE" => {
-                let pr = self.obj_ref();
-                self.dop(DO::DropProcedure(pr));
             }
             b"FUNCTION" => {
                 let fr = self.obj_ref();

@@ -1,6 +1,5 @@
 use crate::*;
-/// Iterator that yields references to page data.
-pub type DataSource = Box<dyn Iterator<Item = (PagePtr, usize)>>;
+
 /// Instruction.
 pub enum Instruction {
     PushConst(Value),
@@ -25,6 +24,25 @@ pub enum Instruction {
     PushFloat(CExpPtr<f64>),
     PushBool(CExpPtr<bool>),
 }
+
+/// Compiled expression which yields type T when evaluated.
+pub trait CExp<T> {
+    fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> T;
+}
+/// Pointer to CExp.
+pub type CExpPtr<T> = Box<dyn CExp<T>>;
+
+/// Function that compiles a builtin function call ( see Database::register ).
+#[derive(Clone, Copy)]
+pub enum CompileFunc {
+    Value(fn(&Parser, &mut [Expr]) -> CExpPtr<Value>),
+    Int(fn(&Parser, &mut [Expr]) -> CExpPtr<i64>),
+    Float(fn(&Parser, &mut [Expr]) -> CExpPtr<f64>),
+}
+
+/// Iterator that yields references to page data.
+pub type DataSource = Box<dyn Iterator<Item = (PagePtr, usize)>>;
+
 /// State for FOR loop (non-sorted case).
 pub struct ForState {
     pub(crate) data_source: DataSource,
@@ -86,7 +104,6 @@ pub enum DO {
     DropTable(ObjRef),
     DropView(ObjRef),
     DropIndex(ObjRef, String),
-    DropProcedure(ObjRef),
     DropFunction(ObjRef),
     Insert(TablePtr, Vec<usize>, CTableExpression),
     Update(

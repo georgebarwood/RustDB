@@ -2,19 +2,6 @@ use crate::*;
 use std::{mem, ops};
 use Instruction::*;
 
-/// Compiled expression which yields type T when evaluated.
-pub trait CExp<T> {
-    fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> T;
-}
-/// Pointer to CExp.
-pub type CExpPtr<T> = Box<dyn CExp<T>>;
-/// Function that compiles a builtin function call ( see Database::register ).
-#[derive(Clone, Copy)]
-pub enum CompileFunc {
-    Value(fn(&Parser, &mut [Expr]) -> CExpPtr<Value>),
-    Int(fn(&Parser, &mut [Expr]) -> CExpPtr<i64>),
-    Float(fn(&Parser, &mut [Expr]) -> CExpPtr<f64>),
-}
 /// Calculate various attributes such as data_type, is_constant etc.
 fn check(p: &Parser, e: &mut Expr) {
     if e.checked {
@@ -389,7 +376,7 @@ pub(crate) fn c_update(
     p.dop(DO::Update(se, from.unwrap(), w));
 }
 
-/// Complete DELETE statement.
+/// Compile DELETE statement.
 pub(crate) fn c_delete(p: &mut Parser, tname: &ObjRef, wher: &mut Option<Expr>) {
     let t = table_look(p, tname);
     let from = Some(CTableExpression::Base(t.clone()));

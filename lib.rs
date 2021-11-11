@@ -5,6 +5,8 @@
 //!
 //!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
 //!
+//!Use FN rather than FUNCTION in CREATE FUNCTION.
+//!
 //!Sort out error handling for PARSEINT etc.
 //!
 //!Handle HTTP IO in parallel. Read-only transactions.
@@ -81,9 +83,9 @@ pub mod util;
 pub mod builtin;
 /// Storage of variable length values : ByteStorage.
 pub mod bytes;
-/// Compiled expressions.
+/// Structs that implement CExp trait.
 pub mod cexp;
-/// Compile parsed expressions, checking types.
+/// Functions to compile parsed expressions, checking types.
 pub mod compile;
 /// Instruction execution.
 pub mod exec;
