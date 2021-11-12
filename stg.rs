@@ -96,7 +96,7 @@ impl CompactFile {
         // Calculate number of extension pages needed.
         let ext = self.ext(size);
         // Read the current starter info.
-        let off: u64 = Self::HSIZE + (self.sp_size as u64) * lpnum;
+        let off = Self::HSIZE + (self.sp_size as u64) * lpnum;
         let mut starter = vec![0_u8; self.sp_size];
         self.read(off, &mut starter);
         let old_size = util::get(&starter, 0, 2) as usize;

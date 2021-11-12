@@ -45,9 +45,9 @@ pub fn get(data: &[u8], off: usize, n: usize) -> u64 {
 pub fn iget(data: &[u8], off: usize, n: usize) -> i64 {
     let mut x: u64 = get(data, off, n);
     if n < 8 {
-        let sign_bit: u64 = 1_u64 << (n * 8 - 1);
+        let sign_bit = 1 << (n * 8 - 1);
         if (sign_bit & x) != 0 {
-            x += 0xffff_ffff_ffff_ffff << (n * 8);
+            x += u64::MAX << (n * 8);
         }
     }
     x as i64

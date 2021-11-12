@@ -1,4 +1,6 @@
 use crate::*;
+use compile::*;
+
 /// Registers builtin functions - called from `Database`::new.
 pub fn register_builtins(db: &DB) {
     let list = [
@@ -34,7 +36,7 @@ pub fn check_types(b: &Block, args: &mut [Expr], dk: &[DataKind]) {
         panic!("Wrong number of args");
     }
     for (i, e) in args.iter_mut().enumerate() {
-        let k = get_kind(b, e);
+        let k = b.kind(e);
         if k != dk[i] {
             panic!(
                 "Builtin function arg {} type mismatch expected {:?} got {:?}",

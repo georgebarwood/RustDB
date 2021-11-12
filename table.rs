@@ -1,4 +1,5 @@
 use crate::*;
+use compile::*;
 use std::collections::BTreeMap;
 use util::SmallSet;
 
@@ -109,7 +110,7 @@ impl Table {
         }
         if best_match > 0 {
             // Get the key values for the chosen index.
-            let clist: &[usize] = &list[best_index].1;
+            let clist = &list[best_index].1;
             let mut cols = SmallSet::new();
             for col in clist.iter().take(best_match) {
                 cols.insert(*col);

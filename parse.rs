@@ -1,4 +1,5 @@
 use crate::*;
+use compile::*;
 use std::{mem, str};
 use Instruction::*;
 
@@ -771,7 +772,7 @@ impl<'a> Parser<'a> {
         }
         let mut src = self.insert_expression(cnames.len());
         if !self.b.parse_only {
-            let t = table_look(&self.b, &tr);
+            let t = c_table(&self.b, &tr);
             let mut cnums: Vec<usize> = Vec::new();
             {
                 for cname in &cnames {
@@ -830,7 +831,7 @@ impl<'a> Parser<'a> {
     fn s_check(&mut self) {
         let name = self.obj_ref();
         if !self.b.parse_only {
-            function_look(&self.b, &name);
+            c_function(&self.b, &name);
         }
     }
     fn s_exec(&mut self) {
@@ -856,7 +857,7 @@ impl<'a> Parser<'a> {
             self.read(Token::RBra);
         }
         if !self.b.parse_only {
-            let func = function_look(&self.b, &name);
+            let func = c_function(&self.b, &name);
             self.b.check_types(&func, &ptypes);
             self.b.add(Call(func));
         }
@@ -865,35 +866,17 @@ impl<'a> Parser<'a> {
         let se: SelectExpression = self.select_expression(true);
         let for_id = self.b.local_typ.len();
         self.b.local_typ.push(NONE);
+        let start_id = self.b.get_jump_id();
+        let break_id = self.b.get_jump_id();
         if !self.b.parse_only {
-            let start_id;
-            let break_id = self.b.get_jump_id();
-            let mut cse = c_select(&mut self.b, se);
-            let orderbylen = cse.orderby.len();
-            if orderbylen == 0 {
-                self.b.add(ForInit(for_id, Box::new(cse.from.unwrap())));
-                start_id = self.b.get_loop_id();
-                let info = Box::new(ForNextInfo {
-                    for_id,
-                    assigns: cse.assigns,
-                    exps: cse.exps,
-                    wher: cse.wher,
-                });
-                self.b.add(ForNext(break_id, info));
-            } else {
-                let assigns = mem::take(&mut cse.assigns);
-                self.b.add(ForSortInit(for_id, Box::new(cse)));
-                start_id = self.b.get_loop_id();
-                let info = Box::new((for_id, orderbylen, assigns));
-                self.b.add(ForSortNext(break_id, info));
-            }
-            let save = self.b.break_id;
-            self.b.break_id = break_id;
-            self.statement();
-            self.b.break_id = save;
-            self.b.add(Jump(start_id));
-            self.b.set_jump(break_id);
+            c_for(&mut self.b, se, start_id, break_id, for_id);
         }
+        let save = self.b.break_id;
+        self.b.break_id = break_id;
+        self.statement();
+        self.b.break_id = save;
+        self.b.add(Jump(start_id));
+        self.b.set_jump(break_id);
     }
 
     // ****************** Parse Create statements.
@@ -940,7 +923,7 @@ impl<'a> Parser<'a> {
         }
         if !self.b.parse_only {
             let mut cols = Vec::new();
-            let table = table_look(&self.b, &tname);
+            let table = c_table(&self.b, &tname);
             for cname in &cnames {
                 if let Some(cnum) = table.info.colmap.get(cname) {
                     cols.push(*cnum);

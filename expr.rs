@@ -248,25 +248,31 @@ impl<'a> Block<'a> {
         }
         self.local_map.insert(name, local_id);
     }
+    /// Get the number of a local variable from a name.
     pub fn get_local(&self, name: &[u8]) -> Option<&usize> {
         self.local_map.get(name)
     }
+    /// Get the name of a local variable from a number.
     pub fn local_name(&self, num: usize) -> &[u8] {
         self.locals[num]
     }
+    /// Get a local jump id.
     pub fn get_jump_id(&mut self) -> usize {
         let result = self.jumps.len();
         self.jumps.push(usize::MAX);
         result
     }
+    /// Set instruction location of jump id.
     pub fn set_jump(&mut self, jump_id: usize) {
         self.jumps[jump_id] = self.ilist.len();
     }
+    /// Get a local jump id to current location.
     pub fn get_loop_id(&mut self) -> usize {
         let result = self.get_jump_id();
         self.set_jump(result);
         result
     }
+    /// Get a number for a local goto label.
     pub fn get_goto_label(&mut self, s: &'a [u8]) -> usize {
         if let Some(jump_id) = self.labels.get(s) {
             *jump_id
@@ -276,6 +282,7 @@ impl<'a> Block<'a> {
             jump_id
         }
     }
+    /// Set the local for a local goto lable.
     pub fn set_goto_label(&mut self, s: &'a [u8]) {
         if let Some(jump_id) = self.labels.get(s) {
             let j = *jump_id;
@@ -287,5 +294,12 @@ impl<'a> Block<'a> {
             let jump_id = self.get_loop_id();
             self.labels.insert(s, jump_id);
         }
+    }
+
+    /// Get the DataKind of an expression.
+    pub fn kind(&self, e: &mut Expr) -> DataKind
+    {
+      compile::c_check(self, e);
+      data_kind(e.data_type)
     }
 }

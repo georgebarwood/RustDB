@@ -3,8 +3,6 @@
 //!
 //!multipart requests ( for file upload ).
 //!
-//!Bultin function to check all functions compile.
-//!
 //!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
 //!
 //!Use FN rather than FUNCTION in CREATE FUNCTION.
@@ -59,7 +57,6 @@
 
 use crate::{
     bytes::ByteStorage,
-    compile::*,
     exec::EvalEnv,
     expr::*,
     page::{Page, PagePtr, PAGE_SIZE},
