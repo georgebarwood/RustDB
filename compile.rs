@@ -123,18 +123,6 @@ pub fn c_check(b: &Block, e: &mut Expr) {
     }
     e.checked = true;
 }
-/// Get DataType of an expression.
-fn get_type(b: &Block, e: &mut Expr) -> DataType {
-    c_check(b, e);
-    e.data_type
-}
-/// Get DataKind of an expression.
-/*
-pub fn get_kind(b: &Block, e: &mut Expr) -> DataKind {
-    check(b, e);
-    data_kind(e.data_type)
-}
-*/
 /// Compile a call to a builtin function that returns a Value.
 fn c_builtin_value(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<Value> {
     if let Some((_dk, CompileFunc::Value(cf))) = b.db.builtins.borrow().get(name) {
@@ -552,26 +540,26 @@ pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
 pub fn c_call(b: &Block, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value> {
     let fp = c_function(b, name);
     let mut pv = Vec::new();
-    let mut pt = Vec::new();
+    let mut pk = Vec::new();
     for e in parms {
-        pt.push(get_type(b, e));
+        pk.push(b.kind(e));
         let ce = c_value(b, e);
         pv.push(ce);
     }
-    b.check_types(&fp, &pt);
+    b.check_types(&fp, &pk);
     Box::new(cexp::Call { fp, pv })
 }
 /// Generate code to evaluate expression and push the value onto the stack.
-pub fn push(b: &mut Block, e: &mut Expr) -> DataType {
+pub fn push(b: &mut Block, e: &mut Expr) -> DataKind {
     if b.parse_only {
-        return NONE;
+        return DataKind::None;
     }
-    let t = get_type(b, e);
+    let k = b.kind(e);
     match &mut e.exp {
         ExprIs::Const(x) => {
             b.add(PushConst((*x).clone()));
         }
-        ExprIs::Binary(_, _, _) => match data_kind(t) {
+        ExprIs::Binary(_, _, _) => match k {
             DataKind::Int => {
                 let ce = c_int(b, e);
                 b.add(PushInt(ce));
@@ -606,7 +594,7 @@ pub fn push(b: &mut Block, e: &mut Expr) -> DataType {
             b.add(PushValue(ce));
         }
     }
-    t
+    k
 }
 
 /// Compile FOR statement.

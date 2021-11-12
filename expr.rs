@@ -225,13 +225,13 @@ impl<'a> Block<'a> {
             self.add(DataOp(Box::new(dop)));
         }
     }
-    pub fn check_types(&self, r: &FunctionPtr, ptypes: &[DataType]) {
-        if ptypes.len() != r.param_count {
+    pub fn check_types(&self, r: &FunctionPtr, pkinds: &[DataKind]) {
+        if pkinds.len() != r.param_count {
             panic!("param count mismatch");
         }
-        for (i, pt) in ptypes.iter().enumerate() {
+        for (i, pk) in pkinds.iter().enumerate() {
             let ft = data_kind(r.local_typ[i]);
-            let et = data_kind(*pt);
+            let et = *pk;
             if ft != et {
                 panic!("param type mismatch expected {:?} got {:?}", ft, et);
             }
@@ -297,9 +297,8 @@ impl<'a> Block<'a> {
     }
 
     /// Get the DataKind of an expression.
-    pub fn kind(&self, e: &mut Expr) -> DataKind
-    {
-      compile::c_check(self, e);
-      data_kind(e.data_type)
+    pub fn kind(&self, e: &mut Expr) -> DataKind {
+        compile::c_check(self, e);
+        data_kind(e.data_type)
     }
 }

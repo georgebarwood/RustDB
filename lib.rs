@@ -5,8 +5,6 @@
 //!
 //!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
 //!
-//!Use FN rather than FUNCTION in CREATE FUNCTION.
-//!
 //!Sort out error handling for PARSEINT etc.
 //!
 //!Handle HTTP IO in parallel. Read-only transactions.

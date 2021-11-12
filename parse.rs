@@ -846,19 +846,19 @@ impl<'a> Parser<'a> {
             name: pname,
         };
         self.read(Token::LBra);
-        let mut ptypes = Vec::new();
+        let mut pkinds = Vec::new();
         if !self.test(Token::RBra) {
             let mut e = self.exp();
-            ptypes.push(push(&mut self.b, &mut e));
+            pkinds.push(push(&mut self.b, &mut e));
             while self.test(Token::Comma) {
                 let mut e = self.exp();
-                ptypes.push(push(&mut self.b, &mut e));
+                pkinds.push(push(&mut self.b, &mut e));
             }
             self.read(Token::RBra);
         }
         if !self.b.parse_only {
             let func = c_function(&self.b, &name);
-            self.b.check_types(&func, &ptypes);
+            self.b.check_types(&func, &pkinds);
             self.b.add(Call(func));
         }
     }
@@ -1131,10 +1131,10 @@ impl<'a> Parser<'a> {
         if self.b.return_type != NONE {
             let mut e = self.exp();
             if !self.b.parse_only {
-                let t = data_kind(push(&mut self.b, &mut e));
-                let rt = data_kind(self.b.return_type);
-                if t != rt {
-                    panic!("Return type mismatch expected {:?} got {:?}", rt, t)
+                let k = push(&mut self.b, &mut e);
+                let rk = data_kind(self.b.return_type);
+                if k != rk {
+                    panic!("Return type mismatch expected {:?} got {:?}", rk, k)
                 }
                 self.b.add(PopToLocal(self.b.param_count));
             }
