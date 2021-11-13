@@ -88,6 +88,8 @@ pub mod compile;
 pub mod exec;
 /// Expression types, result of parsing.
 pub mod expr;
+/// Under development.
+pub mod genquery;
 /// Initial SQL
 pub mod init;
 /// Page for SortedFile.
@@ -413,6 +415,12 @@ pub trait Query {
     /// Get the error string.
     fn get_error(&mut self) -> String {
         String::new()
+    }
+    fn fileattr(&mut self, _k: i64, _x: i64) -> Rc<String> {
+        Rc::new(String::new())
+    }
+    fn filecontent(&mut self, _k: i64) -> Rc<Vec<u8>> {
+        Rc::new(Vec::new())
     }
 }
 /// Query where output is printed to console (used for initialisation ).

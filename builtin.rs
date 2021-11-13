@@ -5,6 +5,12 @@ use compile::*;
 pub fn register_builtins(db: &DB) {
     let list = [
         ("ARG", DataKind::String, CompileFunc::Value(c_arg)),
+        ("FILEATTR", DataKind::String, CompileFunc::Value(c_fileattr)),
+        (
+            "FILECONTENT",
+            DataKind::Binary,
+            CompileFunc::Value(c_filecontent),
+        ),
         ("GLOBAL", DataKind::Int, CompileFunc::Int(c_global)),
         ("REPLACE", DataKind::String, CompileFunc::Value(c_replace)),
         (
@@ -208,5 +214,44 @@ impl CExp<Value> for Arg {
         let s = self.s.eval(ee, d).str();
         let result = ee.qy.arg(k, &s);
         Value::String(result)
+    }
+}
+
+/////////////////////////////
+/// Compile call to FILEATTR.
+fn c_fileattr(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
+    check_types(b, args, &[DataKind::Int, DataKind::Int]);
+    let k = c_int(b, &mut args[0]);
+    let x = c_int(b, &mut args[1]);
+    Box::new(FileAttr { k, x })
+}
+struct FileAttr {
+    k: CExpPtr<i64>,
+    x: CExpPtr<i64>,
+}
+impl CExp<Value> for FileAttr {
+    fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
+        let k = self.k.eval(ee, d);
+        let x = self.x.eval(ee, d);
+        let result = ee.qy.fileattr(k, x);
+        Value::String(result)
+    }
+}
+
+/////////////////////////////
+/// Compile call to FILECONTENT.
+fn c_filecontent(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
+    check_types(b, args, &[DataKind::Int]);
+    let k = c_int(b, &mut args[0]);
+    Box::new(FileContent { k })
+}
+struct FileContent {
+    k: CExpPtr<i64>,
+}
+impl CExp<Value> for FileContent {
+    fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
+        let k = self.k.eval(ee, d);
+        let result = ee.qy.filecontent(k);
+        Value::Binary(result)
     }
 }

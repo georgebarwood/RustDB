@@ -8,7 +8,7 @@ pub struct WebQuery {
     pub path: Rc<String>,
     pub query: HashMap<String, Rc<String>>,
     pub form: HashMap<String, Rc<String>>,
-
+    pub parts: Vec<Part>,
     pub err: String,
     pub output: Vec<u8>,
     pub status_code: String,
@@ -22,8 +22,12 @@ impl WebQuery {
         let (method, path, query, _version) = hp.read_request();
         let _input_headers = hp.read_headers();
         let mut form = HashMap::new();
+        let mut parts = Vec::new();
+        println!("content_type='{}'", hp.content_type);
         if hp.content_type == "application/x-www-form-urlencoded" {
             form = hp.read_form();
+        } else if hp.content_type.starts_with("multipart/form-data") {
+            parts = hp.read_multipart();
         } else {
             let _content = hp.read_content();
         }
@@ -42,6 +46,7 @@ impl WebQuery {
             path,
             query,
             form,
+            parts,
             err: String::new(),
             now,
         }
@@ -172,6 +177,7 @@ struct HttpRequestParser<'a> {
     end_content: usize, // End of content.
     content_length: usize,
     content_type: String,
+    eof: bool,
 }
 impl<'a> HttpRequestParser<'a> {
     pub fn new(stream: &'a TcpStream) -> Self {
@@ -185,11 +191,13 @@ impl<'a> HttpRequestParser<'a> {
             end_content: usize::MAX,
             content_length: 0,
             content_type: String::new(),
+            eof: false,
         }
     }
     fn get_byte(&mut self) -> u8 {
         if self.base + self.index == self.end_content {
             self.index += 1;
+            self.eof = true;
             return b' ';
         }
         if self.index == self.count {
@@ -210,7 +218,7 @@ impl<'a> HttpRequestParser<'a> {
             }
         }
     }
-    fn read_to(&mut self, to: u8) -> String {
+    fn read_to_bytes(&mut self, to: u8) -> Vec<u8> {
         let mut result = Vec::new();
         loop {
             let b = self.get_byte();
@@ -223,7 +231,11 @@ impl<'a> HttpRequestParser<'a> {
             }
             result.push(b);
         }
-        String::from_utf8(result).unwrap()
+        result
+    }
+    fn read_to(&mut self, to: u8) -> String {
+        let bytes = self.read_to_bytes(to);
+        String::from_utf8(bytes).unwrap()
     }
     fn decode(&mut self, b: u8) -> u8 {
         if b == b'%' {
@@ -335,4 +347,66 @@ impl<'a> HttpRequestParser<'a> {
         self.end_content = self.base + self.index + self.content_length;
         self.read_map()
     }
+    pub fn read_multipart(&mut self) -> Vec<Part> {
+        /* Typical multipart body would be:
+        ------WebKitFormBoundaryVXXOTFUWdfGpOcFK
+        Content-Disposition: form-data; name="f1"; filename="test.txt"
+        Content-Type: text/plain
+
+        Hello there
+
+        ------WebKitFormBoundaryVXXOTFUWdfGpOcFK
+        Content-Disposition: form-data; name="submit"
+
+        Upload
+        ------WebKitFormBoundaryVXXOTFUWdfGpOcFK--
+        */
+        self.end_content = self.base + self.index + self.content_length;
+
+        let result = Vec::new();
+        let seperator = self.read_to_bytes(13);
+
+        /* Now need to repeated read multipart headers, then body.
+           Each body is terminated by the seperator.
+        */
+        let mut ok = true;
+        while ok {
+            let _headers = self.read_headers();
+            println!("headers={:?}", _headers);
+            let mut body = Vec::new();
+            ok = false;
+            while !self.eof {
+                let b = self.get_byte();
+                body.push(b);
+                // Check to see if we matched separator
+                if ends_with(&body, &seperator) {
+                    println!("Got seperator");
+                    let b = self.get_byte();
+                    ok = b == 13;
+                    break;
+                }
+            }
+        }
+        while !self.eof {
+            self.get_byte();
+        }
+        result
+    }
+}
+
+fn ends_with(body: &[u8], sep: &[u8]) -> bool {
+    let bn = body.len();
+    let sn = sep.len();
+    if bn < sn {
+        return false;
+    }
+    if &body[bn - sn..bn] == sep {
+        return true;
+    }
+    false
+}
+
+pub struct Part {
+    pub filename: Rc<String>,
+    pub data: Rc<Vec<u8>>,
 }
