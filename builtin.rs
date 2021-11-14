@@ -21,6 +21,7 @@ pub fn register_builtins(db: &DB) {
             CompileFunc::Value(c_substring),
         ),
         ("LEN", DataKind::Int, CompileFunc::Int(c_len)),
+        ("BINLEN", DataKind::Int, CompileFunc::Int(c_bin_len)),
         ("PARSEINT", DataKind::Int, CompileFunc::Int(c_parse_int)),
         (
             "PARSEFLOAT",
@@ -82,6 +83,26 @@ impl CExp<i64> for Len {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> i64 {
         let s = self.s.eval(e, d).str();
         s.len() as i64
+    }
+}
+/////////////////////////////
+/// Compile call to BINLEN.
+fn c_bin_len(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[DataKind::Binary]);
+    let bv = c_value(b, &mut args[0]);
+    Box::new(BinLen { bv })
+}
+struct BinLen {
+    bv: CExpPtr<Value>,
+}
+impl CExp<i64> for BinLen {
+    fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> i64 {
+        let x = self.bv.eval(e, d);
+        if let Value::Binary(xx) = x {
+            xx.len() as i64
+        } else {
+            0
+        }
     }
 }
 /////////////////////////////

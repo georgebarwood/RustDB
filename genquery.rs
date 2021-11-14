@@ -2,16 +2,15 @@ use crate::*;
 
 /// http Request/Response.
 pub struct GenQuery {
-    pub method: String,
     pub path: String,
     pub query: HashMap<String, String>,
     pub form: HashMap<String, String>,
     pub cookies: HashMap<String, String>,
     pub parts: Vec<Part>,
     pub err: String,
-    pub output: Vec<u8>,
     pub status_code: u16,
     pub headers: Vec<(String, String)>,
+    pub output: Vec<u8>,
     pub now: i64, // Micro-seconds since January 1, 1970 0:00:00 UTC
 }
 
@@ -25,7 +24,6 @@ impl GenQuery {
         let headers = Vec::new();
         let status_code = 200;
         Self {
-            method: String::new(),
             path: String::new(),
             query: HashMap::new(),
             form: HashMap::new(),
@@ -47,7 +45,6 @@ impl GenQuery {
 impl Query for GenQuery {
     fn arg(&mut self, kind: i64, s: &str) -> Rc<String> {
         let result: &str = match kind {
-            99 => &self.method,
             0 => &self.path,
             1 => {
                 if let Some(s) = self.query.get(s) {
@@ -62,7 +59,6 @@ impl Query for GenQuery {
                 } else {
                     ""
                 }
-
             }
             3 => {
                 if let Some(s) = self.cookies.get(s) {
@@ -70,7 +66,6 @@ impl Query for GenQuery {
                 } else {
                     ""
                 }
-
             }
             _ => "",
         };

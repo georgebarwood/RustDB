@@ -979,7 +979,7 @@ impl<'a> Parser<'a> {
             b"FN" => self.create_function(true),
             b"TABLE" => self.s_alter_table(),
             b"VIEW" => self.create_view(true),
-            _ => panic!("ALTER : TABLE,VIEW.. expected"),
+            _ => panic!("ALTER : TABLE,FN.. expected"),
         }
     }
     fn s_drop(&mut self) {
@@ -1007,7 +1007,7 @@ impl<'a> Parser<'a> {
                 self.b.dop(DO::DropSchema(s));
             }
             _ => {
-                panic!("DROP : TABLE,VIEW.. expected");
+                panic!("DROP : TABLE,FN .. expected");
             }
         }
     }
@@ -1038,7 +1038,7 @@ impl<'a> Parser<'a> {
                 self.b.dop(DO::RenameFunction(o, n));
             }
             _ => {
-                panic!("RENAME : TABLE,VIEW.. expected");
+                panic!("RENAME : TABLE,FN.. expected");
             }
         }
     }

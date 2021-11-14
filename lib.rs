@@ -401,31 +401,23 @@ impl TableBuilder {
 
 /// Input/Output message. Query and response.
 pub trait Query {
-    /// Append SELECT values to response body.
-    fn selected(&mut self, values: &[Value]);
-
-    /// ARG builtin function. Get query parameter, form value or cookie.
-    /// Can also set response code or select mode.
-    fn arg(&mut self, _kind: i64, _name: &str) -> Rc<String> {
-        Rc::new(String::new())
-    }
+    /// STATUSCODE builtin function. sets the response status code.
+    fn status_code(&mut self, _code: i64) {}
 
     /// HEADER builtin function, adds header to response.
     fn header(&mut self, _name: &str, _value: &str) {}
+
+    /// Append SELECT values to response body.
+    fn selected(&mut self, values: &[Value]);
 
     /// GLOBAL builtin function. Used to get request time.
     fn global(&self, _kind: i64) -> i64 {
         0
     }
 
-    fn status_code(&mut self, _code: i64) {}
-
-    /// Set the error string.
-    fn set_error(&mut self, err: String);
-
-    /// Get the error string.
-    fn get_error(&mut self) -> String {
-        String::new()
+    /// ARG builtin function. Get path, query parameter, form value or cookie.
+    fn arg(&mut self, _kind: i64, _name: &str) -> Rc<String> {
+        Rc::new(String::new())
     }
 
     /// Get file attribute ( One of name, content_type, file_name )
@@ -436,6 +428,14 @@ pub trait Query {
     /// Get file content. Note: content is consumed ( can only be fetched once ).
     fn file_content(&mut self, _fnum: i64) -> Rc<Vec<u8>> {
         Rc::new(Vec::new())
+    }
+
+    /// Set the error string.
+    fn set_error(&mut self, err: String);
+
+    /// Get the error string.
+    fn get_error(&mut self) -> String {
+        String::new()
     }
 }
 
