@@ -10,24 +10,25 @@ use axum::{
 };
 
 use tower::ServiceBuilder;
-use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
+use tower_cookies::{CookieManagerLayer, Cookies};
 
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::Mutex;
+use tokio::sync::{
+    mpsc::{channel, Receiver, Sender},
+    Mutex,
+};
 
-use database::genquery::{GenQuery, Part};
-use database::Database;
+use database::{
+    genquery::{GenQuery, Part},
+    Database,
+};
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::thread;
+use std::{collections::HashMap, sync::Arc, thread};
 
-struct GQ {
+struct ServerQuery {
     pub x: Box<GenQuery>,
 }
 
-impl GQ {
+impl ServerQuery {
     pub fn new() -> Self {
         Self {
             x: Box::new(GenQuery::new()),
@@ -36,14 +37,14 @@ impl GQ {
 }
 
 struct SharedState {
-    tx: mpsc::Sender<GQ>,
-    rx: mpsc::Receiver<GQ>,
+    tx: Sender<ServerQuery>,
+    rx: Receiver<ServerQuery>,
 }
 
 #[tokio::main]
 async fn main() {
-    let (tx, mut server_rx): (Sender<GQ>, Receiver<GQ>) = mpsc::channel(1);
-    let (server_tx, rx): (Sender<GQ>, Receiver<GQ>) = mpsc::channel(1);
+    let (tx, mut server_rx): (Sender<ServerQuery>, Receiver<ServerQuery>) = channel(1);
+    let (server_tx, rx): (Sender<ServerQuery>, Receiver<ServerQuery>) = channel(1);
 
     // This is the server thread (synchronous).
     thread::spawn(move || {
@@ -53,8 +54,8 @@ async fn main() {
         let db = Database::new(stg, database::init::INITSQL);
         loop {
             let mut q = server_rx.blocking_recv().unwrap();
-            let sql = "EXEC [handler].[".to_string() + &q.x.path + "]()";
-            db.run_timed(&sql, &mut *q.x);
+            let sql = "EXEC web.Main()";
+            db.run_timed(sql, &mut *q.x);
             let _x = server_tx.blocking_send(q);
             db.save();
         }
@@ -82,27 +83,26 @@ async fn my_get_handler(
     Extension(state): Extension<Arc<Mutex<SharedState>>>,
     Path(path): Path<String>,
     Query(params): Query<HashMap<String, String>>,
-    cookies: Cookies,
-) -> GQ {
-    let mut c = Cookie::new("MyCookie", "Hi George");
-    c.set_path("/");
-    cookies.add(c);
+    tcookies: Cookies,
+) -> ServerQuery {
+    
+    // Get cookies into a HashMap.
+    let mut cookies = HashMap::new();
+    for cookie in tcookies.list() {
+        let (name, value) = cookie.name_value();
+        cookies.insert(name.to_string(), value.to_string());
+    }
 
-    let mut q = GQ::new();
-    q.x.path = path;
-    q.x.query = params;
+    // Build the ServerQuery.
+    let mut sq = ServerQuery::new();
+    sq.x.path = path;
+    sq.x.query = params;
+    sq.x.cookies = cookies;
 
-    let q: GQ = {
-        if q.x.path == "/favicon.ico" {
-            q
-        } else {
-            let mut state = state.lock().await;
-            let _x = state.tx.send(q).await;
-            state.rx.recv().await.unwrap()
-        }
-    };
-
-    q
+    // Send query to database thread ( and get it back ).
+    let mut state = state.lock().await;
+    let _x = state.tx.send(sq).await;
+    state.rx.recv().await.unwrap()
 }
 
 async fn my_post_handler(
@@ -110,9 +110,18 @@ async fn my_post_handler(
     Path(path): Path<String>,
     Query(params): Query<HashMap<String, String>>,
     form: Option<Form<HashMap<String, String>>>,
-    _cookies: Cookies,
+    tcookies: Cookies,
     mp: Option<Multipart>,
-) -> GQ {
+) -> ServerQuery {
+
+    // Get the cookies into a HashMap.
+    let mut cookies = HashMap::new();
+    for cookie in tcookies.list() {
+        let (name, value) = cookie.name_value();
+        cookies.insert(name.to_string(), value.to_string());
+    }
+
+    // Get Vec of Parts.
     let mut parts = Vec::new();
     if let Some(mut mp) = mp {
         while let Some(field) = mp.next_field().await.unwrap() {
@@ -144,35 +153,33 @@ async fn my_post_handler(
         }
     }
 
-    let mut q = GQ::new();
-    q.x.path = path;
-    q.x.query = params;
-    q.x.parts = parts;
+    // Build the ServerQuery.
+    let mut sq = ServerQuery::new();
+    sq.x.path = path;
+    sq.x.query = params;
+    sq.x.cookies = cookies;
+    sq.x.parts = parts;
     if let Some(Form(form)) = form {
-        q.x.form = form;
+        sq.x.form = form;
     }
 
-    let q: GQ = {
-        // Send the Query to the database server thread.
-        let mut state = state.lock().await;
-        let _x = state.tx.send(q).await;
-        // Get the Query back again.
-        state.rx.recv().await.unwrap()
-    };
-
-    q
+    // Send the ServerQuery to database thread ( and get it back ).
+    let mut state = state.lock().await;
+    let _x = state.tx.send(sq).await;
+    state.rx.recv().await.unwrap()
 }
 
-use axum::body::{Bytes, Full};
-use axum::http::header::HeaderName;
-use axum::http::status::StatusCode;
-use axum::http::{HeaderValue, Response};
-use axum::response::IntoResponse;
-use std::convert::Infallible;
+use axum::{
+    body::{Bytes, Full},
+    http::header::HeaderName,
+    http::status::StatusCode,
+    http::{HeaderValue, Response},
+    response::IntoResponse,
+};
 
-impl IntoResponse for GQ {
+impl IntoResponse for ServerQuery {
     type Body = Full<Bytes>;
-    type BodyError = Infallible;
+    type BodyError = std::convert::Infallible;
 
     fn into_response(self) -> Response<Self::Body> {
         let mut res = Response::new(Full::from(self.x.output));
