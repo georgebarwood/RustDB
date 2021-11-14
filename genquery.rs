@@ -6,6 +6,7 @@ pub struct GenQuery {
     pub path: String,
     pub query: HashMap<String, String>,
     pub form: HashMap<String, String>,
+    pub cookies: HashMap<String, String>,
     pub parts: Vec<Part>,
     pub err: String,
     pub output: Vec<u8>,
@@ -28,6 +29,7 @@ impl GenQuery {
             path: String::new(),
             query: HashMap::new(),
             form: HashMap::new(),
+            cookies: HashMap::new(),
             parts: Vec::new(),
             err: String::new(),
             output,
@@ -60,6 +62,15 @@ impl Query for GenQuery {
                 } else {
                     ""
                 }
+
+            }
+            3 => {
+                if let Some(s) = self.cookies.get(s) {
+                    s
+                } else {
+                    ""
+                }
+
             }
             _ => "",
         };

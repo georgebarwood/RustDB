@@ -571,8 +571,11 @@ END
 GO
 CREATE FN [web].[SetContentType]( ct string ) AS
 BEGIN
-  DECLARE dummy string
-  SET dummy = ARG( 10, 'ContentType: ' | ct )
+  -- DECLARE dummy string
+  -- SET dummy = ARG( 10, 'ContentType: ' | ct )
+
+  DECLARE x int
+  SET x = HEADER( 'contenttype', 'text/html' )
 END
 GO
 CREATE FN [web].[SendBinary]( contenttype string, content binary ) AS
@@ -583,9 +586,9 @@ END
 GO
 CREATE FN [web].[Redirect]( url string ) AS
 BEGIN
-  DECLARE dummy string
-  SET dummy = ARG( 10, 'Location: ' | url )
-  SET dummy = ARG( 11, '303 Redirect' )
+  DECLARE dummy int
+  SET dummy = HEADER( 'location', url )
+  SET dummy = STATUSCODE( 303 )
 END
 GO
 CREATE FN [web].[Query]( name string ) RETURNS string AS
@@ -1279,9 +1282,9 @@ BEGIN
     DECLARE content binary SET content =  FILECONTENT(0)
     
     INSERT INTO web.File( Path, ContentType, ContentLength, Content )
-    VALUES ( '/Uploads/' | FILEATTR(0,2), FILEATTR(0,1), LEN(content), content )
+    VALUES ( '/Uploads/' | FILEATTR(0,2), FILEATTR(0,1), 0 /*BINLEN(content)*/, content )
   END
-  SELECT '<form method=post enctype=\"multipart/form-data\"><p><Input name=file type=file><p><input type=submit value=Upload></form>'
+  SELECT '<form method=post enctype=\"multipart/form-data\"><p><Input name=file type=file><p><input name=submit type=submit value=Upload></form>'
   EXEC web.Trailer()
 END
 GO
@@ -1413,7 +1416,7 @@ BEGIN
   DECLARE sid int, sname string, fname string
   FOR sid = Id, sname = sys.QuoteName(Name) FROM sys.Schema
   BEGIN
-    FOR fname = sys . QuoteName(Name) FROM sys.Function WHERE Schema = sid
+    FOR fname = sys.QuoteName(Name) FROM sys.Function WHERE Schema = sid
     BEGIN
       -- SELECT '<br>Checking ' | sname | '.' | fname
       EXECUTE( 'CHECK ' | sname | '.' | fname )
@@ -1580,7 +1583,7 @@ INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode]) VALUES
 (5,'George','Washington',26,'WC1')
 (6,'Ron','Williams',49,'')
 (7,'Adam','Baker',0,'')
-(8,'George','Barwood',-63,'GL2 4LZ')
+(8,'George','Barwood',63,'GL2 4LZ')
 (9,'Fred','Flintstone',88,'XYZ')
 GO
 
