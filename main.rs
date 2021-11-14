@@ -1,6 +1,10 @@
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 use axum::{
     extract::{Extension, Form, Multipart, Path, Query},
-    response::Html,
     routing::get,
     AddExtensionLayer, Router,
 };
@@ -8,18 +12,28 @@ use axum::{
 use tower::ServiceBuilder;
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 
-use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::Mutex;
 
-use database::genquery::GenQuery;
+use database::genquery::{GenQuery, Part};
 use database::Database;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 
-type GQ = Box<GenQuery>;
+struct GQ {
+    pub x: Box<GenQuery>,
+}
+
+impl GQ {
+    pub fn new() -> Self {
+        Self {
+            x: Box::new(GenQuery::new()),
+        }
+    }
+}
 
 struct SharedState {
     tx: mpsc::Sender<GQ>,
@@ -39,9 +53,8 @@ async fn main() {
         let db = Database::new(stg, database::init::INITSQL);
         loop {
             let mut q = server_rx.blocking_recv().unwrap();
-            // println!("Server got query {}", q.path);
-            let sql = "EXEC [handler].[".to_string() + &q.path + "]()";
-            db.run_timed(&sql, &mut *q);
+            let sql = "EXEC [handler].[".to_string() + &q.x.path + "]()";
+            db.run_timed(&sql, &mut *q.x);
             let _x = server_tx.blocking_send(q);
             db.save();
         }
@@ -70,32 +83,26 @@ async fn my_get_handler(
     Path(path): Path<String>,
     Query(params): Query<HashMap<String, String>>,
     cookies: Cookies,
-) -> Html<String> {
-    // let result = tokio::task::block_in_place(|| "hello world!");
-
+) -> GQ {
     let mut c = Cookie::new("MyCookie", "Hi George");
     c.set_path("/");
     cookies.add(c);
 
-    let mut q = Box::new(database::genquery::GenQuery::new());
-    q.path = path;
-    q.query = params;
+    let mut q = GQ::new();
+    q.x.path = path;
+    q.x.query = params;
 
-    let q : GQ = {
-        if q.path == "/favicon.ico"
-        {
-          q
-        }
-        else
-        {
-          let mut state = state.lock().await;
-          let _x = state.tx.send(q).await;
-          state.rx.recv().await.unwrap()
+    let q: GQ = {
+        if q.x.path == "/favicon.ico" {
+            q
+        } else {
+            let mut state = state.lock().await;
+            let _x = state.tx.send(q).await;
+            state.rx.recv().await.unwrap()
         }
     };
 
-    let s = std::str::from_utf8(&q.output).unwrap();
-    Html(s.to_string())
+    q
 }
 
 async fn my_post_handler(
@@ -104,63 +111,80 @@ async fn my_post_handler(
     Query(params): Query<HashMap<String, String>>,
     form: Option<Form<HashMap<String, String>>>,
     _cookies: Cookies,
-    _mp: Option<Multipart>,
-) -> Html<String> {
-/*
-    let mut mpinfo = String::new();
+    mp: Option<Multipart>,
+) -> GQ {
+    let mut parts = Vec::new();
     if let Some(mut mp) = mp {
-        mpinfo += "multipart form!!";
         while let Some(field) = mp.next_field().await.unwrap() {
             let name = field.name().unwrap().to_string();
-            let filename = match field.file_name() {
-                Some(s) => s.to_string(),
-                None => "No filename".to_string(),
-            };
-            let ct = match field.content_type() {
+            let file_name = match field.file_name() {
                 Some(s) => s.to_string(),
                 None => "".to_string(),
             };
-            let mut datalen = 0;
+            let content_type = match field.content_type() {
+                Some(s) => s.to_string(),
+                None => "".to_string(),
+            };
+            let mut data = Vec::new();
             let mut text = "".to_string();
-            if ct == "" {
-                match field.text().await {
-                    Ok(s) => text = s,
-                    Err(_) => {}
+            if content_type.is_empty() {
+                if let Ok(s) = field.text().await {
+                    text = s;
                 }
-            } else {
-                datalen = match field.bytes().await {
-                    Ok(bytes) => bytes.len(),
-                    Err(_) => 0,
-                };
+            } else if let Ok(bytes) = field.bytes().await {
+                data = bytes.to_vec()
             }
-
-            mpinfo += &format!(
-                "<p>name is `{}` filename is `{}` ct is `{}` data len is {} bytes text is {}",
-                name, filename, ct, datalen, text
-            );
+            parts.push(Part {
+                name,
+                file_name,
+                content_type,
+                data,
+                text,
+            });
         }
     }
-    let s = format!(
-        "<p>Hi George path is '{}' and params are {:?}  <p>cookies {:?} form is {:?} mpinfo {}",
-        path, params, cookies, form, mpinfo
-    );
-    Html(s)
-*/
 
-    let mut q = Box::new(database::genquery::GenQuery::new());
-    q.path = path;
-    q.query = params;
-    if let Some(Form(form)) = form
-    {
-      q.form = form;
+    let mut q = GQ::new();
+    q.x.path = path;
+    q.x.query = params;
+    q.x.parts = parts;
+    if let Some(Form(form)) = form {
+        q.x.form = form;
     }
 
-    let q : GQ = {
+    let q: GQ = {
+        // Send the Query to the database server thread.
         let mut state = state.lock().await;
         let _x = state.tx.send(q).await;
+        // Get the Query back again.
         state.rx.recv().await.unwrap()
     };
 
-    let s = std::str::from_utf8(&q.output).unwrap();
-    Html(s.to_string())
+    q
+}
+
+use axum::body::{Bytes, Full};
+use axum::http::header::HeaderName;
+use axum::http::status::StatusCode;
+use axum::http::{HeaderValue, Response};
+use axum::response::IntoResponse;
+use std::convert::Infallible;
+
+impl IntoResponse for GQ {
+    type Body = Full<Bytes>;
+    type BodyError = Infallible;
+
+    fn into_response(self) -> Response<Self::Body> {
+        let mut res = Response::new(Full::from(self.x.output));
+
+        *res.status_mut() = StatusCode::from_u16(self.x.status_code).unwrap();
+
+        for (name, value) in &self.x.headers {
+            res.headers_mut().insert(
+                HeaderName::from_lowercase(name.as_bytes()).unwrap(),
+                HeaderValue::from_str(value).unwrap(),
+            );
+        }
+        res
+    }
 }
