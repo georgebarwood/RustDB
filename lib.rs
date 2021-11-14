@@ -398,35 +398,51 @@ impl TableBuilder {
         table
     }
 }
-/// Input/Output interface.
+
+/// Input/Output message. Query and response.
 pub trait Query {
-    /// Append SELECT values to output.
-    fn push(&mut self, values: &[Value]);
-    /// ARG builtin function.
+    /// Append SELECT values to response body.
+    fn selected(&mut self, values: &[Value]);
+
+    /// ARG builtin function. Get query parameter, form value or cookie.
+    /// Can also set response code or select mode.
     fn arg(&mut self, _kind: i64, _name: &str) -> Rc<String> {
         Rc::new(String::new())
     }
-    /// GLOBAL builtin function.
+
+    /// HEADER builtin function, adds header to response.
+    fn header(&mut self, _name: &str, _value: &str) {}
+
+    /// GLOBAL builtin function. Used to get request time.
     fn global(&self, _kind: i64) -> i64 {
         0
     }
+
+    fn status_code(&mut self, _code: i64) {}
+
     /// Set the error string.
     fn set_error(&mut self, err: String);
+
     /// Get the error string.
     fn get_error(&mut self) -> String {
         String::new()
     }
-    fn fileattr(&mut self, _k: i64, _x: i64) -> Rc<String> {
+
+    /// Get file attribute ( One of name, content_type, file_name )
+    fn file_attr(&mut self, _fnum: i64, _atx: i64) -> Rc<String> {
         Rc::new(String::new())
     }
-    fn filecontent(&mut self, _k: i64) -> Rc<Vec<u8>> {
+
+    /// Get file content. Note: content is consumed ( can only be fetched once ).
+    fn file_content(&mut self, _fnum: i64) -> Rc<Vec<u8>> {
         Rc::new(Vec::new())
     }
 }
+
 /// Query where output is printed to console (used for initialisation ).
 struct DummyQuery {}
 impl Query for DummyQuery {
-    fn push(&mut self, _values: &[Value]) {}
+    fn selected(&mut self, _values: &[Value]) {}
     /// Called if a panic ( error ) occurs.
     fn set_error(&mut self, err: String) {
         println!("Error: {}", err);

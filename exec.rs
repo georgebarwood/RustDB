@@ -343,7 +343,7 @@ impl<'r> EvalEnv<'r> {
                         temp.push(values);
                     } else {
                         // Output directly.
-                        self.qy.push(&values);
+                        self.qy.selected(&values);
                     }
                 }
             }
@@ -351,7 +351,7 @@ impl<'r> EvalEnv<'r> {
                 // Sort then output the rows.
                 temp.sort_by(|a, b| table::row_compare(a, b, &cse.desc));
                 for r in &temp {
-                    self.qy.push(&r[obl..]);
+                    self.qy.selected(&r[obl..]);
                 }
             }
         } else {
@@ -360,7 +360,7 @@ impl<'r> EvalEnv<'r> {
                 let val = ce.eval(self, &[]);
                 values.push(val);
             }
-            self.qy.push(&values);
+            self.qy.selected(&values);
         }
     }
     /// Execute a SET operation.

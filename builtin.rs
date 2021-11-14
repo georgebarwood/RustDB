@@ -5,6 +5,8 @@ use compile::*;
 pub fn register_builtins(db: &DB) {
     let list = [
         ("ARG", DataKind::String, CompileFunc::Value(c_arg)),
+        ("HEADER", DataKind::Int, CompileFunc::Int(c_header)),
+        ("STATUSCODE", DataKind::Int, CompileFunc::Int(c_status_code)),
         ("FILEATTR", DataKind::String, CompileFunc::Value(c_fileattr)),
         (
             "FILECONTENT",
@@ -218,6 +220,45 @@ impl CExp<Value> for Arg {
 }
 
 /////////////////////////////
+/// Compile call to HEADER.
+fn c_header(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[DataKind::String, DataKind::String]);
+    let n = c_value(b, &mut args[0]);
+    let v = c_value(b, &mut args[1]);
+    Box::new(Header { n, v })
+}
+struct Header {
+    n: CExpPtr<Value>,
+    v: CExpPtr<Value>,
+}
+impl CExp<i64> for Header {
+    fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> i64 {
+        let n = self.n.eval(ee, d).str();
+        let v = self.v.eval(ee, d).str();
+        ee.qy.header(&n, &v);
+        0
+    }
+}
+
+/////////////////////////////
+/// Compile call to STATUSCODE.
+fn c_status_code(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[DataKind::Int]);
+    let code = c_int(b, &mut args[0]);
+    Box::new(StatusCode { code })
+}
+struct StatusCode {
+    code: CExpPtr<i64>,
+}
+impl CExp<i64> for StatusCode {
+    fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> i64 {
+        let code = self.code.eval(ee, d);
+        ee.qy.status_code(code);
+        0
+    }
+}
+
+/////////////////////////////
 /// Compile call to FILEATTR.
 fn c_fileattr(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[DataKind::Int, DataKind::Int]);
@@ -233,7 +274,7 @@ impl CExp<Value> for FileAttr {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
         let k = self.k.eval(ee, d);
         let x = self.x.eval(ee, d);
-        let result = ee.qy.fileattr(k, x);
+        let result = ee.qy.file_attr(k, x);
         Value::String(result)
     }
 }
@@ -251,7 +292,7 @@ struct FileContent {
 impl CExp<Value> for FileContent {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
         let k = self.k.eval(ee, d);
-        let result = ee.qy.filecontent(k);
+        let result = ee.qy.file_content(k);
         Value::Binary(result)
     }
 }

@@ -1,5 +1,6 @@
 use crate::*;
 
+/// http Request/Response.
 pub struct GenQuery {
     pub method: String,
     pub path: String,
@@ -8,8 +9,8 @@ pub struct GenQuery {
     pub parts: Vec<Part>,
     pub err: String,
     pub output: Vec<u8>,
-    pub status_code: String,
-    pub headers: String,
+    pub status_code: u16,
+    pub headers: Vec<(String, String)>,
     pub now: i64, // Micro-seconds since January 1, 1970 0:00:00 UTC
 }
 
@@ -20,8 +21,8 @@ impl GenQuery {
             .unwrap();
         let now = now.as_micros() as i64;
         let output = Vec::with_capacity(10000);
-        let headers = String::with_capacity(1000);
-        let status_code = "200 OK".to_string();
+        let headers = Vec::new();
+        let status_code = 200;
         Self {
             method: String::new(),
             path: String::new(),
@@ -60,26 +61,26 @@ impl Query for GenQuery {
                     ""
                 }
             }
-            10 => {
-                self.headers.push_str(s);
-                self.headers.push_str("\r\n");
-                ""
-            }
-            11 => {
-                self.status_code = s.to_string();
-                ""
-            }
-            _ => panic!(),
+            _ => "",
         };
         Rc::new(result.to_string())
     }
+
+    fn status_code(&mut self, code: i64) {
+        self.status_code = code as u16;
+    }
+
+    fn header(&mut self, name: &str, value: &str) {
+        self.headers.push((name.to_string(), value.to_string()));
+    }
+
     fn global(&self, kind: i64) -> i64 {
         match kind {
             0 => self.now,
             _ => panic!(),
         }
     }
-    fn push(&mut self, values: &[Value]) {
+    fn selected(&mut self, values: &[Value]) {
         for v in values {
             match v {
                 Value::String(s) => {
@@ -108,6 +109,28 @@ impl Query for GenQuery {
         self.err = String::new();
         result
     }
+    fn file_attr(&mut self, k: i64, x: i64) -> Rc<String> {
+        let k = k as usize;
+        let result: &str = {
+            if k >= self.parts.len() {
+                ""
+            } else {
+                let p = &self.parts[k];
+                match x {
+                    0 => &p.name,
+                    1 => &p.content_type,
+                    2 => &p.file_name,
+                    3 => &p.text,
+                    _ => panic!(),
+                }
+            }
+        };
+        Rc::new(result.to_string())
+    }
+    fn file_content(&mut self, k: i64) -> Rc<Vec<u8>> {
+        let bytes = std::mem::take(&mut self.parts[k as usize].data);
+        Rc::new(bytes)
+    }
 }
 
 impl Default for GenQuery {
@@ -118,8 +141,8 @@ impl Default for GenQuery {
 
 pub struct Part {
     pub name: String,
-    pub filename: String,
-    pub contenttype: String,
+    pub file_name: String,
+    pub content_type: String,
     pub text: String,
     pub data: Vec<u8>,
 }

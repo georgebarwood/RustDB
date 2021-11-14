@@ -113,7 +113,7 @@ impl Query for WebQuery {
             _ => panic!(),
         }
     }
-    fn push(&mut self, values: &[Value]) {
+    fn selected(&mut self, values: &[Value]) {
         for v in values {
             match v {
                 Value::String(s) => {
