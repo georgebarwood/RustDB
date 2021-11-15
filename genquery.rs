@@ -3,7 +3,7 @@ use crate::*;
 /// http Request/Response.
 pub struct GenQuery {
     pub path: String,
-    pub query: HashMap<String, String>,
+    pub params: HashMap<String, String>,
     pub form: HashMap<String, String>,
     pub cookies: HashMap<String, String>,
     pub parts: Vec<Part>,
@@ -25,7 +25,7 @@ impl GenQuery {
         let status_code = 200;
         Self {
             path: String::new(),
-            query: HashMap::new(),
+            params: HashMap::new(),
             form: HashMap::new(),
             cookies: HashMap::new(),
             parts: Vec::new(),
@@ -47,7 +47,7 @@ impl Query for GenQuery {
         let result: &str = match kind {
             0 => &self.path,
             1 => {
-                if let Some(s) = self.query.get(s) {
+                if let Some(s) = self.params.get(s) {
                     s
                 } else {
                     ""

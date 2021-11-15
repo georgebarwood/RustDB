@@ -142,6 +142,14 @@ impl Query for WebQuery {
         self.err = String::new();
         result
     }
+    fn status_code(&mut self, code: i64) {
+        self.status_code = code.to_string();
+    }
+
+    fn header(&mut self, name: &str, value: &str) {
+        let hdr = name.to_string() + ": " + value;
+        self.headers.push_str(&hdr);
+    }
 }
 /// Parser for http request.
 ///
