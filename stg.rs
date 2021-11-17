@@ -1,4 +1,4 @@
-/// Storage interface for CompactFile and SharedStorage.
+/// Storage interface for CompactFile and VersionStorage.
 pub trait Storage {
     // Get the current size of the underlying storage.
     fn size(&mut self) -> u64;
@@ -42,7 +42,7 @@ impl SharedStorage {
             let amount: usize = min(Self::PAGE_SIZE - poff, len - done);
             if let Some(cp) = x.cache.get(page, time) {
                 // Copy bytes from the cached page.
-                println!("Using cache page {} time={}", page, time );
+                println!("Using cache page {} time={}", page, time);
                 bytes[done..done + amount].copy_from_slice(&cp[poff..poff + amount]);
             } else {
                 // Get bytes from the file.
@@ -64,12 +64,11 @@ impl SharedStorage {
             let poff = off as usize % Self::PAGE_SIZE;
             let amount: usize = min(Self::PAGE_SIZE - poff, len - done);
 
-            if !x.cache.saved(page)
-            {
-              let mut buffer = vec![0; Self::PAGE_SIZE];
-              x.stg.read(page * Self::PAGE_SIZE as u64, &mut buffer);
-              println!("Setting cache page {}", page );
-              x.cache.set(page, buffer);
+            if !x.cache.saved(page) {
+                let mut buffer = vec![0; Self::PAGE_SIZE];
+                x.stg.read(page * Self::PAGE_SIZE as u64, &mut buffer);
+                println!("Setting cache page {}", page);
+                x.cache.set(page, buffer);
             }
             done += amount;
             off += amount as u64;

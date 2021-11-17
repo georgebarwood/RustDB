@@ -46,15 +46,11 @@ impl<T> Cache<T> {
     }
 
     /// Test if specified page is already saved for current time.
-    pub fn saved(&mut self, pageid: PageId ) -> bool
-    {
-        if let Some(u) = self.updates.get(&self.time)
-        {
-          u.contains(&pageid )
-        }
-        else
-        {
-          false
+    pub fn saved(&mut self, pageid: PageId) -> bool {
+        if let Some(u) = self.updates.get(&self.time) {
+            u.contains(&pageid)
+        } else {
+            false
         }
     }
 
@@ -70,7 +66,7 @@ impl<T> Cache<T> {
     /// Register that an update operation has completed. The cache time is incremented.
     /// Cached pages may be freed.
     pub fn tick(&mut self) {
-        println!( "Cache tick time={}", self.time ); 
+        println!("Cache tick time={}", self.time);
         self.time += 1;
         self.trim();
     }
@@ -78,7 +74,7 @@ impl<T> Cache<T> {
     /// Register that there is a client reading the database. The result is the cache time.
     pub fn begin_read(&mut self) -> Time {
         let time = self.time;
-        println!( "Cache begin read time={}", time ); 
+        println!("Cache begin read time={}", time);
         let n = self.readers.entry(time).or_insert(0);
         *n += 1;
         time
@@ -86,7 +82,7 @@ impl<T> Cache<T> {
 
     /// Register that the read at the specified time has ended. Cached pages may be freed.
     pub fn end_read(&mut self, time: Time) {
-        println!( "Cache end read time={}", time );
+        println!("Cache end read time={}", time);
         let n = self.readers.get_mut(&time).unwrap();
         *n -= 1;
         if *n == 0 {
@@ -105,7 +101,7 @@ impl<T> Cache<T> {
             }
             for pid in self.updates.remove(&wt).unwrap() {
                 let p = self.pages.get_mut(&pid).unwrap();
-                println!("Cache trim page {}", pid );
+                println!("Cache trim page {}", pid);
                 p.trim(rt);
             }
         }
