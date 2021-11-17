@@ -20,7 +20,7 @@ use database::{
     Database,
 };
 
-use std::{collections::HashMap, thread};
+use std::{collections::HashMap, sync::Arc, thread};
 
 /// Query to be sent to server thread, implements IntoResponse.
 struct ServerQuery {
@@ -41,22 +41,34 @@ struct ServerMessage {
     pub tx: oneshot::Sender<ServerQuery>,
 }
 
+/// State shared with handlers.
+#[derive(Clone)]
+struct SharedState {
+    /// Sender channel for sending queries to server thread.
+    tx: mpsc::Sender<ServerMessage>,
+    /// Shared storage used for read-only queries.
+    stg: Arc<database::stg::SharedStorage>,
+}
+
 /// Main function ( execution starts here ).
 #[tokio::main]
 async fn main() {
+    let sf = database::stg::SimpleFileStorage::new("c:\\Users\\pc\\rust\\sftest01.rustdb");
+    let stg = Arc::new(database::stg::SharedStorage::new(sf));
+
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
+
+    let state = Arc::new(SharedState { tx, stg });
+    let wstg = Box::new(state.stg.open_write());
 
     // This is the server thread (synchronous).
     thread::spawn(move || {
-        let stg = Box::new(database::stg::SimpleFileStorage::new(
-            "c:\\Users\\pc\\rust\\sftest01.rustdb",
-        ));
-        let db = Database::new(stg, database::init::INITSQL);
+        let db = Database::new(wstg, database::init::INITSQL);
         loop {
             let mut sm = rx.blocking_recv().unwrap();
             db.run_timed("EXEC web.Main()", &mut *sm.sq.x);
-            let _x = sm.tx.send(sm.sq);
             db.save();
+            let _x = sm.tx.send(sm.sq);            
         }
     });
 
@@ -64,7 +76,7 @@ async fn main() {
     let app = Router::new().route("/*key", get(h_get).post(h_post)).layer(
         ServiceBuilder::new()
             .layer(CookieManagerLayer::new())
-            .layer(AddExtensionLayer::new(tx)),
+            .layer(AddExtensionLayer::new(state)),
     );
 
     // run it with hyper on localhost:3000
@@ -82,6 +94,17 @@ fn map_cookies(cookies: Cookies) -> HashMap<String, String> {
         result.insert(name.to_string(), value.to_string());
     }
     result
+
+    /*
+    cookies
+        .list()
+        .iter()
+        .map(|cookie| {
+            let (name, value) = cookie.name_value();
+            (name.to_string(), value.to_string())
+        })
+        .collect()
+    */
 }
 
 /// Get Vec of Parts from MultiPart.
@@ -121,7 +144,7 @@ async fn map_parts(mp: Option<Multipart>) -> Vec<Part> {
 
 /// Handler for http GET requests.
 async fn h_get(
-    state: Extension<mpsc::Sender<ServerMessage>>,
+    state: Extension<Arc<SharedState>>,
     path: Path<String>,
     params: Query<HashMap<String, String>>,
     cookies: Cookies,
@@ -132,15 +155,16 @@ async fn h_get(
     sq.x.params = params.0;
     sq.x.cookies = map_cookies(cookies);
 
-    // Send query to database thread ( and get it back ).
-    let (tx, rx) = oneshot::channel::<ServerQuery>();
-    let _err = state.send(ServerMessage { sq, tx }).await;
-    rx.await.unwrap()
+    // GET requests should be read-only.
+    let stg = Box::new(state.stg.open_read());
+    let db = Database::new(stg, "");
+    db.run_timed("EXEC web.Main()", &mut *sq.x);
+    sq
 }
 
 /// Handler for http POST requests.
 async fn h_post(
-    state: Extension<mpsc::Sender<ServerMessage>>,
+    state: Extension<Arc<SharedState>>,
     path: Path<String>,
     params: Query<HashMap<String, String>>,
     cookies: Cookies,
@@ -160,7 +184,7 @@ async fn h_post(
 
     // Send query to database thread ( and get it back ).
     let (tx, rx) = oneshot::channel::<ServerQuery>();
-    let _err = state.send(ServerMessage { sq, tx }).await;
+    let _err = state.tx.send(ServerMessage { sq, tx }).await;
     rx.await.unwrap()
 }
 
