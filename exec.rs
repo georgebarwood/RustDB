@@ -20,6 +20,7 @@ impl<'r> EvalEnv<'r> {
             call_depth: 0,
         }
     }
+
     /// Allocate and initialise local variables.
     pub fn alloc_locals(&mut self, dt: &[DataType], param_count: usize) {
         for d in dt.iter().skip(param_count) {
@@ -27,6 +28,7 @@ impl<'r> EvalEnv<'r> {
             self.stack.push(v);
         }
     }
+
     /// Execute list of instructions.
     pub fn go(&mut self, ilist: &[Instruction]) {
         let n = ilist.len();
@@ -86,6 +88,7 @@ impl<'r> EvalEnv<'r> {
             }
         }
     } // end fn go
+
     /// Call a function.
     pub fn call(&mut self, r: &Function) {
         self.call_depth += 1;
@@ -122,6 +125,7 @@ impl<'r> EvalEnv<'r> {
         self.bp = save_bp;
         self.call_depth -= 1;
     }
+
     /// Discard n items from stack.
     fn discard(&mut self, mut n: usize) {
         while n > 0 {
@@ -129,10 +133,12 @@ impl<'r> EvalEnv<'r> {
             n -= 1;
         }
     }
+
     /// Pop a value from the stack and assign it to a local varaiable.
     fn pop_to_local(&mut self, local: usize) {
         self.stack[self.bp + local] = self.stack.pop().unwrap();
     }
+
     /// Pop string from the stack.
     fn pop_string(&mut self) -> String {
         if let Value::String(s) = self.stack.pop().unwrap() {
@@ -141,16 +147,19 @@ impl<'r> EvalEnv<'r> {
             panic!()
         }
     }
+
     /// Push clone of local variable onto the stack.
     fn push_local(&mut self, local: usize) {
         self.stack.push(self.stack[self.bp + local].clone());
     }
+
     /// Execute a ForInit instruction. Constructs For state and assigns it to local variable.
     fn for_init(&mut self, for_id: usize, cte: &CTableExpression) {
         let data_source = self.data_source(cte);
         let fs = util::new(ForState { data_source });
         self.stack[self.bp + for_id] = Value::For(fs);
     }
+
     /// Evaluate optional where expression.
     fn ok(&mut self, wher: &Option<CExpPtr<bool>>, data: &[u8]) -> bool {
         if let Some(w) = wher {
@@ -159,6 +168,7 @@ impl<'r> EvalEnv<'r> {
             true
         }
     }
+
     /// Execute a ForNext instruction. Fetches a record from underlying file that satisfies the where condition,
     /// evaluates the expressions and assigns the results to local variables.
     fn for_next(&mut self, info: &ForNextInfo) -> bool {
@@ -184,11 +194,13 @@ impl<'r> EvalEnv<'r> {
             }
         }
     }
+
     /// Execute ForSortInit instruction. Constructs sorted vector of rows.
     fn for_sort_init(&mut self, for_id: usize, cse: &CSelectExpression) {
         let rows = self.get_temp(cse);
         self.stack[self.bp + for_id] = Value::ForSort(util::new(ForSortState { ix: 0, rows }));
     }
+
     /// Execute ForSortNext instruction. Assigns locals from current row, moves to next row.
     fn for_sort_next(&mut self, info: &(usize, usize, Assigns)) -> bool {
         let (for_id, orderbylen, assigns) = info;
@@ -210,29 +222,32 @@ impl<'r> EvalEnv<'r> {
             panic!("Jump into FOR loop");
         }
     }
+
     /// Execute SQL string.
     fn execute(&mut self) {
         let s = self.pop_string();
         self.db.run(&s, self.qy);
     }
+
     /// Execute a data operation (DO).
     fn exec_do(&mut self, dop: &DO) {
         match dop {
-            DO::CreateFunction(name, source, alter) => {
-                sys::create_function(&self.db, name, source.clone(), *alter)
-            }
+            DO::Insert(tp, cols, values) => self.insert(tp.clone(), cols, values),
+            DO::Update(assigns, from, wher) => self.update(assigns, from, wher),
+            DO::Delete(from, wher) => self.delete(from, wher),
             DO::CreateSchema(name) => sys::create_schema(&self.db, name),
             DO::CreateTable(ti) => sys::create_table(&self.db, ti),
             DO::CreateIndex(x) => sys::create_index(&self.db, x),
-            DO::Insert(tp, cols, values) => self.insert(tp.clone(), cols, values),
-            DO::Delete(from, wher) => self.delete(from, wher),
-            DO::Update(assigns, from, wher) => self.update(assigns, from, wher),
+            DO::CreateFunction(name, source, alter) => {
+                sys::create_function(&self.db, name, source.clone(), *alter)
+            }
+            DO::DropSchema(name) => self.drop_schema(name),
             DO::DropTable(name) => self.drop_table(name),
             DO::DropFunction(name) => self.drop_function(name),
-            DO::DropSchema(name) => self.drop_schema(name),
             _ => panic!(),
         }
     }
+
     /// Get list of record ids for DELETE/UPDATE.
     fn get_id_list(&mut self, te: &CTableExpression, w: &Option<CExpPtr<bool>>) -> Vec<u64> {
         let mut idlist = Vec::new();
@@ -246,6 +261,7 @@ impl<'r> EvalEnv<'r> {
         }
         idlist
     }
+
     /// Execute INSERT operation.
     fn insert(&mut self, t: TablePtr, cols: &[usize], src: &CTableExpression) {
         if let CTableExpression::Values(x) = src {
@@ -254,6 +270,7 @@ impl<'r> EvalEnv<'r> {
             panic!();
         }
     }
+
     /// Execute a DELETE operation.
     fn delete(&mut self, from: &CTableExpression, w: &Option<CExpPtr<bool>>) {
         let idlist = self.get_id_list(from, w);
@@ -271,6 +288,7 @@ impl<'r> EvalEnv<'r> {
             t.remove(&self.db, &oldrow);
         }
     }
+
     /// Execute an UPDATE operation.
     fn update(
         &mut self,
@@ -299,6 +317,7 @@ impl<'r> EvalEnv<'r> {
             }
         }
     }
+
     /// Get DataSource from CTableExpression.
     fn data_source(&mut self, te: &CTableExpression) -> DataSource {
         match te {
@@ -317,6 +336,7 @@ impl<'r> EvalEnv<'r> {
             _ => panic!(),
         }
     }
+
     /// Execute a SELECT operation.
     fn select(&mut self, cse: &CSelectExpression) {
         if let Some(te) = &cse.from {
@@ -363,6 +383,7 @@ impl<'r> EvalEnv<'r> {
             self.qy.selected(&values);
         }
     }
+
     /// Execute a SET operation.
     fn set(&mut self, cse: &CSelectExpression) {
         if let Some(te) = &cse.from {
@@ -384,6 +405,7 @@ impl<'r> EvalEnv<'r> {
             }
         }
     }
+
     /// Assign or append to a local variable.
     fn assign_local(&mut self, a: &(usize, AssignOp), val: Value) {
         let var = &mut self.stack[self.bp + a.0];
@@ -396,6 +418,7 @@ impl<'r> EvalEnv<'r> {
             }
         }
     }
+
     /// Insert evaluated values into a table.
     fn insert_values(&mut self, table: TablePtr, ci: &[usize], vals: &[Vec<CExpPtr<Value>>]) {
         let mut row = Row::new(table.info.clone());
@@ -421,6 +444,7 @@ impl<'r> EvalEnv<'r> {
             table.insert(&self.db, &mut row);
         }
     }
+
     /// Get sorted temporary table.
     fn get_temp(&mut self, cse: &CSelectExpression) -> Vec<Vec<Value>> {
         if let Some(te) = &cse.from {
@@ -448,6 +472,18 @@ impl<'r> EvalEnv<'r> {
             panic!()
         }
     }
+
+    fn drop_schema(&mut self, name: &str) {
+        if let Some(sid) = sys::get_schema(&self.db, name) {
+            let sql = "EXEC sys.DropSchema(".to_string() + &sid.to_string() + ")";
+            self.db.run(&sql, self.qy);
+            self.db.schemas.borrow_mut().remove(name);
+            self.db.function_reset.set(true);
+        } else {
+            panic!("Drop Schema not found {}", name);
+        }
+    }
+
     fn drop_table(&mut self, name: &ObjRef) {
         if let Some(t) = sys::get_table(&self.db, name) {
             let sql = "EXEC sys.DropTable(".to_string() + &t.id.to_string() + ")";
@@ -458,6 +494,7 @@ impl<'r> EvalEnv<'r> {
             panic!("Drop Table not found {}", name.str());
         }
     }
+
     fn drop_function(&mut self, name: &ObjRef) {
         if let Some(fid) = sys::get_function_id(&self.db, name) {
             let sql = "DELETE FROM sys.Function WHERE Id = ".to_string() + &fid.to_string();
@@ -465,16 +502,6 @@ impl<'r> EvalEnv<'r> {
             self.db.function_reset.set(true);
         } else {
             panic!("Drop Function not found {}", name.str());
-        }
-    }
-    fn drop_schema(&mut self, name: &str) {
-        if let Some(sid) = sys::get_schema(&self.db, name) {
-            let sql = "EXEC sys.DropSchema(".to_string() + &sid.to_string() + ")";
-            self.db.run(&sql, self.qy);
-            self.db.schemas.borrow_mut().remove(name);
-            self.db.function_reset.set(true);
-        } else {
-            panic!("Drop Schema not found {}", name);
         }
     }
 } // impl EvalEnv

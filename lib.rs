@@ -1,13 +1,15 @@
 //!
 //!ToDo List:
 //!
-//!multipart requests ( for file upload ).
+//!Read-only transactions.
+//!
+//!multipart requests ( for file upload ) (Done - at least in Axum case ).
 //!
 //!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
 //!
 //!Sort out error handling for PARSEINT etc.
 //!
-//!Handle HTTP IO in parallel. Read-only transactions.
+//!Handle HTTP IO in parallel (Done with Axum).
 //!
 //!Work on improving/testing SQL code, browse schema, float I/O.
 //!
@@ -55,13 +57,14 @@
 
 use crate::{
     bytes::ByteStorage,
+    compact::CompactFile,
     exec::EvalEnv,
     expr::*,
     page::{Page, PagePtr, PAGE_SIZE},
     parse::Parser,
     run::*,
     sortedfile::{Asc, Id, Record, SortedFile},
-    stg::{CompactFile, Storage},
+    stg::Storage,
     table::{ColInfo, IndexInfo, Row, SaveOp, Table, TablePtr},
     util::newmap,
     value::{get_bytes, Value},
@@ -80,8 +83,12 @@ pub mod util;
 pub mod builtin;
 /// Storage of variable length values : ByteStorage.
 pub mod bytes;
+/// Cache to retain page values at different times.
+pub mod cache;
 /// Structs that implement CExp trait.
 pub mod cexp;
+/// CompactFile : storage of logical pages in smaller regions of backing storage.
+pub mod compact;
 /// Functions to compile parsed expressions, checking types.
 pub mod compile;
 /// Instruction execution.
@@ -100,7 +107,7 @@ pub mod parse;
 pub mod run;
 /// Sorted Record storage.
 pub mod sortedfile;
-/// Storage of logical pages in smaller regions of backing storage.
+/// Backing storage for CompactFile.
 pub mod stg;
 /// System table functions.
 pub mod sys;
@@ -254,7 +261,11 @@ GO
     pub fn run_timed(self: &DB, source: &str, qy: &mut dyn Query) {
         let start = std::time::Instant::now();
         self.run(source, qy);
-        println!("db run time={} micro sec.", start.elapsed().as_micros());
+        println!(
+            "db query path={} run time={} micro sec.",
+            qy.arg(0, ""),
+            start.elapsed().as_micros()
+        );
     }
     /// Run a batch of SQL.
     pub fn go(self: &DB, source: &str, qy: &mut dyn Query) -> Option<SqlError> {
