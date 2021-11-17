@@ -126,6 +126,9 @@ pub struct VersionStorage {
 }
 
 impl Storage for VersionStorage {
+    fn size(&mut self) -> u64 {
+        self.size
+    }
     fn read(&mut self, off: u64, bytes: &mut [u8]) {
         if self.writer {
             self.ss.direct_read(off, bytes);
@@ -134,18 +137,11 @@ impl Storage for VersionStorage {
         }
     }
     fn write(&mut self, off: u64, bytes: &[u8]) {
-        if !self.writer {
-            panic!()
-        }
+        debug_assert!(self.writer);
         self.ss.write(off, bytes);
     }
-    fn size(&mut self) -> u64 {
-        self.size
-    }
     fn commit(&mut self, size: u64) {
-        if !self.writer {
-            panic!()
-        }
+        debug_assert!(self.writer);
         self.ss.commit(size);
     }
 }
