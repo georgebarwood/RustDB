@@ -262,7 +262,7 @@ GO
         let start = std::time::Instant::now();
         self.run(source, qy);
         println!(
-            "db query path={} run time={} micro sec.",
+            "run_timed path={} run time={} micro sec.",
             qy.arg(0, ""),
             start.elapsed().as_micros()
         );

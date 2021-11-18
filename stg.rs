@@ -14,80 +14,18 @@ use crate::cache::Cache;
 use std::cmp::min;
 use std::sync::{Arc, Mutex};
 
-pub struct SharedStorageInner {
-    pub stg: SimpleFileStorage,
-    pub cache: Cache<Vec<u8>>,
+struct SharedStorageInner {
+    stg: SimpleFileStorage,
+    cache: Cache<Vec<u8>>,
 }
 
 /// Multiple versioned views on underlying SimpleFileStorage.
 pub struct SharedStorage {
-    pub x: Mutex<SharedStorageInner>,
+    x: Mutex<SharedStorageInner>,
 }
 
 impl SharedStorage {
-    const PAGE_SIZE: usize = 1024;
-
-    pub fn end_read(&self, time: u64) {
-        let mut x = self.x.lock().unwrap();
-        x.cache.end_read(time);
-    }
-
-    pub fn read(&self, time: u64, mut off: u64, bytes: &mut [u8]) {
-        let mut x = self.x.lock().unwrap();
-        let mut done: usize = 0;
-        let len: usize = bytes.len();
-        while done < len {
-            let page = off / Self::PAGE_SIZE as u64;
-            let poff = off as usize % Self::PAGE_SIZE;
-            let amount: usize = min(Self::PAGE_SIZE - poff, len - done);
-            if let Some(cp) = x.cache.get(page, time) {
-                // Copy bytes from the cached page.
-                // println!("Using cache page {} time={}", page, time);
-                bytes[done..done + amount].copy_from_slice(&cp[poff..poff + amount]);
-            } else {
-                // Get bytes from the file.
-                x.stg.read(off, &mut bytes[done..done + amount]);
-            }
-            done += amount;
-            off += amount as u64;
-        }
-    }
-
-    pub fn write(&self, woff: u64, bytes: &[u8]) {
-        let mut x = self.x.lock().unwrap();
-        // Save copies of affected pages in cache for readers.
-        let mut done: usize = 0;
-        let mut off = woff;
-        let len: usize = bytes.len();
-        while done < len {
-            let page = off / Self::PAGE_SIZE as u64;
-            let poff = off as usize % Self::PAGE_SIZE;
-            let amount: usize = min(Self::PAGE_SIZE - poff, len - done);
-
-            if !x.cache.saved(page) {
-                let mut buffer = vec![0; Self::PAGE_SIZE];
-                x.stg.read(page * Self::PAGE_SIZE as u64, &mut buffer);
-                // println!("Setting cache page {}", page);
-                x.cache.set(page, buffer);
-            }
-            done += amount;
-            off += amount as u64;
-        }
-        // Write to underlying file.
-        x.stg.write(woff, bytes);
-    }
-
-    pub fn direct_read(&self, off: u64, bytes: &mut [u8]) {
-        let mut x = self.x.lock().unwrap();
-        x.stg.read(off, bytes);
-    }
-
-    pub fn commit(&self, size: u64) {
-        let mut x = self.x.lock().unwrap();
-        x.stg.commit(size);
-        x.cache.tick();
-    }
-
+    // Probably should take Box<dyn Storage> not SimpleFileStorage.
     pub fn new(stg: SimpleFileStorage) -> Self {
         Self {
             x: Mutex::new(SharedStorageInner {
@@ -114,6 +52,69 @@ impl SharedStorage {
             ss: self.clone(),
             size: x.stg.size(),
         }
+    }
+
+    const PAGE_SIZE: usize = 1024;
+
+    fn end_read(&self, time: u64) {
+        let mut x = self.x.lock().unwrap();
+        x.cache.end_read(time);
+    }
+
+    fn read(&self, time: u64, mut off: u64, bytes: &mut [u8]) {
+        let mut x = self.x.lock().unwrap();
+        let mut done: usize = 0;
+        let len: usize = bytes.len();
+        while done < len {
+            let page = off / Self::PAGE_SIZE as u64;
+            let poff = off as usize % Self::PAGE_SIZE;
+            let amount: usize = min(Self::PAGE_SIZE - poff, len - done);
+            if let Some(cp) = x.cache.get(page, time) {
+                // Copy bytes from the cached page.
+                // println!("Using cache page {} time={}", page, time);
+                bytes[done..done + amount].copy_from_slice(&cp[poff..poff + amount]);
+            } else {
+                // Get bytes from the file.
+                x.stg.read(off, &mut bytes[done..done + amount]);
+            }
+            done += amount;
+            off += amount as u64;
+        }
+    }
+
+    fn write(&self, woff: u64, bytes: &[u8]) {
+        let mut x = self.x.lock().unwrap();
+        // Save copies of affected pages in cache for readers.
+        let mut done: usize = 0;
+        let mut off = woff;
+        let len: usize = bytes.len();
+        while done < len {
+            let page = off / Self::PAGE_SIZE as u64;
+            let poff = off as usize % Self::PAGE_SIZE;
+            let amount: usize = min(Self::PAGE_SIZE - poff, len - done);
+
+            if !x.cache.saved(page) {
+                let mut buffer = vec![0; Self::PAGE_SIZE];
+                x.stg.read(page * Self::PAGE_SIZE as u64, &mut buffer);
+                // println!("Setting cache page {}", page);
+                x.cache.set(page, buffer);
+            }
+            done += amount;
+            off += amount as u64;
+        }
+        // Write to underlying file.
+        x.stg.write(woff, bytes);
+    }
+
+    fn direct_read(&self, off: u64, bytes: &mut [u8]) {
+        let mut x = self.x.lock().unwrap();
+        x.stg.read(off, bytes);
+    }
+
+    fn commit(&self, size: u64) {
+        let mut x = self.x.lock().unwrap();
+        x.stg.commit(size);
+        x.cache.tick();
     }
 }
 
