@@ -47,19 +47,19 @@ struct SharedState {
     /// Sender channel for sending queries to server thread.
     tx: mpsc::Sender<ServerMessage>,
     /// Shared storage used for read-only queries.
-    stg: Arc<database::stg::SharedStorage>,
+    stg: Arc<database::pstore::SharedPagedStorage>,
 }
 
 /// Main function ( execution starts here ).
 #[tokio::main]
 async fn main() {
-    let sf = database::stg::SimpleFileStorage::new("c:\\Users\\pc\\rust\\sftest01.rustdb");
-    let stg = Arc::new(database::stg::SharedStorage::new(sf));
+    let sf = Box::new(database::stg::SimpleFileStorage::new("c:\\Users\\pc\\rust\\sftest01.rustdb"));
+    let stg = Arc::new(database::pstore::SharedPagedStorage::new(sf));
 
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
 
     let state = Arc::new(SharedState { tx, stg });
-    let wstg = Box::new(state.stg.open_write());
+    let wstg = state.stg.open_write();
 
     // This is the server thread (synchronous).
     thread::spawn(move || {
@@ -68,7 +68,7 @@ async fn main() {
             let mut sm = rx.blocking_recv().unwrap();
             db.run_timed("EXEC web.Main()", &mut *sm.sq.x);
             db.save();
-            let _x = sm.tx.send(sm.sq);            
+            let _x = sm.tx.send(sm.sq);
         }
     });
 
@@ -155,11 +155,14 @@ async fn h_get(
     sq.x.params = params.0;
     sq.x.cookies = map_cookies(cookies);
 
-    // GET requests should be read-only.
-    let stg = Box::new(state.stg.open_read());
-    let db = Database::new(stg, "");
-    db.run_timed("EXEC web.Main()", &mut *sq.x);
-    sq
+    let blocking_task = tokio::task::spawn_blocking(move || {
+        // GET requests should be read-only.
+        let stg = state.stg.open_read();
+        let db = Database::new(stg, "");
+        db.run_timed("EXEC web.Main()", &mut *sq.x);
+        sq
+    });
+    blocking_task.await.unwrap()
 }
 
 /// Handler for http POST requests.
