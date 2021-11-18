@@ -26,7 +26,7 @@ use std::collections::BTreeSet;
 /// Layout of extension page: 8 byte logical page number | user data | unused data.
 pub struct CompactFile {
     /// Underlying storage.
-    stg: Box<dyn Storage>,
+    pub stg: Box<dyn Storage+Send>,
     /// Size of starter page
     sp_size: usize,
     /// Size of extension page
@@ -53,7 +53,7 @@ impl CompactFile {
     const HSIZE: u64 = 28;
 
     /// Construct a new CompactFile.
-    pub fn new(mut stg: Box<dyn Storage>, sp_size: usize, ep_size: usize) -> Self {
+    pub fn new(mut stg: Box<dyn Storage+Send>, sp_size: usize, ep_size: usize) -> Self {
         let fsize = stg.size();
         let is_new = fsize == 0;
         let mut x = Self {

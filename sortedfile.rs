@@ -52,7 +52,7 @@ impl SortedFile {
                 );
                 p.write_header();
                 p.is_dirty = false;
-                db.file.borrow_mut().set_page(p.pnum, &p.data, p.size());
+                db.file.set_page(p.pnum, p.data.clone());
             }
         }
     }
@@ -236,7 +236,7 @@ impl SortedFile {
                 self.rec_size
             },
             level,
-            vec![0; PAGE_SIZE],
+            Arc::new(Vec::new()),
             u64::MAX,
         )
     }
@@ -264,9 +264,8 @@ impl SortedFile {
         match self.pages.borrow_mut().entry(pnum) {
             Entry::Occupied(e) => e.get().clone(),
             Entry::Vacant(e) => {
-                let mut data = vec![0; PAGE_SIZE];
-                db.file.borrow_mut().get_page(pnum, &mut data);
-                let level = data[0];
+                let data = db.file.get_page(pnum);
+                let level = if data.len() == 0 {0} else {data[0]};
                 let p = util::new(Page::new(
                     if level != 0 {
                         self.key_size

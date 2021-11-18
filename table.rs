@@ -211,8 +211,9 @@ impl Table {
     }
     /// Utility for updating fields by number.
     pub fn write_access<'d, 't>(&'t self, p: &'d mut Page, off: usize) -> WriteAccess<'d, 't> {
+        let data = Data::make_mut(&mut p.data);
         WriteAccess::<'d, 't> {
-            data: &mut p.data[off..],
+            data: &mut data[off..],
             info: &self.info,
         }
     }

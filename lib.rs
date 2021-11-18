@@ -60,11 +60,12 @@ use crate::{
     compact::CompactFile,
     exec::EvalEnv,
     expr::*,
-    page::{Page, PagePtr, PAGE_SIZE},
+    page::{Page, PagePtr},
     parse::Parser,
+    pstore::AccessPagedStorage,
     run::*,
+    stg::*,
     sortedfile::{Asc, Id, Record, SortedFile},
-    stg::Storage,
     table::{ColInfo, IndexInfo, Row, SaveOp, Table, TablePtr},
     util::newmap,
     value::{get_bytes, Value},
@@ -75,6 +76,7 @@ use std::{
     collections::HashMap,
     panic,
     rc::Rc,
+    sync::{Arc, Mutex},
 };
 /// Utility functions and macros.
 #[macro_use]
@@ -117,7 +119,12 @@ pub mod table;
 pub mod value;
 /// WebQuery struct for making a http web server.
 pub mod web;
+
+pub mod pstore;
+
 // End of modules.
+
+pub type Data = Arc<Vec<u8>>;
 
 /// ```Rc<Database>```
 pub type DB = Rc<Database>;
@@ -125,7 +132,7 @@ pub type DB = Rc<Database>;
 /// Database with SQL-like interface.
 pub struct Database {
     /// Page storage.
-    pub file: RefCell<CompactFile>,
+    pub file: AccessPagedStorage,
     // System tables.
     pub sys_schema: TablePtr,
     pub sys_table: TablePtr,
@@ -148,9 +155,9 @@ pub struct Database {
 }
 impl Database {
     /// Construct a new DB, based on the specified file.
-    pub fn new(mut stg: Box<dyn Storage>, initsql: &str) -> DB {
+    pub fn new(file: AccessPagedStorage, initsql: &str) -> DB {
         let mut dq = DummyQuery {};
-        let is_new = stg.size() == 0;
+        let is_new = file.is_new();
         let mut tb = TableBuilder::new();
         let sys_schema = tb.nt("sys", "Schema", &[("Name", STRING)]);
         let sys_table = tb.nt(
@@ -185,7 +192,7 @@ impl Database {
         sys_index.add_index(8, vec![1]);
         sys_index_col.add_index(9, vec![0]);
         let db = Rc::new(Database {
-            file: RefCell::new(CompactFile::new(stg, 400, 1024)),
+            file,
             sys_schema,
             sys_table,
             sys_column,
@@ -322,7 +329,7 @@ GO
             self.functions.borrow_mut().clear();
             self.function_reset.set(false);
         }
-        self.file.borrow_mut().save();
+        self.file.save();
 
         // self.dump_tables();
     }
@@ -369,11 +376,11 @@ GO
     }
     /// Allocate a page of underlying file storage.
     pub fn alloc_page(self: &DB) -> u64 {
-        self.file.borrow_mut().alloc_page()
+        self.file.alloc_page()
     }
     /// Free a pagee of underyling file storage.
     pub fn free_page(self: &DB, lpnum: u64) {
-        self.file.borrow_mut().free_page(lpnum);
+        self.file.free_page(lpnum);
     }
 } // end impl Database
 
