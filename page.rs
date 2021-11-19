@@ -100,6 +100,7 @@ impl Page {
     }
     /// Sets header and trailer data (if parent). Called just before page is saved to file.
     pub fn write_header(&mut self) {
+        debug_assert!( self.size() == self.data.len() );
         let u = self.level as u64
             | ((self.root as u64) << 8)
             | ((self.count as u64) << (8 + NODE_ID_BITS))
