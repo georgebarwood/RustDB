@@ -154,10 +154,12 @@ impl CompactFile {
         self.read(off, &mut starter);
         let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
         let ext = self.ext(size); // Number of extension pages.
-                                  // Read the starter data.
+
+        // Read the starter data.
         let off = 2 + ext * 8;
         let mut done = min(size, self.sp_size - off);
         data[0..done].copy_from_slice(&starter[off..off + done]);
+
         // Read the extension pages.
         for i in 0..ext {
             let amount = min(size - done, self.ep_size - 8);

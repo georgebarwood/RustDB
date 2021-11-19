@@ -45,15 +45,6 @@ impl<T> Cache<T> {
         }
     }
 
-    /// Test if specified page is already saved for current time.
-    pub fn saved(&mut self, pageid: PageId) -> bool {
-        if let Some(u) = self.updates.get(&self.time) {
-            u.contains(&pageid)
-        } else {
-            false
-        }
-    }
-
     /// Get the value of the specified page for the specified (registered) time.  
     pub fn get(&mut self, pageid: PageId, time: Time) -> Option<&T> {
         if let Some(p) = self.pages.get(&pageid) {
@@ -144,7 +135,7 @@ impl<T> CachePage<T> {
     }
 } // end impl CachePage
 
-pub fn test() {
+fn _cache_test() {
     let mut c = Cache::new();
 
     for rt in 0..10 {

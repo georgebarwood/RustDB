@@ -92,6 +92,11 @@ impl SharedPagedData {
             Arc::new(v)
         }
     }
+    fn free_page(&self, lpnum: u64) {
+        let mut x = self.x.lock().unwrap();
+        x.file.free_page(lpnum);
+        x.cache.remove(&lpnum);
+    }
 }
 
 /// Access to paged data.
@@ -132,7 +137,7 @@ impl AccessPagedData {
     /// Free a logical page.
     pub fn free_page(&self, lpnum: u64) {
         debug_assert!(self.writer);
-        self.spd.x.lock().unwrap().file.free_page(lpnum)
+        self.spd.free_page(lpnum);
     }
     /// Commit changes to underlying file ( or rollback logical page allocations ).
     pub fn save(&self, op: SaveOp) {

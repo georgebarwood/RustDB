@@ -12,26 +12,27 @@
 //! Database with SQL-like language.
 //! Example program:
 //! ```
-//! use std::net::TcpListener;
-//! use database::{Database,web::WebQuery};
-//! fn main()
-//! {
-//!     let stg = Box::new(database::stg::SimpleFileStorage::new(
-//!         "c:\\Users\\pc\\rust\\doctest01.rustdb",
-//!     ));
-//!     let db = Database::new( stg, INITSQL );    
-//!     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
-//!     for tcps in listener.incoming()
-//!     {
+//!use database::{pstore::SharedPagedData, stg::SimpleFileStorage, web::WebQuery, Database};
+//!use std::net::TcpListener;
+//!use std::sync::Arc;
+//!
+//!fn main() {
+//!    let sfs = Box::new(SimpleFileStorage::new(
+//!        "c:\\Users\\pc\\rust\\sftest01.rustdb",
+//!    ));
+//!    let spd = Arc::new(SharedPagedData::new(sfs));
+//!    let wstg = spd.open_write();
+//!    let db = Database::new(wstg, database::init::INITSQL);
+//!    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+//!    for tcps in listener.incoming() {
 //!        let mut tcps = tcps.unwrap();
-//!        let mut wq = WebQuery::new( &tcps ); // Reads the http request from the TCP stream into wq.
-//!        db.run( SQL, &mut wq ); // Executes SQL, SELECT output is accumulated in wq.
-//!        wq.write( &mut tcps ); // Writes the http response to the TCP stream.
+//!        let mut wq = WebQuery::new(&tcps); // Reads the http request from the TCP stream into wq.
+//!        let sql = "EXEC web.Main()";
+//!        db.run_timed(&sql, &mut wq); // Executes SQL, http response, SQL output, (status,headers,content) is accumulated in wq.
+//!        wq.write(&mut tcps); // Write the http response to the TCP stream.
 //!        db.save(); // Saves database changes to disk.
-//!     }
-//! }
-//! const SQL : &str = "SELECT 'hello world'";
-//! const INITSQL : &str = "";
+//!    }
+//!}
 //!```
 //!
 //!General Design of Database
@@ -45,7 +46,7 @@
 //!
 //!(3) Index storage ( an index record refers back to the main table ).
 //!
-//!Pages have a maximum size, and are stored in stg::CompactFile, which stores logical pages in smaller regions of backing storage.
+//!Pages have a maximum size, and are stored in CompactFile, which stores logical pages in smaller regions of backing storage.
 //!
 //!When a page becomes too big, it is split into two pages.
 //!
@@ -76,21 +77,21 @@ use std::{
 };
 /// Utility functions and macros.
 #[macro_use]
-pub mod util;
+mod util;
 /// Compilation of builtin functions.
-pub mod builtin;
+mod builtin;
 /// Storage of variable length values : ByteStorage.
-pub mod bytes;
+mod bytes;
 /// Cache to retain page values at different times.
-pub mod cache;
+mod cache;
 /// Structs that implement CExp trait.
-pub mod cexp;
+mod cexp;
 /// CompactFile : storage of logical pages in smaller regions of backing storage.
-pub mod compact;
+mod compact;
 /// Functions to compile parsed expressions, checking types.
 pub mod compile;
 /// Instruction execution.
-pub mod exec;
+mod exec;
 /// Expression types, result of parsing.
 pub mod expr;
 /// Under development.
@@ -100,7 +101,7 @@ pub mod init;
 /// Page for SortedFile.
 pub mod page;
 /// Parser.
-pub mod parse;
+mod parse;
 /// Paged data storage.
 pub mod pstore;
 /// Instruction and other run time types.
@@ -110,9 +111,9 @@ pub mod sortedfile;
 /// Backing storage for CompactFile.
 pub mod stg;
 /// System table functions.
-pub mod sys;
+mod sys;
 /// Table, ColInfo, Row and other Table types.
-pub mod table;
+mod table;
 /// Run-time Value.
 pub mod value;
 /// WebQuery struct for making a http web server.
