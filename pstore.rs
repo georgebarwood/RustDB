@@ -13,6 +13,7 @@ pub struct SharedPagedData {
 }
 
 impl SharedPagedData {
+    /// Construct new SharedPageData based on specified underlying storage.
     pub fn new(file: Box<dyn Storage + Send>) -> Self {
         Self {
             x: Mutex::new(SPSInner {
@@ -28,7 +29,7 @@ impl SharedPagedData {
         AccessPagedData {
             writer: false,
             time: x.stash.begin_read(),
-            sps: self.clone(),
+            spd: self.clone(),
         }
     }
 
@@ -37,7 +38,7 @@ impl SharedPagedData {
         AccessPagedData {
             writer: true,
             time: 0,
-            sps: self.clone(),
+            spd: self.clone(),
         }
     }
 
@@ -97,49 +98,62 @@ impl SharedPagedData {
 pub struct AccessPagedData {
     writer: bool,
     time: u64,
-    sps: Arc<SharedPagedData>,
+    spd: Arc<SharedPagedData>,
 }
 
 impl AccessPagedData {
+    /// Get the specified page.
     pub fn get_page(&self, lpnum: u64) -> Data {
         if self.writer {
-            self.sps.direct_get_page(lpnum)
+            self.spd.direct_get_page(lpnum)
         } else {
-            self.sps.get_page(lpnum, self.time)
+            self.spd.get_page(lpnum, self.time)
         }
     }
+    /// Is the underlying file new (so needs to be initialised ).
     pub fn is_new(&self) -> bool {
-        self.writer && self.sps.x.lock().unwrap().file.is_new()
+        self.writer && self.spd.x.lock().unwrap().file.is_new()
     }
-    pub fn set_page(&self, lpnum: u64, p: Data) {
-        debug_assert!(self.writer);
-        self.sps.set_page(lpnum, p);
-    }
-
+    /// Check whether to compress a page.
     pub fn compress(&self, size: usize, saving: usize) -> bool {
         debug_assert!(self.writer);
-        self.sps.x.lock().unwrap().file.compress(size, saving)
+        self.spd.x.lock().unwrap().file.compress(size, saving)
     }
-    pub fn save(&self) {
+    /// Set the data of the specified page.
+    pub fn set_page(&self, lpnum: u64, p: Data) {
         debug_assert!(self.writer);
-        let mut x = self.sps.x.lock().unwrap();
-        x.file.save();
-        x.stash.tick();
+        self.spd.set_page(lpnum, p);
     }
+    /// Allocate a logical page.
     pub fn alloc_page(&self) -> u64 {
         debug_assert!(self.writer);
-        self.sps.x.lock().unwrap().file.alloc_page()
+        self.spd.x.lock().unwrap().file.alloc_page()
     }
+    /// Free a logical page.
     pub fn free_page(&self, lpnum: u64) {
         debug_assert!(self.writer);
-        self.sps.x.lock().unwrap().file.free_page(lpnum)
+        self.spd.x.lock().unwrap().file.free_page(lpnum)
+    }
+    /// Commit changes to underlying file ( or rollback logical page allocations ).
+    pub fn save(&self, op: SaveOp) {
+        debug_assert!(self.writer);
+        let mut x = self.spd.x.lock().unwrap();
+        match op {
+            SaveOp::Save => {
+                x.file.save();
+                x.stash.tick();
+            }
+            SaveOp::RollBack => {
+                x.file.rollback();
+            }
+        }
     }
 }
 
 impl Drop for AccessPagedData {
     fn drop(&mut self) {
         if !self.writer {
-            self.sps.end_read(self.time);
+            self.spd.end_read(self.time);
         }
     }
 }

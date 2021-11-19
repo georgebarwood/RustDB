@@ -120,6 +120,7 @@ pub mod web;
 
 // End of modules.
 
+/// ```Arc<Vec<u8>>```
 pub type Data = Arc<Vec<u8>>;
 
 /// ```Rc<Database>```
@@ -325,8 +326,7 @@ GO
             self.functions.borrow_mut().clear();
             self.function_reset.set(false);
         }
-        self.file.save();
-
+        self.file.save(op);
         // self.dump_tables();
     }
     /// Get the named table.
