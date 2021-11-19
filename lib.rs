@@ -1,15 +1,11 @@
 //!
 //!ToDo List:
 //!
-//!Read-only transactions.
-//!
-//!multipart requests ( for file upload ) (Done - at least in Axum case ).
+//!Make sys.Function a system table. Index sys.Schema.
 //!
 //!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
 //!
 //!Sort out error handling for PARSEINT etc.
-//!
-//!Handle HTTP IO in parallel (Done with Axum).
 //!
 //!Work on improving/testing SQL code, browse schema, float I/O.
 //!
@@ -62,10 +58,10 @@ use crate::{
     expr::*,
     page::{Page, PagePtr},
     parse::Parser,
-    pstore::AccessPagedStorage,
+    pstore::AccessPagedData,
     run::*,
-    stg::*,
     sortedfile::{Asc, Id, Record, SortedFile},
+    stg::Storage,
     table::{ColInfo, IndexInfo, Row, SaveOp, Table, TablePtr},
     util::newmap,
     value::{get_bytes, Value},
@@ -105,6 +101,8 @@ pub mod init;
 pub mod page;
 /// Parser.
 pub mod parse;
+/// Paged data storage.
+pub mod pstore;
 /// Instruction and other run time types.
 pub mod run;
 /// Sorted Record storage.
@@ -120,8 +118,6 @@ pub mod value;
 /// WebQuery struct for making a http web server.
 pub mod web;
 
-pub mod pstore;
-
 // End of modules.
 
 pub type Data = Arc<Vec<u8>>;
@@ -132,7 +128,7 @@ pub type DB = Rc<Database>;
 /// Database with SQL-like interface.
 pub struct Database {
     /// Page storage.
-    pub file: AccessPagedStorage,
+    pub file: AccessPagedData,
     // System tables.
     pub sys_schema: TablePtr,
     pub sys_table: TablePtr,
@@ -155,7 +151,7 @@ pub struct Database {
 }
 impl Database {
     /// Construct a new DB, based on the specified file.
-    pub fn new(file: AccessPagedStorage, initsql: &str) -> DB {
+    pub fn new(file: AccessPagedData, initsql: &str) -> DB {
         let mut dq = DummyQuery {};
         let is_new = file.is_new();
         let mut tb = TableBuilder::new();

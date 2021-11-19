@@ -64,16 +64,15 @@ impl Page {
         NODE_BASE + self.alloc * self.node_size + if self.level != 0 { PAGE_ID_SIZE } else { 0 }
     }
     /// Construct a new page.
-    pub fn new(rec_size: usize, level: u8, mut data: Arc<Vec<u8>>, pnum: u64) -> Page {
+    pub fn new(rec_size: usize, level: u8, mut data: Data, pnum: u64) -> Page {
         let node_size = rec_size + if level != 0 { PAGE_ID_SIZE } else { 0 } + NODE_OVERHEAD;
         // Round up to multiple of 8 bytes.
         // node_size = node_size + 7;
         // node_size = node_size - node_size % 8;
 
-        if data.len() == 0
-        {
-          let data = Data::make_mut(&mut data);
-          data.resize( NODE_BASE + if level != 0 { PAGE_ID_SIZE } else { 0 }, 0 );
+        if data.len() == 0 {
+            let data = Data::make_mut(&mut data);
+            data.resize(NODE_BASE + if level != 0 { PAGE_ID_SIZE } else { 0 }, 0);
         }
 
         let u = util::get(&data, 0, NODE_BASE);
@@ -326,8 +325,8 @@ impl Page {
         if self.free == 0 {
             self.alloc += 1;
             let size = self.size();
-            let data = Data::make_mut( &mut self.data );
-            data.resize( size, 0 );
+            let data = Data::make_mut(&mut self.data);
+            data.resize(size, 0);
             self.count
         } else {
             let result = self.free;

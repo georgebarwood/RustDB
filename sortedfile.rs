@@ -265,7 +265,7 @@ impl SortedFile {
             Entry::Occupied(e) => e.get().clone(),
             Entry::Vacant(e) => {
                 let data = db.file.get_page(pnum);
-                let level = if data.len() == 0 {0} else {data[0]};
+                let level = if data.len() == 0 { 0 } else { data[0] };
                 let p = util::new(Page::new(
                     if level != 0 {
                         self.key_size

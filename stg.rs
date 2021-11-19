@@ -1,4 +1,4 @@
-/// Storage interface for database storage.
+/// Interface for database storage.
 pub trait Storage {
     // Get the current size of the underlying storage.
     fn size(&mut self) -> u64;

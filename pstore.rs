@@ -1,42 +1,47 @@
 use crate::cache::Cache;
 use crate::*;
 
-/* Idea behind paged storage is:
-(a) Caching, shared access to page in memory.
-(b) Access to old pages.
-*/
-
-pub struct SPSInner {
-    pub file: CompactFile,
-    pub stash: Cache<Arc<Vec<u8>>>,
-    pub cache: HashMap<u64, Arc<Vec<u8>>>,
+struct SPSInner {
+    file: CompactFile,
+    stash: Cache<Data>,
+    cache: HashMap<u64, Data>,
 }
 
-pub struct SharedPagedStorage {
-    pub x: Mutex<SPSInner>,
+/// Allows logical database pages to be shared to allow concurrent readers.
+pub struct SharedPagedData {
+    x: Mutex<SPSInner>,
 }
 
-impl SharedPagedStorage {
-    pub fn new( file: Box<dyn Storage+Send> ) -> Self
-    {
-      Self{ x: Mutex::new( SPSInner{ file: CompactFile::new(file,400,1024), stash: Cache::new(), cache: HashMap::new() } ) }
+impl SharedPagedData {
+    pub fn new(file: Box<dyn Storage + Send>) -> Self {
+        Self {
+            x: Mutex::new(SPSInner {
+                file: CompactFile::new(file, 400, 1024),
+                stash: Cache::new(),
+                cache: HashMap::new(),
+            }),
+        }
     }
-    pub fn open_read(self: &Arc<SharedPagedStorage>) -> AccessPagedStorage {
+    /// Access to a virtual read-only copy of the database logical pages.
+    pub fn open_read(self: &Arc<SharedPagedData>) -> AccessPagedData {
         let mut x = self.x.lock().unwrap();
-        AccessPagedStorage {
+        AccessPagedData {
             writer: false,
             time: x.stash.begin_read(),
             sps: self.clone(),
         }
     }
-    pub fn open_write(self: &Arc<SharedPagedStorage>) -> AccessPagedStorage {
-        AccessPagedStorage {
+
+    /// Write access to the database logical pages.
+    pub fn open_write(self: &Arc<SharedPagedData>) -> AccessPagedData {
+        AccessPagedData {
             writer: true,
             time: 0,
             sps: self.clone(),
         }
     }
-    fn end_read(self: &Arc<SharedPagedStorage>, time: u64) {
+
+    fn end_read(&self, time: u64) {
         let mut x = self.x.lock().unwrap();
         x.stash.end_read(time);
     }
@@ -44,18 +49,18 @@ impl SharedPagedStorage {
     fn set_page(&self, lpnum: u64, p: Data) {
         let mut x = self.x.lock().unwrap();
         x.file.set_page(lpnum, &p, p.len());
-        let old = 
-        {
-          if let Some(old) = x.cache.get(&lpnum)
-          { old.clone() }
-          else 
-          { Arc::new( Vec::new() ) }
+        let old = {
+            if let Some(old) = x.cache.get(&lpnum) {
+                old.clone()
+            } else {
+                Arc::new(Vec::new())
+            }
         };
         x.stash.set(lpnum, old);
         x.cache.insert(lpnum, p);
     }
 
-    fn get_page(&self, lpnum: u64, time: u64) -> Arc<Vec<u8>> {
+    fn get_page(&self, lpnum: u64, time: u64) -> Data {
         // println!("get_page lpnum={} time={}", lpnum, time );
         let mut x = self.x.lock().unwrap();
         if let Some(p) = x.stash.get(lpnum, time) {
@@ -75,7 +80,7 @@ impl SharedPagedStorage {
         }
     }
 
-    fn direct_get_page(&self, lpnum: u64) -> Arc<Vec<u8>> {
+    fn direct_get_page(&self, lpnum: u64) -> Data {
         let mut x = self.x.lock().unwrap();
         if let Some(p) = x.cache.get(&lpnum) {
             p.clone()
@@ -88,45 +93,50 @@ impl SharedPagedStorage {
     }
 }
 
-pub struct AccessPagedStorage {
-    pub writer: bool,
-    pub time: u64,
-    pub sps: Arc<SharedPagedStorage>,
+/// Access to paged data.
+pub struct AccessPagedData {
+    writer: bool,
+    time: u64,
+    sps: Arc<SharedPagedData>,
 }
 
-impl AccessPagedStorage {
-    pub fn get_page(&self, lpnum: u64) -> Arc<Vec<u8>> {
+impl AccessPagedData {
+    pub fn get_page(&self, lpnum: u64) -> Data {
         if self.writer {
             self.sps.direct_get_page(lpnum)
         } else {
             self.sps.get_page(lpnum, self.time)
         }
     }
-    pub fn set_page(&self, lpnum: u64, p: Arc<Vec<u8>>) {
+    pub fn is_new(&self) -> bool {
+        self.writer && self.sps.x.lock().unwrap().file.is_new()
+    }
+    pub fn set_page(&self, lpnum: u64, p: Data) {
         debug_assert!(self.writer);
         self.sps.set_page(lpnum, p);
     }
 
     pub fn compress(&self, size: usize, saving: usize) -> bool {
+        debug_assert!(self.writer);
         self.sps.x.lock().unwrap().file.compress(size, saving)
     }
-    pub fn is_new(&self) -> bool {
-        self.writer && self.sps.x.lock().unwrap().file.is_new()
-    }
     pub fn save(&self) {
+        debug_assert!(self.writer);
         let mut x = self.sps.x.lock().unwrap();
         x.file.save();
         x.stash.tick();
     }
     pub fn alloc_page(&self) -> u64 {
+        debug_assert!(self.writer);
         self.sps.x.lock().unwrap().file.alloc_page()
     }
-    pub fn free_page(&self, pnum: u64) {
-        self.sps.x.lock().unwrap().file.free_page(pnum)
+    pub fn free_page(&self, lpnum: u64) {
+        debug_assert!(self.writer);
+        self.sps.x.lock().unwrap().file.free_page(lpnum)
     }
 }
 
-impl Drop for AccessPagedStorage {
+impl Drop for AccessPagedData {
     fn drop(&mut self) {
         if !self.writer {
             self.sps.end_read(self.time);
