@@ -1,5 +1,5 @@
 /// Interface for database storage.
-pub trait Storage {
+pub trait Storage : Send {
     // Get the current size of the underlying storage.
     fn size(&mut self) -> u64;
     // Read from the underlying storage.
