@@ -61,17 +61,15 @@ impl SharedPagedData {
         x.cache.insert(lpnum, p);
     }
 
-    fn get_page(&self, lpnum: u64, time: u64) -> Data {
-        // println!("get_page lpnum={} time={}", lpnum, time );
+    fn get_page(&self, lpnum: u64, time: u64, writer: bool) -> Data {
         let mut x = self.x.lock().unwrap();
-        if let Some(p) = x.stash.get(lpnum, time) {
-            // println!("got page from stash, lpnum={}", lpnum );
-            p.clone()
-        } else if let Some(p) = x.cache.get(&lpnum) {
-            // println!("got page from cache, lpnum={}", lpnum );
+        if !writer
+        {
+            if let Some(p) = x.stash.get(lpnum, time) { return p.clone(); }
+        }
+        if let Some(p) = x.cache.get(&lpnum) {
             p.clone()
         } else {
-            // println!("got page from file, lpnum={}", lpnum );
             let n = x.file.page_size(lpnum);
             let mut v = vec![0; n];
             x.file.get_page(lpnum, &mut v);
@@ -81,17 +79,6 @@ impl SharedPagedData {
         }
     }
 
-    fn direct_get_page(&self, lpnum: u64) -> Data {
-        let mut x = self.x.lock().unwrap();
-        if let Some(p) = x.cache.get(&lpnum) {
-            p.clone()
-        } else {
-            let n = x.file.page_size(lpnum);
-            let mut v = vec![0; n];
-            x.file.get_page(lpnum, &mut v);
-            Arc::new(v)
-        }
-    }
     fn free_page(&self, lpnum: u64) {
         let mut x = self.x.lock().unwrap();
         x.file.free_page(lpnum);
@@ -109,17 +96,13 @@ pub struct AccessPagedData {
 impl AccessPagedData {
     /// Get the specified page.
     pub fn get_page(&self, lpnum: u64) -> Data {
-        if self.writer {
-            self.spd.direct_get_page(lpnum)
-        } else {
-            self.spd.get_page(lpnum, self.time)
-        }
+        self.spd.get_page(lpnum, self.time, self.writer)
     }
     /// Is the underlying file new (so needs to be initialised ).
     pub fn is_new(&self) -> bool {
         self.writer && self.spd.x.lock().unwrap().file.is_new()
     }
-    /// Check whether to compress a page.
+    /// Check whether compressing a page is worthwhile.
     pub fn compress(&self, size: usize, saving: usize) -> bool {
         debug_assert!(self.writer);
         self.spd.x.lock().unwrap().file.compress(size, saving)

@@ -1,6 +1,8 @@
 //!
 //!ToDo List:
 //!
+//!Test cookies.
+//!
 //!Make sys.Function a system table. Index sys.Schema.
 //!
 //!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
@@ -8,6 +10,8 @@
 //!Sort out error handling for PARSEINT etc.
 //!
 //!Work on improving/testing SQL code, browse schema, float I/O.
+//!
+//!Bug in date - Jun 5, 1825 doesn't work properly.
 //!
 //! Database with SQL-like language.
 //! Example program:
