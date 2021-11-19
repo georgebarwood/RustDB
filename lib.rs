@@ -16,7 +16,7 @@
 //! Database with SQL-like language.
 //! Example program:
 //! ```
-//!use database::{pstore::SharedPagedData, stg::SimpleFileStorage, web::WebQuery, Database};
+//!use rustdb::{pstore::SharedPagedData, stg::SimpleFileStorage, web::WebQuery, Database, init::INITSQL};
 //!use std::net::TcpListener;
 //!use std::sync::Arc;
 //!
@@ -26,7 +26,7 @@
 //!    ));
 //!    let spd = Arc::new(SharedPagedData::new(sfs));
 //!    let wstg = spd.open_write();
-//!    let db = Database::new(wstg, database::init::INITSQL);
+//!    let db = Database::new(wstg, INITSQL);
 //!    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
 //!    for tcps in listener.incoming() {
 //!        let mut tcps = tcps.unwrap();
@@ -81,21 +81,21 @@ use std::{
 };
 /// Utility functions and macros.
 #[macro_use]
-mod util;
+pub mod util;
 /// Compilation of builtin functions.
-mod builtin;
+pub mod builtin;
 /// Storage of variable length values : ByteStorage.
-mod bytes;
+pub mod bytes;
 /// Cache to retain page values at different times.
-mod cache;
+pub mod cache;
 /// Structs that implement CExp trait.
-mod cexp;
+pub mod cexp;
 /// CompactFile : storage of logical pages in smaller regions of backing storage.
-mod compact;
+pub mod compact;
 /// Functions to compile parsed expressions, checking types.
 pub mod compile;
 /// Instruction execution.
-mod exec;
+pub mod exec;
 /// Expression types, result of parsing.
 pub mod expr;
 /// Under development.
@@ -105,7 +105,7 @@ pub mod init;
 /// Page for SortedFile.
 pub mod page;
 /// Parser.
-mod parse;
+pub mod parse;
 /// Paged data storage.
 pub mod pstore;
 /// Instruction and other run time types.
@@ -115,9 +115,9 @@ pub mod sortedfile;
 /// Backing storage for CompactFile.
 pub mod stg;
 /// System table functions.
-mod sys;
+pub mod sys;
 /// Table, ColInfo, Row and other Table types.
-mod table;
+pub mod table;
 /// Run-time Value.
 pub mod value;
 /// WebQuery struct for making a http web server.

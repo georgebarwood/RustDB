@@ -1,15 +1,16 @@
 use crate::cache::Cache;
 use crate::*;
 
-struct SPSInner {
-    file: CompactFile,
-    stash: Cache<Data>,
-    cache: HashMap<u64, Data>,
+/// Inner for SharedPagedData.
+pub struct SPSInner {
+    pub file: CompactFile,
+    pub stash: Cache<Data>,
+    pub cache: HashMap<u64, Data>,
 }
 
 /// Allows logical database pages to be shared to allow concurrent readers.
 pub struct SharedPagedData {
-    x: Mutex<SPSInner>,
+    pub x: Mutex<SPSInner>,
 }
 
 impl SharedPagedData {
@@ -88,9 +89,9 @@ impl SharedPagedData {
 
 /// Access to paged data.
 pub struct AccessPagedData {
-    writer: bool,
-    time: u64,
-    spd: Arc<SharedPagedData>,
+    pub writer: bool,
+    pub time: u64,
+    pub spd: Arc<SharedPagedData>,
 }
 
 impl AccessPagedData {

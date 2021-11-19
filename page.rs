@@ -5,12 +5,9 @@
 //!
 //! Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids.
 //!
-//! Note that the left node is greater than the parent node. A tree with numbers 3, 5, 8 looks like this:
-//!
-//!         5
-//!     8       3
+//! Note that the left node is greater than the parent node.
 use crate::*;
-/// ```Rc<RefCell<Page>>```
+/// Rc<RefCell<Page>>
 pub type PagePtr = Rc<RefCell<Page>>;
 /// The maximum size in bytes of each page.
 pub const PAGE_SIZE: usize = 398 + (1024 - 16) * 16;
@@ -113,6 +110,7 @@ impl Page {
             util::set(data, off, self.first_page, PAGE_ID_SIZE);
         }
     }
+
     /// Is the page full?
     pub fn full(&self) -> bool {
         self.free == 0
@@ -122,6 +120,7 @@ impl Page {
                     + if self.level != 0 { PAGE_ID_SIZE } else { 0 }
                     >= PAGE_SIZE)
     }
+
     /// Construct a new empty page inheriting record size and level from self.
     /// Used when splitting a page that is full.
     pub fn new_page(&self) -> Page {
