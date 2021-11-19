@@ -17,6 +17,8 @@ use tokio::sync::{mpsc, oneshot};
 
 use database::{
     genquery::{GenQuery, Part},
+    pstore::SharedPagedData,
+    stg::SimpleFileStorage,
     Database,
 };
 
@@ -47,19 +49,21 @@ struct SharedState {
     /// Sender channel for sending queries to server thread.
     tx: mpsc::Sender<ServerMessage>,
     /// Shared storage used for read-only queries.
-    stg: Arc<database::pstore::SharedPagedStorage>,
+    spd: Arc<SharedPagedData>,
 }
 
 /// Main function ( execution starts here ).
 #[tokio::main]
 async fn main() {
-    let sf = Box::new(database::stg::SimpleFileStorage::new("c:\\Users\\pc\\rust\\sftest01.rustdb"));
-    let stg = Arc::new(database::pstore::SharedPagedStorage::new(sf));
+    let sfs = Box::new(SimpleFileStorage::new(
+        "c:\\Users\\pc\\rust\\sftest01.rustdb",
+    ));
+    let spd = Arc::new(SharedPagedData::new(sfs));
 
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
 
-    let state = Arc::new(SharedState { tx, stg });
-    let wstg = state.stg.open_write();
+    let state = Arc::new(SharedState { tx, spd });
+    let wstg = state.spd.open_write();
 
     // This is the server thread (synchronous).
     thread::spawn(move || {
@@ -157,8 +161,8 @@ async fn h_get(
 
     let blocking_task = tokio::task::spawn_blocking(move || {
         // GET requests should be read-only.
-        let stg = state.stg.open_read();
-        let db = Database::new(stg, "");
+        let d = state.spd.open_read();
+        let db = Database::new(d, "");
         db.run_timed("EXEC web.Main()", &mut *sq.x);
         sq
     });
