@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{HashMap, Query, Rc, Value, panic};
 
 /// http Request/Response.
 pub struct GenQuery {

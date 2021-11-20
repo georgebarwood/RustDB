@@ -74,7 +74,7 @@ use crate::{
 use std::{
     cell::{Cell, RefCell},
     cmp::Ordering,
-    collections::HashMap,
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     panic,
     rc::Rc,
     sync::{Arc, Mutex},

@@ -1,5 +1,4 @@
-use crate::*;
-use std::collections::BTreeSet;
+use crate::{BTreeSet, HashMap, Rc, RefCell};
 
 /// Wrap a type in Rc + RefCell.
 pub fn new<T>(x: T) -> std::rc::Rc<std::cell::RefCell<T>> {

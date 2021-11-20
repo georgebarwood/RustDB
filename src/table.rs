@@ -1,5 +1,5 @@
 use crate::*;
-use compile::*;
+use compile::{c_bool, c_int, c_value};
 use std::collections::BTreeMap;
 use util::SmallSet;
 

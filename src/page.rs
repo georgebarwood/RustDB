@@ -6,7 +6,7 @@
 //! Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids.
 //!
 //! Note that the left node is greater than the parent node.
-use crate::*;
+use crate::{Arc, DB, Data, Ordering, Rc, Record, RefCell, panic, util};
 /// Rc<RefCell<Page>>
 pub type PagePtr = Rc<RefCell<Page>>;
 /// The maximum size in bytes of each page.
