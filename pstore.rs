@@ -64,9 +64,10 @@ impl SharedPagedData {
 
     fn get_page(&self, lpnum: u64, time: u64, writer: bool) -> Data {
         let mut x = self.x.lock().unwrap();
-        if !writer
-        {
-            if let Some(p) = x.stash.get(lpnum, time) { return p.clone(); }
+        if !writer {
+            if let Some(p) = x.stash.get(lpnum, time) {
+                return p.clone();
+            }
         }
         if let Some(p) = x.cache.get(&lpnum) {
             p.clone()

@@ -435,7 +435,7 @@ impl Record for Row {
 }
 
 /// Row for inserting into an index.
-struct IndexRow {
+pub struct IndexRow {
     pub tinfo: Rc<ColInfo>,
     pub cols: Rc<Vec<usize>>,
     pub keys: Vec<Value>,

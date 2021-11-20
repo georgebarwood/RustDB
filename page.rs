@@ -97,7 +97,7 @@ impl Page {
     }
     /// Sets header and trailer data (if parent). Called just before page is saved to file.
     pub fn write_header(&mut self) {
-        debug_assert!( self.size() == self.data.len() );
+        debug_assert!(self.size() == self.data.len());
         let u = self.level as u64
             | ((self.root as u64) << 8)
             | ((self.count as u64) << (8 + NODE_ID_BITS))
@@ -319,14 +319,20 @@ impl Page {
             self.count + 1
         }
     }
+    /// Resize data.
+    fn resize_data(&mut self)
+    {
+      let size = self.size();
+      let data = Data::make_mut(&mut self.data);
+      data.resize(size, 0);
+    }
+
     /// Allocate a node.
     fn alloc_node(&mut self) -> usize {
         self.count += 1;
         if self.free == 0 {
             self.alloc += 1;
-            let size = self.size();
-            let data = Data::make_mut(&mut self.data);
-            data.resize(size, 0);
+            self.resize_data();
             self.count
         } else {
             let result = self.free;
@@ -603,6 +609,7 @@ impl Page {
         }
         self.free = 0;
         self.alloc = self.count;
+        self.resize_data();
     }
     /// Relocate node x (or any child of x) if it is greater than page count ( for fn compress ).
     fn relocate(&mut self, mut x: usize, flist: &mut Vec<usize>) -> usize {
@@ -614,7 +621,6 @@ impl Page {
                 let dest = self.rec_offset(to);
                 let data = Data::make_mut(&mut self.data);
                 data.copy_within(src..src + n, dest);
-                data[src..src + n].fill(0);
                 x = to;
             }
             let c = self.left(x);

@@ -309,7 +309,7 @@ impl CompactFile {
         self.write(epnum * self.ep_size as u64, &buf);
     }
 
-    /// Check if logical page number is within resereved region.
+    /// Check if logical page number is within reserved region.
     fn lp_valid(&mut self, lpnum: u64) -> bool {
         Self::HSIZE + (lpnum + 1) * (self.sp_size as u64) <= self.ep_resvd * (self.ep_size as u64)
     }
