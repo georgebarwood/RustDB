@@ -1,4 +1,4 @@
-use crate::{HashMap, Query, Rc, Value, panic, util};
+use crate::{panic, util, HashMap, Query, Rc, Value};
 use std::{io::Read, io::Write, net::TcpStream};
 /// Response content is accumulated in result.
 ///

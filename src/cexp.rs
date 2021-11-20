@@ -1,4 +1,4 @@
-use crate::{CExp, CExpPtr, EvalEnv, FunctionPtr, Rc, Value, get_bytes, panic, util};
+use crate::{get_bytes, panic, util, CExp, CExpPtr, EvalEnv, FunctionPtr, Rc, Value};
 
 pub struct Call {
     pub fp: FunctionPtr,
