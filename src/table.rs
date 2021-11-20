@@ -448,7 +448,7 @@ impl IndexRow {
     fn new(table: &Table, cols: Rc<Vec<usize>>, row: &Row) -> Self {
         let mut keys = Vec::new();
         let mut codes = Vec::new();
-        if row.codes.len() > 0 {
+        if !row.codes.is_empty() {
             for c in &*cols {
                 keys.push(row.values[*c].clone());
                 codes.push(row.codes[*c]);

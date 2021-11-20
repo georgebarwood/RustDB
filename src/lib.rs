@@ -27,7 +27,7 @@
 //!    let spd = Arc::new(SharedPagedData::new(sfs));
 //!    let wstg = spd.open_write();
 //!    let db = Database::new(wstg, INITSQL);
-//!    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+//!    let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
 //!    for tcps in listener.incoming() {
 //!        let mut tcps = tcps.unwrap();
 //!        let mut wq = WebQuery::new(&tcps); // Reads the http request from the TCP stream into wq.
