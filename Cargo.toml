@@ -5,6 +5,7 @@ authors = ["George Barwood"]
 edition = "2021"
 description = "SQL database (in development)"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/georgebarwood/RustDB"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
