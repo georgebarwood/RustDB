@@ -11,17 +11,24 @@ pub struct SPSInner {
 /// Allows logical database pages to be shared to allow concurrent readers.
 pub struct SharedPagedData {
     pub x: Mutex<SPSInner>,
+    pub sp_size: usize,
+    pub ep_size: usize,
 }
 
 impl SharedPagedData {
     /// Construct new SharedPageData based on specified underlying storage.
-    pub fn new(file: Box<dyn Storage + Send>) -> Self {
+    pub fn new(file: Box<dyn Storage>) -> Self {
+        let file = CompactFile::new(file, 400, 1024);
+        let sp_size = file.sp_size;
+        let ep_size = file.ep_size;
         Self {
             x: Mutex::new(SPSInner {
-                file: CompactFile::new(file, 400, 1024),
+                file,
                 stash: Cache::new(),
                 cache: HashMap::new(),
             }),
+            sp_size,
+            ep_size,
         }
     }
     /// Access to a virtual read-only copy of the database logical pages.
@@ -107,7 +114,7 @@ impl AccessPagedData {
     /// Check whether compressing a page is worthwhile.
     pub fn compress(&self, size: usize, saving: usize) -> bool {
         debug_assert!(self.writer);
-        self.spd.x.lock().unwrap().file.compress(size, saving)
+        CompactFile::compress(self.spd.sp_size, self.spd.ep_size, size, saving)
     }
     /// Set the data of the specified page.
     pub fn set_page(&self, lpnum: u64, p: Data) {

@@ -19,8 +19,6 @@
 //!use rustdb::{pstore::SharedPagedData, stg::SimpleFileStorage, web::WebQuery, Database, init::INITSQL};
 //!use std::net::TcpListener;
 //!use std::sync::Arc;
-//!
-//!fn main() {
 //!    let sfs = Box::new(SimpleFileStorage::new(
 //!        "c:\\Users\\pc\\rust\\sftest01.rustdb",
 //!    ));
@@ -36,7 +34,6 @@
 //!        wq.write(&mut tcps); // Write the http response to the TCP stream.
 //!        db.save(); // Saves database changes to disk.
 //!    }
-//!}
 //!```
 //!
 //!General Design of Database

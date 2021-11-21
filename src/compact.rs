@@ -28,9 +28,9 @@ pub struct CompactFile {
     /// Underlying storage.
     pub stg: Box<dyn Storage>,
     /// Size of starter page
-    sp_size: usize,
+    pub sp_size: usize,
     /// Size of extension page
-    ep_size: usize,
+    pub ep_size: usize,
     /// Number of extension pages reserved for starter pages.      
     ep_resvd: u64,
     /// Number of extension pages allocated.       
@@ -172,7 +172,8 @@ impl CompactFile {
         debug_assert!(done == size);
         size
     }
-    /// Allocate logical page number. Page are numbered 0,1,2...
+
+    /// Allocate logical page number. Pages are numbered 0,1,2...
     pub fn alloc_page(&mut self) -> u64 {
         if let Some(p) = self.lp_free.iter().next() {
             *p
@@ -344,16 +345,21 @@ impl CompactFile {
 
     /// Calculate the number of extension pages needed to store a page of given size.
     fn ext(&self, size: usize) -> usize {
+        Self::ext_pages(self.sp_size, self.ep_size, size)
+    }
+
+    /// Calculate the number of extension pages needed to store a page of given size.
+    pub fn ext_pages(sp_size: usize, ep_size: usize, size: usize) -> usize {
         let mut n = 0;
-        if size > (self.sp_size - 2) {
-            n = ((size - (self.sp_size - 2)) + (self.ep_size - 16 - 1)) / (self.ep_size - 16);
+        if size > (sp_size - 2) {
+            n = ((size - (sp_size - 2)) + (ep_size - 16 - 1)) / (ep_size - 16);
         }
-        debug_assert!(2 + 16 * n + size <= self.sp_size + n * self.ep_size);
+        debug_assert!(2 + 16 * n + size <= sp_size + n * ep_size);
         n
     }
 
     /// Check whether compressing a page is worthwhile.
-    pub fn compress(&self, size: usize, saving: usize) -> bool {
-        self.ext(size - saving) < self.ext(size)
+    pub fn compress(sp_size: usize, ep_size: usize, size: usize, saving: usize) -> bool {
+        Self::ext_pages(sp_size, ep_size, size - saving) < Self::ext_pages(sp_size, ep_size, size)
     }
 } // end impl CompactFile
