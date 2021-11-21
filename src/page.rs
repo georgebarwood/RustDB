@@ -12,9 +12,9 @@ pub type PagePtr = Rc<RefCell<Page>>;
 /// The maximum size in bytes of each page.
 pub const PAGE_SIZE: usize = 398 + (1024 - 16) * 16;
 /// = 3. Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
-const NODE_OVERHEAD: usize = 3;
+pub const NODE_OVERHEAD: usize = 3;
 /// = 8. 45 bits ( 1 + 4 x 11 ) needs 6 bytes, but use 8.
-const NODE_BASE: usize = 8;
+pub const NODE_BASE: usize = 8;
 /// = 6. Number of bytes used to store a page number.
 const PAGE_ID_SIZE: usize = 6;
 /// = 11. Node ids are 11 bits.

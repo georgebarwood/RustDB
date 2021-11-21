@@ -46,7 +46,7 @@ impl<T> Cache<T> {
     }
 
     /// Get the value of the specified page for the specified (registered) time.  
-    pub fn get(&mut self, pageid: PageId, time: Time) -> Option<&T> {
+    pub fn get(&self, pageid: PageId, time: Time) -> Option<&T> {
         if let Some(p) = self.pages.get(&pageid) {
             p.get(time)
         } else {

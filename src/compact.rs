@@ -53,7 +53,7 @@ impl CompactFile {
     const HSIZE: u64 = 28;
 
     /// Construct a new CompactFile.
-    pub fn new(mut stg: Box<dyn Storage>, sp_size: usize, ep_size: usize) -> Self {
+    pub fn new(stg: Box<dyn Storage>, sp_size: usize, ep_size: usize) -> Self {
         let fsize = stg.size();
         let is_new = fsize == 0;
         let mut x = Self {
@@ -136,7 +136,7 @@ impl CompactFile {
     }
 
     /// Get the current size of the specified logical page.
-    pub fn page_size(&mut self, lpnum: u64) -> usize {
+    pub fn page_size(&self, lpnum: u64) -> usize {
         if self.lp_valid(lpnum) {
             self.readu16(Self::HSIZE + (self.sp_size as u64) * lpnum)
         } else {
@@ -145,7 +145,7 @@ impl CompactFile {
     }
 
     /// Get logical page contents. Returns the page size.
-    pub fn get_page(&mut self, lpnum: u64, data: &mut [u8]) -> usize {
+    pub fn get_page(&self, lpnum: u64, data: &mut [u8]) -> usize {
         if !self.lp_valid(lpnum) {
             return 0;
         }
@@ -244,14 +244,14 @@ impl CompactFile {
     }
 
     /// Read a u64 from the underlying file.
-    fn readu64(&mut self, offset: u64) -> u64 {
+    fn readu64(&self, offset: u64) -> u64 {
         let mut bytes = [0; 8];
         self.read(offset, &mut bytes);
         u64::from_le_bytes(bytes)
     }
 
     /// Read a u16 from the underlying file.
-    fn readu16(&mut self, offset: u64) -> usize {
+    fn readu16(&self, offset: u64) -> usize {
         let mut bytes = [0; 2];
         self.read(offset, &mut bytes);
         u16::from_le_bytes(bytes) as usize
@@ -268,7 +268,7 @@ impl CompactFile {
     }
 
     /// Read bytes from the underlying file.
-    fn read(&mut self, off: u64, bytes: &mut [u8]) {
+    fn read(&self, off: u64, bytes: &mut [u8]) {
         self.stg.read(off, bytes);
     }
 
@@ -311,7 +311,7 @@ impl CompactFile {
     }
 
     /// Check if logical page number is within reserved region.
-    fn lp_valid(&mut self, lpnum: u64) -> bool {
+    fn lp_valid(&self, lpnum: u64) -> bool {
         Self::HSIZE + (lpnum + 1) * (self.sp_size as u64) <= self.ep_resvd * (self.ep_size as u64)
     }
 

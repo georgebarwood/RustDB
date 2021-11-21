@@ -74,7 +74,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     panic,
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
 };
 /// Utility functions and macros.
 #[macro_use]
