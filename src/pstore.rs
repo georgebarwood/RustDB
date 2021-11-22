@@ -91,7 +91,7 @@ impl Stash {
         }
     }
 
-    /// Get the specified page.  
+    /// Get the sPageInfoPtr for the specified page.  
     pub fn get(&mut self, lpnum: u64) -> PageInfoPtr {
         let p = self.pages.entry(lpnum).or_insert_with(PageInfo::new);
         p.clone()
@@ -119,12 +119,13 @@ impl Stash {
 
     /// Register that an update operation has completed. The cache time is incremented.
     /// Stashed pages may be freed.
-    pub fn tick(&mut self) {
+    pub fn end_write(&mut self) {
         // println!("Stash tick time={}", self.time);
         self.time += 1;
         self.trim();
     }
 
+    /// Trim the cache due to a read or write ending.
     fn trim(&mut self) {
         // rt is time of first remaining reader.
         let rt = *self.readers.keys().next().unwrap_or(&self.time);
@@ -245,13 +246,14 @@ impl AccessPagedData {
     /// Commit changes to underlying file ( or rollback logical page allocations ).
     pub fn save(&self, op: SaveOp) {
         debug_assert!(self.writer);
-        let mut stash = self.spd.stash.write().unwrap();
         match op {
             SaveOp::Save => {
                 self.spd.file.write().unwrap().save();
-                stash.tick();
+                self.spd.stash.write().unwrap().end_write();
             }
             SaveOp::RollBack => {
+                // Note: rollback happens before any pages are updated.
+                // However logical page allocations need to be rolled back.
                 self.spd.file.write().unwrap().rollback();
             }
         }
