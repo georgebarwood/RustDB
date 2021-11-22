@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "0.1.8"
+version = "0.1.11"
 authors = ["George Barwood"]
 edition = "2021"
 description = "SQL database (in development)"
@@ -8,6 +8,18 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/georgebarwood/RustDB/"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["internal"]
+
+# minimal exposes a minimal interface.
+minimal = []
+
+# builtin exposes an interface that allows extra SQL builtin functions to be defined.
+builtin = []
+
+# internal exposes a maximal interface.
+internal = []
 
 [dependencies]
 # stacker = "0.1"
