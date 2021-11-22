@@ -1,5 +1,6 @@
 pub const INITSQL : &str = "
 
+
 CREATE FN [sys].[TypeName]( t int ) RETURNS string AS 
 BEGIN 
   RETURN CASE 
@@ -399,6 +400,24 @@ CREATE FN [date].[Ticks]() RETURNS int AS
 BEGIN
   -- Microseconds since 1 Jan 0000
   RETURN GLOBAL(0) + 62135596800000000 /* 719162 * 24 * 3600 * 1000000 */
+END
+GO
+CREATE FN [date].[TestRoundTrip]() AS
+BEGIN
+
+  DECLARE day int
+
+  SET day = 0
+  WHILE day < 1000000
+  BEGIN
+    IF date.YearMonthDayToDays( date.DaysToYearMonthDay(day) ) != day
+    BEGIN
+      SELECT 'Test failed day = ' | day
+      BREAK
+    END
+    SET day = day + 1
+  END
+  SELECT 'Finished test day=' | day | ' date=' | date.DaysToString(day)
 END
 GO
 CREATE FN [date].[Test]( y int, m int, d int, n int ) AS 
@@ -1017,6 +1036,27 @@ END
 GO
 --############################################
 CREATE SCHEMA [handler]
+CREATE FN [handler].[/Slow]() AS
+BEGIN
+  EXEC web.Head( 'Slow' )
+
+  DECLARE n int, a int, total int
+  SET n = 0
+  WHILE n < 100000 -- Intended to take a long time
+  BEGIN
+    FOR a = y FROM dbo.Test  
+    BEGIN
+      SET total = total + a
+    END
+    SET n = n + 1
+  END
+  SELECT 'Total = ' | total
+
+  SELECT '<p>' | LastName FROM dbo.Cust
+
+  EXEC web.Trailer()
+END
+GO
 CREATE FN [handler].[/ShowTable]() AS 
 BEGIN 
   DECLARE t int SET t = PARSEINT( web.Query('k') )
@@ -1534,6 +1574,33 @@ CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int)
 GO
 CREATE INDEX [ByCust] ON [dbo].[Order]([Cust])
 GO
+CREATE FN [dbo].[Testing]() AS
+
+BEGIN
+
+CREATE TABLE dbo.Test( x string, y bigint )
+
+DECLARE i int
+SET i = 0
+WHILE i < 2000
+BEGIN
+  INSERT INTO dbo.Test(x,y) VALUES ( 'Hello', i )
+  SET i = i + 1
+END
+
+DECLARE n int, a int, total int
+SET n = 0
+WHILE n < 10000 -- Intended to take a long time
+BEGIN
+  SET n = n + 1
+  FOR a = y FROM dbo.Test  
+  BEGIN
+    SET total = total + a
+  END
+END
+
+END
+GO
 CREATE FN [dbo].[MakeOrders]() AS
 BEGIN 
   DELETE FROM dbo.Order WHERE 1 = 1
@@ -1574,7 +1641,7 @@ INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode]) VALUES
 (5,'George','Washington',29,'WC1')
 (6,'Ron','Williams',49,'')
 (7,'Adam','Baker',0,'')
-(8,'George','Barwood',63,'GL2 4LZ')
+(8,'George','Barwood',64,'GL2 4LZ')
 (9,'Fred','Flintstone',88,'XYZ')
 GO
 
@@ -1646,8 +1713,9 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (116,1,99,1034461)
 (117,1,99,1034465)
 (118,5,999,1035114)
-(120,8,0,1035114)
+(120,8,1825,934597)
 (121,5,99,1035114)
+(122,8,888,1023862)
 GO
 
 --############################################

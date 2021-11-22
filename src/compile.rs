@@ -154,7 +154,7 @@ pub fn c_value(b: &Block, e: &mut Expr) -> CExpPtr<Value> {
                 let c2 = c_value(b, b2);
                 match op {
                     Token::VBar => Box::new(cexp::Concat { c1, c2 }),
-                    _ => panic!(),
+                    _ => panic!("Invalid operator {:?}", op),
                 }
             }
             ExprIs::FuncCall(name, parms) => c_call(b, name, parms),
