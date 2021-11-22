@@ -522,7 +522,7 @@ BEGIN
   -- Need to adjust day to allow for leap years.
   -- Leap years are 0, 4, 8, 12 ... 96, not 100, 104 ... not 200... not 300, 400, 404 ... not 500.
   -- Adjustment as function of y is 0 => 0, 1 => 1, 2 =>1, 3 => 1, 4 => 1, 5 => 2 ..
-  SET day = day - ( year + 3 ) / 4 - ( year + 99 ) / 100 + ( year + 399 ) / 400
+  SET day = day - ( year + 3 ) / 4 + ( year + 99 ) / 100 - ( year + 399 ) / 400
   
   IF day < 0
   BEGIN
