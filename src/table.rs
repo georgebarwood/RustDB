@@ -3,7 +3,7 @@ use compile::{c_bool, c_int, c_value};
 use std::collections::BTreeMap;
 use util::SmallSet;
 
-/// Table Pointer.
+/// Table Pointer. ```Rc<Table>```
 pub type TablePtr = Rc<Table>;
 
 /// List of indexes. Each index has a file and a list of column numbers.

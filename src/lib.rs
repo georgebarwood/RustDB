@@ -13,6 +13,14 @@
 //!
 //!Bug in date - Jun 5, 1825 doesn't work properly.
 //!
+//!Features
+//!
+//!minimal exposes a minimal interface.
+//!
+//!builtin exposes an interface that allows extra SQL builtin functions to be defined.
+//!
+//!internal (the default) exposes a maximal interface.
+//!
 //! Database with SQL-like language.
 //! Example program:
 //! ```
@@ -76,49 +84,117 @@ use std::{
     rc::Rc,
     sync::{Arc, Mutex, RwLock},
 };
+
 /// Utility functions and macros.
+#[cfg(feature = "internal")]
 #[macro_use]
 pub mod util;
-/// Compilation of builtin functions.
-pub mod builtin;
-/// Storage of variable length values : ByteStorage.
-pub mod bytes;
-/// Cache to retain page values at different times.
-pub mod cache;
-/// Structs that implement CExp trait.
-pub mod cexp;
-/// CompactFile : storage of logical pages in smaller regions of backing storage.
-pub mod compact;
-/// Functions to compile parsed expressions, checking types.
-pub mod compile;
-/// Instruction execution.
-pub mod exec;
-/// Expression types, result of parsing.
-pub mod expr;
-/// Under development.
+#[cfg(not(feature = "internal"))]
+#[macro_use]
+mod util;
+
+// Modules that are always public.
+
+/// General Query.
 pub mod genquery;
+
+/// WebQuery struct with http support.
+pub mod web;
+
 /// Initial SQL
 pub mod init;
+
+/// Backing storage for database.
+pub mod stg;
+
+/// Page storage.
+pub mod pstore;
+
+// Conditional modules.
+
+#[cfg(feature = "internal")]
+/// Compilation of builtin functions.
+pub mod builtin;
+#[cfg(not(feature = "internal"))]
+mod builtin;
+
+#[cfg(feature = "internal")]
+/// Storage of variable length values : ByteStorage.
+pub mod bytes;
+#[cfg(not(feature = "internal"))]
+mod bytes;
+
+#[cfg(feature = "internal")]
+/// Structs that implement CExp trait.
+pub mod cexp;
+#[cfg(not(feature = "internal"))]
+mod cexp;
+
+#[cfg(feature = "internal")]
+/// CompactFile : storage of logical pages in smaller regions of backing storage.
+pub mod compact;
+#[cfg(not(feature = "internal"))]
+mod compact;
+
+#[cfg(not(feature = "minimal"))]
+/// Functions to compile parsed expressions, checking types.
+pub mod compile;
+#[cfg(feature = "minimal")]
+mod compile;
+
+#[cfg(feature = "internal")]
+/// Instruction execution.
+pub mod exec;
+#[cfg(not(feature = "internal"))]
+mod exec;
+
+#[cfg(not(feature = "minimal"))]
+/// Expression types, result of parsing.
+pub mod expr;
+#[cfg(feature = "minimal")]
+mod expr;
+
+#[cfg(feature = "internal")]
 /// Page for SortedFile.
 pub mod page;
+#[cfg(not(feature = "internal"))]
+mod page;
+
+#[cfg(feature = "internal")]
 /// Parser.
 pub mod parse;
-/// Paged data storage.
-pub mod pstore;
+#[cfg(not(feature = "internal"))]
+mod parse;
+
+#[cfg(feature = "internal")]
 /// Instruction and other run time types.
 pub mod run;
+#[cfg(not(feature = "internal"))]
+mod run;
+
+#[cfg(feature = "internal")]
 /// Sorted Record storage.
 pub mod sortedfile;
-/// Backing storage for CompactFile.
-pub mod stg;
+#[cfg(not(feature = "internal"))]
+mod sortedfile;
+
+#[cfg(feature = "internal")]
 /// System table functions.
 pub mod sys;
+#[cfg(not(feature = "internal"))]
+mod sys;
+
+#[cfg(feature = "internal")]
 /// Table, ColInfo, Row and other Table types.
 pub mod table;
+#[cfg(not(feature = "internal"))]
+mod table;
+
+#[cfg(feature = "internal")]
 /// Run-time Value.
 pub mod value;
-/// WebQuery struct for making a http web server.
-pub mod web;
+#[cfg(not(feature = "internal"))]
+mod value;
 
 // End of modules.
 
@@ -245,12 +321,23 @@ GO
         builtin::register_builtins(&db);
         db
     }
+
+    #[cfg(not(feature = "minimal"))]
     /// Register a builtin function.
     pub fn register(self: &DB, name: &str, typ: DataKind, cf: CompileFunc) {
         self.builtins
             .borrow_mut()
             .insert(name.to_string(), (typ, cf));
     }
+
+    #[cfg(feature = "minimal")]
+    /// Register a builtin function.
+    fn register(self: &DB, name: &str, typ: DataKind, cf: CompileFunc) {
+        self.builtins
+            .borrow_mut()
+            .insert(name.to_string(), (typ, cf));
+    }
+
     /// Run a batch of SQL.
     pub fn run(self: &DB, source: &str, qy: &mut dyn Query) {
         if let Some(e) = self.go(source, qy) {
@@ -298,6 +385,7 @@ GO
             None
         }
     }
+
     /// Save updated tables to underlying file ( or rollback if there was an error ).
     pub fn save(self: &DB) {
         let op = if self.err.get() {
@@ -331,6 +419,7 @@ GO
         self.file.save(op);
         // self.dump_tables();
     }
+
     /// Get the named table.
     pub fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr> {
         if let Some(t) = self.tables.borrow().get(name) {
@@ -338,6 +427,7 @@ GO
         }
         sys::get_table(self, name)
     }
+
     /// Get the named function.
     pub fn get_function(self: &DB, name: &ObjRef) -> Option<FunctionPtr> {
         if let Some(f) = self.functions.borrow().get(name) {
@@ -345,11 +435,13 @@ GO
         }
         sys::get_function(self, name)
     }
+
     /// Insert the table into the map of tables.
     pub fn publish_table(&self, table: TablePtr) {
         let name = table.info.name.clone();
         self.tables.borrow_mut().insert(name, table);
     }
+
     /// Get code for value.
     pub fn encode(self: &DB, val: &Value) -> u64 {
         let bytes = match val {
@@ -364,19 +456,23 @@ GO
         }
         self.bs.encode(self, &bytes[7..])
     }
+
     /// Decode u64 to bytes.
     pub fn decode(self: &DB, code: u64) -> Vec<u8> {
         self.bs.decode(self, code)
     }
+
     /// Delete encoding.
     pub fn delcode(self: &DB, code: u64) {
         self.bs.delcode(self, code);
     }
+
     /// Allocate a page of underlying file storage.
     pub fn alloc_page(self: &DB) -> u64 {
         self.file.alloc_page()
     }
-    /// Free a pagee of underyling file storage.
+
+    /// Free a page of underyling file storage.
     pub fn free_page(self: &DB, lpnum: u64) {
         self.file.free_page(lpnum);
     }

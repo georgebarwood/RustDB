@@ -1,6 +1,6 @@
 use crate::{panic, HashMap, Query, Rc, Value};
 
-/// http Request/Response.
+/// General Query.
 pub struct GenQuery {
     pub path: String,
     pub params: HashMap<String, String>,

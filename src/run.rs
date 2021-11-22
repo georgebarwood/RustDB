@@ -128,5 +128,5 @@ pub struct Function {
     pub ilist: RefCell<Vec<Instruction>>, // Valid when compiled is true.
     pub compiled: Cell<bool>,
 }
-/// Rc<Function>
+/// ```Rc<Function>```
 pub type FunctionPtr = Rc<Function>;

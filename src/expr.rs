@@ -205,10 +205,9 @@ impl<'a> Block<'a> {
         }
         for i in &mut self.ilist {
             match i {
-                JumpIfFalse(x, _) => *x = self.jumps[*x],
-                Jump(x) => *x = self.jumps[*x],
-                ForNext(x, _) => *x = self.jumps[*x],
-                ForSortNext(x, _) => *x = self.jumps[*x],
+                JumpIfFalse(x, _) | Jump(x) | ForNext(x, _) | ForSortNext(x, _) => {
+                    *x = self.jumps[*x]
+                }
                 _ => {}
             }
         }

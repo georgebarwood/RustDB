@@ -7,7 +7,7 @@
 //!
 //! Note that the left node is greater than the parent node.
 use crate::{panic, util, Arc, Data, Ordering, Rc, Record, RefCell, DB};
-/// Rc<RefCell<Page>>
+/// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
 /// The maximum size in bytes of each page.
 pub const PAGE_SIZE: usize = 398 + (1024 - 16) * 16;

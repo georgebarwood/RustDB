@@ -92,9 +92,10 @@ impl CompactFile {
     }
 
     /// Set the contents of the page.
-    pub fn set_page(&mut self, lpnum: u64, data: &[u8], size: usize) {
+    pub fn set_page(&mut self, lpnum: u64, data: &[u8]) {
         self.extend_starter_pages(lpnum);
         // Calculate number of extension pages needed.
+        let size = data.len();
         let ext = self.ext(size);
         // Read the current starter info.
         let off = Self::HSIZE + (self.sp_size as u64) * lpnum;
@@ -216,8 +217,8 @@ impl CompactFile {
         // Free the temporary set of free logical pages.
         for p in &std::mem::take(&mut self.lp_free) {
             let p = *p;
-            // Set the pagee size to zero, frees any associated extension pages.
-            self.set_page(p, &[], 0);
+            // Set the page size to zero, frees any associated extension pages.
+            self.set_page(p, &[]);
             // Store link to old lp_first after size field.
             self.writeu64(Self::HSIZE + p * self.sp_size as u64 + 2, self.lp_first);
             self.lp_first = p;
