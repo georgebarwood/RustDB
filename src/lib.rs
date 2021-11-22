@@ -74,15 +74,15 @@ use crate::{
     util::newmap,
     value::{get_bytes, Value},
 };
+use parking_lot::{Mutex, RwLock};
 use std::{
     cell::{Cell, RefCell},
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     panic,
     rc::Rc,
-    sync::Arc,    
+    sync::Arc,
 };
-use parking_lot::{Mutex, RwLock};
 
 /// Utility functions and macros.
 #[cfg(feature = "internal")]
