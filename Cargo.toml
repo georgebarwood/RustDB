@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "0.1.11"
+version = "0.1.13"
 authors = ["George Barwood"]
 edition = "2021"
 description = "SQL database (in development)"
@@ -23,6 +23,7 @@ internal = []
 
 [dependencies]
 # stacker = "0.1"
+parking_lot = "0.11.2"
 
 [dev-dependencies]
 mimalloc = { version = "0.1.26", default-features = false }
