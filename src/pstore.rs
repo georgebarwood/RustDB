@@ -20,7 +20,7 @@ impl PageInfo {
     }
 
     /// Get the Data for the page, checking history if not a writer.
-    /// Reads Data from file if not cached.
+    /// Reads Data from file if necessary.
     pub fn get(&mut self, lpnum: u64, a: &AccessPagedData) -> Data {
         if !a.writer {
             if let Some((_k, v)) = self
@@ -64,21 +64,14 @@ impl PageInfo {
 
 /// Central store of cached data.
 pub struct Stash {
+    /// Write time - number of writes.
     pub time: u64,
-    pub pages: HashMap<u64, PageInfoPtr>, // Page for specific PageId.
-    pub readers: BTreeMap<u64, usize>,    // Count of readers at specified Time.
-    pub updates: BTreeMap<u64, HashSet<u64>>, // Set of PageIds updated at specified Time.
-}
-
-impl Default for Stash {
-    fn default() -> Self {
-        Self {
-            time: 0,
-            pages: HashMap::new(),
-            readers: BTreeMap::new(),
-            updates: BTreeMap::new(),
-        }
-    }
+    /// Page number -> page info.
+    pub pages: HashMap<u64, PageInfoPtr>,
+    /// Time -> reader count.
+    pub readers: BTreeMap<u64, usize>,
+    /// Time -> set of page numbers.
+    pub updates: BTreeMap<u64, HashSet<u64>>,
 }
 
 impl Stash {
@@ -98,7 +91,7 @@ impl Stash {
         p.clone()
     }
 
-    /// Register that there is a client reading the database. The result is the cache time.
+    /// Register that there is a client reading the database. The result is the current time.
     pub fn begin_read(&mut self) -> u64 {
         let time = self.time;
         // println!("Stash begin read time={}", time);
@@ -118,7 +111,7 @@ impl Stash {
         }
     }
 
-    /// Register that an update operation has completed. The cache time is incremented.
+    /// Register that an update operation has completed. Time is incremented.
     /// Stashed pages may be freed.
     pub fn end_write(&mut self) {
         // println!("Stash tick time={}", self.time);
@@ -126,7 +119,7 @@ impl Stash {
         self.trim();
     }
 
-    /// Trim the cache due to a read or write ending.
+    /// Trim due to a read or write ending.
     fn trim(&mut self) {
         // rt is time of first remaining reader.
         let rt = *self.readers.keys().next().unwrap_or(&self.time);
@@ -140,6 +133,17 @@ impl Stash {
                 // println!("Stash trim page {}", lpnum);
                 p.lock().unwrap().trim(rt);
             }
+        }
+    }
+}
+
+impl Default for Stash {
+    fn default() -> Self {
+        Self {
+            time: 0,
+            pages: HashMap::new(),
+            readers: BTreeMap::new(),
+            updates: BTreeMap::new(),
         }
     }
 }
@@ -210,8 +214,10 @@ impl AccessPagedData {
     /// Set the data of the specified page.
     pub fn set_page(&self, lpnum: u64, data: Data) {
         debug_assert!(self.writer);
+
         // First update the stash ( ensures any readers will not attempt to read the file ).
         self.spd.stash.write().unwrap().set(lpnum, data.clone());
+
         // Write data to underlying file.
         self.spd.file.write().unwrap().set_page(lpnum, &data);
     }
