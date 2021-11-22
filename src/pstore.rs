@@ -21,11 +21,11 @@ impl PageInfo {
 
     /// Get the Data for the page, checking history if not a writer.
     /// Reads Data from file if not cached.
-    pub fn get(&mut self, file: &CompactFile, time: u64, lpnum: u64, writer: bool) -> Data {
-        if !writer {
+    pub fn get(&mut self, lpnum: u64, a: &AccessPagedData) -> Data {
+        if !a.writer {
             if let Some((_k, v)) = self
                 .history
-                .range((Included(&time), Included(&u64::MAX)))
+                .range((Included(&a.time), Included(&u64::MAX)))
                 .next()
             {
                 return v.clone();
@@ -37,6 +37,7 @@ impl PageInfo {
         }
 
         // Get data from file.
+        let file = a.spd.file.read().unwrap();
         let n = file.page_size(lpnum);
         let mut v = vec![0; n];
         file.get_page(lpnum, &mut v);
@@ -91,7 +92,7 @@ impl Stash {
         }
     }
 
-    /// Get the sPageInfoPtr for the specified page.  
+    /// Get the PageInfoPtr for the specified page.  
     pub fn get(&mut self, lpnum: u64) -> PageInfoPtr {
         let p = self.pages.entry(lpnum).or_insert_with(PageInfo::new);
         p.clone()
@@ -152,9 +153,10 @@ pub struct SharedPagedData {
 }
 
 impl SharedPagedData {
-    /// Construct new SharedPageData based on specified underlying storage.
+    /// Construct SharedPageData based on specified underlying storage.
     pub fn new(file: Box<dyn Storage>) -> Self {
         let file = CompactFile::new(file, 400, 1024);
+        // Note : if it's not a new file, sp_size and ep_size are read from file header.
         let sp_size = file.sp_size;
         let ep_size = file.ep_size;
         Self {
@@ -183,25 +185,9 @@ impl SharedPagedData {
             spd: self.clone(),
         }
     }
-
-    fn end_read(&self, time: u64) {
-        self.stash.write().unwrap().end_read(time);
-    }
-
-    fn set_page(&self, lpnum: u64, data: Data) {
-        self.stash.write().unwrap().set(lpnum, data.clone());
-        self.file.write().unwrap().set_page(lpnum, &data);
-    }
-
-    fn get_page(&self, lpnum: u64, time: u64, writer: bool) -> Data {
-        let p = self.stash.write().unwrap().get(lpnum);
-        let file = self.file.read().unwrap();
-        let mut p = p.lock().unwrap();
-        p.get(&file, time, lpnum, writer)
-    }
 }
 
-/// Access to paged data.
+/// Access to shared paged data.
 pub struct AccessPagedData {
     pub writer: bool,
     pub time: u64,
@@ -209,9 +195,25 @@ pub struct AccessPagedData {
 }
 
 impl AccessPagedData {
-    /// Get the specified page.
+    /// Get the Data for the specified page.
     pub fn get_page(&self, lpnum: u64) -> Data {
-        self.spd.get_page(lpnum, self.time, self.writer)
+        // Get PageInfoPtr for the specified page.
+        let pinfo = self.spd.stash.write().unwrap().get(lpnum);
+
+        // Lock the Mutex for the page.
+        let mut pinfo = pinfo.lock().unwrap();
+
+        // Read the page data.
+        pinfo.get(lpnum, self)
+    }
+
+    /// Set the data of the specified page.
+    pub fn set_page(&self, lpnum: u64, data: Data) {
+        debug_assert!(self.writer);
+        // First update the stash ( ensures any readers will not attempt to read the file ).
+        self.spd.stash.write().unwrap().set(lpnum, data.clone());
+        // Write data to underlying file.
+        self.spd.file.write().unwrap().set_page(lpnum, &data);
     }
 
     /// Is the underlying file new (so needs to be initialised ).
@@ -223,12 +225,6 @@ impl AccessPagedData {
     pub fn compress(&self, size: usize, saving: usize) -> bool {
         debug_assert!(self.writer);
         CompactFile::compress(self.spd.sp_size, self.spd.ep_size, size, saving)
-    }
-
-    /// Set the data of the specified page.
-    pub fn set_page(&self, lpnum: u64, p: Data) {
-        debug_assert!(self.writer);
-        self.spd.set_page(lpnum, p);
     }
 
     /// Allocate a logical page.
@@ -263,7 +259,7 @@ impl AccessPagedData {
 impl Drop for AccessPagedData {
     fn drop(&mut self) {
         if !self.writer {
-            self.spd.end_read(self.time);
+            self.spd.stash.write().unwrap().end_read(self.time);
         }
     }
 }
