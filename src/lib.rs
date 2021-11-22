@@ -11,8 +11,6 @@
 //!
 //!Work on improving/testing SQL code, browse schema, float I/O.
 //!
-//!Bug in date - Jun 5, 1825 doesn't work properly.
-//!
 //!Features
 //!
 //!minimal exposes a minimal interface.
@@ -82,8 +80,9 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     panic,
     rc::Rc,
-    sync::{Arc, Mutex, RwLock},
+    sync::Arc,    
 };
+use parking_lot::{Mutex, RwLock};
 
 /// Utility functions and macros.
 #[cfg(feature = "internal")]

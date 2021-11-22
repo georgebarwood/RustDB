@@ -35,21 +35,21 @@ impl SimpleFileStorage {
 
 impl Storage for SimpleFileStorage {
     fn size(&self) -> u64 {
-        let mut f = self.file.lock().unwrap();
+        let mut f = self.file.lock();
         f.seek(SeekFrom::End(0)).unwrap()
     }
     fn read(&self, off: u64, bytes: &mut [u8]) {
-        let mut f = self.file.lock().unwrap();
+        let mut f = self.file.lock();
         f.seek(SeekFrom::Start(off)).unwrap();
         let _x = f.read_exact(bytes);
     }
     fn write(&mut self, off: u64, bytes: &[u8]) {
-        let mut f = self.file.lock().unwrap();
+        let mut f = self.file.lock();
         f.seek(SeekFrom::Start(off)).unwrap();
         let _x = f.write(bytes);
     }
     fn commit(&mut self, size: u64) {
-        let f = self.file.lock().unwrap();
+        let f = self.file.lock();
         f.set_len(size).unwrap();
     }
 }

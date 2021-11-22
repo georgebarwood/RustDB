@@ -516,9 +516,10 @@ BEGIN
   DECLARE year int, day int, cycle int
   -- 146097 is the number of the days in a 400 year cycle ( 400 * 365 + 97 leap years )
   SET cycle = days / 146097
-  SET days = days % 146097
+  SET days = days - 146097 * cycle -- Same as days % 146097
   SET year = days / 365
-  SET day = days % 365
+  SET day = days - year * 365 -- Same as days % 365
+
   -- Need to adjust day to allow for leap years.
   -- Leap years are 0, 4, 8, 12 ... 96, not 100, 104 ... not 200... not 300, 400, 404 ... not 500.
   -- Adjustment as function of y is 0 => 0, 1 => 1, 2 =>1, 3 => 1, 4 => 1, 5 => 2 ..
@@ -527,7 +528,7 @@ BEGIN
   IF day < 0
   BEGIN
     SET year = year - 1
-    SET day = day + CASE WHEN date.IsLeapYear( day ) THEN 366 ELSE 365 END
+    SET day = day + CASE WHEN date.IsLeapYear( year ) THEN 366 ELSE 365 END
   END
   RETURN 512 * ( cycle * 400 + year ) + day + 1
 END

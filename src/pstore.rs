@@ -37,7 +37,7 @@ impl PageInfo {
         }
 
         // Get data from file.
-        let file = a.spd.file.read().unwrap();
+        let file = a.spd.file.read();
         let n = file.page_size(lpnum);
         let mut v = vec![0; n];
         file.get_page(lpnum, &mut v);
@@ -62,7 +62,7 @@ impl PageInfo {
     }
 }
 
-/// Central store of cached data.
+/// Central store of data.
 pub struct Stash {
     /// Write time - number of writes.
     pub time: u64,
@@ -81,7 +81,7 @@ impl Stash {
         let u = self.updates.entry(time).or_insert_with(HashSet::new);
         if u.insert(lpnum) {
             let p = self.pages.entry(lpnum).or_insert_with(PageInfo::new);
-            p.lock().unwrap().set(time, data);
+            p.lock().set(time, data);
         }
     }
 
@@ -131,7 +131,7 @@ impl Stash {
             for lpnum in self.updates.remove(&wt).unwrap() {
                 let p = self.pages.get(&lpnum).unwrap();
                 // println!("Stash trim page {}", lpnum);
-                p.lock().unwrap().trim(rt);
+                p.lock().trim(rt);
             }
         }
     }
@@ -173,7 +173,7 @@ impl SharedPagedData {
 
     /// Access to a virtual read-only copy of the database logical pages.
     pub fn open_read(self: &Arc<SharedPagedData>) -> AccessPagedData {
-        let mut stash = self.stash.write().unwrap();
+        let mut stash = self.stash.write();
         AccessPagedData {
             writer: false,
             time: stash.begin_read(),
@@ -202,10 +202,10 @@ impl AccessPagedData {
     /// Get the Data for the specified page.
     pub fn get_page(&self, lpnum: u64) -> Data {
         // Get PageInfoPtr for the specified page.
-        let pinfo = self.spd.stash.write().unwrap().get(lpnum);
+        let pinfo = self.spd.stash.write().get(lpnum);
 
         // Lock the Mutex for the page.
-        let mut pinfo = pinfo.lock().unwrap();
+        let mut pinfo = pinfo.lock();
 
         // Read the page data.
         pinfo.get(lpnum, self)
@@ -216,15 +216,15 @@ impl AccessPagedData {
         debug_assert!(self.writer);
 
         // First update the stash ( ensures any readers will not attempt to read the file ).
-        self.spd.stash.write().unwrap().set(lpnum, data.clone());
+        self.spd.stash.write().set(lpnum, data.clone());
 
         // Write data to underlying file.
-        self.spd.file.write().unwrap().set_page(lpnum, &data);
+        self.spd.file.write().set_page(lpnum, &data);
     }
 
     /// Is the underlying file new (so needs to be initialised ).
     pub fn is_new(&self) -> bool {
-        self.writer && self.spd.file.read().unwrap().is_new()
+        self.writer && self.spd.file.read().is_new()
     }
 
     /// Check whether compressing a page is worthwhile.
@@ -236,13 +236,13 @@ impl AccessPagedData {
     /// Allocate a logical page.
     pub fn alloc_page(&self) -> u64 {
         debug_assert!(self.writer);
-        self.spd.file.write().unwrap().alloc_page()
+        self.spd.file.write().alloc_page()
     }
 
     /// Free a logical page.
     pub fn free_page(&self, lpnum: u64) {
         debug_assert!(self.writer);
-        self.spd.file.write().unwrap().free_page(lpnum);
+        self.spd.file.write().free_page(lpnum);
     }
 
     /// Commit changes to underlying file ( or rollback logical page allocations ).
@@ -250,13 +250,13 @@ impl AccessPagedData {
         debug_assert!(self.writer);
         match op {
             SaveOp::Save => {
-                self.spd.file.write().unwrap().save();
-                self.spd.stash.write().unwrap().end_write();
+                self.spd.file.write().save();
+                self.spd.stash.write().end_write();
             }
             SaveOp::RollBack => {
                 // Note: rollback happens before any pages are updated.
                 // However logical page allocations need to be rolled back.
-                self.spd.file.write().unwrap().rollback();
+                self.spd.file.write().rollback();
             }
         }
     }
@@ -265,7 +265,7 @@ impl AccessPagedData {
 impl Drop for AccessPagedData {
     fn drop(&mut self) {
         if !self.writer {
-            self.spd.stash.write().unwrap().end_read(self.time);
+            self.spd.stash.write().end_read(self.time);
         }
     }
 }
