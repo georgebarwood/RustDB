@@ -7,17 +7,17 @@ use std::collections::hash_map::Entry;
 /// Each page is either a parent page with links to child pages, or a leaf page.
 pub struct SortedFile {
     /// Cached pages.
-    pages: RefCell<HashMap<u64, PagePtr>>,
+    pub pages: RefCell<HashMap<u64, PagePtr>>,
     /// List of pages that have changed.
-    dirty_pages: RefCell<Vec<PagePtr>>,
+    pub dirty_pages: RefCell<Vec<PagePtr>>,
     /// Size of a record.
-    rec_size: usize,
+    pub rec_size: usize,
     /// Size of a key.
-    key_size: usize,
+    pub key_size: usize,
     /// The root page.
-    root_page: u64,
+    pub root_page: u64,
     /// Status
-    ok: Cell<bool>,
+    pub ok: Cell<bool>,
 }
 impl SortedFile {
     /// Create File with specified record size, key size, root page.

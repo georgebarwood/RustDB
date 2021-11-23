@@ -13,11 +13,9 @@
 //!
 //!Features
 //!
-//!minimal exposes a minimal interface.
-//!
 //!builtin exposes an interface that allows extra SQL builtin functions to be defined.
 //!
-//!internal (the default) exposes a maximal interface.
+//!max exposes a maximal interface, including internal details.
 //!
 //! Database with SQL-like language.
 //! Example program:
@@ -85,10 +83,10 @@ use std::{
 };
 
 /// Utility functions and macros.
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 #[macro_use]
 pub mod util;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 #[macro_use]
 mod util;
 
@@ -111,88 +109,88 @@ pub mod pstore;
 
 // Conditional modules.
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// Compilation of builtin functions.
 pub mod builtin;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod builtin;
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// Storage of variable length values : ByteStorage.
 pub mod bytes;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod bytes;
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// Structs that implement CExp trait.
 pub mod cexp;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod cexp;
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// CompactFile : storage of logical pages in smaller regions of backing storage.
 pub mod compact;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod compact;
 
-#[cfg(not(feature = "minimal"))]
+#[cfg(feature = "builtin")]
 /// Functions to compile parsed expressions, checking types.
 pub mod compile;
-#[cfg(feature = "minimal")]
+#[cfg(not(feature = "builtin"))]
 mod compile;
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// Instruction execution.
 pub mod exec;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod exec;
 
-#[cfg(not(feature = "minimal"))]
+#[cfg(feature = "builtin")]
 /// Expression types, result of parsing.
 pub mod expr;
-#[cfg(feature = "minimal")]
+#[cfg(not(feature = "builtin"))]
 mod expr;
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// Page for SortedFile.
 pub mod page;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod page;
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// Parser.
 pub mod parse;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod parse;
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// Instruction and other run time types.
 pub mod run;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod run;
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// Sorted Record storage.
 pub mod sortedfile;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod sortedfile;
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// System table functions.
 pub mod sys;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod sys;
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// Table, ColInfo, Row and other Table types.
 pub mod table;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod table;
 
-#[cfg(feature = "internal")]
+#[cfg(feature = "max")]
 /// Run-time Value.
 pub mod value;
-#[cfg(not(feature = "internal"))]
+#[cfg(not(feature = "max"))]
 mod value;
 
 // End of modules.
@@ -321,7 +319,7 @@ GO
         db
     }
 
-    #[cfg(not(feature = "minimal"))]
+    #[cfg(feature = "builtin")]
     /// Register a builtin function.
     pub fn register(self: &DB, name: &str, typ: DataKind, cf: CompileFunc) {
         self.builtins
@@ -329,7 +327,7 @@ GO
             .insert(name.to_string(), (typ, cf));
     }
 
-    #[cfg(feature = "minimal")]
+    #[cfg(not(feature = "builtin"))]
     /// Register a builtin function.
     fn register(self: &DB, name: &str, typ: DataKind, cf: CompileFunc) {
         self.builtins
