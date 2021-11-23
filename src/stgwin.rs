@@ -1,7 +1,7 @@
 use crate::stg::Storage;
 
 use windows::{
-    core::*,
+    core::Handle,
     Win32::Foundation::{CloseHandle, HANDLE},
     Win32::Storage::FileSystem::{
         CreateFileA, // https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
