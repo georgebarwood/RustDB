@@ -167,7 +167,6 @@ impl Storage for WinFileStorage {
     }
 
     fn commit(&mut self, size: u64) {
-        // Todo: truncate file to size.
         self.truncate(size);
     }
 
