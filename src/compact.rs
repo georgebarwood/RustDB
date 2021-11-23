@@ -1,5 +1,5 @@
 use crate::stg::Storage;
-use crate::util;
+use crate::{util, Arc, Data};
 use std::cmp::min;
 use std::collections::BTreeSet;
 
@@ -100,7 +100,7 @@ impl CompactFile {
         // Read the current starter info.
         let off = Self::HSIZE + (self.sp_size as u64) * lpnum;
         let mut starter = vec![0_u8; self.sp_size];
-        self.read(off, &mut starter);
+        self.stg.read(off, &mut starter);
         let old_size = util::get(&starter, 0, 2) as usize;
         let mut old_ext = self.ext(old_size);
         util::set(&mut starter, 0, size as u64, 2);
@@ -146,14 +146,16 @@ impl CompactFile {
     }
 
     /// Get logical page contents. Returns the page size.
-    pub fn get_page(&self, lpnum: u64, data: &mut [u8]) -> usize {
+    pub fn get_page(&self, lpnum: u64) -> Data {
         if !self.lp_valid(lpnum) {
-            return 0;
+            return Arc::new(Vec::new());
         }
+
         let off = Self::HSIZE + (self.sp_size as u64) * lpnum;
         let mut starter = vec![0_u8; self.sp_size];
         self.read(off, &mut starter);
         let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
+        let mut data = vec![0u8; size];
         let ext = self.ext(size); // Number of extension pages.
 
         // Read the starter data.
@@ -171,7 +173,41 @@ impl CompactFile {
             done += amount;
         }
         debug_assert!(done == size);
-        size
+        Arc::new(data)
+    }
+
+    /// Get logical page contents. Returns the page size.
+    /// Alternative to get_page, uses read_multiple.
+    pub fn _get_page(&self, lpnum: u64) -> Data {
+        if !self.lp_valid(lpnum) {
+            return Arc::new(Vec::new());
+        }
+        let off = Self::HSIZE + (self.sp_size as u64) * lpnum;
+        let mut starter = vec![0_u8; self.sp_size];
+        self.read(off, &mut starter);
+        let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
+        let mut data = vec![0u8; size];
+        let ext = self.ext(size); // Number of extension pages.
+
+        // Read the starter data.
+        let off = 2 + ext * 8;
+        let mut done = min(size, self.sp_size - off);
+
+        let mut list = Vec::new();
+        data[0..done].copy_from_slice(&starter[off..off + done]);
+
+        // Read the extension pages.
+        for i in 0..ext {
+            let amount = min(size - done, self.ep_size - 8);
+            let page = util::getu64(&starter, 2 + i * 8);
+            let roff = page * (self.ep_size as u64);
+            debug_assert!(self.readu64(roff) == lpnum);
+            list.push((roff + 8, done, amount));
+            done += amount;
+        }
+        debug_assert!(done == size);
+        self.stg.read_multiple(&list, &mut data);
+        Arc::new(data)
     }
 
     /// Allocate logical page number. Pages are numbered 0,1,2...

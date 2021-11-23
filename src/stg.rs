@@ -1,13 +1,24 @@
 /// Interface for database storage.
 pub trait Storage: Send + Sync {
-    // Get the current size of the underlying storage.
+    /// Get the current size of the underlying storage.
     fn size(&self) -> u64;
-    // Read from the underlying storage.
+
+    /// Read from the underlying storage.
     fn read(&self, off: u64, bytes: &mut [u8]);
-    // Write to the underlying storage.
+
+    /// Write to the underlying storage.
     fn write(&mut self, off: u64, bytes: &[u8]);
-    // Finish write transaction, size is new size of underlying storage.
+
+    /// Finish write transaction, size is new size of underlying storage.
     fn commit(&mut self, size: u64);
+
+    /// Read multiple ranges. List is (file offset, data offset, data size).
+    fn read_multiple(&self, list: &[(u64, usize, usize)], data: &mut [u8]) {
+        for (addr, off, size) in list {
+            let data = &mut data[*off..off + *size];
+            self.read(*addr, data);
+        }
+    }
 }
 
 use crate::Mutex;

@@ -108,6 +108,9 @@ pub mod stg;
 pub mod pstore;
 
 // Conditional modules.
+#[cfg(target_os = "windows")]
+/// Optimised implementatation of ```Storage``` (windows only).
+pub mod stgwin;
 
 #[cfg(feature = "max")]
 /// Compilation of builtin functions.

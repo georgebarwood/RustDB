@@ -38,12 +38,9 @@ impl PageInfo {
 
         // Get data from file.
         let file = a.spd.file.read();
-        let n = file.page_size(lpnum);
-        let mut v = vec![0; n];
-        file.get_page(lpnum, &mut v);
-        let p = Arc::new(v);
-        self.current = Some(p.clone());
-        p
+        let data = file.get_page(lpnum);
+        self.current = Some(data.clone());
+        data
     }
 
     /// Set the page data, updating the history using the specified time and current data.
