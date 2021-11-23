@@ -158,13 +158,13 @@ impl Storage for WinFileStorage {
     }
 
     fn read(&self, off: u64, buffer: &mut [u8]) {
-        let x = self.start_read(off, buffer);
-        self.wait(x);
+        let h = self.start_read(off, buffer);
+        self.wait(h);
     }
 
     fn write(&mut self, off: u64, buffer: &[u8]) {
-        let x = self.start_write(off, buffer);
-        self.wait(x);
+        let h = self.start_write(off, buffer);
+        self.wait(h);
     }
 
     fn commit(&mut self, size: u64) {
