@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "0.1.14"
+version = "0.1.15"
 authors = ["George Barwood"]
 edition = "2021"
 description = "SQL database (in development)"
@@ -10,6 +10,7 @@ repository = "https://github.com/georgebarwood/RustDB/"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+default = ["max"]
 
 # ````builtin``` exposes an interface that allows extra SQL builtin functions to be defined.
 builtin = []
