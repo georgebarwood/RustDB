@@ -46,7 +46,7 @@ impl WinFileStorage {
         }
     }
 
-    fn start_read(&self, off: u64, buffer: &mut [u8]) -> HANDLE {
+    pub fn start_read(&self, off: u64, buffer: &mut [u8]) -> HANDLE {
         unsafe {
             let event: HANDLE = CreateEventA(std::ptr::null_mut(), true, false, None);
 
@@ -84,7 +84,7 @@ impl WinFileStorage {
         }
     }
 
-    fn start_write(&mut self, off: u64, buffer: &[u8]) -> HANDLE {
+    pub fn start_write(&mut self, off: u64, buffer: &[u8]) -> HANDLE {
         unsafe {
             let event: HANDLE = CreateEventA(std::ptr::null_mut(), true, false, None);
 
@@ -122,7 +122,7 @@ impl WinFileStorage {
         }
     }
 
-    fn wait(&self, x: HANDLE) {
+    pub fn wait(&self, x: HANDLE) {
         unsafe {
             let wait_ok = WaitForSingleObject(x, 2000);
             assert!(wait_ok == WAIT_OBJECT_0);
