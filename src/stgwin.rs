@@ -50,7 +50,7 @@ impl WinFileStorage {
         unsafe {
             let event: HANDLE = CreateEventA(std::ptr::null_mut(), true, false, None);
 
-            let mut overlapped = Box::new(OVERLAPPED {
+            let mut overlapped = OVERLAPPED {
                 Anonymous: OVERLAPPED_0 {
                     Anonymous: OVERLAPPED_0_0 {
                         Offset: off as u32,
@@ -60,7 +60,7 @@ impl WinFileStorage {
                 hEvent: event,
                 Internal: 0,
                 InternalHigh: 0,
-            });
+            };
 
             // overlapped.hEvent.ok().unwrap();
 
@@ -71,7 +71,7 @@ impl WinFileStorage {
                 buffer.as_mut_ptr() as _,
                 blen as u32,
                 std::ptr::null_mut(),
-                &mut *overlapped,
+                &mut overlapped,
             );
 
             /*
