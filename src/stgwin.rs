@@ -143,6 +143,7 @@ impl WinFileStorage {
                             GetOverlappedResult(self.file, &mut overlapped, &mut bytes_copied, false);
                         assert!(overlapped_ok.as_bool());
             */
+            CloseHandle(x);
         }
     }
 }
