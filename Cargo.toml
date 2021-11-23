@@ -6,6 +6,7 @@ edition = "2021"
 description = "SQL database (in development)"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/georgebarwood/RustDB/"
+categories = ["database-implementations"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,13 +23,24 @@ max = ["builtin"]
 # stacker = "0.1"
 parking_lot = "0.11.2"
 
+[dependencies.windows]
+version = "0.27"
+features = [
+    "alloc",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Threading",
+    "Win32_System_IO",
+]
+
 [dev-dependencies]
 mimalloc = { version = "0.1.26", default-features = false }
 axum = { version = "0.3.2", default-features = false, features = ["multipart","http1"] }
 hyper = { version = "0.14.14", features = ["server"] }
-tokio = { version = "1.13.0", features = ["macros","rt-multi-thread"] }
 tower = { version = "0.4.10" }
 tower-cookies = "0.2.1"
+tokio = { version = "1.13.0", features = ["macros","rt"] }
 
 #serde = { version = "1.0.130", features = ["derive"] }
 #headers = "0.3.5"
