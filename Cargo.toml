@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "0.1.13"
+version = "0.1.14"
 authors = ["George Barwood"]
 edition = "2021"
 description = "SQL database (in development)"
@@ -10,16 +10,12 @@ repository = "https://github.com/georgebarwood/RustDB/"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["internal"]
 
-# minimal exposes a minimal interface.
-minimal = []
-
-# builtin exposes an interface that allows extra SQL builtin functions to be defined.
+# ````builtin``` exposes an interface that allows extra SQL builtin functions to be defined.
 builtin = []
 
-# internal exposes a maximal interface.
-internal = []
+# ```max``` exposes a maximal interface, including internal modules.
+max = ["builtin"]
 
 [dependencies]
 # stacker = "0.1"
