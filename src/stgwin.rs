@@ -135,7 +135,7 @@ impl WinFileStorage {
 
     pub fn wait(&self, x: HANDLE) {
         unsafe {
-            let wait_ok = WaitForSingleObject(x, 2000);
+            let wait_ok = WaitForSingleObject(x, u32::MAX);
             assert!(wait_ok == WAIT_OBJECT_0);
             /*
                         let mut bytes_copied = 0;
