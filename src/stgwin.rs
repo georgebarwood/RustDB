@@ -7,7 +7,10 @@ use windows::{
         CreateFileA, // https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
         GetFileSizeEx, // https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfilesizeex
         ReadFile, // https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile
+        SetEndOfFile,
+        SetFilePointerEx,
         WriteFile, // https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile
+        FILE_BEGIN,
         FILE_FLAG_OVERLAPPED,
         FILE_GENERIC_READ,
         FILE_GENERIC_WRITE,
@@ -84,6 +87,14 @@ impl WinFileStorage {
         }
     }
 
+    pub fn truncate(&mut self, size: u64) {
+        unsafe {
+            let mut pos = 0;
+            SetFilePointerEx(self.file, size as i64, &mut pos, FILE_BEGIN);
+            SetEndOfFile(self.file);
+        }
+    }
+
     pub fn start_write(&mut self, off: u64, buffer: &[u8]) -> HANDLE {
         unsafe {
             let event: HANDLE = CreateEventA(std::ptr::null_mut(), true, false, None);
@@ -155,8 +166,9 @@ impl Storage for WinFileStorage {
         self.wait(x);
     }
 
-    fn commit(&mut self, _size: u64) {
+    fn commit(&mut self, size: u64) {
         // Todo: truncate file to size.
+        self.truncate(size);
     }
 
     /// Read multiple ranges. List is (file offset, data offset, data size).
@@ -166,9 +178,8 @@ impl Storage for WinFileStorage {
             let data = &mut data[*off..off + *size];
             handles.push(self.start_read(*addr, data));
         }
-        for h in handles
-        {
-          self.wait(h);
+        for h in handles {
+            self.wait(h);
         }
     }
 }
