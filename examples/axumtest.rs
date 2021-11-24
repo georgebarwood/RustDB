@@ -19,8 +19,8 @@ use rustdb::{
     genquery::{GenQuery, Part},
     init::INITSQL,
     pstore::SharedPagedData,
-    stg::SimpleFileStorage,
-    Database,
+    // stg::SimpleFileStorage,
+    Database, DB,
 };
 
 use std::{collections::HashMap, sync::Arc, thread};
@@ -53,11 +53,11 @@ struct SharedState {
     spd: Arc<SharedPagedData>,
 }
 
-/// Main function ( execution starts here ).
 #[tokio::main]
 async fn main() {
     // console_subscriber::init();
-    let sfs = Box::new(SimpleFileStorage::new(
+    // let sfs = Box::new(rustdb::stgwin::WinFileStorage::new(
+    let sfs = Box::new(rustdb::stg::SimpleFileStorage::new(
         "C:/Users/pc/rust/axumtest/sftest01.rustdb",
     ));
     let spd = Arc::new(SharedPagedData::new(sfs));
@@ -70,6 +70,7 @@ async fn main() {
     // This is the server thread (synchronous).
     thread::spawn(move || {
         let db = Database::new(wstg, INITSQL);
+        register_builtins(&db);
         loop {
             let mut sm = rx.blocking_recv().unwrap();
             db.run_timed("EXEC web.Main()", &mut *sm.sq.x);
@@ -219,5 +220,42 @@ impl IntoResponse for ServerQuery {
             );
         }
         res
+    }
+}
+
+fn register_builtins( db: &DB )
+{
+    let list = [
+        ("ARGON", DataKind::Binary, CompileFunc::Value(c_argon))
+    ];
+    for (name, typ, cf) in list {
+        db.register(name, typ, cf);
+    }
+}
+
+/////////////////////////////
+
+use rustdb::{ *, builtin::*, exec::* };
+use std::rc::Rc;
+use argon2rs::argon2i_simple;
+
+/// Compile call to ARGON.
+fn c_argon(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
+    check_types(b, args, &[DataKind::String, DataKind::String]);
+    let password = c_value(b, &mut args[0]);
+    let salt = c_value(b, &mut args[1]);
+    Box::new(Argon{ password, salt })
+}
+struct Argon {
+    password: CExpPtr<Value>,
+    salt: CExpPtr<Value>,
+}
+impl CExp<Value> for Argon {
+    fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
+        let pw = self.password.eval(ee, d).str();
+        let salt = self.salt.eval(ee, d).str();
+
+        let result = argon2i_simple( &pw, &salt ).to_vec();
+        Value::Binary(Rc::new(result))
     }
 }
