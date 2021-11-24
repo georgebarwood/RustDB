@@ -63,7 +63,6 @@ impl WinFileStorage {
     pub fn start_read(&self, off: u64, buffer: &mut [u8]) -> WinEvent {
         unsafe {
             let event: HANDLE = CreateEventA(std::ptr::null_mut(), true, false, None);
-            event.ok().unwrap();
 
             let mut overlapped = OVERLAPPED {
                 Anonymous: OVERLAPPED_0 {
@@ -87,12 +86,6 @@ impl WinFileStorage {
                 &mut overlapped,
             );
 
-            /*
-                        if !ok.as_bool() {
-                            assert_eq!(GetLastError(), ERROR_IO_PENDING);
-                        }
-            */
-
             WinEvent { event }
         }
     }
@@ -113,8 +106,6 @@ impl WinFileStorage {
                 InternalHigh: 0,
             };
 
-            // overlapped.hEvent.ok().unwrap();
-
             let blen = buffer.len();
 
             let _ok = WriteFile(
@@ -125,12 +116,6 @@ impl WinFileStorage {
                 &mut overlapped,
             );
 
-            /*
-            if !ok.as_bool() {
-              assert_eq!(GetLastError(), ERROR_IO_PENDING);
-            }
-            */
-
             WinEvent { event }
         }
     }
@@ -138,13 +123,7 @@ impl WinFileStorage {
     pub fn wait(&self, x: WinEvent) {
         unsafe {
             let wait_ok = WaitForSingleObject(x.event, u32::MAX);
-            assert!(wait_ok == WAIT_OBJECT_0);
-            /*
-                        let mut bytes_copied = 0;
-                        let overlapped_ok =
-                            GetOverlappedResult(self.file, &mut overlapped, &mut bytes_copied, false);
-                        assert!(overlapped_ok.as_bool());
-            */
+            debug_assert!(wait_ok == WAIT_OBJECT_0);
         }
     }
 
