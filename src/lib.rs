@@ -60,18 +60,18 @@
 pub use crate::{
     genquery::{GenQuery, Part},
     init::INITSQL,
-    pstore::SharedPagedData,
+    pstore::{AccessPagedData, SharedPagedData},
     stg::SimpleFileStorage,
 };
 
 #[cfg(feature = "builtin")]
 pub use crate::{
+    builtin::check_types,
     compile::{c_bool, c_float, c_int, c_value},
+    exec::EvalEnv,
     expr::{Block, DataKind, Expr},
     run::{CExp, CExpPtr, CompileFunc},
     value::Value,
-    exec::EvalEnv,
-    builtin::check_types
 };
 
 use crate::{
@@ -80,7 +80,6 @@ use crate::{
     expr::*,
     page::{Page, PagePtr},
     parse::Parser,
-    pstore::AccessPagedData,
     run::*,
     sortedfile::{Asc, Id, Record, SortedFile},
     stg::Storage,
