@@ -15,7 +15,10 @@ use tower_cookies::{CookieManagerLayer, Cookies};
 
 use tokio::sync::{mpsc, oneshot};
 
-use rustdb::*;
+use rustdb::{
+    c_value, check_types, AccessPagedData, Block, CExp, CExpPtr, CompileFunc, DataKind, Database,
+    EvalEnv, Expr, GenQuery, Part, SharedPagedData, SimpleFileStorage, Value, DB, INITSQL,
+};
 
 use std::{collections::HashMap, rc::Rc, sync::Arc, thread};
 
@@ -102,17 +105,6 @@ fn map_cookies(cookies: Cookies) -> HashMap<String, String> {
         result.insert(name.to_string(), value.to_string());
     }
     result
-
-    /*
-    cookies
-        .list()
-        .iter()
-        .map(|cookie| {
-            let (name, value) = cookie.name_value();
-            (name.to_string(), value.to_string())
-        })
-        .collect()
-    */
 }
 
 /// Get Vec of Parts from MultiPart.
