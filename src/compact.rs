@@ -146,7 +146,7 @@ impl CompactFile {
     }
 
     /// Get logical page contents. Returns the page size.
-    pub fn get_page(&self, lpnum: u64) -> Data {
+    pub fn _old_get_page(&self, lpnum: u64) -> Data {
         if !self.lp_valid(lpnum) {
             return Arc::new(Vec::new());
         }
@@ -178,7 +178,7 @@ impl CompactFile {
 
     /// Get logical page contents. Returns the page size.
     /// Alternative to get_page, uses read_multiple.
-    pub fn _get_page(&self, lpnum: u64) -> Data {
+    pub fn get_page(&self, lpnum: u64) -> Data {
         if !self.lp_valid(lpnum) {
             return Arc::new(Vec::new());
         }
