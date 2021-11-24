@@ -55,9 +55,8 @@ impl WinFileStorage {
                 None,
             );
 
-            if let Err(err) = file.ok() 
-            {
-               panic!("{} Filename= {}", err, filename);
+            if let Err(err) = file.ok() {
+                panic!("{} Filename= {}", err, filename);
             }
             Self { file }
         }

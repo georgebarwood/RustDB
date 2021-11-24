@@ -57,6 +57,14 @@
 //!
 //!Each page is implemented as a binary tree ( so there is a tree of trees ).
 
+#[cfg(feature = "builtin")]
+pub use crate::{
+    compile::{c_bool, c_float, c_int, c_value},
+    expr::{Block, DataKind, Expr},
+    run::{CExp, CExpPtr, CompileFunc},
+    value::Value,
+};
+
 use crate::{
     bytes::ByteStorage,
     compact::CompactFile,
@@ -70,7 +78,7 @@ use crate::{
     stg::Storage,
     table::{ColInfo, IndexInfo, Row, SaveOp, Table, TablePtr},
     util::newmap,
-    value::{get_bytes, Value},
+    value::get_bytes,
 };
 use parking_lot::{Mutex, RwLock};
 use std::{
