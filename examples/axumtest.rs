@@ -47,6 +47,15 @@ struct SharedState {
     spd: Arc<SharedPagedData>,
 }
 
+fn get_db(apd: AccessPagedData, sql: &str) -> DB {
+    let db = Database::new(apd, sql);
+    let list = [("ARGON", DataKind::Binary, CompileFunc::Value(c_argon))];
+    for (name, typ, cf) in list {
+        db.register(name, typ, cf);
+    }
+    db
+}
+
 #[tokio::main]
 async fn main() {
     // console_subscriber::init();
@@ -58,12 +67,11 @@ async fn main() {
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
 
     let state = Arc::new(SharedState { tx, spd });
-    let wstg = state.spd.open_write();
+    let wapd = state.spd.open_write();
 
     // This is the server thread (synchronous).
     thread::spawn(move || {
-        let db = Database::new(wstg, INITSQL);
-        register_builtins(&db);
+        let db = get_db(wapd, INITSQL);
         loop {
             let mut sm = rx.blocking_recv().unwrap();
             db.run_timed("EXEC web.Main()", &mut *sm.sq.x);
@@ -157,8 +165,8 @@ async fn h_get(
 
     let blocking_task = tokio::task::spawn_blocking(move || {
         // GET requests should be read-only.
-        let d = state.spd.open_read();
-        let db = Database::new(d, "");
+        let apd = state.spd.open_read();
+        let db = get_db(apd, "");
         db.run_timed("EXEC web.Main()", &mut *sq.x);
         sq
     });
@@ -216,16 +224,6 @@ impl IntoResponse for ServerQuery {
     }
 }
 
-fn register_builtins( db: &DB )
-{
-    let list = [
-        ("ARGON", DataKind::Binary, CompileFunc::Value(c_argon))
-    ];
-    for (name, typ, cf) in list {
-        db.register(name, typ, cf);
-    }
-}
-
 /////////////////////////////
 
 use argon2rs::argon2i_simple;
@@ -235,7 +233,7 @@ fn c_argon(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[DataKind::String, DataKind::String]);
     let password = c_value(b, &mut args[0]);
     let salt = c_value(b, &mut args[1]);
-    Box::new(Argon{ password, salt })
+    Box::new(Argon { password, salt })
 }
 struct Argon {
     password: CExpPtr<Value>,
@@ -246,7 +244,7 @@ impl CExp<Value> for Argon {
         let pw = self.password.eval(ee, d).str();
         let salt = self.salt.eval(ee, d).str();
 
-        let result = argon2i_simple( &pw, &salt ).to_vec();
+        let result = argon2i_simple(&pw, &salt).to_vec();
         Value::Binary(Rc::new(result))
     }
 }
