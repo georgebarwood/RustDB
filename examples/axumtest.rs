@@ -50,6 +50,7 @@ struct SharedState {
     spd: Arc<SharedPagedData>,
 }
 
+/// Get database with extra registered builtin functions.
 fn get_db(apd: AccessPagedData, sql: &str) -> DB {
     let db = Database::new(apd, sql);
     let list = [("ARGON", DataKind::Binary, CompileFunc::Value(c_argon))];
@@ -60,6 +61,7 @@ fn get_db(apd: AccessPagedData, sql: &str) -> DB {
 }
 
 #[tokio::main]
+/// Execution starts here.
 async fn main() {
     // console_subscriber::init();
     let sfs = Box::new(SimpleFileStorage::new(
@@ -227,6 +229,8 @@ fn c_argon(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     let salt = c_value(b, &mut args[1]);
     Box::new(Argon { password, salt })
 }
+
+/// Compiled call to ARGON.
 struct Argon {
     password: CExpPtr<Value>,
     salt: CExpPtr<Value>,
