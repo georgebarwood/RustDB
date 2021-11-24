@@ -45,7 +45,11 @@ impl PageInfo {
 
     /// Set the page data, updating the history using the specified time and current data.
     pub fn set(&mut self, time: u64, data: Data) {
-        self.history.insert(time, self.current.take().unwrap());
+        let old = self.current.take();
+        if old.is_some()
+        {
+          self.history.insert(time, old.unwrap() );
+        }
         self.current = Some(data);
     }
 
