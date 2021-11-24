@@ -23,7 +23,7 @@ impl WebQuery {
         let _input_headers = hp.read_headers();
         let mut form = HashMap::new();
         let mut parts = Vec::new();
-        println!("content_type='{}'", hp.content_type);
+        // println!("content_type='{}'", hp.content_type);
         if hp.content_type == "application/x-www-form-urlencoded" {
             form = hp.read_form();
         } else if hp.content_type.starts_with("multipart/form-data") {
@@ -147,7 +147,7 @@ impl Query for WebQuery {
     }
 
     fn header(&mut self, name: &str, value: &str) {
-        let hdr = name.to_string() + ": " + value;
+        let hdr = name.to_string() + ": " + value + "\r\n";
         self.headers.push_str(&hdr);
     }
 }
@@ -211,6 +211,8 @@ impl<'a> HttpRequestParser<'a> {
         if self.index == self.count {
             self.base += self.count;
             self.count = self.stream.read(&mut self.buffer).unwrap();
+            assert!(self.count <= self.buffer.len());
+            assert!(self.count != 0); // Dubious
             self.index = 0;
         }
         let result = self.buffer[self.index];
@@ -286,6 +288,7 @@ impl<'a> HttpRequestParser<'a> {
             let value = self.read_coded_str(b'&');
             result.insert(name, Rc::new(value));
         }
+        println!("map={:?}", result);
         result
     }
     fn read_target(&mut self) -> (Rc<String>, HashMap<String, Rc<String>>) {

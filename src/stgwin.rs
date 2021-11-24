@@ -27,6 +27,17 @@ use windows::{
 
 // See also https://docs.microsoft.com/en-us/windows/win32/fileio/synchronous-and-asynchronous-i-o
 
+pub struct WinEvent {
+    event: HANDLE,
+}
+impl Drop for WinEvent {
+    fn drop(&mut self) {
+        unsafe {
+            CloseHandle(self.event);
+        }
+    }
+}
+
 pub struct WinFileStorage {
     pub file: HANDLE,
 }
@@ -49,9 +60,10 @@ impl WinFileStorage {
         }
     }
 
-    pub fn start_read(&self, off: u64, buffer: &mut [u8]) -> HANDLE {
+    pub fn start_read(&self, off: u64, buffer: &mut [u8]) -> WinEvent {
         unsafe {
             let event: HANDLE = CreateEventA(std::ptr::null_mut(), true, false, None);
+            event.ok().unwrap();
 
             let mut overlapped = OVERLAPPED {
                 Anonymous: OVERLAPPED_0 {
@@ -64,8 +76,6 @@ impl WinFileStorage {
                 Internal: 0,
                 InternalHigh: 0,
             };
-
-            // overlapped.hEvent.ok().unwrap();
 
             let blen = buffer.len();
 
@@ -83,19 +93,11 @@ impl WinFileStorage {
                         }
             */
 
-            event
+            WinEvent { event }
         }
     }
 
-    pub fn truncate(&mut self, size: u64) {
-        unsafe {
-            let mut pos = 0;
-            SetFilePointerEx(self.file, size as i64, &mut pos, FILE_BEGIN);
-            SetEndOfFile(self.file);
-        }
-    }
-
-    pub fn start_write(&mut self, off: u64, buffer: &[u8]) -> HANDLE {
+    pub fn start_write(&mut self, off: u64, buffer: &[u8]) -> WinEvent {
         unsafe {
             let event: HANDLE = CreateEventA(std::ptr::null_mut(), true, false, None);
 
@@ -124,18 +126,18 @@ impl WinFileStorage {
             );
 
             /*
-                        if !ok.as_bool() {
-                            assert_eq!(GetLastError(), ERROR_IO_PENDING);
-                        }
+            if !ok.as_bool() {
+              assert_eq!(GetLastError(), ERROR_IO_PENDING);
+            }
             */
 
-            event
+            WinEvent { event }
         }
     }
 
-    pub fn wait(&self, x: HANDLE) {
+    pub fn wait(&self, x: WinEvent) {
         unsafe {
-            let wait_ok = WaitForSingleObject(x, u32::MAX);
+            let wait_ok = WaitForSingleObject(x.event, u32::MAX);
             assert!(wait_ok == WAIT_OBJECT_0);
             /*
                         let mut bytes_copied = 0;
@@ -143,7 +145,14 @@ impl WinFileStorage {
                             GetOverlappedResult(self.file, &mut overlapped, &mut bytes_copied, false);
                         assert!(overlapped_ok.as_bool());
             */
-            CloseHandle(x);
+        }
+    }
+
+    pub fn truncate(&mut self, size: u64) {
+        unsafe {
+            let mut pos = 0;
+            SetFilePointerEx(self.file, size as i64, &mut pos, FILE_BEGIN);
+            SetEndOfFile(self.file);
         }
     }
 }
@@ -158,13 +167,13 @@ impl Storage for WinFileStorage {
     }
 
     fn read(&self, off: u64, buffer: &mut [u8]) {
-        let h = self.start_read(off, buffer);
-        self.wait(h);
+        let e = self.start_read(off, buffer);
+        self.wait(e);
     }
 
     fn write(&mut self, off: u64, buffer: &[u8]) {
-        let h = self.start_write(off, buffer);
-        self.wait(h);
+        let e = self.start_write(off, buffer);
+        self.wait(e);
     }
 
     fn commit(&mut self, size: u64) {
@@ -173,13 +182,13 @@ impl Storage for WinFileStorage {
 
     /// Read multiple ranges. List is (file offset, data offset, data size).
     fn read_multiple(&self, list: &[(u64, usize, usize)], data: &mut [u8]) {
-        let mut handles = Vec::new();
+        let mut events = Vec::new();
         for (addr, off, size) in list {
             let data = &mut data[*off..off + *size];
-            handles.push(self.start_read(*addr, data));
+            events.push(self.start_read(*addr, data));
         }
-        for h in handles {
-            self.wait(h);
+        for e in events {
+            self.wait(e);
         }
     }
 }
