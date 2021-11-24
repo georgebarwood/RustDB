@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "0.1.15"
+version = "0.1.17"
 authors = ["George Barwood"]
 edition = "2021"
 description = "SQL database (in development)"
@@ -40,7 +40,8 @@ axum = { version = "0.3.2", default-features = false, features = ["multipart","h
 hyper = { version = "0.14.14", features = ["server"] }
 tower = { version = "0.4.10" }
 tower-cookies = "0.2.1"
-tokio = { version = "1.13.0", features = ["macros","rt"] }
+tokio = { version = "1.13.0", features = ["macros","rt-multi-thread"] }
+argon2rs = "0.2.5"
 
 #serde = { version = "1.0.130", features = ["derive"] }
 #headers = "0.3.5"
