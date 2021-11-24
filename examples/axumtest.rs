@@ -15,15 +15,9 @@ use tower_cookies::{CookieManagerLayer, Cookies};
 
 use tokio::sync::{mpsc, oneshot};
 
-use rustdb::{
-    genquery::{GenQuery, Part},
-    init::INITSQL,
-    pstore::SharedPagedData,
-    // stg::SimpleFileStorage,
-    Database, DB,
-};
+use rustdb::*;
 
-use std::{collections::HashMap, sync::Arc, thread};
+use std::{collections::HashMap, rc::Rc, sync::Arc, thread};
 
 /// Query to be sent to server thread, implements IntoResponse.
 struct ServerQuery {
@@ -56,8 +50,7 @@ struct SharedState {
 #[tokio::main]
 async fn main() {
     // console_subscriber::init();
-    // let sfs = Box::new(rustdb::stgwin::WinFileStorage::new(
-    let sfs = Box::new(rustdb::stg::SimpleFileStorage::new(
+    let sfs = Box::new(SimpleFileStorage::new(
         "C:/Users/pc/rust/axumtest/sftest01.rustdb",
     ));
     let spd = Arc::new(SharedPagedData::new(sfs));
@@ -235,8 +228,6 @@ fn register_builtins( db: &DB )
 
 /////////////////////////////
 
-use rustdb::{ *, builtin::*, exec::* };
-use std::rc::Rc;
 use argon2rs::argon2i_simple;
 
 /// Compile call to ARGON.
