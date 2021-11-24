@@ -57,18 +57,26 @@
 //!
 //!Each page is implemented as a binary tree ( so there is a tree of trees ).
 
+pub use crate::{
+    genquery::{GenQuery, Part},
+    init::INITSQL,
+    pstore::SharedPagedData,
+    stg::SimpleFileStorage,
+};
+
 #[cfg(feature = "builtin")]
 pub use crate::{
     compile::{c_bool, c_float, c_int, c_value},
     expr::{Block, DataKind, Expr},
     run::{CExp, CExpPtr, CompileFunc},
     value::Value,
+    exec::EvalEnv,
+    builtin::check_types
 };
 
 use crate::{
     bytes::ByteStorage,
     compact::CompactFile,
-    exec::EvalEnv,
     expr::*,
     page::{Page, PagePtr},
     parse::Parser,
@@ -116,9 +124,11 @@ pub mod stg;
 pub mod pstore;
 
 // Conditional modules.
-#[cfg(target_os = "windows")]
-/// Optimised implementatation of ```Storage``` (windows only).
-pub mod stgwin;
+
+// #[cfg(target_os = "windows")]
+// Optimised implementatation of ```Storage``` (windows only).
+// This didn't work out - actually ran slower!
+// pub mod stgwin;
 
 #[cfg(feature = "max")]
 /// Compilation of builtin functions.
