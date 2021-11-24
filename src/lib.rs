@@ -40,6 +40,8 @@
 //!    }
 //!```
 //!
+//![See here](https://github.com/georgebarwood/RustDB/blob/main/examples/axumtest.rs) for more advanced example (Axum webserver with ARGON hash function).
+//!
 //!General Design of Database
 //!
 //!SortedFile stores fixed size Records in a tree of Pages.
