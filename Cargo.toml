@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "0.1.17"
+version = "0.1.18"
 authors = ["George Barwood"]
 edition = "2021"
 description = "SQL database (in development)"
@@ -22,17 +22,6 @@ max = ["builtin"]
 [dependencies]
 # stacker = "0.1"
 parking_lot = "0.11.2"
-
-[dependencies.windows]
-version = "0.27"
-features = [
-    "alloc",
-    "Win32_Foundation",
-    "Win32_Security",
-    "Win32_Storage_FileSystem",
-    "Win32_System_Threading",
-    "Win32_System_IO",
-]
 
 [dev-dependencies]
 mimalloc = { version = "0.1.26", default-features = false }
