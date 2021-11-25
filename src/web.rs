@@ -221,7 +221,6 @@ impl<'a> HttpRequestParser<'a> {
             self.index = 0;
             if self.count == 0
             {
-              println!("Unexpected zero read base={}", self.base );
               self.index = 1;
               self.eof = true;
               return b' ';
@@ -300,7 +299,6 @@ impl<'a> HttpRequestParser<'a> {
             let value = self.read_coded_str(b'&');
             result.insert(name, Rc::new(value));
         }
-        println!("map={:?}", result);
         result
     }
     fn read_target(&mut self) -> (Rc<String>, HashMap<String, Rc<String>>) {
@@ -396,7 +394,7 @@ impl<'a> HttpRequestParser<'a> {
         let mut ok = true;
         while ok {
             let _headers = self.read_headers();
-            println!("headers={:?}", _headers);
+            // println!("headers={:?}", _headers);
             let mut body = Vec::new();
             ok = false;
             while !self.eof {

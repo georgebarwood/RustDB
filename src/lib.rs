@@ -1,9 +1,5 @@
 //!
-//!ToDo List:
-//!
-//!Test cookies.
-//!
-//!Make sys.Function a system table. Index sys.Schema.
+//!# ToDo List:
 //!
 //!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
 //!
@@ -11,24 +7,23 @@
 //!
 //!Work on improving/testing SQL code, browse schema, float I/O.
 //!
-//!Features
+//!# Features
 //!
-//!builtin exposes an interface that allows extra SQL builtin functions to be defined.
+//! This crate supports two cargo features. 
+//! - `builtin` : Allows extra SQL builtin functions to be defined.
+//! - `max` : Exposes maximal interface, including all internal modules (default).
 //!
-//!max exposes a maximal interface, including internal details.
-//!
-//! Database with SQL-like language.
-//! Example program:
+//!# Examples
 //! ```
-//!use rustdb::{pstore::SharedPagedData, stg::SimpleFileStorage, web::WebQuery, Database, init::INITSQL};
+//!use rustdb::{SharedPagedData, SimpleFileStorage, WebQuery, Database, INITSQL};
 //!use std::net::TcpListener;
 //!use std::sync::Arc;
 //!    let sfs = Box::new(SimpleFileStorage::new(
 //!        "c:\\Users\\pc\\rust\\sftest01.rustdb",
 //!    ));
 //!    let spd = Arc::new(SharedPagedData::new(sfs));
-//!    let wstg = spd.open_write();
-//!    let db = Database::new(wstg, INITSQL);
+//!    let apd = spd.open_write();
+//!    let db = Database::new(apd, INITSQL);
 //!    let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
 //!    for tcps in listener.incoming() {
 //!        let mut tcps = tcps.unwrap();
@@ -42,16 +37,16 @@
 //!
 //![See here](https://github.com/georgebarwood/RustDB/blob/main/examples/axumtest.rs) for more advanced example (Axum webserver with ARGON hash function).
 //!
-//!General Design of Database
+//!# General Design of Database
 //!
 //!SortedFile stores fixed size Records in a tree of Pages.
 //!SortedFile is used to implement:
 //!
-//!(1) Variable length values ( which are split into fragments - see bytes module - although up to 15 bytes can be stored directly. ).
+//! - Variable length values ( which are split into fragments - see bytes module - although up to 15 bytes can be stored directly. ).
 //!
-//!(2) Database Table storage. Each record has a 64-bit Id.
+//! - Database Table storage. Each record has a 64-bit Id.
 //!
-//!(3) Index storage ( an index record refers back to the main table ).
+//! - Index storage ( an index record refers back to the main table ).
 //!
 //!Pages have a maximum size, and are stored in CompactFile, which stores logical pages in smaller regions of backing storage.
 //!
@@ -243,6 +238,7 @@ pub struct Database {
     pub sys_column: TablePtr,
     pub sys_index: TablePtr,
     pub sys_index_col: TablePtr,
+    pub sys_function: TablePtr,
     /// Storage of variable length data.
     pub bs: ByteStorage,
     // Various maps for named database objects.
@@ -263,9 +259,9 @@ impl Database {
         let mut dq = DummyQuery {};
         let is_new = file.is_new();
         let mut tb = TableBuilder::new();
-        let sys_schema = tb.nt("sys", "Schema", &[("Name", STRING)]);
+        let sys_schema = tb.nt("Schema", &[("Name", STRING)]);
         let sys_table = tb.nt(
-            "sys",
+            
             "Table",
             &[
                 ("Root", BIGINT),
@@ -277,24 +273,32 @@ impl Database {
             ],
         );
         let sys_column = tb.nt(
-            "sys",
+            
             "Column",
             &[("Table", BIGINT), ("Name", STRING), ("Type", BIGINT)],
         );
         let sys_index = tb.nt(
-            "sys",
+            
             "Index",
             &[("Root", BIGINT), ("Table", BIGINT), ("Name", STRING)],
         );
         let sys_index_col = tb.nt(
-            "sys",
+            
             "IndexColumn",
             &[("Index", BIGINT), ("ColId", BIGINT)],
         );
-        sys_table.add_index(6, vec![1, 2]);
-        sys_column.add_index(7, vec![0]);
-        sys_index.add_index(8, vec![1]);
-        sys_index_col.add_index(9, vec![0]);
+        let sys_function = tb.nt(
+            
+            "Function",
+            &[("Schema", BIGINT), ("Name", STRING), ("Def", STRING)],
+        );
+        sys_schema.add_index(7, vec![0]);
+        sys_table.add_index(8, vec![1, 2]);
+        sys_column.add_index(9, vec![0]);
+        sys_index.add_index(10, vec![1]);
+        sys_index_col.add_index(11, vec![0]);
+        sys_function.add_index(12, vec![0, 1]);
+
         let db = Rc::new(Database {
             file,
             sys_schema,
@@ -302,6 +306,7 @@ impl Database {
             sys_column,
             sys_index,
             sys_index_col,
+            sys_function,
             bs: ByteStorage::new(0),
             schemas: newmap(),
             functions: newmap(),
@@ -331,15 +336,13 @@ CREATE TABLE sys.Table( Root bigint, Schema bigint, Name string, IsView tinyint,
 CREATE TABLE sys.Column( Table bigint, Name string, Type bigint )
 CREATE TABLE sys.Index( Root bigint, Table bigint, Name string )
 CREATE TABLE sys.IndexColumn( Index bigint, ColId bigint )
+CREATE TABLE sys.Function( Schema bigint, Name string, Def string )
 GO
+CREATE INDEX ByName ON sys.Schema(Name)
 CREATE INDEX BySchemaName ON sys.Table(Schema,Name)
-GO
 CREATE INDEX ByTable ON sys.Column(Table)
 CREATE INDEX ByTable ON sys.Index(Table)
 CREATE INDEX ByIndex ON sys.IndexColumn(Index)
-GO
-CREATE TABLE sys.Function( Schema bigint, Name string, Def string )
-GO
 CREATE INDEX BySchemaName ON sys.Function(Schema,Name)
 GO
 ";
@@ -529,11 +532,11 @@ impl TableBuilder {
             list: Vec::new(),
         }
     }
-    fn nt(&mut self, schema: &str, name: &str, ct: &[(&str, DataType)]) -> TablePtr {
+    fn nt(&mut self, name: &str, ct: &[(&str, DataType)]) -> TablePtr {
         let id = self.alloc;
         let root_page = id as u64;
         self.alloc += 1;
-        let name = ObjRef::new(schema, name);
+        let name = ObjRef::new("sys", name);
         let info = ColInfo::new(name, ct);
         let table = Table::new(id, root_page, 1, Rc::new(info));
         self.list.push(table.clone());
@@ -542,7 +545,7 @@ impl TableBuilder {
 }
 
 /// Input/Output message. Query and response.
-pub trait Query {
+pub trait Query : std::any::Any {
     /// STATUSCODE builtin function. sets the response status code.
     fn status_code(&mut self, _code: i64) {}
 

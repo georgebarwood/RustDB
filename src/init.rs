@@ -1,6 +1,5 @@
 pub const INITSQL : &str = "
 
-
 CREATE FN [sys].[TypeName]( t int ) RETURNS string AS 
 BEGIN 
   RETURN CASE 
@@ -402,24 +401,6 @@ BEGIN
   RETURN GLOBAL(0) + 62135596800000000 /* 719162 * 24 * 3600 * 1000000 */
 END
 GO
-CREATE FN [date].[TestRoundTrip]() AS
-BEGIN
-
-  DECLARE day int
-
-  SET day = 0
-  WHILE day < 1000000
-  BEGIN
-    IF date.YearMonthDayToDays( date.DaysToYearMonthDay(day) ) != day
-    BEGIN
-      SELECT 'Test failed day = ' | day
-      BREAK
-    END
-    SET day = day + 1
-  END
-  SELECT 'Finished test day=' | day | ' date=' | date.DaysToString(day)
-END
-GO
 CREATE FN [date].[Test]( y int, m int, d int, n int ) AS 
 BEGIN
   DECLARE ymd int, days int
@@ -535,19 +516,18 @@ BEGIN
   DECLARE year int, day int, cycle int
   -- 146097 is the number of the days in a 400 year cycle ( 400 * 365 + 97 leap years )
   SET cycle = days / 146097
-  SET days = days - 146097 * cycle -- Same as days % 146097
+  SET days = days % 146097
   SET year = days / 365
-  SET day = days - year * 365 -- Same as days % 365
-
+  SET day = days % 365
   -- Need to adjust day to allow for leap years.
   -- Leap years are 0, 4, 8, 12 ... 96, not 100, 104 ... not 200... not 300, 400, 404 ... not 500.
   -- Adjustment as function of y is 0 => 0, 1 => 1, 2 =>1, 3 => 1, 4 => 1, 5 => 2 ..
-  SET day = day - ( year + 3 ) / 4 + ( year + 99 ) / 100 - ( year + 399 ) / 400
+  SET day = day - ( year + 3 ) / 4 - ( year + 99 ) / 100 + ( year + 399 ) / 400
   
   IF day < 0
   BEGIN
     SET year = year - 1
-    SET day = day + CASE WHEN date.IsLeapYear( year ) THEN 366 ELSE 365 END
+    SET day = day + CASE WHEN date.IsLeapYear( day ) THEN 366 ELSE 365 END
   END
   RETURN 512 * ( cycle * 400 + year ) + day + 1
 END
@@ -584,8 +564,12 @@ END
 GO
 CREATE FN [web].[SetCookie]( name string, value string, expires string ) AS
 BEGIN
-  -- SELECT 16, name, value, expires /* e.g. 01 Jan 2050 */
-  THROW 'SetCookie is ToDo'
+  /* Expires can be either in seconds e.g. Max-Age=1000000000
+     or Expires=Wed, 09 Jun 2021 10:18:14 GMT
+     or blank for temporary cookie
+  */
+  DECLARE x int
+  SET x = HEADER( 'set-cookie', name | '=' | value | '; ' | expires )
 END
 GO
 CREATE FN [web].[SetContentType]( ct string ) AS
@@ -602,9 +586,9 @@ END
 GO
 CREATE FN [web].[Redirect]( url string ) AS
 BEGIN
-  DECLARE dummy int
-  SET dummy = HEADER( 'location', url )
-  SET dummy = STATUSCODE( 303 )
+  DECLARE x int
+  SET x = HEADER( 'location', url )
+  SET x = STATUSCODE( 303 )
 END
 GO
 CREATE FN [web].[Query]( name string ) RETURNS string AS
@@ -1036,27 +1020,6 @@ END
 GO
 --############################################
 CREATE SCHEMA [handler]
-CREATE FN [handler].[/Slow]() AS
-BEGIN
-  EXEC web.Head( 'Slow' )
-
-  DECLARE n int, a int, total int
-  SET n = 0
-  WHILE n < 100000 -- Intended to take a long time
-  BEGIN
-    FOR a = y FROM dbo.Test  
-    BEGIN
-      SET total = total + a
-    END
-    SET n = n + 1
-  END
-  SELECT 'Total = ' | total
-
-  SELECT '<p>' | LastName FROM dbo.Cust
-
-  EXEC web.Trailer()
-END
-GO
 CREATE FN [handler].[/ShowTable]() AS 
 BEGIN 
   DECLARE t int SET t = PARSEINT( web.Query('k') )
@@ -1350,6 +1313,8 @@ BEGIN
      | '<br>CREATE INDEX ByLastName on dbo.Cust(LastName)'
      | '<br>CREATE VIEW dbo.OrderSummary AS SELECT Cust, SUM(Total) as Total, COUNT() as Count FROM dbo.Order GROUP BY Cust'
      | '<br>CREATE FN handler.[/MyPage]() AS BEGIN END'
+     | '<br>SELECT ''hash='' | ARGON( ''argon2i!'', ''delicious salt'' )'
+     | '<br>EXEC web.SetCookie(''username'',''fred'',''Max-Age=1000000000'')'
    EXEC web.Trailer()
 END
 GO
@@ -1428,13 +1393,20 @@ CREATE FN [handler].[/EditFile]() AS
 BEGIN
   DECLARE k int SET k = PARSEINT( web.Query('k') )
   DECLARE path string SET path = web.Form('path')
-  IF path != '' UPDATE web.File SET Path = path WHERE Id = k
-  EXEC web.Head( 'Edit File' )
-  SELECT '<h1>Edit File Path</h1>'
-  SELECT '<form method=post>Path: <input name=path size=50 value=\"' | Path | '\">'
-    | '<p><input type=submit value=Save></form>'
-  FROM web.File WHERE Id = k
-  EXEC web.Trailer()
+  IF path != '' 
+  BEGIN
+    UPDATE web.File SET Path = path WHERE Id = k
+    EXEC web.Redirect('ListFile')
+  END
+  ELSE
+  BEGIN
+    EXEC web.Head( 'Edit File' )
+    SELECT '<h1>Edit File Path</h1>'
+    SELECT '<form method=post>Path: <input name=path size=50 value=\"' | Path | '\">'
+      | '<p><input type=submit value=Save></form>'
+    FROM web.File WHERE Id = k
+    EXEC web.Trailer()
+  END
 END
 GO
 CREATE FN [handler].[/Dump]() AS 
@@ -1574,33 +1546,6 @@ CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int)
 GO
 CREATE INDEX [ByCust] ON [dbo].[Order]([Cust])
 GO
-CREATE FN [dbo].[Testing]() AS
-
-BEGIN
-
-CREATE TABLE dbo.Test( x string, y bigint )
-
-DECLARE i int
-SET i = 0
-WHILE i < 2000
-BEGIN
-  INSERT INTO dbo.Test(x,y) VALUES ( 'Hello', i )
-  SET i = i + 1
-END
-
-DECLARE n int, a int, total int
-SET n = 0
-WHILE n < 10000 -- Intended to take a long time
-BEGIN
-  SET n = n + 1
-  FOR a = y FROM dbo.Test  
-  BEGIN
-    SET total = total + a
-  END
-END
-
-END
-GO
 CREATE FN [dbo].[MakeOrders]() AS
 BEGIN 
   DELETE FROM dbo.Order WHERE 1 = 1
@@ -1638,10 +1583,10 @@ INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode]) VALUES
 (2,'Clare','Smith',29,'GL3')
 (3,'Ron','Jones',45,'')
 (4,'Peter','Perfect',36,'')
-(5,'George','Washington',29,'WC1')
+(5,'George','Washington',31,'WC1')
 (6,'Ron','Williams',49,'')
 (7,'Adam','Baker',0,'')
-(8,'George','Barwood',64,'GL2 4LZ')
+(8,'George','Barwood',63,'GL2 4LZ')
 (9,'Fred','Flintstone',88,'XYZ')
 GO
 
@@ -1691,7 +1636,7 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (94,2,55,1034273)
 (95,3,10,1034273)
 (96,4,20,1034273)
-(97,5,30,1034273)
+(97,5,30,1036986)
 (98,6,40,1034785)
 (99,7,50,1034785)
 (100,1,25,1034273)
@@ -1713,9 +1658,9 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (116,1,99,1034461)
 (117,1,99,1034465)
 (118,5,999,1035114)
-(120,8,1825,934597)
+(120,8,5000,1035114)
 (121,5,99,1035114)
-(122,8,888,1023862)
+(122,8,50,1035123)
 GO
 
 --############################################

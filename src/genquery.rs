@@ -147,6 +147,7 @@ impl Default for GenQuery {
     }
 }
 
+/// Part of multipart data ( uploaded files ). 
 pub struct Part {
     pub name: String,
     pub file_name: String,

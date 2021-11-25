@@ -1,7 +1,7 @@
 use crate::*;
 /// Simple value ( Binary, String, Int, Float, Bool ).
 ///
-/// Binary and String values are allocated 16 bytes.
+/// When stored in a database record, Binary and String values are allocated 16 bytes.
 /// If the value is more than 15 bytes, the first 7 bytes are stored inline, and the rest are coded.
 
 #[derive(Clone)]
