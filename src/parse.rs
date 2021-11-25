@@ -544,7 +544,7 @@ impl<'a> Parser<'a> {
                 panic!("Hex literal must have even number of characters");
             }
             let hb = &self.source[self.token_start + 2..self.source_ix - 1];
-            result = Expr::new(ExprIs::Const(Value::Binary(Rc::new(util::parse_hex(hb)))));
+            result = Expr::new(ExprIs::Const(Value::RcBinary(Rc::new(util::parse_hex(hb)))));
             self.read_token();
         } else if self.test(Token::Minus) {
             result = Expr::new(ExprIs::Minus(Box::new(self.exp_p(30))));

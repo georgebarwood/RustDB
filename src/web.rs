@@ -8,6 +8,7 @@ pub struct WebQuery {
     pub path: Rc<String>,
     pub query: HashMap<String, Rc<String>>,
     pub form: HashMap<String, Rc<String>>,
+    pub input_headers: Vec<(String,String)>,
     pub parts: Vec<Part>,
     pub err: String,
     pub output: Vec<u8>,
@@ -20,7 +21,7 @@ impl WebQuery {
     pub fn new(s: &TcpStream) -> Self {
         let mut hp = HttpRequestParser::new(s);
         let (method, path, query, _version) = hp.read_request();
-        let _input_headers = hp.read_headers();
+        let input_headers = hp.read_headers();
         let mut form = HashMap::new();
         let mut parts = Vec::new();
         // println!("content_type='{}'", hp.content_type);
@@ -41,6 +42,7 @@ impl WebQuery {
         Self {
             status_code,
             output,
+            input_headers,
             headers,
             method,
             path,
@@ -53,12 +55,12 @@ impl WebQuery {
     }
     pub fn trace(&self) {
         println!(
-            "method={} path={} query={:?}",
-            self.method, self.path, self.query
+            "method={} path={} query={:?} input headers={:?}",
+            self.method, self.path, self.query, self.input_headers
         );
     }
     /// Writes the http response to the TCP stream.
-    pub fn write(&mut self, tcps: &mut TcpStream) {
+    pub fn write(&mut self, tcps: &mut TcpStream) -> Result<(),std::io::Error> {
         let contents = &self.output;
         let status_line = "HTTP/1.1 ".to_string() + &self.status_code;
         let response = format!(
@@ -67,9 +69,10 @@ impl WebQuery {
             self.headers,
             contents.len()
         );
-        tcps.write_all(response.as_bytes()).unwrap();
-        tcps.write_all(contents).unwrap();
-        tcps.flush().unwrap();
+        tcps.write_all(response.as_bytes())?;
+        tcps.write_all(contents)?;
+        tcps.flush()?;
+        Ok(())
     }
     /// Append string to output.
     fn push_str(&mut self, s: &str) {
@@ -125,7 +128,10 @@ impl Query for WebQuery {
                 Value::Float(x) => {
                     self.push_str(&x.to_string());
                 }
-                Value::Binary(x) => {
+                Value::RcBinary(x) => {
+                    self.output.extend_from_slice(x);
+                }
+                Value::ArcBinary(x) => {
                     self.output.extend_from_slice(x);
                 }
                 _ => {
@@ -203,17 +209,23 @@ impl<'a> HttpRequestParser<'a> {
         }
     }
     fn get_byte(&mut self) -> u8 {
-        if self.base + self.index == self.end_content {
-            self.index += 1;
+        if self.eof || self.base + self.index >= self.end_content {
+            self.index = 1;
             self.eof = true;
             return b' ';
         }
-        if self.index == self.count {
+        if self.index >= self.count {
             self.base += self.count;
             self.count = self.stream.read(&mut self.buffer).unwrap();
             assert!(self.count <= self.buffer.len());
-            assert!(self.count != 0); // Dubious
             self.index = 0;
+            if self.count == 0
+            {
+              println!("Unexpected zero read base={}", self.base );
+              self.index = 1;
+              self.eof = true;
+              return b' ';
+            }
         }
         let result = self.buffer[self.index];
         self.index += 1;
@@ -222,7 +234,7 @@ impl<'a> HttpRequestParser<'a> {
     fn skip_white_space(&mut self) {
         loop {
             let b = self.get_byte();
-            if b != 32 && b != 9 {
+            if b != b' ' && b != 9 {
                 self.index -= 1;
                 break;
             }
@@ -235,7 +247,7 @@ impl<'a> HttpRequestParser<'a> {
             if b == to {
                 break;
             }
-            if b == 13 {
+            if b == 13 || self.eof {
                 self.index -= 1;
                 break;
             }
@@ -322,7 +334,7 @@ impl<'a> HttpRequestParser<'a> {
         (method, path, query, version)
     }
     fn read_header(&mut self) -> Option<(String, String)> {
-        assert!(self.get_byte() == 10);
+        if self.get_byte() != 10 { return None; }
         let name = self.read_to(b':');
         if name.is_empty() {
             return None;
@@ -341,8 +353,9 @@ impl<'a> HttpRequestParser<'a> {
         while let Some(pair) = self.read_header() {
             result.push(pair);
         }
-        assert!(self.get_byte() == 13);
-        assert!(self.get_byte() == 10);
+        // Read CR/LF
+        self.get_byte();
+        self.get_byte();
         result
     }
     pub fn read_content(&mut self) -> String {

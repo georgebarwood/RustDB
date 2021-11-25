@@ -7,7 +7,8 @@ use crate::*;
 #[derive(Clone)]
 pub enum Value {
     None,
-    Binary(Rc<Vec<u8>>),
+    RcBinary(Rc<Vec<u8>>),
+    ArcBinary(Arc<Vec<u8>>),
     String(Rc<String>),
     Int(i64),
     Float(f64),
@@ -22,7 +23,7 @@ impl Value {
             DataKind::Bool => Value::Bool(false),
             DataKind::Float => Value::Float(0.0),
             DataKind::String => Value::String(Rc::new(String::new())),
-            DataKind::Binary => Value::Binary(Rc::new(Vec::new())),
+            DataKind::Binary => Value::RcBinary(Rc::new(Vec::new())),
             _ => Value::Int(0),
         }
     }
@@ -40,7 +41,7 @@ impl Value {
             DataKind::Binary => {
                 let (bytes, u) = get_bytes(db, &data[off..]);
                 code = u;
-                Value::Binary(Rc::new(bytes))
+                Value::RcBinary(Rc::new(bytes))
             }
             _ => {
                 let size = data_size(typ);
@@ -71,7 +72,10 @@ impl Value {
             Value::String(s) => {
                 save_bytes(s.as_bytes(), &mut data[off..], code);
             }
-            Value::Binary(b) => {
+            Value::RcBinary(b) => {
+                save_bytes(b, &mut data[off..], code);
+            }
+            Value::ArcBinary(b) => {
                 save_bytes(b, &mut data[off..], code);
             }
             _ => {}
@@ -83,7 +87,8 @@ impl Value {
             Value::String(s) => s.clone(),
             Value::Int(x) => Rc::new(x.to_string()),
             Value::Float(x) => Rc::new(x.to_string()),
-            Value::Binary(x) => Rc::new(util::to_hex(x)),
+            Value::RcBinary(x) => Rc::new(util::to_hex(x)),
+            Value::ArcBinary(x) => Rc::new(util::to_hex(x)),
             _ => panic!("str not implemented"),
         }
     }

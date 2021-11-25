@@ -64,12 +64,21 @@ pub use crate::{
     init::INITSQL,
     pstore::{AccessPagedData, SharedPagedData},
     stg::SimpleFileStorage,
+    web::WebQuery
 };
 
 #[cfg(feature = "builtin")]
 pub use crate::{
     builtin::check_types,
     compile::{c_bool, c_float, c_int, c_value},
+    exec::EvalEnv,
+    expr::{Block, DataKind, Expr},
+    run::{CExp, CExpPtr, CompileFunc},
+    value::Value,
+};
+#[cfg(not(feature = "builtin"))]
+use crate::{
+    compile::c_bool,
     exec::EvalEnv,
     expr::{Block, DataKind, Expr},
     run::{CExp, CExpPtr, CompileFunc},
@@ -87,8 +96,9 @@ use crate::{
     stg::Storage,
     table::{ColInfo, IndexInfo, Row, SaveOp, Table, TablePtr},
     util::newmap,
-    value::get_bytes,
+    value::*,
 };
+
 use parking_lot::{Mutex, RwLock};
 use std::{
     cell::{Cell, RefCell},
@@ -464,7 +474,8 @@ GO
     /// Get code for value.
     pub fn encode(self: &DB, val: &Value) -> u64 {
         let bytes = match val {
-            Value::Binary(x) => x,
+            Value::RcBinary(x) => &**x,
+            Value::ArcBinary(x) => &**x,
             Value::String(x) => x.as_bytes(),
             _ => {
                 return u64::MAX;
@@ -556,9 +567,9 @@ pub trait Query {
         Rc::new(String::new())
     }
 
-    /// Get file content. Note: content is consumed ( can only be fetched once ).
-    fn file_content(&mut self, _fnum: i64) -> Rc<Vec<u8>> {
-        Rc::new(Vec::new())
+    /// Get file content.
+    fn file_content(&mut self, _fnum: i64) -> Arc<Vec<u8>> {
+        Arc::new(Vec::new())
     }
 
     /// Set the error string.

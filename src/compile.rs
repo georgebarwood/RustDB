@@ -58,7 +58,8 @@ pub fn c_check(b: &Block, e: &mut Expr) {
                 Value::Int(_) => BIGINT,
                 Value::Float(_) => DOUBLE,
                 Value::String(_) => STRING,
-                Value::Binary(_) => BINARY,
+                Value::RcBinary(_) => BINARY,
+                Value::ArcBinary(_) => BINARY,
                 _ => NONE,
             }
         }

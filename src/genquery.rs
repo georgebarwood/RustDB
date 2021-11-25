@@ -1,4 +1,4 @@
-use crate::{panic, HashMap, Query, Rc, Value};
+use crate::{panic, HashMap, Query, Rc, Value, Data};
 
 /// General Query.
 pub struct GenQuery {
@@ -98,7 +98,10 @@ impl Query for GenQuery {
                 Value::Float(x) => {
                     self.push_str(&x.to_string());
                 }
-                Value::Binary(x) => {
+                Value::RcBinary(x) => {
+                    self.output.extend_from_slice(x);
+                }
+                Value::ArcBinary(x) => {
                     self.output.extend_from_slice(x);
                 }
                 _ => {
@@ -133,9 +136,8 @@ impl Query for GenQuery {
         };
         Rc::new(result.to_string())
     }
-    fn file_content(&mut self, k: i64) -> Rc<Vec<u8>> {
-        let bytes = std::mem::take(&mut self.parts[k as usize].data);
-        Rc::new(bytes)
+    fn file_content(&mut self, k: i64) -> Data {
+        self.parts[k as usize].data.clone()
     }
 }
 
@@ -150,5 +152,5 @@ pub struct Part {
     pub file_name: String,
     pub content_type: String,
     pub text: String,
-    pub data: Vec<u8>,
+    pub data: Data,
 }

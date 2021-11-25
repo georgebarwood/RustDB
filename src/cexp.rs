@@ -291,7 +291,7 @@ pub struct ColumnBinary {
 impl CExp<Value> for ColumnBinary {
     fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> Value {
         let bytes = get_bytes(&ee.db, &data[self.off..]).0;
-        Value::Binary(Rc::new(bytes))
+        Value::RcBinary(Rc::new(bytes))
     }
 }
 pub struct Local {
