@@ -1,5 +1,6 @@
 pub const INITSQL : &str = "
 
+
 CREATE FN [sys].[TypeName]( t int ) RETURNS string AS 
 BEGIN 
   RETURN CASE 
@@ -401,6 +402,22 @@ BEGIN
   RETURN GLOBAL(0) + 62135596800000000 /* 719162 * 24 * 3600 * 1000000 */
 END
 GO
+CREATE FN [date].[TestRoundTrip]() AS
+BEGIN
+  DECLARE day int
+  SET day = 0
+  WHILE day < 1000000
+  BEGIN
+    IF date.YearMonthDayToDays( date.DaysToYearMonthDay(day) ) != day
+    BEGIN
+      SELECT 'Test failed day = ' | day
+      BREAK
+    END
+    SET day = day + 1
+  END
+  SELECT 'Finished test day=' | day | ' date=' | date.DaysToString(day)
+END
+GO
 CREATE FN [date].[Test]( y int, m int, d int, n int ) AS 
 BEGIN
   DECLARE ymd int, days int
@@ -516,18 +533,18 @@ BEGIN
   DECLARE year int, day int, cycle int
   -- 146097 is the number of the days in a 400 year cycle ( 400 * 365 + 97 leap years )
   SET cycle = days / 146097
-  SET days = days % 146097
+  SET days = days - 146097 * cycle -- Same as days % 146097
   SET year = days / 365
-  SET day = days % 365
+  SET day = days - year * 365 -- Same as days % 365
   -- Need to adjust day to allow for leap years.
   -- Leap years are 0, 4, 8, 12 ... 96, not 100, 104 ... not 200... not 300, 400, 404 ... not 500.
   -- Adjustment as function of y is 0 => 0, 1 => 1, 2 =>1, 3 => 1, 4 => 1, 5 => 2 ..
-  SET day = day - ( year + 3 ) / 4 - ( year + 99 ) / 100 + ( year + 399 ) / 400
+  SET day = day - ( year + 3 ) / 4 + ( year + 99 ) / 100 - ( year + 399 ) / 400
   
   IF day < 0
   BEGIN
     SET year = year - 1
-    SET day = day + CASE WHEN date.IsLeapYear( day ) THEN 366 ELSE 365 END
+    SET day = day + CASE WHEN date.IsLeapYear( year ) THEN 366 ELSE 365 END
   END
   RETURN 512 * ( cycle * 400 + year ) + day + 1
 END
@@ -1020,6 +1037,24 @@ END
 GO
 --############################################
 CREATE SCHEMA [handler]
+CREATE FN [handler].[/Slow]() AS
+BEGIN
+  EXEC web.Head( 'Slow' )
+  DECLARE n int, a int, total int
+  SET n = 0
+  WHILE n < 100000 -- Intended to take a long time
+  BEGIN
+    FOR a = y FROM dbo.Test  
+    BEGIN
+      SET total = total + a
+    END
+    SET n = n + 1
+  END
+  SELECT 'Total = ' | total
+  SELECT '<p>' | LastName FROM dbo.Cust
+  EXEC web.Trailer()
+END
+GO
 CREATE FN [handler].[/ShowTable]() AS 
 BEGIN 
   DECLARE t int SET t = PARSEINT( web.Query('k') )
@@ -1545,6 +1580,28 @@ GO
 CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int) 
 GO
 CREATE INDEX [ByCust] ON [dbo].[Order]([Cust])
+GO
+CREATE FN [dbo].[Testing]() AS
+BEGIN
+CREATE TABLE dbo.Test( x string, y bigint )
+DECLARE i int
+SET i = 0
+WHILE i < 2000
+BEGIN
+  INSERT INTO dbo.Test(x,y) VALUES ( 'Hello', i )
+  SET i = i + 1
+END
+DECLARE n int, a int, total int
+SET n = 0
+WHILE n < 10000 -- Intended to take a long time
+BEGIN
+  SET n = n + 1
+  FOR a = y FROM dbo.Test  
+  BEGIN
+    SET total = total + a
+  END
+END
+END
 GO
 CREATE FN [dbo].[MakeOrders]() AS
 BEGIN 
