@@ -65,7 +65,7 @@ fn get_db(apd: AccessPagedData, sql: &str) -> DB {
 async fn main() {
     // console_subscriber::init();
     let sfs = Box::new(SimpleFileStorage::new(
-        "C:/Users/pc/rust/axumtest/sftest01.rustdb",
+        "C:/Users/pc/rust/sftest01.rustdb",
     ));
     let spd = Arc::new(SharedPagedData::new(sfs));
 

@@ -7,14 +7,14 @@ fn main() {
         "c:\\Users\\pc\\rust\\sftest01.rustdb",
     ));
     let spd = Arc::new(SharedPagedData::new(sfs));
-    let wstg = spd.open_write();
-    let db = Database::new(wstg, INITSQL);
+    let apd = spd.open_write();
+    let db = Database::new(apd, INITSQL);
 
     let listener = TcpListener::bind("127.0.0.1:3000").unwrap(); // 7878 is another possible port.
     for tcps in listener.incoming() {
         let mut tcps = tcps.unwrap();
         let mut wq = WebQuery::new(&tcps); // Reads the http request from the TCP stream into wq.
-        wq.trace();
+        // wq.trace();
         if &*wq.method != "" 
         {
           let sql = "EXEC web.Main()";
