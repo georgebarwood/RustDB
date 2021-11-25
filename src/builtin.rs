@@ -98,11 +98,10 @@ struct BinLen {
 impl CExp<i64> for BinLen {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> i64 {
         let x = self.bv.eval(e, d);
-        match x
-        {
-          Value::RcBinary(xx) => xx.len() as i64,
-          Value::ArcBinary(xx) => xx.len() as i64,
-          _ => panic!()
+        match x {
+            Value::RcBinary(xx) => xx.len() as i64,
+            Value::ArcBinary(xx) => xx.len() as i64,
+            _ => panic!(),
         }
     }
 }

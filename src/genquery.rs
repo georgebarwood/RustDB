@@ -1,4 +1,4 @@
-use crate::{panic, HashMap, Query, Rc, Value, Data};
+use crate::{panic, Data, HashMap, Query, Rc, Value};
 
 /// General Query.
 pub struct GenQuery {
@@ -147,7 +147,7 @@ impl Default for GenQuery {
     }
 }
 
-/// Part of multipart data ( uploaded files ). 
+/// Part of multipart data ( uploaded files ).
 pub struct Part {
     pub name: String,
     pub file_name: String,

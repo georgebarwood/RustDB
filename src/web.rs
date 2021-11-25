@@ -8,7 +8,7 @@ pub struct WebQuery {
     pub path: Rc<String>,
     pub query: HashMap<String, Rc<String>>,
     pub form: HashMap<String, Rc<String>>,
-    pub input_headers: Vec<(String,String)>,
+    pub input_headers: Vec<(String, String)>,
     pub parts: Vec<Part>,
     pub err: String,
     pub output: Vec<u8>,
@@ -60,7 +60,7 @@ impl WebQuery {
         );
     }
     /// Writes the http response to the TCP stream.
-    pub fn write(&mut self, tcps: &mut TcpStream) -> Result<(),std::io::Error> {
+    pub fn write(&mut self, tcps: &mut TcpStream) -> Result<(), std::io::Error> {
         let contents = &self.output;
         let status_line = "HTTP/1.1 ".to_string() + &self.status_code;
         let response = format!(
@@ -219,11 +219,10 @@ impl<'a> HttpRequestParser<'a> {
             self.count = self.stream.read(&mut self.buffer).unwrap();
             assert!(self.count <= self.buffer.len());
             self.index = 0;
-            if self.count == 0
-            {
-              self.index = 1;
-              self.eof = true;
-              return b' ';
+            if self.count == 0 {
+                self.index = 1;
+                self.eof = true;
+                return b' ';
             }
         }
         let result = self.buffer[self.index];
@@ -332,7 +331,9 @@ impl<'a> HttpRequestParser<'a> {
         (method, path, query, version)
     }
     fn read_header(&mut self) -> Option<(String, String)> {
-        if self.get_byte() != 10 { return None; }
+        if self.get_byte() != 10 {
+            return None;
+        }
         let name = self.read_to(b':');
         if name.is_empty() {
             return None;

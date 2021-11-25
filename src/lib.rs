@@ -9,7 +9,7 @@
 //!
 //!# Features
 //!
-//! This crate supports two cargo features. 
+//! This crate supports two cargo features.
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
 //! - `max` : Exposes maximal interface, including all internal modules (default).
 //!
@@ -59,7 +59,7 @@ pub use crate::{
     init::INITSQL,
     pstore::{AccessPagedData, SharedPagedData},
     stg::SimpleFileStorage,
-    web::WebQuery
+    web::WebQuery,
 };
 
 #[cfg(feature = "builtin")]
@@ -261,7 +261,6 @@ impl Database {
         let mut tb = TableBuilder::new();
         let sys_schema = tb.nt("Schema", &[("Name", STRING)]);
         let sys_table = tb.nt(
-            
             "Table",
             &[
                 ("Root", BIGINT),
@@ -273,22 +272,15 @@ impl Database {
             ],
         );
         let sys_column = tb.nt(
-            
             "Column",
             &[("Table", BIGINT), ("Name", STRING), ("Type", BIGINT)],
         );
         let sys_index = tb.nt(
-            
             "Index",
             &[("Root", BIGINT), ("Table", BIGINT), ("Name", STRING)],
         );
-        let sys_index_col = tb.nt(
-            
-            "IndexColumn",
-            &[("Index", BIGINT), ("ColId", BIGINT)],
-        );
+        let sys_index_col = tb.nt("IndexColumn", &[("Index", BIGINT), ("ColId", BIGINT)]);
         let sys_function = tb.nt(
-            
             "Function",
             &[("Schema", BIGINT), ("Name", STRING), ("Def", STRING)],
         );
@@ -545,7 +537,7 @@ impl TableBuilder {
 }
 
 /// Input/Output message. Query and response.
-pub trait Query : std::any::Any {
+pub trait Query: std::any::Any {
     /// STATUSCODE builtin function. sets the response status code.
     fn status_code(&mut self, _code: i64) {}
 

@@ -137,13 +137,11 @@ pub fn get_schema(db: &DB, sname: &str) -> Option<i64> {
         return Some(*id);
     }
     let t = &db.sys_schema;
-    let keys = vec![
-        Value::String(Rc::new(sname.to_string())),
-    ];
+    let keys = vec![Value::String(Rc::new(sname.to_string()))];
     if let Some((pp, off)) = t.ix_get(db, keys, 0) {
         let p = &pp.borrow();
         let a = t.access(p, off);
-        debug_assert!( a.str(db, 0) == sname );
+        debug_assert!(a.str(db, 0) == sname);
         let id = a.id();
         db.schemas.borrow_mut().insert(sname.to_string(), id);
         return Some(a.id());
