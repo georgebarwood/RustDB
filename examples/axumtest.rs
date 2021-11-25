@@ -136,7 +136,7 @@ async fn map_parts(mp: Option<Multipart>) -> Vec<Part> {
                 name,
                 file_name,
                 content_type,
-                data,
+                data: Arc::new(data),
                 text,
             });
         }
@@ -241,6 +241,6 @@ impl CExp<Value> for Argon {
         let salt = self.salt.eval(ee, d).str();
 
         let result = argon2i_simple(&pw, &salt).to_vec();
-        Value::Binary(Rc::new(result))
+        Value::RcBinary(Rc::new(result))
     }
 }
