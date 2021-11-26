@@ -1,5 +1,6 @@
-use crate::compile::{c_int, c_value};
-use crate::*;
+use crate::{
+    c_int, c_value, Block, CExp, CExpPtr, CompileFunc, DataKind, EvalEnv, Expr, Rc, Value, DB,
+};
 
 /// Registers builtin functions - called from `Database`::new.
 pub fn register_builtins(db: &DB) {

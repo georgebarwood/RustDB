@@ -16,21 +16,41 @@ pub struct WebQuery {
     pub headers: String,
     pub now: i64, // Micro-seconds since January 1, 1970 0:00:00 UTC
 }
+
+/// Path and Query.
+type Target = (Rc<String>, HashMap<String, Rc<String>>);
+
+/// Method, Path, Query, Version.
+type Request = (Rc<String>, Rc<String>, HashMap<String, Rc<String>>, String);
+
+pub enum WebErr {
+    Io(std::io::Error),
+    Utf8(std::string::FromUtf8Error),
+    Eof,
+}
+
+fn from_utf8(bytes: Vec<u8>) -> Result<String, WebErr> {
+    match String::from_utf8(bytes) {
+        Ok(s) => Ok(s),
+        Err(e) => Err(WebErr::Utf8(e)),
+    }
+}
+
 impl WebQuery {
     /// Reads the http request from the TCP stream into a new WebQuery.
-    pub fn new(s: &TcpStream) -> Self {
+    pub fn new(s: &TcpStream) -> Result<Self, WebErr> {
         let mut hp = HttpRequestParser::new(s);
-        let (method, path, query, _version) = hp.read_request();
-        let input_headers = hp.read_headers();
+        let (method, path, query, _version) = hp.read_request()?;
+        let input_headers = hp.read_headers()?;
         let mut form = HashMap::new();
         let mut parts = Vec::new();
         // println!("content_type='{}'", hp.content_type);
         if hp.content_type == "application/x-www-form-urlencoded" {
-            form = hp.read_form();
+            form = hp.read_form()?;
         } else if hp.content_type.starts_with("multipart/form-data") {
-            parts = hp.read_multipart();
+            parts = hp.read_multipart()?;
         } else {
-            let _content = hp.read_content();
+            let _content = hp.read_content()?;
         }
         let now = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
@@ -39,7 +59,7 @@ impl WebQuery {
         let output = Vec::with_capacity(10000);
         let headers = String::with_capacity(1000);
         let status_code = "200 OK".to_string();
-        Self {
+        Ok(Self {
             status_code,
             output,
             input_headers,
@@ -51,7 +71,7 @@ impl WebQuery {
             parts,
             err: String::new(),
             now,
-        }
+        })
     }
     pub fn trace(&self) {
         println!(
@@ -208,40 +228,48 @@ impl<'a> HttpRequestParser<'a> {
             eof: false,
         }
     }
-    fn get_byte(&mut self) -> u8 {
+
+    fn get_byte(&mut self) -> Result<u8, WebErr> {
         if self.eof || self.base + self.index >= self.end_content {
             self.index = 1;
             self.eof = true;
-            return b' ';
+            return Ok(b' ');
         }
         if self.index >= self.count {
             self.base += self.count;
-            self.count = self.stream.read(&mut self.buffer).unwrap();
+
+            self.count = match self.stream.read(&mut self.buffer) {
+                Ok(n) => n,
+                Err(e) => {
+                    return Err(WebErr::Io(e));
+                }
+            };
             assert!(self.count <= self.buffer.len());
             self.index = 0;
             if self.count == 0 {
-                self.index = 1;
-                self.eof = true;
-                return b' ';
+                return Err(WebErr::Eof);
             }
         }
         let result = self.buffer[self.index];
         self.index += 1;
-        result
+        Ok(result)
     }
-    fn skip_white_space(&mut self) {
+
+    fn skip_white_space(&mut self) -> Result<(), WebErr> {
         loop {
-            let b = self.get_byte();
+            let b = self.get_byte()?;
             if b != b' ' && b != 9 {
                 self.index -= 1;
                 break;
             }
         }
+        Ok(())
     }
-    fn read_to_bytes(&mut self, to: u8) -> Vec<u8> {
+
+    fn read_to_bytes(&mut self, to: u8) -> Result<Vec<u8>, WebErr> {
         let mut result = Vec::new();
         loop {
-            let b = self.get_byte();
+            let b = self.get_byte()?;
             if b == to {
                 break;
             }
@@ -251,27 +279,30 @@ impl<'a> HttpRequestParser<'a> {
             }
             result.push(b);
         }
-        result
+        Ok(result)
     }
-    fn read_to(&mut self, to: u8) -> String {
-        let bytes = self.read_to_bytes(to);
-        String::from_utf8(bytes).unwrap()
+
+    fn read_to(&mut self, to: u8) -> Result<String, WebErr> {
+        let bytes = self.read_to_bytes(to)?;
+        from_utf8(bytes)
     }
-    fn decode(&mut self, b: u8) -> u8 {
-        if b == b'%' {
-            let h1 = self.get_byte();
-            let h2 = self.get_byte();
+
+    fn decode(&mut self, b: u8) -> Result<u8, WebErr> {
+        Ok(if b == b'%' {
+            let h1 = self.get_byte()?;
+            let h2 = self.get_byte()?;
             util::hex(h1) * 16 + util::hex(h2)
         } else if b == b'+' {
             b' '
         } else {
             b
-        }
+        })
     }
-    fn read_coded_str(&mut self, to: u8) -> String {
-        let mut result = Vec::new();
+
+    fn read_coded_str(&mut self, to: u8) -> Result<String, WebErr> {
+        let mut bytes = Vec::new();
         loop {
-            let b = self.get_byte();
+            let b = self.get_byte()?;
             if b == to {
                 break;
             }
@@ -279,14 +310,15 @@ impl<'a> HttpRequestParser<'a> {
                 self.index -= 1;
                 break;
             }
-            result.push(self.decode(b));
+            bytes.push(self.decode(b)?);
         }
-        String::from_utf8(result).unwrap()
+        from_utf8(bytes)
     }
-    fn read_map(&mut self) -> HashMap<String, Rc<String>> {
+
+    fn read_map(&mut self) -> Result<HashMap<String, Rc<String>>, WebErr> {
         let mut result = HashMap::new();
         loop {
-            let b = self.get_byte();
+            let b = self.get_byte()?;
             if b == b' ' {
                 break;
             }
@@ -294,17 +326,18 @@ impl<'a> HttpRequestParser<'a> {
             if b == 13 {
                 break;
             }
-            let name = self.read_coded_str(b'=');
-            let value = self.read_coded_str(b'&');
+            let name = self.read_coded_str(b'=')?;
+            let value = self.read_coded_str(b'&')?;
             result.insert(name, Rc::new(value));
         }
-        result
+        Ok(result)
     }
-    fn read_target(&mut self) -> (Rc<String>, HashMap<String, Rc<String>>) {
+
+    fn read_target(&mut self) -> Result<Target, WebErr> {
         let mut path = Vec::new();
         let mut query = HashMap::new();
         loop {
-            let b = self.get_byte();
+            let b = self.get_byte()?;
             if b == b' ' {
                 break;
             }
@@ -313,64 +346,67 @@ impl<'a> HttpRequestParser<'a> {
                 break;
             }
             if b == b'?' {
-                query = self.read_map();
+                query = self.read_map()?;
                 break;
             }
-            path.push(self.decode(b));
+            path.push(self.decode(b)?);
         }
-        let path = Rc::new(String::from_utf8(path).unwrap());
-        (path, query)
+        let path = from_utf8(path)?;
+        let path = Rc::new(path);
+        Ok((path, query))
     }
+
     /// Get Method, path, query and protocol version.
-    pub fn read_request(
-        &mut self,
-    ) -> (Rc<String>, Rc<String>, HashMap<String, Rc<String>>, String) {
-        let method = Rc::new(self.read_to(b' '));
-        let (path, query) = self.read_target();
-        let version = self.read_to(13);
-        (method, path, query, version)
+    pub fn read_request(&mut self) -> Result<Request, WebErr> {
+        let method = Rc::new(self.read_to(b' ')?);
+        let (path, query) = self.read_target()?;
+        let version = self.read_to(13)?;
+        Ok((method, path, query, version))
     }
-    fn read_header(&mut self) -> Option<(String, String)> {
-        if self.get_byte() != 10 {
-            return None;
+
+    fn read_header(&mut self) -> Result<Option<(String, String)>, WebErr> {
+        if self.get_byte()? != 10 {
+            return Ok(None);
         }
-        let name = self.read_to(b':');
+        let name = self.read_to(b':')?;
         if name.is_empty() {
-            return None;
+            return Ok(None);
         }
-        self.skip_white_space();
-        let value = self.read_to(13);
+        self.skip_white_space()?;
+        let value = self.read_to(13)?;
         if name == "Content-Type" {
             self.content_type = value.clone();
         } else if name == "Content-Length" {
             self.content_length = value.parse::<usize>().unwrap();
         }
-        Some((name, value))
+        Ok(Some((name, value)))
     }
-    pub fn read_headers(&mut self) -> Vec<(String, String)> {
+    pub fn read_headers(&mut self) -> Result<Vec<(String, String)>, WebErr> {
         let mut result = Vec::new();
-        while let Some(pair) = self.read_header() {
+        while let Some(pair) = self.read_header()? {
             result.push(pair);
         }
         // Read CR/LF
-        self.get_byte();
-        self.get_byte();
-        result
+        self.get_byte()?;
+        self.get_byte()?;
+        Ok(result)
     }
-    pub fn read_content(&mut self) -> String {
+
+    pub fn read_content(&mut self) -> Result<String, WebErr> {
         let mut result = Vec::new();
         let mut n = self.content_length;
         while n > 0 {
-            result.push(self.get_byte());
+            result.push(self.get_byte()?);
             n -= 1;
         }
-        String::from_utf8(result).unwrap()
+        from_utf8(result)
     }
-    pub fn read_form(&mut self) -> HashMap<String, Rc<String>> {
+
+    pub fn read_form(&mut self) -> Result<HashMap<String, Rc<String>>, WebErr> {
         self.end_content = self.base + self.index + self.content_length;
         self.read_map()
     }
-    pub fn read_multipart(&mut self) -> Vec<Part> {
+    pub fn read_multipart(&mut self) -> Result<Vec<Part>, WebErr> {
         /* Typical multipart body would be:
         ------WebKitFormBoundaryVXXOTFUWdfGpOcFK
         Content-Disposition: form-data; name="f1"; filename="test.txt"
@@ -387,33 +423,33 @@ impl<'a> HttpRequestParser<'a> {
         self.end_content = self.base + self.index + self.content_length;
 
         let result = Vec::new();
-        let seperator = self.read_to_bytes(13);
+        let seperator = self.read_to_bytes(13)?;
 
         /* Now need to repeated read multipart headers, then body.
            Each body is terminated by the seperator.
         */
         let mut ok = true;
         while ok {
-            let _headers = self.read_headers();
+            let _headers = self.read_headers()?;
             // println!("headers={:?}", _headers);
             let mut body = Vec::new();
             ok = false;
             while !self.eof {
-                let b = self.get_byte();
+                let b = self.get_byte()?;
                 body.push(b);
                 // Check to see if we matched separator
                 if ends_with(&body, &seperator) {
                     println!("Got seperator");
-                    let b = self.get_byte();
+                    let b = self.get_byte()?;
                     ok = b == 13;
                     break;
                 }
             }
         }
         while !self.eof {
-            self.get_byte();
+            self.get_byte()?;
         }
-        result
+        Ok(result)
     }
 }
 

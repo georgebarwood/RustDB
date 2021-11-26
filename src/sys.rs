@@ -144,7 +144,7 @@ pub fn get_schema(db: &DB, sname: &str) -> Option<i64> {
         debug_assert!(a.str(db, 0) == sname);
         let id = a.id();
         db.schemas.borrow_mut().insert(sname.to_string(), id);
-        return Some(a.id());
+        return Some(id);
     }
     None
 }
