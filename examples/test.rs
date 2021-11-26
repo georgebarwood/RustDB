@@ -10,17 +10,19 @@ fn main() {
     let apd = spd.open_write();
     let db = Database::new(apd, INITSQL);
 
-    let listener = TcpListener::bind("127.0.0.1:3000").unwrap(); // 7878 is another possible port.
+    let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
     for tcps in listener.incoming() {
-        let mut tcps = tcps.unwrap();
-        let mut wq = WebQuery::new(&tcps); // Reads the http request from the TCP stream into wq.
-        // wq.trace();
-        if &*wq.method != "" 
-        {
-          let sql = "EXEC web.Main()";
-          db.run_timed(&sql, &mut wq); // Executes SQL, http response, SQL output, (status,headers,content) is accumulated in wq.
+        if let Ok(mut tcps) = tcps {
+            if let Ok(mut wq) = WebQuery::new(&tcps) {
+                // wq.trace();
+                let sql = "EXEC web.Main()";
+                // Execute SQL. http response, SQL output, (status,headers,content) is accumulated in wq.
+                db.run_timed(&sql, &mut wq);
+                // Write the http response to the TCP stream.
+                let _err = wq.write(&mut tcps);
+                // Save database changes to disk.
+                db.save();
+            }
         }
-        let _err = wq.write(&mut tcps); // Write the http response to the TCP stream.
-        db.save(); // Saves database changes to disk.
     }
 }
