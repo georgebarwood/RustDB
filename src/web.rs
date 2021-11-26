@@ -27,6 +27,7 @@ pub enum WebErr {
     Io(std::io::Error),
     Utf8(std::string::FromUtf8Error),
     Eof,
+    NewlineExpected,
 }
 
 fn from_utf8(bytes: Vec<u8>) -> Result<String, WebErr> {
@@ -213,6 +214,10 @@ struct HttpRequestParser<'a> {
     content_type: String,
     eof: bool,
 }
+/*
+  Note: this code needs attention, probably doesn't cope with all error possibilities accurately.
+  Also cookies are todo and multipart may not work for multiple files ( or at all ).
+*/
 impl<'a> HttpRequestParser<'a> {
     pub fn new(stream: &'a TcpStream) -> Self {
         Self {
@@ -387,9 +392,11 @@ impl<'a> HttpRequestParser<'a> {
             result.push(pair);
         }
         // Read CR/LF
-        self.get_byte()?;
-        self.get_byte()?;
-        Ok(result)
+        if self.get_byte()? != 13 || self.get_byte()? != 10 {
+            Err(WebErr::NewlineExpected)
+        } else {
+            Ok(result)
+        }
     }
 
     pub fn read_content(&mut self) -> Result<String, WebErr> {
