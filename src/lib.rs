@@ -81,7 +81,7 @@ pub use crate::{
 };
 #[cfg(not(feature = "builtin"))]
 use crate::{
-    compile::c_bool,
+    compile::{c_bool, c_int, c_value},
     exec::EvalEnv,
     expr::{Block, DataKind, Expr},
     run::{CExp, CExpPtr, CompileFunc},
