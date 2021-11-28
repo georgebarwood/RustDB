@@ -1,17 +1,35 @@
-use crate::{panic, Data, HashMap, Query, Rc, Value};
+use crate::{panic, BTreeMap, Data, Query, Rc, Value};
+
+use serde::{Serialize, Deserialize};
 
 /// General Query.
+#[derive(Serialize, Deserialize, Debug)]
 pub struct GenQuery {
     pub path: String,
-    pub params: HashMap<String, String>,
-    pub form: HashMap<String, String>,
-    pub cookies: HashMap<String, String>,
+    pub params: BTreeMap<String, String>,
+    pub form: BTreeMap<String, String>,
+    pub cookies: BTreeMap<String, String>,
     pub parts: Vec<Part>,
-    pub err: String,
-    pub status_code: u16,
-    pub headers: Vec<(String, String)>,
-    pub output: Vec<u8>,
     pub now: i64, // Micro-seconds since January 1, 1970 0:00:00 UTC
+    
+    #[serde(skip_serializing)]
+    pub err: String,
+    #[serde(skip_serializing)]
+    pub status_code: u16,
+    #[serde(skip_serializing)]    
+    pub headers: Vec<(String, String)>,
+    #[serde(skip_serializing)]
+    pub output: Vec<u8>,
+}
+
+/// Part of multipart data ( uploaded files ).
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Part {
+    pub name: String,
+    pub file_name: String,
+    pub content_type: String,
+    pub text: String,
+    pub data: Data,
 }
 
 impl GenQuery {
@@ -25,9 +43,9 @@ impl GenQuery {
         let status_code = 200;
         Self {
             path: String::new(),
-            params: HashMap::new(),
-            form: HashMap::new(),
-            cookies: HashMap::new(),
+            params: BTreeMap::new(),
+            form: BTreeMap::new(),
+            cookies: BTreeMap::new(),
             parts: Vec::new(),
             err: String::new(),
             output,
@@ -145,13 +163,4 @@ impl Default for GenQuery {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Part of multipart data ( uploaded files ).
-pub struct Part {
-    pub name: String,
-    pub file_name: String,
-    pub content_type: String,
-    pub text: String,
-    pub data: Data,
 }

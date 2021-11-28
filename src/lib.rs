@@ -121,14 +121,13 @@ use crate::{
     value::*,
 };
 
-use std::sync::{Mutex, RwLock};
 use std::{
     cell::{Cell, RefCell},
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     panic,
     rc::Rc,
-    sync::Arc,
+    sync::{Arc, Mutex, RwLock},
 };
 
 /// Utility functions and macros, [SmallSet].
