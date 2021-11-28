@@ -32,7 +32,7 @@ pub trait CExp<T> {
 /// Pointer to CExp.
 pub type CExpPtr<T> = Box<dyn CExp<T>>;
 
-/// Function that compiles a builtin function call ( see Database::register ).
+/// Function that compiles a builtin function call ( see [Database]::register ).
 #[derive(Clone, Copy)]
 pub enum CompileFunc {
     Value(fn(&Block, &mut [Expr]) -> CExpPtr<Value>),

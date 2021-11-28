@@ -42,16 +42,16 @@ impl SortedFile {
             let p = &mut *pp.borrow_mut();
             if p.pnum != u64::MAX {
                 p.compress(db);
-                /*
-                println!(
-                    "Saving page {} root={} count={} node_size={} size={}",
-                    p.pnum,
-                    self.root_page,
-                    p.count,
-                    p.node_size,
-                    p.size()
-                );
-                */
+                if false {
+                    println!(
+                        "Saving page {} root={} count={} node_size={} size={}",
+                        p.pnum,
+                        self.root_page,
+                        p.count,
+                        p.node_size,
+                        p.size()
+                    );
+                }
                 p.write_header();
                 p.is_dirty = false;
                 db.file.set_page(p.pnum, p.data.clone());

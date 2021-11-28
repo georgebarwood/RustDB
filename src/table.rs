@@ -1,7 +1,6 @@
 use crate::*;
 use compile::{c_bool, c_int, c_value};
 use std::collections::BTreeMap;
-use util::SmallSet;
 
 /// Table Pointer. ```Rc<Table>```
 pub type TablePtr = Rc<Table>;

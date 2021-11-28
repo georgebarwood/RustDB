@@ -1,17 +1,9 @@
+//!# Interface
 //!
-//!# ToDo List
-//!
-//!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
-//!
-//!Sort out error handling for PARSEINT etc.
-//!
-//!Work on improving/testing SQL code, browse schema, float I/O. Login.
-//!
-//!# Features
-//!
-//! This crate supports two cargo features.
-//! - `builtin` : Allows extra SQL builtin functions to be defined.
-//! - `max` : Exposes maximal interface, including all internal modules (default).
+//!The method [Database]::run (or alternatively Database::run_timed) is called to execute an SQL query.
+//!This takes a [Query] parameter which accumulates SELECT results and which also has methods
+//!for accessing the environment and controlling output. Custom builtin functions implement [CExp] and have access to the query
+//!via an [EvalEnv] parameter, which can be downcast if ncessary.   
 //!
 //!# Examples
 //! ```
@@ -45,6 +37,12 @@
 //!
 //![See here](https://github.com/georgebarwood/RustDB/blob/main/examples/axumtest.rs) for more advanced example (Axum webserver with ARGON hash function).
 //!
+//!# Features
+//!
+//! This crate supports two cargo features.
+//! - `builtin` : Allows extra SQL builtin functions to be defined.
+//! - `max` : Exposes maximal interface, including all internal modules (default).
+//!
 //!# General Design of Database
 //!
 //!SortedFile stores fixed size Records in a tree of Pages.
@@ -61,6 +59,27 @@
 //!When a page becomes too big, it is split into two pages.
 //!
 //!Each page is implemented as a binary tree ( so there is a tree of trees ).
+//!
+//!# ToDo List
+//!
+//!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
+//!
+//!Consider replication/backup/durability issues [Here](https://en.wikipedia.org/wiki/Durability_(database_systems))
+//!
+//! Have a replication server. Replication server has old copy of database, and log.
+//! Changes are sent to replication server, which adds changes to the log.
+//! At some point the old copy can be updated ( and the history is lost ).
+//! Replication server could be set to run 1 week behind.  
+//! Can set up extra replication servers from primary replication server.
+//! During cloning process, the replication server stops applying updates.
+//! Database at a paticular point in time can be recreated by running replication log forwards.
+//! Question is WHAT to sent to replication server?
+//! Seems logical to send update messages ( SQL strings and environment values ).
+//!
+//!Sort out error handling for PARSEINT etc.
+//!
+//!Work on improving/testing SQL code, browse schema, float I/O. Login.
+//!
 
 pub use crate::{
     genquery::{GenQuery, Part},
@@ -98,11 +117,11 @@ use crate::{
     sortedfile::{Asc, Id, Record, SortedFile},
     stg::Storage,
     table::{ColInfo, IndexInfo, Row, SaveOp, Table, TablePtr},
-    util::newmap,
+    util::{newmap, SmallSet},
     value::*,
 };
 
-use parking_lot::{Mutex, RwLock};
+use std::sync::{Mutex, RwLock};
 use std::{
     cell::{Cell, RefCell},
     cmp::Ordering,
@@ -112,7 +131,7 @@ use std::{
     sync::Arc,
 };
 
-/// Utility functions and macros.
+/// Utility functions and macros, [SmallSet].
 #[cfg(feature = "max")]
 #[macro_use]
 pub mod util;
@@ -140,7 +159,7 @@ pub mod pstore;
 // Conditional modules.
 
 // #[cfg(target_os = "windows")]
-// Optimised implementatation of ```Storage``` (windows only).
+// Optimised implementatation of [Storage] (windows only).
 // This didn't work out - actually ran slower!
 // pub mod stgwin;
 
@@ -151,19 +170,19 @@ pub mod builtin;
 mod builtin;
 
 #[cfg(feature = "max")]
-/// Storage of variable length values : ByteStorage.
+/// Storage of variable length values : [ByteStorage].
 pub mod bytes;
 #[cfg(not(feature = "max"))]
 mod bytes;
 
 #[cfg(feature = "max")]
-/// Structs that implement CExp trait.
+/// Structs that implement [CExp] trait.
 pub mod cexp;
 #[cfg(not(feature = "max"))]
 mod cexp;
 
 #[cfg(feature = "max")]
-/// CompactFile : storage of logical pages in smaller regions of backing storage.
+/// [CompactFile] : storage of logical pages in smaller regions of backing storage.
 pub mod compact;
 #[cfg(not(feature = "max"))]
 mod compact;
@@ -187,25 +206,25 @@ pub mod expr;
 mod expr;
 
 #[cfg(feature = "max")]
-/// Page for SortedFile.
+/// [Page] for [SortedFile].
 pub mod page;
 #[cfg(not(feature = "max"))]
 mod page;
 
 #[cfg(feature = "max")]
-/// Parser.
+/// [Parser].
 pub mod parse;
 #[cfg(not(feature = "max"))]
 mod parse;
 
 #[cfg(feature = "max")]
-/// Instruction and other run time types.
+/// [Instruction] and other run time types.
 pub mod run;
 #[cfg(not(feature = "max"))]
 mod run;
 
 #[cfg(feature = "max")]
-/// Sorted Record storage.
+/// Sorted [Record] storage.
 pub mod sortedfile;
 #[cfg(not(feature = "max"))]
 mod sortedfile;
@@ -217,13 +236,13 @@ pub mod sys;
 mod sys;
 
 #[cfg(feature = "max")]
-/// Table, ColInfo, Row and other Table types.
+/// [Table], [ColInfo], [Row] and other Table types.
 pub mod table;
 #[cfg(not(feature = "max"))]
 mod table;
 
 #[cfg(feature = "max")]
-/// Run-time Value.
+/// Run-time [Value].
 pub mod value;
 #[cfg(not(feature = "max"))]
 mod value;
@@ -419,7 +438,7 @@ GO
     }
 
     /// Save updated tables to underlying file ( or rollback if there was an error ).
-    pub fn save(self: &DB) {
+    pub fn save(self: &DB) -> usize {
         let op = if self.err.get() {
             self.err.set(false);
             SaveOp::RollBack
@@ -448,8 +467,7 @@ GO
             self.functions.borrow_mut().clear();
             self.function_reset.set(false);
         }
-        self.file.save(op);
-        // self.dump_tables();
+        self.file.save(op)
     }
 
     /// Get the named table.
