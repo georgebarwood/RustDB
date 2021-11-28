@@ -68,9 +68,15 @@ async fn main() {
     let spd = Arc::new(SharedPagedData::new(sfs));
 
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
+    let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
 
     let state = Arc::new(SharedState { tx, spd });
     let wapd = state.spd.open_write();
+
+    // This is the logging thread *synchronous)
+    thread::spawn(move || {
+        log_loop(log_rx);
+    });
 
     // This is the server thread (synchronous).
     thread::spawn(move || {
@@ -82,7 +88,8 @@ async fn main() {
             if updates > 0 {
                 println!("Pages updated={}", updates);
                 let ser = serde_json::to_string(&sm.sq.x).unwrap();
-                println!("Serialised query={}", ser);
+                // println!("Serialised query={}", ser);
+                let _err = log_tx.send(ser);
             }
             let _x = sm.tx.send(sm.sq);
         }
@@ -247,5 +254,21 @@ impl CExp<Value> for Argon {
 
         let result = argon2i_simple(&pw, &salt).to_vec();
         Value::RcBinary(Rc::new(result))
+    }
+}
+
+use std::{fs::OpenOptions, io::Write};
+fn log_loop(log_rx: std::sync::mpsc::Receiver<String>) {
+    let filename = "C:/Users/pc/rust/sftest01.logfile";
+    let mut logfile = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(filename)
+        .unwrap();
+    loop {
+        let logstr = log_rx.recv().unwrap();
+        println!("Logging {}", logstr);
+        let _err = logfile.write_all(logstr.as_bytes());
+        let _err = logfile.write_all(b"\r\n");
     }
 }
