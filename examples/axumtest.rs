@@ -78,7 +78,9 @@ async fn main() {
         loop {
             let mut sm = rx.blocking_recv().unwrap();
             db.run_timed("EXEC web.Main()", &mut *sm.sq.x);
-            db.save();
+            let updates = db.save();
+            println!( "Pages updated={}", updates );
+            // If updates > 0 could log message to log file for later backup/restore processing.
             let _x = sm.tx.send(sm.sq);
         }
     });
@@ -188,7 +190,9 @@ async fn h_post(
     // Send query to database thread ( and get it back ).
     let (tx, rx) = oneshot::channel::<ServerQuery>();
     let _err = state.tx.send(ServerMessage { sq, tx }).await;
-    rx.await.unwrap()
+    let result = rx.await.unwrap();
+
+    result
 }
 
 use axum::{
