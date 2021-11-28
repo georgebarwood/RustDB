@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "0.1.23"
+version = "0.1.25"
 authors = ["George Barwood"]
 edition = "2021"
 description = "SQL database (in development)"
@@ -21,15 +21,16 @@ max = ["builtin"]
 
 [dependencies]
 # stacker = "0.1"
-parking_lot = "0.11.2"
+# parking_lot = "0.11.2"
+serde = { verion = "1.0.130", features = ["derive","rc"] }
 
 [dev-dependencies]
 mimalloc = { version = "0.1.26", default-features = false }
-axum = { version = "0.3.2", default-features = false, features = ["multipart","http1"] }
-hyper = { version = "0.14.14", features = ["server"] }
-tower = { version = "0.4.10" }
-tower-cookies = "0.2.1"
-tokio = { version = "1.13.0", features = ["macros","rt-multi-thread"] }
+axum = { version = "0.3.4", default-features = false, features = ["multipart","http1"] }
+#hyper = { version = "0.14.14", features = ["server"] }
+tower = { version = "0.4.11" }
+tower-cookies = "0.2.2"
+tokio = { version = "1.14.0", features = ["full"] }
 argon2rs = "0.2.5"
 
 #serde = { version = "1.0.130", features = ["derive"] }
