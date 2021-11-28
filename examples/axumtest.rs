@@ -20,7 +20,7 @@ use rustdb::{
     EvalEnv, Expr, GenQuery, Part, SharedPagedData, SimpleFileStorage, Value, DB, INITSQL,
 };
 
-use std::{collections::HashMap, rc::Rc, sync::Arc, thread};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
 
 /// Query to be sent to server thread, implements IntoResponse.
 struct ServerQuery {
@@ -79,8 +79,11 @@ async fn main() {
             let mut sm = rx.blocking_recv().unwrap();
             db.run_timed("EXEC web.Main()", &mut *sm.sq.x);
             let updates = db.save();
-            println!( "Pages updated={}", updates );
-            // If updates > 0 could log message to log file for later backup/restore processing.
+            if updates > 0 {
+                println!("Pages updated={}", updates);
+                let ser = serde_json::to_string(&sm.sq.x).unwrap();
+                println!("Serialised query={}", ser);
+            }
             let _x = sm.tx.send(sm.sq);
         }
     });
@@ -99,9 +102,9 @@ async fn main() {
         .unwrap();
 }
 
-/// Get HashMap of cookies from Cookies.
-fn map_cookies(cookies: Cookies) -> HashMap<String, String> {
-    let mut result = HashMap::new();
+/// Get BTreeMap of cookies from Cookies.
+fn map_cookies(cookies: Cookies) -> BTreeMap<String, String> {
+    let mut result = BTreeMap::new();
     for cookie in cookies.list() {
         let (name, value) = cookie.name_value();
         result.insert(name.to_string(), value.to_string());
@@ -148,7 +151,7 @@ async fn map_parts(mp: Option<Multipart>) -> Vec<Part> {
 async fn h_get(
     state: Extension<Arc<SharedState>>,
     path: Path<String>,
-    params: Query<HashMap<String, String>>,
+    params: Query<BTreeMap<String, String>>,
     cookies: Cookies,
 ) -> ServerQuery {
     // Build the ServerQuery.
@@ -171,9 +174,9 @@ async fn h_get(
 async fn h_post(
     state: Extension<Arc<SharedState>>,
     path: Path<String>,
-    params: Query<HashMap<String, String>>,
+    params: Query<BTreeMap<String, String>>,
     cookies: Cookies,
-    form: Option<Form<HashMap<String, String>>>,
+    form: Option<Form<BTreeMap<String, String>>>,
     multipart: Option<Multipart>,
 ) -> ServerQuery {
     // Build the ServerQuery.
