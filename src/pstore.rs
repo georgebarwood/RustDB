@@ -247,6 +247,7 @@ impl AccessPagedData {
     /// Free a logical page.
     pub fn free_page(&self, lpnum: u64) {
         debug_assert!(self.writer);
+        self.spd.stash.write().unwrap().set(lpnum,Arc::new(Vec::new()));
         self.spd.file.write().unwrap().free_page(lpnum);
     }
 
