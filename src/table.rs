@@ -262,8 +262,8 @@ impl<'d, 'i> Access<'d, 'i> {
         String::from_utf8(bytes).unwrap()
     }
     /// Extract Id from byte data.
-    pub fn id(&self) -> i64 {
-        util::getu64(self.data, 0) as i64
+    pub fn id(&self) -> u64 {
+        util::getu64(self.data, 0)
     }
 }
 
@@ -282,6 +282,14 @@ impl<'d, 'i> WriteAccess<'d, 'i> {
             val as u64,
             self.info.siz(colnum),
         );
+    }
+    /// Extract int from byte data for column number colnum.
+    pub fn int(&self, colnum: usize) -> i64 {
+        util::get(self.data, self.info.off[colnum], self.info.siz(colnum)) as i64
+    }
+    /// Extract Id from byte data.
+    pub fn id(&self) -> u64 {
+        util::getu64(self.data, 0)
     }
 }
 

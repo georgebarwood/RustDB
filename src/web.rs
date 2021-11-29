@@ -156,7 +156,7 @@ impl Query for WebQuery {
                     self.output.extend_from_slice(x);
                 }
                 _ => {
-                    panic!()
+                    panic!("Unexpected value selected")
                 }
             }
         }

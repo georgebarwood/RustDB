@@ -1,6 +1,6 @@
 use crate::{panic, BTreeMap, Data, Query, Rc, Value};
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// General Query.
 #[derive(Serialize, Deserialize, Debug)]
@@ -11,12 +11,12 @@ pub struct GenQuery {
     pub cookies: BTreeMap<String, String>,
     pub parts: Vec<Part>,
     pub now: i64, // Micro-seconds since January 1, 1970 0:00:00 UTC
-    
+
     #[serde(skip_serializing)]
     pub err: String,
     #[serde(skip_serializing)]
     pub status_code: u16,
-    #[serde(skip_serializing)]    
+    #[serde(skip_serializing)]
     pub headers: Vec<(String, String)>,
     #[serde(skip_serializing)]
     pub output: Vec<u8>,

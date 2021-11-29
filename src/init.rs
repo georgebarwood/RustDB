@@ -1108,6 +1108,8 @@ BEGIN
   EXECUTE( browse.ShowSql( t, k ) )
 END
 GO
+CREATE FN [handler].[/Rtest]() AS BEGIN EXEC rtest.OneTest() END
+GO
 CREATE FN [handler].[/OrderSummary]() AS
 BEGIN
   EXEC web.Head( 'Order Summary' )
@@ -1769,6 +1771,113 @@ BEGIN
     | '</select>'
 END
 GO
+--############################################
+CREATE SCHEMA [email]
+CREATE TABLE [email].[Msg]([from] string) 
+GO
+INSERT INTO [email].[Msg](Id,[from]) VALUES 
+GO
+
+--############################################
+CREATE SCHEMA [rtest]
+CREATE TABLE [rtest].[Gen]([x] bigint) 
+GO
+CREATE TABLE [rtest].[t0]([x] string,[y] bigint) 
+GO
+CREATE TABLE [rtest].[t1]([x] string,[y] bigint) 
+GO
+CREATE TABLE [rtest].[t2]([x] string,[y] bigint) 
+GO
+CREATE TABLE [rtest].[t4]([x] string,[y] bigint) 
+GO
+CREATE TABLE [rtest].[t5]([x] string,[y] bigint) 
+GO
+CREATE TABLE [rtest].[t6]([x] string,[y] bigint) 
+GO
+CREATE FN [rtest].[OneTest]() AS
+BEGIN 
+  DECLARE rtest int
+  SET rtest = Id FROM sys.Schema WHERE Name = 'rtest'
+
+  DECLARE r int
+  SET r = x FROM rtest.Gen
+  SET r = r * 48271 % 2147483647
+  UPDATE rtest.Gen SET x = r WHERE true
+
+  DECLARE sql string, a int
+  SET a = r % 2
+
+  DECLARE tname string
+  SET tname = 't' | ( r / 100 ) % 7
+
+  DECLARE exists string
+  SET exists = ''
+  SET exists = Name FROM sys.Table WHERE Schema = rtest AND Name = tname
+
+  SET sql = CASE WHEN exists = '' 
+    THEN 'CREATE TABLE rtest.[' | tname | '](x string, y bigint)'
+    WHEN r % 10 = 0 THEN 'DROP TABLE rtest.[' | tname | ']'
+    WHEN r % 2 = 1 THEN 'INSERT INTO rtest.[' | tname | '](y) VALUES (' | (r % 10) | ')'
+    ELSE 'DELETE FROM rtest.[' | tname | '] WHERE y = ' | ( r%15)
+  END
+  
+  SELECT 'sql=' | sql
+
+  EXECUTE( sql )
+ 
+END
+GO
+INSERT INTO [rtest].[Gen](Id,[x]) VALUES 
+(1,554214335)
+GO
+
+INSERT INTO [rtest].[t0](Id,[x],[y]) VALUES 
+(1,'',5)
+(2,'',3)
+(3,'',5)
+(4,'',9)
+(6,'',7)
+(7,'',7)
+(8,'',7)
+(9,'',9)
+(10,'',7)
+(11,'',7)
+(12,'',7)
+GO
+
+INSERT INTO [rtest].[t1](Id,[x],[y]) VALUES 
+(2,'',7)
+(3,'',7)
+(4,'',7)
+GO
+
+INSERT INTO [rtest].[t2](Id,[x],[y]) VALUES 
+(1,'',1)
+GO
+
+INSERT INTO [rtest].[t4](Id,[x],[y]) VALUES 
+(2,'',5)
+(3,'',1)
+(4,'',3)
+(6,'',5)
+(7,'',3)
+(8,'',7)
+(9,'',7)
+(10,'',5)
+(11,'',3)
+(13,'',5)
+(14,'',7)
+GO
+
+INSERT INTO [rtest].[t5](Id,[x],[y]) VALUES 
+(1,'',5)
+(2,'',5)
+GO
+
+INSERT INTO [rtest].[t6](Id,[x],[y]) VALUES 
+(1,'',1)
+GO
+
 DECLARE tid int, sid int, cid int
 SET sid = Id FROM sys.Schema WHERE Name = 'sys'
 SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 'Column'
@@ -1844,4 +1953,36 @@ VALUES (cid, 0,'','',10,'',0,'',0,0,'','')
 SET cid=Id FROM sys.Column WHERE Table = tid AND Name = 'Date'
 INSERT INTO browse.Column(Id,[Position],[Label],[Description],[RefersTo],[Default],[InputCols],[InputFunction],[InputRows],[Style],[DisplayFunction],[ParseFunction]) 
 VALUES (cid, 0,'','',0,'date.DaysToYearMonthDay(date.Today())',0,'browse.InputYearMonthDay',0,0,'date.YearMonthDayToString','date.StringToYearMonthDay')
+GO
+DECLARE tid int, sid int, cid int
+SET sid = Id FROM sys.Schema WHERE Name = 'email'
+SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 'Msg'
+GO
+DECLARE tid int, sid int, cid int
+SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
+SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 'Gen'
+GO
+DECLARE tid int, sid int, cid int
+SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
+SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't0'
+GO
+DECLARE tid int, sid int, cid int
+SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
+SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't1'
+GO
+DECLARE tid int, sid int, cid int
+SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
+SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't2'
+GO
+DECLARE tid int, sid int, cid int
+SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
+SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't4'
+GO
+DECLARE tid int, sid int, cid int
+SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
+SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't5'
+GO
+DECLARE tid int, sid int, cid int
+SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
+SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't6'
 GO";

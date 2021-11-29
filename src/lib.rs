@@ -437,6 +437,7 @@ GO
     }
 
     /// Save updated tables to underlying file ( or rollback if there was an error ).
+    /// Returns the number of logical pages that were updated.
     pub fn save(self: &DB) -> usize {
         let op = if self.err.get() {
             self.err.set(false);

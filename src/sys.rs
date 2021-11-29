@@ -142,7 +142,7 @@ pub fn get_schema(db: &DB, sname: &str) -> Option<i64> {
         let p = &pp.borrow();
         let a = t.access(p, off);
         debug_assert!(a.str(db, 0) == sname);
-        let id = a.id();
+        let id = a.id() as i64;
         db.schemas.borrow_mut().insert(sname.to_string(), id);
         return Some(id);
     }
@@ -161,7 +161,7 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)> {
         if let Some((pp, off)) = t.ix_get(db, keys, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);
-            return Some((a.id(), a.int(0), a.int(5)));
+            return Some((a.id() as i64, a.int(0), a.int(5)));
         }
     }
     None
@@ -190,7 +190,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr> {
             let p = &pp.borrow();
             let a = t.access(p, off);
             debug_assert!(a.int(1) == table_id);
-            let index_id = a.id();
+            let index_id = a.id() as i64;
             let root = a.int(0) as u64;
             let mut cols = Vec::new();
             let t = &db.sys_index_col;
@@ -245,7 +245,7 @@ pub fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64> {
         if let Some((pp, off)) = t.ix_get(db, keys, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);
-            return Some(a.id());
+            return Some(a.id() as i64);
         }
     }
     None
@@ -266,21 +266,23 @@ fn parse_function(db: &DB, source: Rc<String>) -> FunctionPtr {
     })
 }
 
-/// Update IdGen field for a table.
-pub fn save_id_gen(db: &DB, id: u64, val: i64) {
-    let t = &db.sys_table;
-    let (pp, off) = t.id_get(db, id).unwrap();
-    let p = &mut pp.borrow_mut();
-    let mut wa = t.write_access(p, off);
-    wa.set_int(5, val);
-    t.file.set_dirty(p, &pp);
-}
-
 /// Get the IdGen field for a table. This is only needed to initialise system tables.
 pub fn get_id_gen(db: &DB, id: u64) -> i64 {
     let t = &db.sys_table;
     let (pp, off) = t.id_get(db, id).unwrap();
     let p = &pp.borrow();
     let a = t.access(p, off);
+    debug_assert!( a.id() == id );
     a.int(5)
+}
+
+/// Update IdGen field for a table.
+pub fn save_id_gen(db: &DB, id: u64, val: i64) {
+    let t = &db.sys_table;
+    let (pp, off) = t.id_get(db, id).unwrap();
+    let p = &mut pp.borrow_mut();
+    let mut wa = t.write_access(p, off);
+    debug_assert!( wa.id() == id );
+    wa.set_int(5, val);
+    t.file.set_dirty(p, &pp);
 }

@@ -489,6 +489,7 @@ impl<'r> EvalEnv<'r> {
             let sql = "EXEC sys.DropTable(".to_string() + &t.id.to_string() + ")";
             self.db.run(&sql, self.qy);
             self.db.tables.borrow_mut().remove(name);
+            self.db.function_reset.set(true);
             t.free_pages(&self.db);
         } else {
             panic!("Drop Table not found {}", name.str());

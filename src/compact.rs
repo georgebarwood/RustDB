@@ -24,6 +24,7 @@ use std::collections::BTreeSet;
 /// Note: for a free logical page, the link to the next free page is stored after the page size ( 0 ).
 ///
 /// Layout of extension page: 8 byte logical page number | user data | unused data.
+
 pub struct CompactFile {
     /// Underlying storage.
     pub stg: Box<dyn Storage>,
@@ -48,9 +49,26 @@ pub struct CompactFile {
     /// File is newly created.         
     is_new: bool,
 }
+
 impl CompactFile {
     /// = 28. Size of file header.
     const HSIZE: u64 = 28;
+    const TRACE: bool = false;
+
+    fn trace(&self, msg: &str) {
+        if !Self::TRACE{ return; }
+        print!(
+            "Compactfile trace {} ep_resvd={} ep_count={} ep_free={:?} lp_alloc={} lp_free={:?} free=[",
+            msg, self.ep_resvd, self.ep_count, self.ep_free, self.lp_alloc, self.lp_free
+        );
+        let mut p = self.lp_first;
+        while p != u64::MAX
+        {
+          print!( " {}", p );
+          p = self.readu64(Self::HSIZE + p * self.sp_size as u64 + 2);
+        }
+        println!("]");
+    }
 
     /// Construct a new CompactFile.
     pub fn new(stg: Box<dyn Storage>, sp_size: usize, ep_size: usize) -> Self {
@@ -178,6 +196,7 @@ impl CompactFile {
 
     /// Allocate logical page number. Pages are numbered 0,1,2...
     pub fn alloc_page(&mut self) -> u64 {
+        self.trace("alloc_page");
         if let Some(p) = self.lp_free.iter().next() {
             *p
         } else {
@@ -197,6 +216,7 @@ impl CompactFile {
     /// Free a logical page number.
     pub fn free_page(&mut self, pnum: u64) {
         self.lp_free.insert(pnum);
+        self.trace("free_page");
     }
 
     /// Is this a new file?
@@ -206,16 +226,19 @@ impl CompactFile {
 
     /// Resets logical page allocation to last save.
     pub fn rollback(&mut self) {
+        self.trace("rollback before");
         self.lp_free.clear();
         if self.lp_alloc_dirty {
             self.lp_alloc_dirty = false;
             self.lp_alloc = self.readu64(8);
             self.lp_first = self.readu64(16);
         }
+        self.trace("rollback after");
     }
 
     /// Process the temporary sets of free pages and write the file header.
     pub fn save(&mut self) {
+        self.trace("save before");
         // Free the temporary set of free logical pages.
         for p in &std::mem::take(&mut self.lp_free) {
             let p = *p;
@@ -244,6 +267,7 @@ impl CompactFile {
             self.writeu64(16, self.lp_first);
         }
         self.stg.commit(self.ep_count * self.ep_size as u64);
+        self.trace("save after");
     }
 
     /// Read a u64 from the underlying file.
