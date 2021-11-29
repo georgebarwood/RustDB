@@ -272,7 +272,7 @@ pub fn get_id_gen(db: &DB, id: u64) -> i64 {
     let (pp, off) = t.id_get(db, id).unwrap();
     let p = &pp.borrow();
     let a = t.access(p, off);
-    debug_assert!( a.id() == id );
+    debug_assert!(a.id() == id);
     a.int(5)
 }
 
@@ -282,7 +282,7 @@ pub fn save_id_gen(db: &DB, id: u64, val: i64) {
     let (pp, off) = t.id_get(db, id).unwrap();
     let p = &mut pp.borrow_mut();
     let mut wa = t.write_access(p, off);
-    debug_assert!( wa.id() == id );
+    debug_assert!(wa.id() == id);
     wa.set_int(5, val);
     t.file.set_dirty(p, &pp);
 }

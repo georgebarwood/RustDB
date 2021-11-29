@@ -22,7 +22,7 @@ pub struct Table {
     pub info: Rc<ColInfo>,
 
     /// List of indexes.
-    ixlist: RefCell<IxList>,
+    pub ixlist: RefCell<IxList>,
 
     /// Table id in sys.Table.
     pub id: i64,

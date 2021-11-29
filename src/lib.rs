@@ -3,7 +3,7 @@
 //!The method [Database]::run (or alternatively Database::run_timed) is called to execute an SQL query.
 //!This takes a [Query] parameter which accumulates SELECT results and which also has methods
 //!for accessing the environment and controlling output. Custom builtin functions implement [CExp] and have access to the query
-//!via an [EvalEnv] parameter, which can be downcast if ncessary.   
+//!via an [EvalEnv] parameter, which can be downcast if necessary.   
 //!
 //!# Examples
 //! ```
@@ -66,15 +66,7 @@
 //!
 //!Consider replication/backup/durability issues [Here](https://en.wikipedia.org/wiki/Durability_(database_systems))
 //!
-//! Have a replication server. Replication server has old copy of database, and log.
-//! Changes are sent to replication server, which adds changes to the log.
-//! At some point the old copy can be updated ( and the history is lost ).
-//! Replication server could be set to run 1 week behind.  
-//! Can set up extra replication servers from primary replication server.
-//! During cloning process, the replication server stops applying updates.
-//! Database at a paticular point in time can be recreated by running replication log forwards.
-//! Question is WHAT to sent to replication server?
-//! Seems logical to send update messages ( SQL strings and environment values ).
+//!Implement email in example program. Replication of log files. Server status.
 //!
 //!Sort out error handling for PARSEINT etc.
 //!

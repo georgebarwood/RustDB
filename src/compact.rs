@@ -56,16 +56,17 @@ impl CompactFile {
     const TRACE: bool = false;
 
     fn trace(&self, msg: &str) {
-        if !Self::TRACE{ return; }
+        if !Self::TRACE {
+            return;
+        }
         print!(
             "Compactfile trace {} ep_resvd={} ep_count={} ep_free={:?} lp_alloc={} lp_free={:?} free=[",
             msg, self.ep_resvd, self.ep_count, self.ep_free, self.lp_alloc, self.lp_free
         );
         let mut p = self.lp_first;
-        while p != u64::MAX
-        {
-          print!( " {}", p );
-          p = self.readu64(Self::HSIZE + p * self.sp_size as u64 + 2);
+        while p != u64::MAX {
+            print!(" {}", p);
+            p = self.readu64(Self::HSIZE + p * self.sp_size as u64 + 2);
         }
         println!("]");
     }

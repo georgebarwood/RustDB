@@ -113,6 +113,9 @@ impl Query for GenQuery {
                 Value::Int(x) => {
                     self.push_str(&x.to_string());
                 }
+                Value::Bool(x) => {
+                    self.push_str(&x.to_string());
+                }
                 Value::Float(x) => {
                     self.push_str(&x.to_string());
                 }
