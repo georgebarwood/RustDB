@@ -66,7 +66,7 @@ fn c_exception(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
 struct Exception {}
 impl CExp<Value> for Exception {
     fn eval(&self, e: &mut EvalEnv, _d: &[u8]) -> Value {
-        let err = e.qy.get_error();
+        let err = e.tr.get_error();
         Value::String(Rc::new(err))
     }
 }
@@ -131,7 +131,7 @@ struct Global {
 impl CExp<i64> for Global {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> i64 {
         let x = self.x.eval(ee, d);
-        ee.qy.global(x)
+        ee.tr.global(x)
     }
 }
 /////////////////////////////
@@ -236,7 +236,7 @@ impl CExp<Value> for Arg {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
         let k = self.k.eval(ee, d);
         let s = self.s.eval(ee, d).str();
-        let result = ee.qy.arg(k, &s);
+        let result = ee.tr.arg(k, &s);
         Value::String(result)
     }
 }
@@ -257,7 +257,7 @@ impl CExp<i64> for Header {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> i64 {
         let n = self.n.eval(ee, d).str();
         let v = self.v.eval(ee, d).str();
-        ee.qy.header(&n, &v);
+        ee.tr.header(&n, &v);
         0
     }
 }
@@ -275,7 +275,7 @@ struct StatusCode {
 impl CExp<i64> for StatusCode {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> i64 {
         let code = self.code.eval(ee, d);
-        ee.qy.status_code(code);
+        ee.tr.status_code(code);
         0
     }
 }
@@ -296,7 +296,7 @@ impl CExp<Value> for FileAttr {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
         let k = self.k.eval(ee, d);
         let x = self.x.eval(ee, d);
-        let result = ee.qy.file_attr(k, x);
+        let result = ee.tr.file_attr(k, x);
         Value::String(result)
     }
 }
@@ -314,7 +314,7 @@ struct FileContent {
 impl CExp<Value> for FileContent {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
         let k = self.k.eval(ee, d);
-        let result = ee.qy.file_content(k);
+        let result = ee.tr.file_content(k);
         Value::ArcBinary(result)
     }
 }

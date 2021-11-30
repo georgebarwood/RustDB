@@ -6,17 +6,17 @@ pub struct EvalEnv<'r> {
     pub stack: Vec<Value>,
     pub bp: usize, // "Base Pointer" - used to access local variables.
     pub db: DB,
-    pub qy: &'r mut dyn Transaction,
+    pub tr: &'r mut dyn Transaction,
     pub call_depth: usize,
 }
 impl<'r> EvalEnv<'r> {
     /// Construct a new EvalEnv.
-    pub fn new(db: DB, qy: &'r mut dyn Transaction) -> Self {
+    pub fn new(db: DB, tr: &'r mut dyn Transaction) -> Self {
         EvalEnv {
             stack: Vec::new(),
             bp: 0,
             db,
-            qy,
+            tr,
             call_depth: 0,
         }
     }
@@ -226,7 +226,7 @@ impl<'r> EvalEnv<'r> {
     /// Execute SQL string.
     fn execute(&mut self) {
         let s = self.pop_string();
-        self.db.run(&s, self.qy);
+        self.db.run(&s, self.tr);
     }
 
     /// Execute a data operation (DO).
@@ -363,7 +363,7 @@ impl<'r> EvalEnv<'r> {
                         temp.push(values);
                     } else {
                         // Output directly.
-                        self.qy.selected(&values);
+                        self.tr.selected(&values);
                     }
                 }
             }
@@ -371,7 +371,7 @@ impl<'r> EvalEnv<'r> {
                 // Sort then output the rows.
                 temp.sort_by(|a, b| table::row_compare(a, b, &cse.desc));
                 for r in &temp {
-                    self.qy.selected(&r[obl..]);
+                    self.tr.selected(&r[obl..]);
                 }
             }
         } else {
@@ -380,7 +380,7 @@ impl<'r> EvalEnv<'r> {
                 let val = ce.eval(self, &[]);
                 values.push(val);
             }
-            self.qy.selected(&values);
+            self.tr.selected(&values);
         }
     }
 
@@ -476,7 +476,7 @@ impl<'r> EvalEnv<'r> {
     fn drop_schema(&mut self, name: &str) {
         if let Some(sid) = sys::get_schema(&self.db, name) {
             let sql = "EXEC sys.DropSchema(".to_string() + &sid.to_string() + ")";
-            self.db.run(&sql, self.qy);
+            self.db.run(&sql, self.tr);
             self.db.schemas.borrow_mut().remove(name);
             self.db.function_reset.set(true);
         } else {
@@ -487,7 +487,7 @@ impl<'r> EvalEnv<'r> {
     fn drop_table(&mut self, name: &ObjRef) {
         if let Some(t) = sys::get_table(&self.db, name) {
             let sql = "EXEC sys.DropTable(".to_string() + &t.id.to_string() + ")";
-            self.db.run(&sql, self.qy);
+            self.db.run(&sql, self.tr);
             self.db.tables.borrow_mut().remove(name);
             self.db.function_reset.set(true);
             t.free_pages(&self.db);
@@ -499,7 +499,7 @@ impl<'r> EvalEnv<'r> {
     fn drop_function(&mut self, name: &ObjRef) {
         if let Some(fid) = sys::get_function_id(&self.db, name) {
             let sql = "DELETE FROM sys.Function WHERE Id = ".to_string() + &fid.to_string();
-            self.db.run(&sql, self.qy);
+            self.db.run(&sql, self.tr);
             self.db.function_reset.set(true);
         } else {
             panic!("Drop Function not found {}", name.str());

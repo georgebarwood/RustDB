@@ -382,32 +382,32 @@ GO
     }
 
     /// Run a batch of SQL.
-    pub fn run(self: &DB, source: &str, qy: &mut dyn Transaction) {
-        if let Some(e) = self.go(source, qy) {
+    pub fn run(self: &DB, source: &str, tr: &mut dyn Transaction) {
+        if let Some(e) = self.go(source, tr) {
             let err = format!(
                 "{} in {} at line {} column {}.",
                 e.msg, e.rname, e.line, e.column
             );
             println!("Run error {}", &err);
-            qy.set_error(err);
+            tr.set_error(err);
             self.err.set(true);
         }
     }
     /// Run a batch of SQL, printing the execution time.
-    pub fn run_timed(self: &DB, source: &str, qy: &mut dyn Transaction) {
+    pub fn run_timed(self: &DB, source: &str, tr: &mut dyn Transaction) {
         let start = std::time::Instant::now();
-        self.run(source, qy);
+        self.run(source, tr);
         println!(
             "run_timed path={} run time={} micro sec.",
-            qy.arg(0, ""),
+            tr.arg(0, ""),
             start.elapsed().as_micros()
         );
     }
     /// Run a batch of SQL.
-    pub fn go(self: &DB, source: &str, qy: &mut dyn Transaction) -> Option<SqlError> {
+    pub fn go(self: &DB, source: &str, tr: &mut dyn Transaction) -> Option<SqlError> {
         let mut p = Parser::new(source, self);
         let result = std::panic::catch_unwind(panic::AssertUnwindSafe(|| {
-            p.batch(qy);
+            p.batch(tr);
         }));
         if let Err(x) = result {
             Some(if let Some(e) = x.downcast_ref::<SqlError>() {
