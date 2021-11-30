@@ -17,20 +17,20 @@ use tokio::sync::{mpsc, oneshot};
 
 use rustdb::{
     c_value, check_types, AccessPagedData, Block, CExp, CExpPtr, CompileFunc, DataKind, Database,
-    EvalEnv, Expr, GenQuery, Part, SharedPagedData, SimpleFileStorage, Value, DB, INITSQL,
+    EvalEnv, Expr, GenTransaction, Part, SharedPagedData, SimpleFileStorage, Value, DB, INITSQL,
 };
 
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
 
 /// Query to be sent to server thread, implements IntoResponse.
 struct ServerQuery {
-    pub x: Box<GenQuery>,
+    pub x: Box<GenTransaction>,
 }
 
 impl ServerQuery {
     pub fn new() -> Self {
         Self {
-            x: Box::new(GenQuery::new()),
+            x: Box::new(GenTransaction::new()),
         }
     }
 }
@@ -87,7 +87,7 @@ async fn main() {
             let updates = db.save();
             if updates > 0 {
                 println!("Pages updated={}", updates);
-                let ser = serde_json::to_string(&sm.sq.x).unwrap();
+                let ser = serde_json::to_string(&sm.sq.x.qy).unwrap();
                 // println!("Serialised query={}", ser);
                 let _err = log_tx.send(ser);
             }
@@ -163,9 +163,9 @@ async fn h_get(
 ) -> ServerQuery {
     // Build the ServerQuery.
     let mut sq = ServerQuery::new();
-    sq.x.path = path.0;
-    sq.x.params = params.0;
-    sq.x.cookies = map_cookies(cookies);
+    sq.x.qy.path = path.0;
+    sq.x.qy.params = params.0;
+    sq.x.qy.cookies = map_cookies(cookies);
 
     let blocking_task = tokio::task::spawn_blocking(move || {
         // GET requests should be read-only.
@@ -188,13 +188,13 @@ async fn h_post(
 ) -> ServerQuery {
     // Build the ServerQuery.
     let mut sq = ServerQuery::new();
-    sq.x.path = path.0;
-    sq.x.params = params.0;
-    sq.x.cookies = map_cookies(cookies);
+    sq.x.qy.path = path.0;
+    sq.x.qy.params = params.0;
+    sq.x.qy.cookies = map_cookies(cookies);
     if let Some(Form(form)) = form {
-        sq.x.form = form;
+        sq.x.qy.form = form;
     } else {
-        sq.x.parts = map_parts(multipart).await;
+        sq.x.qy.parts = map_parts(multipart).await;
     }
 
     // Send query to database thread ( and get it back ).
@@ -216,11 +216,11 @@ impl IntoResponse for ServerQuery {
     type BodyError = std::convert::Infallible;
 
     fn into_response(self) -> Response<Self::Body> {
-        let mut res = Response::new(Full::from(self.x.output));
+        let mut res = Response::new(Full::from(self.x.rp.output));
 
-        *res.status_mut() = StatusCode::from_u16(self.x.status_code).unwrap();
+        *res.status_mut() = StatusCode::from_u16(self.x.rp.status_code).unwrap();
 
-        for (name, value) in &self.x.headers {
+        for (name, value) in &self.x.rp.headers {
             res.headers_mut().insert(
                 HeaderName::from_lowercase(name.as_bytes()).unwrap(),
                 HeaderValue::from_str(value).unwrap(),
