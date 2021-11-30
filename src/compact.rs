@@ -1,5 +1,5 @@
 use crate::stg::Storage;
-use crate::{util, Arc, Data};
+use crate::{nd, util, Arc, Data};
 use std::cmp::min;
 use std::collections::BTreeSet;
 
@@ -167,7 +167,7 @@ impl CompactFile {
     /// Get logical page contents. Returns the page size.
     pub fn get_page(&self, lpnum: u64) -> Data {
         if !self.lp_valid(lpnum) {
-            return Arc::new(Vec::new());
+            return nd();
         }
 
         let off = Self::HSIZE + (self.sp_size as u64) * lpnum;

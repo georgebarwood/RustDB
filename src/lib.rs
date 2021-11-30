@@ -35,7 +35,8 @@
 //!    }
 //!```
 //!
-//![See here](https://github.com/georgebarwood/RustDB/blob/main/examples/axumtest.rs) for more advanced example (Axum webserver with ARGON hash function).
+//![See here](https://github.com/georgebarwood/RustDB/blob/main/examples/axumtest.rs) for more advanced example
+//! ( Axum webserver with ARGON hash function and query logging ).
 //!
 //!# Features
 //!
@@ -45,8 +46,8 @@
 //!
 //!# General Design of Database
 //!
-//!SortedFile stores fixed size Records in a tree of Pages.
-//!SortedFile is used to implement:
+//! SortedFile stores fixed size Records in a tree of Pages.
+//! SortedFile is used to implement:
 //!
 //! - Variable length values ( which are split into fragments - see bytes module - although up to 15 bytes can be stored directly. ).
 //!
@@ -54,11 +55,11 @@
 //!
 //! - Index storage ( an index record refers back to the main table ).
 //!
-//!Pages have a maximum size, and are stored in CompactFile, which stores logical pages in smaller regions of backing storage.
+//! When a page becomes too big, it is split into two pages.
 //!
-//!When a page becomes too big, it is split into two pages.
+//! Each page is implemented as a binary tree ( so there is a tree of trees ).
 //!
-//!Each page is implemented as a binary tree ( so there is a tree of trees ).
+//! [SharedPagedData] allows logical database pages to be shared to allow concurrent readers.
 //!
 //!# ToDo List
 //!
@@ -109,7 +110,7 @@ use crate::{
     sortedfile::{Asc, Id, Record, SortedFile},
     stg::Storage,
     table::{ColInfo, IndexInfo, Row, SaveOp, Table, TablePtr},
-    util::{newmap, SmallSet},
+    util::{nd, newmap, SmallSet},
     value::*,
 };
 
@@ -582,7 +583,7 @@ pub trait Query: std::any::Any {
 
     /// Get file content.
     fn file_content(&mut self, _fnum: i64) -> Arc<Vec<u8>> {
-        Arc::new(Vec::new())
+        nd()
     }
 
     /// Set the error string.

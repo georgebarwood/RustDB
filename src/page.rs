@@ -6,7 +6,7 @@
 //! Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids.
 //!
 //! Note that the left node is greater than the parent node.
-use crate::{panic, util, Arc, Data, Ordering, Rc, Record, RefCell, DB};
+use crate::{nd, panic, util, Data, Ordering, Rc, Record, RefCell, DB};
 
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
@@ -144,7 +144,7 @@ impl Page {
     /// Construct a new empty page inheriting record size and level from self.
     /// Used when splitting a page that is full.
     pub fn new_page(&self) -> Page {
-        Page::new(self.rec_size(), self.level, Arc::new(Vec::new()), u64::MAX)
+        Page::new(self.rec_size(), self.level, nd(), u64::MAX)
     }
 
     /// Find child page number.

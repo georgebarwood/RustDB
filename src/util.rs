@@ -1,8 +1,13 @@
-use crate::{BTreeSet, HashMap, Rc, RefCell};
+use crate::{Arc, BTreeSet, Data, HashMap, Rc, RefCell};
 
 /// Wrap a type in Rc + RefCell.
 pub fn new<T>(x: T) -> std::rc::Rc<std::cell::RefCell<T>> {
     Rc::new(RefCell::new(x))
+}
+
+/// New Data ( `Arc::new(Vec::new())` ).
+pub fn nd() -> Data {
+    Arc::new(Vec::new())
 }
 
 /// Construct a new map wrapped in a RefCell.

@@ -1,4 +1,6 @@
-use crate::{Arc, BTreeMap, CompactFile, Data, HashMap, HashSet, Mutex, RwLock, SaveOp, Storage};
+use crate::{
+    nd, Arc, BTreeMap, CompactFile, Data, HashMap, HashSet, Mutex, RwLock, SaveOp, Storage,
+};
 use std::ops::Bound::Included;
 
 /// ```Arc<Mutex<PageInfo>>```
@@ -247,11 +249,7 @@ impl AccessPagedData {
     /// Free a logical page.
     pub fn free_page(&self, lpnum: u64) {
         debug_assert!(self.writer);
-        self.spd
-            .stash
-            .write()
-            .unwrap()
-            .set(lpnum, Arc::new(Vec::new()));
+        self.spd.stash.write().unwrap().set(lpnum, nd());
         self.spd.file.write().unwrap().free_page(lpnum);
     }
 

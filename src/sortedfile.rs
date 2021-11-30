@@ -238,7 +238,7 @@ impl SortedFile {
                 self.rec_size
             },
             level,
-            Arc::new(Vec::new()),
+            nd(),
             u64::MAX,
         )
     }
