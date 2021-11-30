@@ -1,13 +1,13 @@
 //!# Interface
 //!
 //!The method [Database]::run (or alternatively Database::run_timed) is called to execute an SQL query.
-//!This takes a [Query] parameter which accumulates SELECT results and which also has methods
+//!This takes a [Transaction] parameter which accumulates SELECT results and which also has methods
 //!for accessing the environment and controlling output. Custom builtin functions implement [CExp] and have access to the query
 //!via an [EvalEnv] parameter, which can be downcast if necessary.   
 //!
 //!# Examples
 //! ```
-//!use rustdb::{Database, SharedPagedData, SimpleFileStorage, WebQuery, INITSQL};
+//!use rustdb::{Database, SharedPagedData, SimpleFileStorage, WebTransaction, INITSQL};
 //!use std::net::TcpListener;
 //!use std::sync::Arc;
 //!
@@ -21,7 +21,7 @@
 //!    let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
 //!    for tcps in listener.incoming() {
 //!        if let Ok(mut tcps) = tcps {
-//!            if let Ok(mut wq) = WebQuery::new(&tcps) {
+//!            if let Ok(mut wq) = WebTransaction::new(&tcps) {
 //!                // wq.trace();
 //!                let sql = "EXEC web.Main()";
 //!                // Execute SQL. http response, SQL output, (status,headers,content) is accumulated in wq.
@@ -75,11 +75,11 @@
 //!
 
 pub use crate::{
-    genquery::{GenQuery, Part},
+    gentrans::{GenTransaction, Part},
     init::INITSQL,
     pstore::{AccessPagedData, SharedPagedData},
     stg::SimpleFileStorage,
-    web::WebQuery,
+    webtrans::WebTransaction,
 };
 
 #[cfg(feature = "builtin")]
@@ -133,11 +133,11 @@ mod util;
 
 // Modules that are always public.
 
-/// General Query.
-pub mod genquery;
+/// General Transaction ( implementation of Transaction ).
+pub mod gentrans;
 
-/// WebQuery struct with http support.
-pub mod web;
+/// WebTransaction ( alternative implementation of Transaction with http support ).
+pub mod webtrans;
 
 /// Initial SQL
 pub mod init;
@@ -275,7 +275,7 @@ pub struct Database {
 impl Database {
     /// Construct a new DB, based on the specified file.
     pub fn new(file: AccessPagedData, initsql: &str) -> DB {
-        let mut dq = DummyQuery {};
+        let mut dq = DummyTransaction {};
         let is_new = file.is_new();
         let mut tb = TableBuilder::new();
         let sys_schema = tb.nt("Schema", &[("Name", STRING)]);
@@ -382,7 +382,7 @@ GO
     }
 
     /// Run a batch of SQL.
-    pub fn run(self: &DB, source: &str, qy: &mut dyn Query) {
+    pub fn run(self: &DB, source: &str, qy: &mut dyn Transaction) {
         if let Some(e) = self.go(source, qy) {
             let err = format!(
                 "{} in {} at line {} column {}.",
@@ -394,7 +394,7 @@ GO
         }
     }
     /// Run a batch of SQL, printing the execution time.
-    pub fn run_timed(self: &DB, source: &str, qy: &mut dyn Query) {
+    pub fn run_timed(self: &DB, source: &str, qy: &mut dyn Transaction) {
         let start = std::time::Instant::now();
         self.run(source, qy);
         println!(
@@ -404,7 +404,7 @@ GO
         );
     }
     /// Run a batch of SQL.
-    pub fn go(self: &DB, source: &str, qy: &mut dyn Query) -> Option<SqlError> {
+    pub fn go(self: &DB, source: &str, qy: &mut dyn Transaction) -> Option<SqlError> {
         let mut p = Parser::new(source, self);
         let result = std::panic::catch_unwind(panic::AssertUnwindSafe(|| {
             p.batch(qy);
@@ -555,8 +555,8 @@ impl TableBuilder {
     }
 }
 
-/// Input/Output message. Query and response.
-pub trait Query: std::any::Any {
+/// Input/Output message. Query and Response.
+pub trait Transaction: std::any::Any {
     /// STATUSCODE builtin function. sets the response status code.
     fn status_code(&mut self, _code: i64) {}
 
@@ -596,8 +596,8 @@ pub trait Query: std::any::Any {
 }
 
 /// Query where output is printed to console (used for initialisation ).
-struct DummyQuery {}
-impl Query for DummyQuery {
+struct DummyTransaction {}
+impl Transaction for DummyTransaction {
     fn selected(&mut self, _values: &[Value]) {}
     /// Called if a panic ( error ) occurs.
     fn set_error(&mut self, err: String) {

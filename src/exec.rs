@@ -6,12 +6,12 @@ pub struct EvalEnv<'r> {
     pub stack: Vec<Value>,
     pub bp: usize, // "Base Pointer" - used to access local variables.
     pub db: DB,
-    pub qy: &'r mut dyn Query,
+    pub qy: &'r mut dyn Transaction,
     pub call_depth: usize,
 }
 impl<'r> EvalEnv<'r> {
     /// Construct a new EvalEnv.
-    pub fn new(db: DB, qy: &'r mut dyn Query) -> Self {
+    pub fn new(db: DB, qy: &'r mut dyn Transaction) -> Self {
         EvalEnv {
             stack: Vec::new(),
             bp: 0,

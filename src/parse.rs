@@ -101,7 +101,7 @@ impl<'a> Parser<'a> {
         }
     } // end fn statement
     /// Parse and execute a batch of statements.
-    pub fn batch(&mut self, rs: &mut dyn Query) {
+    pub fn batch(&mut self, rs: &mut dyn Transaction) {
         loop {
             while self.token != Token::EndOfFile && !self.test_id(b"GO") {
                 self.statement();
