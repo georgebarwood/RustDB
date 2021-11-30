@@ -1,14 +1,17 @@
 use crate::{panic, util, HashMap, Query, Rc, Value};
 use std::{io::Read, io::Write, net::TcpStream};
+
+type Map = HashMap<String, Rc<String>>;
+
 /// Response content is accumulated in result.
 ///
 /// ToDo : cookies, files.
 pub struct WebQuery {
     pub method: Rc<String>,
     pub path: Rc<String>,
-    pub query: HashMap<String, Rc<String>>,
-    pub form: HashMap<String, Rc<String>>,
-    pub input_headers: Vec<(String, String)>,
+    pub query: Map,
+    pub form: Map,
+    pub cookies: Map,
     pub parts: Vec<Part>,
     pub err: String,
     pub output: Vec<u8>,
@@ -18,11 +21,12 @@ pub struct WebQuery {
 }
 
 /// Path and Query.
-type Target = (Rc<String>, HashMap<String, Rc<String>>);
+type Target = (Rc<String>, Map);
 
 /// Method, Path, Query, Version.
-type Request = (Rc<String>, Rc<String>, HashMap<String, Rc<String>>, String);
+type Request = (Rc<String>, Rc<String>, Map, String);
 
+#[derive(Debug)]
 pub enum WebErr {
     Io(std::io::Error),
     Utf8(std::string::FromUtf8Error),
@@ -42,7 +46,7 @@ impl WebQuery {
     pub fn new(s: &TcpStream) -> Result<Self, WebErr> {
         let mut hp = HttpRequestParser::new(s);
         let (method, path, query, _version) = hp.read_request()?;
-        let input_headers = hp.read_headers()?;
+        let cookies = hp.read_headers()?;
         let mut form = HashMap::new();
         let mut parts = Vec::new();
         // println!("content_type='{}'", hp.content_type);
@@ -63,12 +67,12 @@ impl WebQuery {
         Ok(Self {
             status_code,
             output,
-            input_headers,
             headers,
             method,
             path,
             query,
             form,
+            cookies,
             parts,
             err: String::new(),
             now,
@@ -76,8 +80,8 @@ impl WebQuery {
     }
     pub fn trace(&self) {
         println!(
-            "method={} path={} query={:?} input headers={:?}",
-            self.method, self.path, self.query, self.input_headers
+            "method={} path={} query={:?} input cookies={:?}",
+            self.method, self.path, self.query, self.cookies,
         );
     }
     /// Writes the http response to the TCP stream.
@@ -114,6 +118,13 @@ impl Query for WebQuery {
             }
             2 => {
                 if let Some(s) = self.form.get(s) {
+                    s.clone()
+                } else {
+                    Rc::new(String::new())
+                }
+            }
+            3 => {
+                if let Some(s) = self.cookies.get(s) {
                     s.clone()
                 } else {
                     Rc::new(String::new())
@@ -369,33 +380,43 @@ impl<'a> HttpRequestParser<'a> {
         Ok((method, path, query, version))
     }
 
-    fn read_header(&mut self) -> Result<Option<(String, String)>, WebErr> {
-        if self.get_byte()? != 10 {
-            return Ok(None);
-        }
-        let name = self.read_to(b':')?;
-        if name.is_empty() {
-            return Ok(None);
-        }
-        self.skip_white_space()?;
-        let value = self.read_to(13)?;
-        if name == "Content-Type" {
-            self.content_type = value.clone();
-        } else if name == "Content-Length" {
-            self.content_length = value.parse::<usize>().unwrap();
-        }
-        Ok(Some((name, value)))
-    }
-    pub fn read_headers(&mut self) -> Result<Vec<(String, String)>, WebErr> {
-        let mut result = Vec::new();
-        while let Some(pair) = self.read_header()? {
-            result.push(pair);
+    pub fn read_headers(&mut self) -> Result<HashMap<String, Rc<String>>, WebErr> {
+        let mut cookies = HashMap::new();
+        loop {
+            if self.get_byte()? != 10 {
+                break;
+            }
+            let name = self.read_to(b':')?;
+            if name.is_empty() {
+                break;
+            }
+            self.skip_white_space()?;
+
+            println!("Reading header {}", name);
+
+            if name == "Cookie" {
+                cookies = self.read_map()?;
+                if self.get_byte()? != 13
+                {
+                  return Err(WebErr::NewlineExpected);
+                }
+            } else {
+                let value = self.read_to(13)?;
+                if name == "Content-Type" {
+                    self.content_type = value.clone();
+                } else if name == "Content-Length" {
+                    self.content_length = value.parse::<usize>().unwrap();
+                }
+            }
+
+            println!("Read header {}", name);
         }
         // Read CR/LF
         if self.get_byte()? != 13 || self.get_byte()? != 10 {
             Err(WebErr::NewlineExpected)
         } else {
-            Ok(result)
+            println!("Got headers, cookies={:?}", cookies);
+            Ok(cookies)
         }
     }
 
@@ -437,7 +458,7 @@ impl<'a> HttpRequestParser<'a> {
         */
         let mut ok = true;
         while ok {
-            let _headers = self.read_headers()?;
+            self.read_headers()?;
             // println!("headers={:?}", _headers);
             let mut body = Vec::new();
             ok = false;
