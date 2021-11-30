@@ -22,12 +22,12 @@ use rustdb::{
 
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
 
-/// Query to be sent to server thread, implements IntoResponse.
-struct ServerQuery {
+/// Transaction to be sent to server thread, implements IntoResponse.
+struct ServerTrans {
     pub x: Box<GenTransaction>,
 }
 
-impl ServerQuery {
+impl ServerTrans {
     pub fn new() -> Self {
         Self {
             x: Box::new(GenTransaction::new()),
@@ -37,8 +37,8 @@ impl ServerQuery {
 
 /// Message to server thread, includes oneshot Sender for reply.
 struct ServerMessage {
-    pub sq: ServerQuery,
-    pub tx: oneshot::Sender<ServerQuery>,
+    pub st: ServerTrans,
+    pub tx: oneshot::Sender<ServerTrans>,
 }
 
 /// State shared with handlers.
@@ -83,15 +83,15 @@ async fn main() {
         let db = get_db(wapd, INITSQL);
         loop {
             let mut sm = rx.blocking_recv().unwrap();
-            db.run_timed("EXEC web.Main()", &mut *sm.sq.x);
+            db.run_timed("EXEC web.Main()", &mut *sm.st.x);
             let updates = db.save();
             if updates > 0 {
                 println!("Pages updated={}", updates);
-                let ser = serde_json::to_string(&sm.sq.x.qy).unwrap();
+                let ser = serde_json::to_string(&sm.st.x.qy).unwrap();
                 // println!("Serialised query={}", ser);
                 let _err = log_tx.send(ser);
             }
-            let _x = sm.tx.send(sm.sq);
+            let _x = sm.tx.send(sm.st);
         }
     });
 
@@ -160,9 +160,9 @@ async fn h_get(
     path: Path<String>,
     params: Query<BTreeMap<String, String>>,
     cookies: Cookies,
-) -> ServerQuery {
-    // Build the ServerQuery.
-    let mut sq = ServerQuery::new();
+) -> ServerTrans {
+    // Build the ServerTrans.
+    let mut sq = ServerTrans::new();
     sq.x.qy.path = path.0;
     sq.x.qy.params = params.0;
     sq.x.qy.cookies = map_cookies(cookies);
@@ -185,21 +185,21 @@ async fn h_post(
     cookies: Cookies,
     form: Option<Form<BTreeMap<String, String>>>,
     multipart: Option<Multipart>,
-) -> ServerQuery {
-    // Build the ServerQuery.
-    let mut sq = ServerQuery::new();
-    sq.x.qy.path = path.0;
-    sq.x.qy.params = params.0;
-    sq.x.qy.cookies = map_cookies(cookies);
+) -> ServerTrans {
+    // Build the Server Transaction.
+    let mut st = ServerTrans::new();
+    st.x.qy.path = path.0;
+    st.x.qy.params = params.0;
+    st.x.qy.cookies = map_cookies(cookies);
     if let Some(Form(form)) = form {
-        sq.x.qy.form = form;
+        st.x.qy.form = form;
     } else {
-        sq.x.qy.parts = map_parts(multipart).await;
+        st.x.qy.parts = map_parts(multipart).await;
     }
 
-    // Send query to database thread ( and get it back ).
-    let (tx, rx) = oneshot::channel::<ServerQuery>();
-    let _err = state.tx.send(ServerMessage { sq, tx }).await;
+    // Send transaction to database thread ( and get it back ).
+    let (tx, rx) = oneshot::channel::<ServerTrans>();
+    let _err = state.tx.send(ServerMessage { st, tx }).await;
     let result = rx.await.unwrap();
 
     result
@@ -211,7 +211,7 @@ use axum::{
     response::IntoResponse,
 };
 
-impl IntoResponse for ServerQuery {
+impl IntoResponse for ServerTrans {
     type Body = Full<Bytes>;
     type BodyError = std::convert::Infallible;
 
