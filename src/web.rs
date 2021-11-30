@@ -331,7 +331,7 @@ impl<'a> HttpRequestParser<'a> {
         from_utf8(bytes)
     }
 
-    fn read_map(&mut self) -> Result<HashMap<String, Rc<String>>, WebErr> {
+    fn read_map(&mut self) -> Result<Map, WebErr> {
         let mut result = HashMap::new();
         loop {
             let b = self.get_byte()?;
@@ -380,7 +380,7 @@ impl<'a> HttpRequestParser<'a> {
         Ok((method, path, query, version))
     }
 
-    pub fn read_headers(&mut self) -> Result<HashMap<String, Rc<String>>, WebErr> {
+    pub fn read_headers(&mut self) -> Result<Map, WebErr> {
         let mut cookies = HashMap::new();
         loop {
             if self.get_byte()? != 10 {
@@ -430,7 +430,7 @@ impl<'a> HttpRequestParser<'a> {
         from_utf8(result)
     }
 
-    pub fn read_form(&mut self) -> Result<HashMap<String, Rc<String>>, WebErr> {
+    pub fn read_form(&mut self) -> Result<Map, WebErr> {
         self.end_content = self.base + self.index + self.content_length;
         self.read_map()
     }
