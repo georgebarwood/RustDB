@@ -392,8 +392,6 @@ impl<'a> HttpRequestParser<'a> {
             }
             self.skip_white_space()?;
 
-            println!("Reading header {}", name);
-
             if name == "Cookie" {
                 cookies = self.read_map()?;
                 if self.get_byte()? != 13
@@ -408,14 +406,11 @@ impl<'a> HttpRequestParser<'a> {
                     self.content_length = value.parse::<usize>().unwrap();
                 }
             }
-
-            println!("Read header {}", name);
         }
         // Read CR/LF
         if self.get_byte()? != 13 || self.get_byte()? != 10 {
             Err(WebErr::NewlineExpected)
         } else {
-            println!("Got headers, cookies={:?}", cookies);
             Ok(cookies)
         }
     }
