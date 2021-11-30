@@ -267,7 +267,6 @@ fn log_loop(log_rx: std::sync::mpsc::Receiver<String>) {
         .unwrap();
     loop {
         let logstr = log_rx.recv().unwrap();
-        println!("Logging {}", logstr);
         let _err = logfile.write_all(logstr.as_bytes());
         let _err = logfile.write_all(b"\r\n");
     }
