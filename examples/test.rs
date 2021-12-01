@@ -1,14 +1,12 @@
-use rustdb::{Database, SharedPagedData, WebTransaction, INITSQL};
+use rustdb::{AtomicFile, Database, SharedPagedData, SimpleFileStorage, WebTransaction, INITSQL};
 use std::net::TcpListener;
 use std::sync::Arc;
 
 fn main() {
-    rustdb::atomfile::test();
-
-    // let stg = Box::new(rustdb::SimpleFileStorage::new(
-    let stg = Box::new(rustdb::AtomicFile::new(
+    let file = Box::new(SimpleFileStorage::new(
         "c:\\Users\\pc\\rust\\sftest01.rustdb",
     ));
+    let stg = Box::new(AtomicFile::new(file));
     let spd = Arc::new(SharedPagedData::new(stg));
     let apd = spd.open_write();
     let db = Database::new(apd, INITSQL);
