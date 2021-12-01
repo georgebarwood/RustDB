@@ -16,7 +16,35 @@ pub struct AtomicFile {
     pub file: Mutex<fs::File>,
 }
 
-const TRACE: bool = false;
+impl AtomicFile {
+    pub fn new(filename: &str) -> Self {
+        Self {
+            map: BTreeMap::new(),
+            file: Mutex::new(
+                OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .open(filename)
+                    .unwrap(),
+            ),
+        }
+    }
+
+    fn read0(&self, off: u64, bytes: &mut [u8]) {
+        let mut f = self.file.lock().unwrap();
+        f.seek(SeekFrom::Start(off)).unwrap();
+        let _x = f.read_exact(bytes);
+    }
+
+    fn write0(&self, off: u64, bytes: &[u8]) {
+        let mut f = self.file.lock().unwrap();
+        f.seek(SeekFrom::Start(off)).unwrap();
+        let _x = f.write(bytes);
+    }
+}
+
+const TRACE: bool = false; // For debugging.
 
 impl Storage for AtomicFile {
     fn size(&self) -> u64 {
@@ -174,48 +202,15 @@ impl Storage for AtomicFile {
     }
 
     fn commit(&mut self, size: u64) {
-        self.flush();
-        let f = self.file.lock().unwrap();
-        f.set_len(size).unwrap();
-    }
-}
-
-impl AtomicFile {
-    pub fn new(filename: &str) -> Self {
-        Self {
-            map: BTreeMap::new(),
-            file: Mutex::new(
-                OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .create(true)
-                    .open(filename)
-                    .unwrap(),
-            ),
-        }
-    }
-
-    pub fn read0(&self, off: u64, bytes: &mut [u8]) {
-        let mut f = self.file.lock().unwrap();
-        f.seek(SeekFrom::Start(off)).unwrap();
-        let _x = f.read_exact(bytes);
-    }
-    pub fn write0(&self, off: u64, bytes: &[u8]) {
-        let mut f = self.file.lock().unwrap();
-        f.seek(SeekFrom::Start(off)).unwrap();
-        let _x = f.write(bytes);
-    }
-
-    pub fn flush(&mut self) {
         // ToDo : first write the updates to a special file (for roll forward in case of an abort/crash).
         for (k, v) in &self.map {
             let start = k - v.len as u64 + 1;
             self.write0(start, &v.data[v.off..v.off + v.len]);
         }
         self.map.clear();
+        let f = self.file.lock().unwrap();
+        f.set_len(size).unwrap();
     }
-
-    pub fn commit() {}
 }
 
 pub fn test() {
