@@ -25,6 +25,7 @@ max = ["builtin"]
 serde = { version = "1.0.130", features = ["derive","rc"] }
 
 [dev-dependencies]
+rand = "0.8.4"
 mimalloc = { version = "0.1.26", default-features = false }
 axum = { version = "0.3.4", default-features = false, features = ["multipart","http1"] }
 #hyper = { version = "0.14.14", features = ["server"] }
