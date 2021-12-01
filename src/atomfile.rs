@@ -1,6 +1,5 @@
 use crate::*;
 use std::cmp::min;
-use std::{fs, fs::OpenOptions, io::Read, io::Seek, io::SeekFrom, io::Write};
 
 pub struct DataSlice {
     off: usize,
@@ -12,44 +11,32 @@ pub struct DataSlice {
 /// Keeps a list of outstanding writes which have not yet been written to the underlying file.
 pub struct AtomicFile {
     /// Map of existing outstanding writes. Note the key is the end of the write minus one.
-    pub map: BTreeMap<u64, DataSlice>,
-    pub file: Mutex<fs::File>,
+    pub map: Mutex<BTreeMap<u64, DataSlice>>,
+    pub stg: Box<dyn Storage>,
 }
 
 impl AtomicFile {
-    pub fn new(filename: &str) -> Self {
+    pub fn new(stg: Box<dyn Storage>) -> Self {
         Self {
-            map: BTreeMap::new(),
-            file: Mutex::new(
-                OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .create(true)
-                    .open(filename)
-                    .unwrap(),
-            ),
+            map: Mutex::new(BTreeMap::new()),
+            stg,
         }
     }
 
     fn read0(&self, off: u64, bytes: &mut [u8]) {
-        let mut f = self.file.lock().unwrap();
-        f.seek(SeekFrom::Start(off)).unwrap();
-        let _x = f.read_exact(bytes);
+        self.stg.read(off, bytes);
     }
 
     fn write0(&self, off: u64, bytes: &[u8]) {
-        let mut f = self.file.lock().unwrap();
-        f.seek(SeekFrom::Start(off)).unwrap();
-        let _x = f.write(bytes);
+        self.stg.write(off, bytes);
     }
 }
 
-const TRACE: bool = false; // For debugging.
+const TRACE: bool = true; // For debugging.
 
 impl Storage for AtomicFile {
     fn size(&self) -> u64 {
-        let mut f = self.file.lock().unwrap();
-        f.seek(SeekFrom::End(0)).unwrap()
+        self.stg.size()
     }
 
     /// Read from file. Uses map data if available.
@@ -61,8 +48,9 @@ impl Storage for AtomicFile {
         let mut done: usize = 0;
         let mut todo: usize = data.len();
 
-        for (k, v) in self.map.range(start..) {
-            let estart = *k - v.len as u64 + 1;
+        let map = self.map.lock().unwrap();
+        for (k, v) in map.range(start..) {
+            let estart = *k + 1 - v.len as u64;
             if estart > start + done as u64 {
                 let lim = (estart - (start + done as u64)) as usize;
                 let amount = min(todo, lim) as usize;
@@ -111,7 +99,7 @@ impl Storage for AtomicFile {
         }
     }
 
-    fn write_data(&mut self, start: u64, data: Data, off: usize, len: usize) {
+    fn write_data(&self, start: u64, data: Data, off: usize, len: usize) {
         if TRACE {
             println!("write_data start={} len={}", start, len);
         }
@@ -121,7 +109,8 @@ impl Storage for AtomicFile {
         let mut add = Vec::new();
         let end = start + len as u64;
 
-        for (k, v) in self.map.range_mut(start..) {
+        let mut map = self.map.lock().unwrap();
+        for (k, v) in map.range_mut(start..) {
             let eend = *k + 1; // end of existing write.
             let estart = eend - v.len as u64; // start of existing write.
 
@@ -147,7 +136,7 @@ impl Storage for AtomicFile {
                 }
             }
             // (d) New write starts before existing write, but doesn't subsume it. Trim existing write.
-            else if start < estart {
+            else if start <= estart {
                 let trim = (end - estart) as usize;
                 v.len -= trim;
                 v.off += trim;
@@ -186,73 +175,65 @@ impl Storage for AtomicFile {
             }
         }
         for k in remove {
-            self.map.remove(&k);
+            map.remove(&k);
         }
         for (start, data, off, len) in add {
-            self.map
-                .insert(start + len as u64 - 1, DataSlice { data, off, len });
+            map.insert(start + len as u64 - 1, DataSlice { data, off, len });
         }
 
-        self.map
-            .insert(start + len as u64 - 1, DataSlice { data, off, len });
+        map.insert(start + len as u64 - 1, DataSlice { data, off, len });
     }
 
-    fn write(&mut self, start: u64, data: &[u8]) {
+    fn write(&self, start: u64, data: &[u8]) {
         let len = data.len();
         let d = Arc::new(data.to_vec());
         self.write_data(start, d, 0, len);
     }
 
-    fn commit(&mut self, size: u64) {
+    fn commit(&self, size: u64) {
         // ToDo : first write the updates to a special file (for roll forward in case of an abort/crash).
-        for (k, v) in &self.map {
-            let start = k - v.len as u64 + 1;
+        let mut map = self.map.lock().unwrap();
+        for (k, v) in map.iter() {
+            let start = k + 1 - v.len as u64;
             self.write0(start, &v.data[v.off..v.off + v.len]);
         }
-        self.map.clear();
-        let f = self.file.lock().unwrap();
-        f.set_len(size).unwrap();
+        map.clear();
+        self.stg.commit(size);
     }
 }
 
-pub fn test() {
-    // Write ranges 5..15 and 20..25 */
-    let mut af = AtomicFile::new("test.atomfile");
-    let d = b"0123456789";
-    af.write(5, d);
-    let d = b"ABCDE";
-    af.write(20, d);
-
-    // println!("Map of writes = {:?}", af.map);
-
-    // Read range 10..40.
-    let mut d = vec![0; 30];
-    af.read(10, &mut d);
-
-    // Write range 8..13
-    let d = b"ABCDE";
-    af.write(8, d);
-
-    // Write range 18..23
-    let d = b"FEGHI";
-    af.write(18, d);
-
-    // Write range 24..29
-    let d = b"JKLMN";
-    af.write(24, d);
-
-    // Write range 8..13
-    let d = b"ABCDE";
-    af.write(8, d);
-
-    // println!("Map of writes = {:?}", af.map);
-
-    // Read range 10..40.
-    let mut d = vec![0; 30];
-    af.read(10, &mut d);
-}
-
 #[test]
-fn run_atomic_file_test() {
-    test();
+pub fn atomic_file_test() {
+use rand::Rng;
+    /* Idea of test is to check AtomicFile and MemFile behave the same */
+
+    let s1 = stg::MemFile::new();
+    let s2 = AtomicFile::new(Box::new(s1));
+    let s3 = stg::MemFile::new();
+
+    let mut rng = rand::thread_rng();
+    for i in 0..1000000 {
+        let off: usize = rng.gen::<usize>() % 50;
+        let mut len = 1 + rng.gen::<usize>() % 10;
+        let w: bool = rng.gen();
+        if w {
+            let mut bytes = Vec::new();
+            while len > 0 {
+                len -= 1;
+                let b: u8 = rng.gen::<u8>();
+                bytes.push(b);
+            }
+            s2.write(off as u64, &bytes);
+            s3.write(off as u64, &bytes);
+        } else {
+            let mut b2 = vec![0; len];
+            let mut b3 = vec![0; len];
+            s2.read(off as u64, &mut b2);
+            s3.read(off as u64, &mut b3);
+            if b2 != b3
+            {
+              panic!("test failed i={}", i );
+            }
+        }
+    }
 }

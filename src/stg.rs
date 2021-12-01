@@ -9,22 +9,63 @@ pub trait Storage: Send + Sync {
     fn read(&self, start: u64, bytes: &mut [u8]);
 
     /// Write to the underlying storage.
-    fn write(&mut self, start: u64, bytes: &[u8]);
+    fn write(&self, start: u64, bytes: &[u8]);
 
     /// Write Vec to underlying storage.
-    fn write_vec(&mut self, start: u64, data: Vec<u8>) {
+    fn write_vec(&self, start: u64, data: Vec<u8>) {
         let len = data.len();
         let d = Arc::new(data);
         self.write_data(start, d, 0, len);
     }
 
     /// Write Data slice to the underlying storage.
-    fn write_data(&mut self, start: u64, data: Data, off: usize, len: usize) {
+    fn write_data(&self, start: u64, data: Data, off: usize, len: usize) {
         self.write(start, &data[off..off + len]);
     }
 
     /// Finish write transaction, size is new size of underlying storage.
-    fn commit(&mut self, size: u64);
+    fn commit(&self, size: u64);
+}
+
+pub struct MemFile {
+    pub v: Mutex<Vec<u8>>,
+}
+
+impl MemFile {
+    pub fn new() -> Self {
+        Self {
+            v: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl Storage for MemFile {
+    fn size(&self) -> u64 {
+        let v = self.v.lock().unwrap();
+        v.len() as u64
+    }
+    fn read(&self, off: u64, bytes: &mut [u8]) {
+        let off = off as usize;
+        let len = bytes.len();
+        let mut v = self.v.lock().unwrap();
+        if off + len > v.len() {
+            v.resize(off + len, 0);
+        }
+        bytes.copy_from_slice(&v[off..off + len]);
+    }
+    fn write(&self, off: u64, bytes: &[u8]) {
+        let off = off as usize;
+        let len = bytes.len();
+        let mut v = self.v.lock().unwrap();
+        if off + len > v.len() {
+            v.resize(off + len, 0);
+        }
+        v[off..off + len].copy_from_slice(bytes);
+    }
+    fn commit(&self, size: u64) {
+        let mut v = self.v.lock().unwrap();
+        v.resize(size as usize, 0);
+    }
 }
 
 use crate::Mutex;
@@ -60,12 +101,12 @@ impl Storage for SimpleFileStorage {
         f.seek(SeekFrom::Start(off)).unwrap();
         let _x = f.read_exact(bytes);
     }
-    fn write(&mut self, off: u64, bytes: &[u8]) {
+    fn write(&self, off: u64, bytes: &[u8]) {
         let mut f = self.file.lock().unwrap();
         f.seek(SeekFrom::Start(off)).unwrap();
         let _x = f.write(bytes);
     }
-    fn commit(&mut self, size: u64) {
+    fn commit(&self, size: u64) {
         let f = self.file.lock().unwrap();
         f.set_len(size).unwrap();
     }
