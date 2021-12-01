@@ -39,6 +39,12 @@ impl MemFile {
     }
 }
 
+impl Default for MemFile {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Storage for MemFile {
     fn size(&self) -> u64 {
         let v = self.v.lock().unwrap();

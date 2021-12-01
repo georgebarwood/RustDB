@@ -204,35 +204,34 @@ impl Storage for AtomicFile {
 
 #[test]
 pub fn atomic_file_test() {
-use rand::Rng;
+    use rand::Rng;
     /* Idea of test is to check AtomicFile and MemFile behave the same */
 
-    let s1 = stg::MemFile::new();
-    let s2 = AtomicFile::new(Box::new(s1));
-    let s3 = stg::MemFile::new();
+    for _ in 0..1000 {
+        let s1 = stg::MemFile::new();
+        let s2 = AtomicFile::new(Box::new(s1));
+        let s3 = stg::MemFile::new();
 
-    let mut rng = rand::thread_rng();
-    for i in 0..1000000 {
-        let off: usize = rng.gen::<usize>() % 50;
-        let mut len = 1 + rng.gen::<usize>() % 10;
-        let w: bool = rng.gen();
-        if w {
-            let mut bytes = Vec::new();
-            while len > 0 {
-                len -= 1;
-                let b: u8 = rng.gen::<u8>();
-                bytes.push(b);
-            }
-            s2.write(off as u64, &bytes);
-            s3.write(off as u64, &bytes);
-        } else {
-            let mut b2 = vec![0; len];
-            let mut b3 = vec![0; len];
-            s2.read(off as u64, &mut b2);
-            s3.read(off as u64, &mut b3);
-            if b2 != b3
-            {
-              panic!("test failed i={}", i );
+        let mut rng = rand::thread_rng();
+        for _ in 0..1000 {
+            let off: usize = rng.gen::<usize>() % 50;
+            let mut len = 1 + rng.gen::<usize>() % 10;
+            let w: bool = rng.gen();
+            if w {
+                let mut bytes = Vec::new();
+                while len > 0 {
+                    len -= 1;
+                    let b: u8 = rng.gen::<u8>();
+                    bytes.push(b);
+                }
+                s2.write(off as u64, &bytes);
+                s3.write(off as u64, &bytes);
+            } else {
+                let mut b2 = vec![0; len];
+                let mut b3 = vec![0; len];
+                s2.read(off as u64, &mut b2);
+                s3.read(off as u64, &mut b3);
+                assert!(b2 == b3);
             }
         }
     }
