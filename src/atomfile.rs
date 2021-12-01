@@ -66,6 +66,7 @@ impl Storage for AtomicFile {
             if estart > start + done as u64 {
                 let lim = (estart - (start + done as u64)) as usize;
                 let amount = min(todo, lim) as usize;
+                self.read0(start + done as u64, &mut data[done..done + amount]);
                 if TRACE {
                     println!(
                         "Read from underlying file at {} amount={}",
@@ -81,7 +82,7 @@ impl Storage for AtomicFile {
             } else {
                 let skip = (start + done as u64 - estart) as usize;
                 let amount = min(todo, v.len - skip);
-                self.read0(start + done as u64, &mut data[done..done + amount]);
+                data[done..done + amount].copy_from_slice( &v.data[v.off+skip..v.off+skip + amount] );
                 if TRACE {
                     println!(
                         "Read from map start = {} amount={} skip={}",
@@ -114,7 +115,7 @@ impl Storage for AtomicFile {
             println!("write_data start={} len={}", start, len);
         }
 
-        // Existing writes which are overlap with new write need to be trimmed or removed.
+        // Existing writes which overlap with new write need to be trimmed or removed.
         let mut remove = Vec::new();
         let mut add = Vec::new();
         let end = start + len as u64;
@@ -133,7 +134,7 @@ impl Storage for AtomicFile {
             // (b) New write starts after existing write. Should not happen due to range condition.
             else if start > eend {
                 if TRACE {
-                    println!("{} > {} so panic", end, eend);
+                    println!("{} > {} so panic", start, eend);
                 }
                 panic!();
             }
