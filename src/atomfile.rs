@@ -74,15 +74,16 @@ impl Storage for AtomicFile {
                         amount
                     )
                 };
-                done = done + amount;
-                todo = todo - amount;
+                done += amount;
+                todo -= amount;
             }
             if estart > start + data.len() as u64 {
                 break;
             } else {
                 let skip = (start + done as u64 - estart) as usize;
                 let amount = min(todo, v.len - skip);
-                data[done..done + amount].copy_from_slice( &v.data[v.off+skip..v.off+skip + amount] );
+                data[done..done + amount]
+                    .copy_from_slice(&v.data[v.off + skip..v.off + skip + amount]);
                 if TRACE {
                     println!(
                         "Read from map start = {} amount={} skip={}",
@@ -91,8 +92,8 @@ impl Storage for AtomicFile {
                         skip
                     )
                 };
-                done = done + amount;
-                todo = todo - amount;
+                done += amount;
+                todo -= amount;
             }
             if todo == 0 {
                 break;
@@ -148,8 +149,8 @@ impl Storage for AtomicFile {
             // (d) New write starts before existing write, but doesn't subsume it. Trim existing write.
             else if start < estart {
                 let trim = (end - estart) as usize;
-                v.len = v.len - trim;
-                v.off = v.off + trim;
+                v.len -= trim;
+                v.off += trim;
                 if TRACE {
                     println!("Case (d), estart={} v.len={}", estart, v.len);
                 }
@@ -161,8 +162,8 @@ impl Storage for AtomicFile {
                 add.push((estart, v.data.clone(), v.off, remain));
 
                 let trim = (end - estart) as usize;
-                v.len = v.len - trim;
-                v.off = v.off + trim;
+                v.len -= trim;
+                v.off += trim;
 
                 if TRACE {
                     println!(

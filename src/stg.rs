@@ -1,4 +1,4 @@
-use crate::{Arc,Data};
+use crate::{Arc, Data};
 
 /// Interface for database storage.
 pub trait Storage: Send + Sync {

@@ -147,9 +147,7 @@ impl CompactFile {
             // Allocate new pages.
             while old_ext < ext {
                 let np = self.ep_alloc();
-                for _ in 0..8 {
-                    info.push(0);
-                }
+                info.resize(info.len() + 8, 0);
                 util::setu64(&mut info[2 + old_ext * 8..], np);
                 old_ext += 1;
             }
