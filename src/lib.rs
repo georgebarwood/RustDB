@@ -21,13 +21,13 @@
 //!    let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
 //!    for tcps in listener.incoming() {
 //!        if let Ok(mut tcps) = tcps {
-//!            if let Ok(mut wq) = WebTransaction::new(&tcps) {
-//!                // wq.trace();
+//!            if let Ok(mut tr) = WebTransaction::new(&tcps) {
+//!                // tr.trace();
 //!                let sql = "EXEC web.Main()";
 //!                // Execute SQL. http response, SQL output, (status,headers,content) is accumulated in wq.
-//!                db.run_timed(&sql, &mut wq);
+//!                db.run_timed(&sql, &mut tr);
 //!                // Write the http response to the TCP stream.
-//!                let _err = wq.write(&mut tcps);
+//!                let _err = tr.write(&mut tcps);
 //!                // Save database changes to disk.
 //!                db.save();
 //!            }
@@ -75,6 +75,7 @@
 //!
 
 pub use crate::{
+    atomfile::AtomicFile,
     gentrans::{GenTransaction, Part},
     init::INITSQL,
     pstore::{AccessPagedData, SharedPagedData},
@@ -147,6 +148,8 @@ pub mod stg;
 
 /// Page storage.
 pub mod pstore;
+
+pub mod atomfile;
 
 // Conditional modules.
 

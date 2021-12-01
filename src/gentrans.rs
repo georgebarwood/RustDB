@@ -1,11 +1,10 @@
-use crate::{panic, BTreeMap, Data, Transaction, Rc, Value};
+use crate::{panic, BTreeMap, Data, Rc, Transaction, Value};
 
 use serde::{Deserialize, Serialize};
 
 /// General Query.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GenQuery
-{
+pub struct GenQuery {
     pub path: String,
     pub params: BTreeMap<String, String>,
     pub form: BTreeMap<String, String>,
@@ -15,8 +14,7 @@ pub struct GenQuery
 }
 
 /// General Response.
-pub struct GenResponse
-{
+pub struct GenResponse {
     pub err: String,
     pub status_code: u16,
     pub headers: Vec<(String, String)>,
@@ -49,19 +47,20 @@ impl GenTransaction {
         let headers = Vec::new();
         let status_code = 200;
         Self {
-            qy: GenQuery { path: String::new(),
-            params: BTreeMap::new(),
-            form: BTreeMap::new(),
-            cookies: BTreeMap::new(),
-            parts: Vec::new(),
-            now,
+            qy: GenQuery {
+                path: String::new(),
+                params: BTreeMap::new(),
+                form: BTreeMap::new(),
+                cookies: BTreeMap::new(),
+                parts: Vec::new(),
+                now,
             },
-            rp: GenResponse{
-            err: String::new(),
-            output,
-            status_code,
-            headers,
-           }
+            rp: GenResponse {
+                err: String::new(),
+                output,
+                status_code,
+                headers,
+            },
         }
     }
     /// Append string to output.

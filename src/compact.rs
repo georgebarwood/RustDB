@@ -28,24 +28,34 @@ use std::collections::BTreeSet;
 pub struct CompactFile {
     /// Underlying storage.
     pub stg: Box<dyn Storage>,
+
     /// Size of starter page
     pub sp_size: usize,
+
     /// Size of extension page
     pub ep_size: usize,
+
     /// Number of extension pages reserved for starter pages.      
     ep_resvd: u64,
+
     /// Number of extension pages allocated.       
     ep_count: u64,
+
     /// Temporary set of free extension pages.         
     ep_free: BTreeSet<u64>,
+
     /// Allocator for logical pages.        
     lp_alloc: u64,
+
     /// Start of linked list of free logical pages.        
     lp_first: u64,
+
     /// lp allocation fields updated.
     lp_alloc_dirty: bool,
+
     /// Temporary set of free logical pages.
     lp_free: BTreeSet<u64>,
+
     /// File is newly created.         
     is_new: bool,
 }
@@ -111,48 +121,56 @@ impl CompactFile {
     }
 
     /// Set the contents of the page.
-    pub fn set_page(&mut self, lpnum: u64, data: &[u8]) {
+    pub fn set_page(&mut self, lpnum: u64, data: Data) {
         self.extend_starter_pages(lpnum);
         // Calculate number of extension pages needed.
         let size = data.len();
         let ext = self.ext(size);
+
         // Read the current starter info.
-        let off = Self::HSIZE + (self.sp_size as u64) * lpnum;
-        let mut starter = vec![0_u8; self.sp_size];
-        self.stg.read(off, &mut starter);
-        let old_size = util::get(&starter, 0, 2) as usize;
+        let foff = Self::HSIZE + (self.sp_size as u64) * lpnum;
+        let old_size = self.readu16(foff);
         let mut old_ext = self.ext(old_size);
-        util::set(&mut starter, 0, size as u64, 2);
+
+        let mut info = vec![0_u8; 2 + old_ext * 8];
+        self.stg.read(foff, &mut info);
+
+        util::set(&mut info, 0, size as u64, 2);
+
         if ext != old_ext {
             // Note freed pages.
             while old_ext > ext {
                 old_ext -= 1;
-                let fp = util::getu64(&starter, 2 + old_ext * 8);
+                let fp = util::getu64(&info, 2 + old_ext * 8);
                 self.ep_free.insert(fp);
             }
             // Allocate new pages.
             while old_ext < ext {
                 let np = self.ep_alloc();
-                util::setu64(&mut starter[2 + old_ext * 8..], np);
+                for _ in 0..8 {
+                    info.push(0);
+                }
+                util::setu64(&mut info[2 + old_ext * 8..], np);
                 old_ext += 1;
             }
         }
-        // Write the starter data.
         let off = 2 + ext * 8;
         let mut done = min(self.sp_size - off, size);
-        starter[off..off + done].copy_from_slice(&data[0..done]);
-        let woff = Self::HSIZE + (self.sp_size as u64) * lpnum;
-        self.write(woff, &starter[0..off + done]);
+        self.write_data(foff + off as u64, data.clone(), 0, done);
+
         // Write the extension pages.
         for i in 0..ext {
             let amount = min(size - done, self.ep_size - 8);
-            let page = util::getu64(&starter, 2 + i * 8) as u64;
-            let woff = page * (self.ep_size as u64);
-            self.writeu64(woff, lpnum);
-            self.write(woff + 8, &data[done..done + amount]);
+            let page = util::getu64(&info, 2 + i * 8) as u64;
+            let foff = page * (self.ep_size as u64);
+            self.writeu64(foff, lpnum);
+            self.write_data(foff + 8, data.clone(), done, amount);
             done += amount;
         }
         debug_assert!(done == size);
+
+        // Write the info.
+        self.stg.write_vec(foff, info);
     }
 
     /// Get the current size of the specified logical page.
@@ -172,7 +190,7 @@ impl CompactFile {
 
         let off = Self::HSIZE + (self.sp_size as u64) * lpnum;
         let mut starter = vec![0_u8; self.sp_size];
-        self.read(off, &mut starter);
+        self.stg.read(off, &mut starter);
         let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
         let mut data = vec![0u8; size];
         let ext = self.ext(size); // Number of extension pages.
@@ -188,7 +206,7 @@ impl CompactFile {
             let page = util::getu64(&starter, 2 + i * 8);
             let roff = page * (self.ep_size as u64);
             debug_assert!(self.readu64(roff) == lpnum);
-            self.read(roff + 8, &mut data[done..done + amount]);
+            self.stg.read(roff + 8, &mut data[done..done + amount]);
             done += amount;
         }
         debug_assert!(done == size);
@@ -244,7 +262,7 @@ impl CompactFile {
         for p in &std::mem::take(&mut self.lp_free) {
             let p = *p;
             // Set the page size to zero, frees any associated extension pages.
-            self.set_page(p, &[]);
+            self.set_page(p, nd());
             // Store link to old lp_first after size field.
             self.writeu64(Self::HSIZE + p * self.sp_size as u64 + 2, self.lp_first);
             self.lp_first = p;
@@ -274,35 +292,29 @@ impl CompactFile {
     /// Read a u64 from the underlying file.
     fn readu64(&self, offset: u64) -> u64 {
         let mut bytes = [0; 8];
-        self.read(offset, &mut bytes);
+        self.stg.read(offset, &mut bytes);
         u64::from_le_bytes(bytes)
     }
 
     /// Read a u16 from the underlying file.
     fn readu16(&self, offset: u64) -> usize {
         let mut bytes = [0; 2];
-        self.read(offset, &mut bytes);
+        self.stg.read(offset, &mut bytes);
         u16::from_le_bytes(bytes) as usize
     }
 
     /// Write a u64 to the underlying file.
     fn writeu64(&mut self, offset: u64, x: u64) {
-        self.write(offset, &x.to_le_bytes());
+        self.stg.write(offset, &x.to_le_bytes());
     }
 
     /// Write a u16 to the underlying file.
     fn writeu16(&mut self, offset: u64, x: u16) {
-        self.write(offset, &x.to_le_bytes());
+        self.stg.write(offset, &x.to_le_bytes());
     }
 
-    /// Read bytes from the underlying file.
-    fn read(&self, off: u64, bytes: &mut [u8]) {
-        self.stg.read(off, bytes);
-    }
-
-    /// Write bytes to the underlying file.
-    fn write(&mut self, off: u64, bytes: &[u8]) {
-        self.stg.write(off, bytes);
+    fn write_data(&mut self, woff: u64, data: Data, ix: usize, amount: usize) {
+        self.stg.write_data(woff, data, ix, amount);
     }
 
     /// Relocate extension page to a new location.
@@ -311,8 +323,8 @@ impl CompactFile {
             return;
         }
         let mut buffer = vec![0; self.ep_size];
-        self.read(from * self.ep_size as u64, &mut buffer);
-        self.write(to * self.ep_size as u64, &buffer);
+        self.stg.read(from * self.ep_size as u64, &mut buffer);
+        self.stg.write(to * self.ep_size as u64, &buffer);
         let lpnum = util::getu64(&buffer, 0);
         // Compute location and length of the array of extension page numbers.
         let mut off = Self::HSIZE + lpnum * self.sp_size as u64;
@@ -335,7 +347,7 @@ impl CompactFile {
     /// Clear extension page.
     fn ep_clear(&mut self, epnum: u64) {
         let buf = vec![0; self.ep_size];
-        self.write(epnum * self.ep_size as u64, &buf);
+        self.stg.write(epnum * self.ep_size as u64, &buf);
     }
 
     /// Check if logical page number is within reserved region.

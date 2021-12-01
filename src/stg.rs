@@ -1,13 +1,27 @@
+use crate::{Arc,Data};
+
 /// Interface for database storage.
 pub trait Storage: Send + Sync {
     /// Get the current size of the underlying storage.
     fn size(&self) -> u64;
 
     /// Read from the underlying storage.
-    fn read(&self, off: u64, bytes: &mut [u8]);
+    fn read(&self, start: u64, bytes: &mut [u8]);
 
     /// Write to the underlying storage.
-    fn write(&mut self, off: u64, bytes: &[u8]);
+    fn write(&mut self, start: u64, bytes: &[u8]);
+
+    /// Write Vec to underlying storage.
+    fn write_vec(&mut self, start: u64, data: Vec<u8>) {
+        let len = data.len();
+        let d = Arc::new(data);
+        self.write_data(start, d, 0, len);
+    }
+
+    /// Write Data slice to the underlying storage.
+    fn write_data(&mut self, start: u64, data: Data, off: usize, len: usize) {
+        self.write(start, &data[off..off + len]);
+    }
 
     /// Finish write transaction, size is new size of underlying storage.
     fn commit(&mut self, size: u64);

@@ -226,7 +226,7 @@ impl AccessPagedData {
         self.spd.stash.write().unwrap().set(lpnum, data.clone());
 
         // Write data to underlying file.
-        self.spd.file.write().unwrap().set_page(lpnum, &data);
+        self.spd.file.write().unwrap().set_page(lpnum, data);
     }
 
     /// Is the underlying file new (so needs to be initialised ).

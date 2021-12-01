@@ -1,4 +1,4 @@
-use crate::{panic, util, HashMap, Transaction, Rc, Value};
+use crate::{panic, util, HashMap, Rc, Transaction, Value};
 use std::{io::Read, io::Write, net::TcpStream};
 
 /// Response content is accumulated in result.
@@ -395,9 +395,8 @@ impl<'a> HttpRequestParser<'a> {
 
             if name == "Cookie" {
                 cookies = self.read_map()?;
-                if self.get_byte()? != 13
-                {
-                  return Err(WebErr::NewlineExpected);
+                if self.get_byte()? != 13 {
+                    return Err(WebErr::NewlineExpected);
                 }
             } else {
                 let value = self.read_to(13)?;
