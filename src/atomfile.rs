@@ -32,7 +32,7 @@ impl AtomicFile {
     }
 }
 
-const TRACE: bool = true; // For debugging.
+const TRACE: bool = false; // For debugging.
 
 impl Storage for AtomicFile {
     fn size(&self) -> u64 {
