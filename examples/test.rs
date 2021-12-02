@@ -3,14 +3,11 @@ use std::net::TcpListener;
 use std::sync::Arc;
 
 fn main() {
-    let file = Box::new(SimpleFileStorage::new(
-        "c:\\Users\\pc\\rust\\sftest01.rustdb",
-    ));
-    let upd = Box::new(SimpleFileStorage::new(
-        "c:\\Users\\pc\\rust\\sftest01.upd",
-    ));
-    let stg = Box::new(AtomicFile::new(file,upd));
+    let file = Box::new(SimpleFileStorage::new("..\\test.rustdb"));
+    let upd = Box::new(SimpleFileStorage::new("..\\test.upd"));
+    let stg = Box::new(AtomicFile::new(file, upd));
     let spd = Arc::new(SharedPagedData::new(stg));
+
     let apd = spd.open_write();
     let db = Database::new(apd, INITSQL);
 

@@ -16,8 +16,9 @@ use tower_cookies::{CookieManagerLayer, Cookies};
 use tokio::sync::{mpsc, oneshot};
 
 use rustdb::{
-    c_value, check_types, AccessPagedData, Block, CExp, CExpPtr, CompileFunc, DataKind, Database,
-    EvalEnv, Expr, GenTransaction, Part, SharedPagedData, SimpleFileStorage, Value, DB, INITSQL,
+    c_value, check_types, AccessPagedData, AtomicFile, Block, CExp, CExpPtr, CompileFunc, DataKind,
+    Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData, SimpleFileStorage, Value, DB,
+    INITSQL,
 };
 
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
@@ -64,8 +65,11 @@ fn get_db(apd: AccessPagedData, sql: &str) -> DB {
 /// Execution starts here.
 async fn main() {
     // console_subscriber::init();
-    let sfs = Box::new(SimpleFileStorage::new("C:/Users/pc/rust/sftest01.rustdb"));
-    let spd = Arc::new(SharedPagedData::new(sfs));
+
+    let file = Box::new(SimpleFileStorage::new("..\\test.rustdb"));
+    let upd = Box::new(SimpleFileStorage::new("..\\test.upd"));
+    let stg = Box::new(AtomicFile::new(file, upd));
+    let spd = Arc::new(SharedPagedData::new(stg));
 
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
     let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
@@ -259,7 +263,7 @@ impl CExp<Value> for Argon {
 
 use std::{fs::OpenOptions, io::Write};
 fn log_loop(log_rx: std::sync::mpsc::Receiver<String>) {
-    let filename = "C:/Users/pc/rust/sftest01.logfile";
+    let filename = "../test.logfile";
     let mut logfile = OpenOptions::new()
         .append(true)
         .create(true)
