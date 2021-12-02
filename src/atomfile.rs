@@ -45,7 +45,6 @@ impl AtomicFile {
             self.upd.read(pos, &mut buf);
             pos += len;
             self.stg.write(start, &buf);
-            { println!("init start={} len={} buf={:?}", start, len, &buf[0..min(len as usize,10)]); }
         }
         self.stg.commit(size);
         self.upd.commit(0);
@@ -67,7 +66,7 @@ impl Storage for AtomicFile {
         self.upd.write_u64(8, size);
         self.upd.commit(16);
 
-        // Now write the update records.
+        // Write the update records.
         let mut pos: u64 = 16;
         for (k, v) in map.iter() {
             let start = k + 1 - v.len as u64;
@@ -78,8 +77,6 @@ impl Storage for AtomicFile {
             pos += 8;
             self.upd.write(pos, &v.data[v.off..v.off + v.len]);
             pos += len;
-
-            { println!("commit start={} len={} buf={:?}", start, len, &v.data[v.off..v.off+min(v.len,10)]); }
         }
         self.upd.commit(pos);
 
