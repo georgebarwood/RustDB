@@ -3,6 +3,8 @@ pub const INITSQL : &str = "
 
 CREATE FN [sys].[TypeName]( t int ) RETURNS string AS 
 BEGIN 
+  DECLARE p int
+  SET p = t / 8
   RETURN CASE 
     WHEN t = 0 THEN 'none'
     WHEN t = 11 THEN 'tinyint'
@@ -14,7 +16,13 @@ BEGIN
     WHEN t = 68 THEN 'double'
     WHEN t = 129 THEN 'binary'
     WHEN t = 130 THEN 'string'
-    ELSE '??type??'
+    ELSE 
+    CASE 
+       WHEN t % 8 = 1 THEN 'binary(' | p | ')'
+       WHEN t % 8 = 2 THEN 'string(' | p | ')'
+       WHEN t % 8 = 3 THEN 'int(' | p | ')'
+       ELSE '???'
+    END
   END
 END
 GO

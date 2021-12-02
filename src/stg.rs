@@ -41,22 +41,9 @@ pub trait Storage: Send + Sync {
 }
 
 /// Simple implementation of storage using `Vec<u8>`.
+#[derive(Default)]
 pub struct MemFile {
     pub v: Mutex<Vec<u8>>,
-}
-
-impl MemFile {
-    pub fn new() -> Self {
-        Self {
-            v: Mutex::new(Vec::new()),
-        }
-    }
-}
-
-impl Default for MemFile {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl Storage for MemFile {

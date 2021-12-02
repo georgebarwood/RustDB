@@ -133,10 +133,11 @@ pub enum DataKind {
 }
 /// Low 3 (=KBITS) bits are DataKind, next 5 bits are size in bytes, or p ( for DECIMAL ).
 pub type DataType = usize;
-const KBITS: usize = 3;
+pub const KBITS: usize = 3;
 pub const NONE: DataType = DataKind::None as usize;
 pub const BINARY: DataType = DataKind::Binary as usize + (16 << KBITS);
 pub const STRING: DataType = DataKind::String as usize + (16 << KBITS);
+pub const BIGSTR: DataType = DataKind::String as usize + (250 << KBITS);
 pub const BIGINT: DataType = DataKind::Int as usize + (8 << KBITS);
 pub const INT: DataType = DataKind::Int as usize + (4 << KBITS);
 pub const SMALLINT: DataType = DataKind::Int as usize + (2 << KBITS);

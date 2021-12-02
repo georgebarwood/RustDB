@@ -63,6 +63,12 @@
 //!
 //!# ToDo List
 //!
+//! Implement string(n), binary(n) where n is number of bytes stored inline.
+//!
+//! Also simplify tinyint, smallint, int, bigint to int(1), int(2), int(4), int(8) = default.s
+//!
+//! Unify GenTransaction and WebTransaction.
+//!
 //!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
 //!
 //!Consider replication/backup/durability issues [Here](https://en.wikipedia.org/wiki/Durability_(database_systems))
@@ -305,7 +311,7 @@ impl Database {
         let sys_index_col = tb.nt("IndexColumn", &[("Index", BIGINT), ("ColId", BIGINT)]);
         let sys_function = tb.nt(
             "Function",
-            &[("Schema", BIGINT), ("Name", STRING), ("Def", STRING)],
+            &[("Schema", BIGINT), ("Name", STRING), ("Def", BIGSTR)],
         );
         sys_schema.add_index(7, vec![0]);
         sys_table.add_index(8, vec![1, 2]);
@@ -351,7 +357,7 @@ CREATE TABLE sys.Table( Root bigint, Schema bigint, Name string, IsView tinyint,
 CREATE TABLE sys.Column( Table bigint, Name string, Type bigint )
 CREATE TABLE sys.Index( Root bigint, Table bigint, Name string )
 CREATE TABLE sys.IndexColumn( Index bigint, ColId bigint )
-CREATE TABLE sys.Function( Schema bigint, Name string, Def string )
+CREATE TABLE sys.Function( Schema bigint, Name string, Def string(250) )
 GO
 CREATE INDEX ByName ON sys.Schema(Name)
 CREATE INDEX BySchemaName ON sys.Table(Schema,Name)
@@ -490,7 +496,7 @@ GO
     }
 
     /// Get code for value.
-    pub fn encode(self: &DB, val: &Value) -> u64 {
+    pub fn encode(self: &DB, val: &Value, size: usize) -> u64 {
         let bytes = match val {
             Value::RcBinary(x) => &**x,
             Value::ArcBinary(x) => &**x,
@@ -499,15 +505,15 @@ GO
                 return u64::MAX;
             }
         };
-        if bytes.len() < 16 {
+        if bytes.len() < size {
             return u64::MAX;
         }
-        self.bs.encode(self, &bytes[7..])
+        self.bs.encode(self, &bytes[size-9..])
     }
 
     /// Decode u64 to bytes.
-    pub fn decode(self: &DB, code: u64) -> Vec<u8> {
-        self.bs.decode(self, code)
+    pub fn decode(self: &DB, code: u64, inline: usize) -> Vec<u8> {
+        self.bs.decode(self, code, inline)
     }
 
     /// Delete encoding.

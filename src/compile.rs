@@ -140,9 +140,10 @@ pub fn c_value(b: &Block, e: &mut Expr) -> CExpPtr<Value> {
         _ => match &mut e.exp {
             ExprIs::ColName(x) => {
                 let (off, typ) = name_to_col(b, x);
-                match typ {
-                    STRING => Box::new(cexp::ColumnString { off }),
-                    BINARY => Box::new(cexp::ColumnBinary { off }),
+                let size = data_size(typ);
+                match data_kind(typ) {
+                    DataKind::String => Box::new(cexp::ColumnString { off, size }),
+                    DataKind::Binary => Box::new(cexp::ColumnBinary { off, size }),
                     _ => panic!(),
                 }
             }

@@ -338,7 +338,7 @@ impl<'a> Parser<'a> {
         if self.token != Token::Id {
             panic!("datatype expected");
         }
-        match self.id_ref() {
+        let mut t = match self.id_ref() {
             b"int" => INT,
             b"string" => STRING,
             b"binary" => BINARY,
@@ -349,7 +349,24 @@ impl<'a> Parser<'a> {
             b"double" => DOUBLE,
             b"bool" => BOOL,
             _ => panic!("Datatype expected"),
+        };
+        if self.test( Token::LBra )
+        {
+          let n = self.decimal_int as usize;
+          self.read( Token::Number );
+          self.read( Token::RBra );
+          match t
+          {
+            BINARY | STRING  => { 
+              if n > 255 { panic!("Maximum size is 255"); } 
+              if n < 16 { panic!("Minimum size is 16"); }
+            },
+            INT => if n > 8  { panic!( "Maximum int precision is 8" ); }
+            _ => panic!( "Invalid data type specification" )
+          }          
+          t = ( t % 8 ) + ( 8 * n );
         }
+        t
     }
     /// Examine current token, determine if it is an operator.
     /// Result is operator token and precedence, or -1 if current token is not an operator.

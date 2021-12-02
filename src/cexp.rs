@@ -277,20 +277,22 @@ impl CExp<bool> for ColumnBool {
 }
 pub struct ColumnString {
     pub off: usize,
+    pub size: usize,
 }
 impl CExp<Value> for ColumnString {
     fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> Value {
-        let bytes = get_bytes(&ee.db, &data[self.off..]).0;
+        let bytes = get_bytes(&ee.db, &data[self.off..], self.size).0;
         let str = String::from_utf8(bytes).unwrap();
         Value::String(Rc::new(str))
     }
 }
 pub struct ColumnBinary {
     pub off: usize,
+    pub size: usize,
 }
 impl CExp<Value> for ColumnBinary {
     fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> Value {
-        let bytes = get_bytes(&ee.db, &data[self.off..]).0;
+        let bytes = get_bytes(&ee.db, &data[self.off..], self.size).0;
         Value::RcBinary(Rc::new(bytes))
     }
 }

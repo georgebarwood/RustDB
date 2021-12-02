@@ -33,13 +33,15 @@ impl Value {
         let val = match data_kind(typ) {
             DataKind::Bool => Value::Bool(data[off] != 0),
             DataKind::String => {
-                let (bytes, u) = get_bytes(db, &data[off..]);
+                let size = data_size(typ);
+                let (bytes, u) = get_bytes(db, &data[off..], size);
                 code = u;
                 let str = String::from_utf8(bytes).unwrap();
                 Value::String(Rc::new(str))
             }
             DataKind::Binary => {
-                let (bytes, u) = get_bytes(db, &data[off..]);
+                let size = data_size(typ);
+                let (bytes, u) = get_bytes(db, &data[off..], size);
                 code = u;
                 Value::RcBinary(Rc::new(bytes))
             }
@@ -70,13 +72,13 @@ impl Value {
                 }
             }
             Value::String(s) => {
-                save_bytes(s.as_bytes(), &mut data[off..], code);
+                save_bytes(s.as_bytes(), &mut data[off..], code, size);
             }
             Value::RcBinary(b) => {
-                save_bytes(b, &mut data[off..], code);
+                save_bytes(b, &mut data[off..], code, size);
             }
             Value::ArcBinary(b) => {
-                save_bytes(b, &mut data[off..], code);
+                save_bytes(b, &mut data[off..], code, size);
             }
             _ => {}
         }
@@ -149,29 +151,29 @@ impl PartialEq for Value {
 }
 impl Eq for Value {}
 /// Decode bytes. Result is bytes and code ( or u64::MAX if no code ).
-pub fn get_bytes(db: &DB, data: &[u8]) -> (Vec<u8>, u64) {
+pub fn get_bytes(db: &DB, data: &[u8], size:usize) -> (Vec<u8>, u64) {
     let n = data[0] as usize;
-    if n <= 15 {
+    if n < size {
         let mut bytes = vec![0_u8; n];
         bytes[0..n].copy_from_slice(&data[1..=n]);
         (bytes, u64::MAX)
     } else {
-        let code = util::getu64(data, 8);
-        let mut bytes = db.decode(code);
-        bytes[0..7].copy_from_slice(&data[1..8]);
+        let code = util::getu64(data, size-8);
+        let mut bytes = db.decode(code,size-9);
+        bytes[0..size-9].copy_from_slice(&data[1..size-8]);
         (bytes, code)
     }
 }
 /// Save bytes. If more than 15 bytes, a code is needed.
-pub fn save_bytes(bytes: &[u8], data: &mut [u8], code: u64) {
+pub fn save_bytes(bytes: &[u8], data: &mut [u8], code: u64, size: usize) {
     let n = bytes.len();
-    if n <= 15 {
+    if n < size {
         data[0] = n as u8;
         data[1..=n].copy_from_slice(&bytes[0..n]);
     } else {
-        // Store first 7 bytes and code.
+        // Store first (size-9) bytes and code.
         data[0] = 255;
-        data[1..8].copy_from_slice(&bytes[0..7]);
-        util::setu64(&mut data[8..], code);
+        data[1..size-8].copy_from_slice(&bytes[0..size-9]);
+        util::setu64(&mut data[size-8..], code);
     }
 }

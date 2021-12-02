@@ -122,18 +122,13 @@ pub fn to_hex(bytes: &[u8]) -> String {
 }
 
 /// Set of usize, optimised for elements < 64.
+#[derive(Default)]
 pub struct SmallSet {
     bitset: u64,
     overflow: BTreeSet<usize>,
 }
 
 impl SmallSet {
-    pub fn new() -> Self {
-        Self {
-            bitset: 0,
-            overflow: BTreeSet::new(),
-        }
-    }
     pub fn insert(&mut self, x: usize) {
         if x < 64 {
             self.bitset |= 1 << x;
@@ -158,11 +153,5 @@ impl SmallSet {
         } else {
             self.overflow.remove(&x)
         }
-    }
-}
-
-impl Default for SmallSet {
-    fn default() -> Self {
-        Self::new()
     }
 }

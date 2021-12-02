@@ -35,6 +35,7 @@ impl AtomicFile {
         if end == 0 {
             return;
         }
+        assert!( end == self.upd.size() );
         let mut pos = 16;
         while pos < end {
             let start = self.upd.read_u64(pos);
@@ -62,7 +63,7 @@ impl Storage for AtomicFile {
         // First set the end position to zero.
         self.upd.write_u64(0, 0);
         self.upd.write_u64(8, size);
-        self.upd.commit(16);
+        self.upd.commit(16); // Not clear if this is necessary.
 
         // Write the update records.
         let mut pos: u64 = 16;
@@ -210,10 +211,10 @@ pub fn test() {
     let mut rng = rand::thread_rng();
 
     for _ in 0..1000 {
-        let s0 = Box::new(MemFile::new());
-        let s1 = Box::new(MemFile::new());
+        let s0 = Box::new(MemFile::default());
+        let s1 = Box::new(MemFile::default());
         let s2 = AtomicFile::new(s0, s1);
-        let s3 = MemFile::new();
+        let s3 = MemFile::default();
 
         for _ in 0..1000 {
             let off: usize = rng.gen::<usize>() % 100;

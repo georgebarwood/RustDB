@@ -91,7 +91,7 @@ impl Table {
         b: &Block,
         we: &mut Expr,
     ) -> (Option<CExpPtr<bool>>, Option<CTableExpression>) {
-        let mut kc = SmallSet::new(); // Set of known columns.
+        let mut kc = SmallSet::default(); // Set of known columns.
         get_known_cols(we, &mut kc);
 
         let list = &*self.ixlist.borrow();
@@ -108,7 +108,7 @@ impl Table {
         if best_match > 0 {
             // Get the key values for the chosen index.
             let clist = &list[best_index].1;
-            let mut cols = SmallSet::new();
+            let mut cols = SmallSet::default();
             for col in clist.iter().take(best_match) {
                 cols.insert(*col);
             }
@@ -258,7 +258,8 @@ impl<'d, 'i> Access<'d, 'i> {
     /// Extract string from byte data for column number colnum.
     pub fn str(&self, db: &DB, colnum: usize) -> String {
         let off = self.info.off[colnum];
-        let bytes = get_bytes(db, &self.data[off..]).0;
+        let size = data_size( self.info.typ[colnum] );
+        let bytes = get_bytes(db, &self.data[off..], size).0;
         String::from_utf8(bytes).unwrap()
     }
     /// Extract Id from byte data.
@@ -395,9 +396,12 @@ impl Row {
     /// Calculate codes for current row values.
     pub fn encode(&mut self, db: &DB) {
         self.codes.clear();
+        let mut i = 0;
         for val in &self.values {
-            let u = db.encode(val);
+            let size = data_size(self.info.typ[i]);
+            let u = db.encode(val,size);
             self.codes.push(u);
+            i += 1;
         }
     }
     /// Delete current codes.
@@ -475,10 +479,11 @@ impl IndexRow {
         for col in &*self.cols {
             let typ = self.tinfo.typ[*col];
             let val = Value::load(db, typ, data, off).0;
-            let code = db.encode(&val);
+            let size = data_size(typ);
+            let code = db.encode(&val,size);
             self.keys.push(val);
             self.codes.push(code);
-            off += data_size(typ);
+            off += size;
         }
     }
 }

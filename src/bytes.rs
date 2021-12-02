@@ -50,8 +50,8 @@ impl ByteStorage {
         }
         result
     }
-    pub fn decode(&self, db: &DB, mut id: u64) -> Vec<u8> {
-        let mut result = vec![0_u8; 7]; // First 7 bytes will be filled in from inline data.
+    pub fn decode(&self, db: &DB, mut id: u64, inline: usize) -> Vec<u8> {
+        let mut result = vec![0_u8; inline]; // inline bytes will be filled in from inline data.
         let start = Fragment::new(id);
         for (pp, off) in self.file.asc(db, Box::new(start)) {
             let p = pp.borrow();
