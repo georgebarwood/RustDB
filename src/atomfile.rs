@@ -203,8 +203,8 @@ impl Storage for AtomicFile {
 
 #[test]
 pub fn test() {
-    use rand::Rng;
     use crate::stg::MemFile;
+    use rand::Rng;
     /* Idea of test is to check AtomicFile and MemFile behave the same */
 
     let mut rng = rand::thread_rng();
