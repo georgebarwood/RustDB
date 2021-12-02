@@ -250,7 +250,7 @@ BEGIN
   DECLARE col string
   SET result = 'Id'
   FOR col = CASE 
-    WHEN Type = 130 THEN 'sys.SingleQuote(' | Name | ')'
+    WHEN Type % 8 = 2 THEN 'sys.SingleQuote(' | Name | ')'
     ELSE Name
   END
   FROM sys.Column WHERE Table = table
@@ -744,7 +744,7 @@ CREATE FN [browse].[ShowSql]( table int, k int ) RETURNS string AS
 BEGIN
   DECLARE cols string, col string, colname string, colid int
   FOR colid = Id, colname = Name, col = CASE 
-    WHEN Type = 130 THEN 'htm.Encode(' | Name | ')'
+    WHEN Type % 8 = 2 THEN 'htm.Encode(' | Name | ')'
     ELSE Name
     END
   FROM sys.Column WHERE Table = table 
@@ -1015,7 +1015,7 @@ BEGIN
   
   SET ob = DefaultOrder FROM browse.Table WHERE Id = table
   FOR colid = Id, type = Type,
-    col = CASE WHEN Type = 130 THEN 'htm.Encode(' | Name | ')' ELSE Name END, colName = Name
+    col = CASE WHEN Type % 8 = 2 THEN 'htm.Encode(' | Name | ')' ELSE Name END, colName = Name
   FROM sys.Column WHERE Table = table AND Id != colId
   ORDER BY browse.ColPos(Id), Id
   BEGIN
@@ -1024,7 +1024,7 @@ BEGIN
     SET ref = RefersTo, label = Label, df = DisplayFunction FROM browse.Column WHERE Id = colid
     IF ref > 0 SET nf = NameFunction FROM browse.Table WHERE Id = ref
     SET ob = DefaultOrder FROM browse.Table WHERE Id = ref
-    SET result |= '|''<TD' | CASE WHEN type != 130 THEN ' align=right' ELSE '' END | '>''|'
+    SET result |= '|''<TD' | CASE WHEN type % 8 != 2 THEN ' align=right' ELSE '' END | '>''|'
       | CASE 
         WHEN df != '' THEN df | '(' | col | ')'
         WHEN nf != '' 

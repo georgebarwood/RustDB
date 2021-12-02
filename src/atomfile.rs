@@ -35,7 +35,7 @@ impl AtomicFile {
         if end == 0 {
             return;
         }
-        assert!( end == self.upd.size() );
+        assert!(end == self.upd.size());
         let mut pos = 16;
         while pos < end {
             let start = self.upd.read_u64(pos);

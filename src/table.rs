@@ -258,7 +258,7 @@ impl<'d, 'i> Access<'d, 'i> {
     /// Extract string from byte data for column number colnum.
     pub fn str(&self, db: &DB, colnum: usize) -> String {
         let off = self.info.off[colnum];
-        let size = data_size( self.info.typ[colnum] );
+        let size = data_size(self.info.typ[colnum]);
         let bytes = get_bytes(db, &self.data[off..], size).0;
         String::from_utf8(bytes).unwrap()
     }
@@ -396,12 +396,10 @@ impl Row {
     /// Calculate codes for current row values.
     pub fn encode(&mut self, db: &DB) {
         self.codes.clear();
-        let mut i = 0;
-        for val in &self.values {
+        for (i, val) in self.values.iter().enumerate() {
             let size = data_size(self.info.typ[i]);
-            let u = db.encode(val,size);
+            let u = db.encode(val, size);
             self.codes.push(u);
-            i += 1;
         }
     }
     /// Delete current codes.
@@ -480,7 +478,7 @@ impl IndexRow {
             let typ = self.tinfo.typ[*col];
             let val = Value::load(db, typ, data, off).0;
             let size = data_size(typ);
-            let code = db.encode(&val,size);
+            let code = db.encode(&val, size);
             self.keys.push(val);
             self.codes.push(code);
             off += size;

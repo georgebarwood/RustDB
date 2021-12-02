@@ -508,7 +508,7 @@ GO
         if bytes.len() < size {
             return u64::MAX;
         }
-        self.bs.encode(self, &bytes[size-9..])
+        self.bs.encode(self, &bytes[size - 9..])
     }
 
     /// Decode u64 to bytes.
