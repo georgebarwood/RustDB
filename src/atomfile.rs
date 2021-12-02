@@ -96,7 +96,6 @@ impl Storage for AtomicFile {
         self.stg.size()
     }
 
-    /// Read from file. Uses map data if available.
     fn read(&self, start: u64, data: &mut [u8]) {
         if TRACE {
             println!("Reading start={} len={}", start, data.len());
