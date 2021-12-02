@@ -88,6 +88,7 @@ impl Storage for AtomicFile {
         }
         map.clear();
         self.stg.commit(size);
+        self.upd.commit(0);
     }
 
     fn size(&self) -> u64 {
