@@ -2,23 +2,24 @@ use crate::{Arc, Data};
 
 /// Interface for database storage.
 pub trait Storage: Send + Sync {
-    /// Get the current size of the underlying storage.
+    /// Get the size of the underlying storage.
+    /// Note : this is valid initially and after a commit but is no updated by write operations.
     fn size(&self) -> u64;
 
-    /// Read from the underlying storage.
-    fn read(&self, start: u64, bytes: &mut [u8]);
+    /// Read data from storage.
+    fn read(&self, start: u64, data: &mut [u8]);
 
-    /// Write to the underlying storage.
-    fn write(&self, start: u64, bytes: &[u8]);
+    /// Write byte slice to storage.
+    fn write(&self, start: u64, data: &[u8]);
 
-    /// Write Vec to underlying storage.
+    /// Write byte Vec to storage.
     fn write_vec(&self, start: u64, data: Vec<u8>) {
         let len = data.len();
         let d = Arc::new(data);
         self.write_data(start, d, 0, len);
     }
 
-    /// Write Data slice to the underlying storage.
+    /// Write Data slice to storage.
     fn write_data(&self, start: u64, data: Data, off: usize, len: usize) {
         self.write(start, &data[off..off + len]);
     }
@@ -26,10 +27,12 @@ pub trait Storage: Send + Sync {
     /// Finish write transaction, size is new size of underlying storage.
     fn commit(&self, size: u64);
 
+    /// Write u64 to storage.
     fn write_u64(&self, start: u64, value: u64) {
         self.write(start, &value.to_le_bytes());
     }
 
+    /// Read u64 from storage.
     fn read_u64(&self, start: u64) -> u64 {
         let mut bytes = [0; 8];
         self.read(start, &mut bytes);
@@ -37,6 +40,7 @@ pub trait Storage: Send + Sync {
     }
 }
 
+/// Simple implementation of storage using `Vec<u8>`.
 pub struct MemFile {
     pub v: Mutex<Vec<u8>>,
 }
@@ -87,7 +91,7 @@ impl Storage for MemFile {
 use crate::Mutex;
 use std::{fs, fs::OpenOptions, io::Read, io::Seek, io::SeekFrom, io::Write};
 
-/// Simple implementation of Storage using std::fs::File.
+/// Simple implementation of Storage using `std::fs::File`.
 pub struct SimpleFileStorage {
     pub file: Mutex<fs::File>,
 }

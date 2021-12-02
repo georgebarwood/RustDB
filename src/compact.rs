@@ -76,7 +76,7 @@ impl CompactFile {
         let mut p = self.lp_first;
         while p != u64::MAX {
             print!(" {}", p);
-            p = self.readu64(Self::HSIZE + p * self.sp_size as u64 + 2);
+            p = self.stg.read_u64(Self::HSIZE + p * self.sp_size as u64 + 2);
         }
         println!("]");
     }
@@ -99,14 +99,14 @@ impl CompactFile {
             is_new,
         };
         if is_new {
-            x.writeu64(0, x.ep_resvd);
+            x.stg.write_u64(0, x.ep_resvd);
             x.writeu16(24, x.sp_size as u16);
             x.writeu16(26, x.ep_size as u16);
             x.lp_alloc_dirty = true;
         } else {
-            x.ep_resvd = x.readu64(0);
-            x.lp_alloc = x.readu64(8);
-            x.lp_first = x.readu64(16);
+            x.ep_resvd = x.stg.read_u64(0);
+            x.lp_alloc = x.stg.read_u64(8);
+            x.lp_first = x.stg.read_u64(16);
             x.sp_size = x.readu16(24) as usize;
             x.ep_size = x.readu16(26) as usize;
         }
@@ -154,15 +154,15 @@ impl CompactFile {
         }
         let off = 2 + ext * 8;
         let mut done = min(self.sp_size - off, size);
-        self.write_data(foff + off as u64, data.clone(), 0, done);
+        self.stg.write_data(foff + off as u64, data.clone(), 0, done);
 
         // Write the extension pages.
         for i in 0..ext {
             let amount = min(size - done, self.ep_size - 8);
             let page = util::getu64(&info, 2 + i * 8) as u64;
             let foff = page * (self.ep_size as u64);
-            self.writeu64(foff, lpnum);
-            self.write_data(foff + 8, data.clone(), done, amount);
+            self.stg.write_u64(foff, lpnum);
+            self.stg.write_data(foff + 8, data.clone(), done, amount);
             done += amount;
         }
         debug_assert!(done == size);
@@ -203,7 +203,7 @@ impl CompactFile {
             let amount = min(size - done, self.ep_size - 8);
             let page = util::getu64(&starter, 2 + i * 8);
             let roff = page * (self.ep_size as u64);
-            debug_assert!(self.readu64(roff) == lpnum);
+            debug_assert!(self.stg.read_u64(roff) == lpnum);
             self.stg.read(roff + 8, &mut data[done..done + amount]);
             done += amount;
         }
@@ -220,7 +220,7 @@ impl CompactFile {
             self.lp_alloc_dirty = true;
             if self.lp_first != u64::MAX {
                 let p = self.lp_first;
-                self.lp_first = self.readu64(Self::HSIZE + p * self.sp_size as u64 + 2);
+                self.lp_first = self.stg.read_u64(Self::HSIZE + p * self.sp_size as u64 + 2);
                 p
             } else {
                 let p = self.lp_alloc;
@@ -247,8 +247,8 @@ impl CompactFile {
         self.lp_free.clear();
         if self.lp_alloc_dirty {
             self.lp_alloc_dirty = false;
-            self.lp_alloc = self.readu64(8);
-            self.lp_first = self.readu64(16);
+            self.lp_alloc = self.stg.read_u64(8);
+            self.lp_first = self.stg.read_u64(16);
         }
         self.trace("rollback after");
     }
@@ -262,7 +262,7 @@ impl CompactFile {
             // Set the page size to zero, frees any associated extension pages.
             self.set_page(p, nd());
             // Store link to old lp_first after size field.
-            self.writeu64(Self::HSIZE + p * self.sp_size as u64 + 2, self.lp_first);
+            self.stg.write_u64(Self::HSIZE + p * self.sp_size as u64 + 2, self.lp_first);
             self.lp_first = p;
             self.lp_alloc_dirty = true;
         }
@@ -280,18 +280,11 @@ impl CompactFile {
         // Save the lp alloc values and file size.
         if self.lp_alloc_dirty {
             self.lp_alloc_dirty = false;
-            self.writeu64(8, self.lp_alloc);
-            self.writeu64(16, self.lp_first);
+            self.stg.write_u64(8, self.lp_alloc);
+            self.stg.write_u64(16, self.lp_first);
         }
         self.stg.commit(self.ep_count * self.ep_size as u64);
         self.trace("save after");
-    }
-
-    /// Read a u64 from the underlying file.
-    fn readu64(&self, offset: u64) -> u64 {
-        let mut bytes = [0; 8];
-        self.stg.read(offset, &mut bytes);
-        u64::from_le_bytes(bytes)
     }
 
     /// Read a u16 from the underlying file.
@@ -301,18 +294,9 @@ impl CompactFile {
         u16::from_le_bytes(bytes) as usize
     }
 
-    /// Write a u64 to the underlying file.
-    fn writeu64(&mut self, offset: u64, x: u64) {
-        self.stg.write(offset, &x.to_le_bytes());
-    }
-
     /// Write a u16 to the underlying file.
     fn writeu16(&mut self, offset: u64, x: u16) {
         self.stg.write(offset, &x.to_le_bytes());
-    }
-
-    fn write_data(&mut self, woff: u64, data: Data, ix: usize, amount: usize) {
-        self.stg.write_data(woff, data, ix, amount);
     }
 
     /// Relocate extension page to a new location.
@@ -332,9 +316,9 @@ impl CompactFile {
         // Update the matching extension page number.
         loop {
             debug_assert!(ext != 0);
-            let x = self.readu64(off);
+            let x = self.stg.read_u64(off);
             if x == from {
-                self.writeu64(off, to);
+                self.stg.write_u64(off, to);
                 break;
             }
             off += 8;
@@ -364,7 +348,7 @@ impl CompactFile {
             save = true;
         }
         if save {
-            self.writeu64(0, self.ep_resvd);
+            self.stg.write_u64(0, self.ep_resvd);
         }
     }
 

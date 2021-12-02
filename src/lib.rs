@@ -143,12 +143,13 @@ pub mod webtrans;
 /// Initial SQL
 pub mod init;
 
-/// Backing storage for database.
+/// Backing storage for database. See also [AtomicFile].
 pub mod stg;
 
-/// Page storage.
+/// [Page] storage.
 pub mod pstore;
 
+/// [AtomicFile]
 pub mod atomfile;
 
 // Conditional modules.

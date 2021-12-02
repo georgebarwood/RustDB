@@ -1,10 +1,11 @@
 use crate::*;
 use std::cmp::min;
 
+/// Slice of Data to be written to storage.
 pub struct DataSlice {
-    off: usize,
-    len: usize,
-    data: Data,
+    pub off: usize,
+    pub len: usize,
+    pub data: Data,
 }
 
 /// AtomicFile makes sure that database updates are all-or-nothing.
