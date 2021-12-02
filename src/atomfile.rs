@@ -39,11 +39,13 @@ impl AtomicFile {
         while pos < end {
             let start = self.upd.read_u64(pos);
             pos += 8;
-            let len = self.upd.read_u64(pos) as usize;
+            let len = self.upd.read_u64(pos);
             pos += 8;
-            let mut buf = vec![0; len];
-            self.upd.read(start, &mut buf);
+            let mut buf = vec![0; len as usize];
+            self.upd.read(pos, &mut buf);
+            pos += len;
             self.stg.write(start, &buf);
+            { println!("init start={} len={} buf={:?}", start, len, &buf[0..min(len as usize,10)]); }
         }
         self.stg.commit(size);
         self.upd.commit(0);
@@ -55,6 +57,9 @@ const TRACE: bool = false; // For debugging.
 impl Storage for AtomicFile {
     fn commit(&self, size: u64) {
         let mut map = self.map.lock().unwrap();
+        if map.is_empty() {
+            return;
+        }
 
         // Write the updates to upd.
         // First set the end position to zero.
@@ -73,6 +78,8 @@ impl Storage for AtomicFile {
             pos += 8;
             self.upd.write(pos, &v.data[v.off..v.off + v.len]);
             pos += len;
+
+            { println!("commit start={} len={} buf={:?}", start, len, &v.data[v.off..v.off+min(v.len,10)]); }
         }
         self.upd.commit(pos);
 

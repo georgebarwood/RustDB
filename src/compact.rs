@@ -154,7 +154,8 @@ impl CompactFile {
         }
         let off = 2 + ext * 8;
         let mut done = min(self.sp_size - off, size);
-        self.stg.write_data(foff + off as u64, data.clone(), 0, done);
+        self.stg
+            .write_data(foff + off as u64, data.clone(), 0, done);
 
         // Write the extension pages.
         for i in 0..ext {
@@ -262,7 +263,8 @@ impl CompactFile {
             // Set the page size to zero, frees any associated extension pages.
             self.set_page(p, nd());
             // Store link to old lp_first after size field.
-            self.stg.write_u64(Self::HSIZE + p * self.sp_size as u64 + 2, self.lp_first);
+            self.stg
+                .write_u64(Self::HSIZE + p * self.sp_size as u64 + 2, self.lp_first);
             self.lp_first = p;
             self.lp_alloc_dirty = true;
         }
