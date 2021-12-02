@@ -101,11 +101,11 @@ impl Storage for AtomicFile {
             println!("Reading start={} len={}", start, data.len());
         }
 
-        let mut done: usize = 0;
         let mut todo: usize = data.len();
         if todo == 0 {
             return;
         }
+        let mut done: usize = 0;
 
         let map = self.map.lock().unwrap();
         for (k, v) in map.range(start..) {
@@ -163,6 +163,9 @@ impl Storage for AtomicFile {
     fn write_data(&self, start: u64, data: Data, off: usize, len: usize) {
         if TRACE {
             println!("write_data start={} len={}", start, len);
+        }
+        if len == 0 {
+            return;
         }
 
         // Existing writes which overlap with new write need to be trimmed or removed.
@@ -255,7 +258,7 @@ pub fn test() {
     for _ in 0..1000 {
         let s0 = Box::new(stg::MemFile::new());
         let s1 = Box::new(stg::MemFile::new());
-        let s2 = AtomicFile::new(s0,s1);
+        let s2 = AtomicFile::new(s0, s1);
         let s3 = stg::MemFile::new();
 
         for _ in 0..1000 {
