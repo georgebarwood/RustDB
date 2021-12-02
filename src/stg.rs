@@ -25,6 +25,16 @@ pub trait Storage: Send + Sync {
 
     /// Finish write transaction, size is new size of underlying storage.
     fn commit(&self, size: u64);
+
+    fn write_u64(&self, start: u64, value: u64) {
+        self.write(start, &value.to_le_bytes());
+    }
+
+    fn read_u64(&self, start: u64) -> u64 {
+        let mut bytes = [0; 8];
+        self.read(start, &mut bytes);
+        u64::from_le_bytes(bytes)
+    }
 }
 
 pub struct MemFile {
@@ -115,5 +125,6 @@ impl Storage for SimpleFileStorage {
     fn commit(&self, size: u64) {
         let f = self.file.lock().unwrap();
         f.set_len(size).unwrap();
+        let _err = f.sync_all();
     }
 }

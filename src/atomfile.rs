@@ -13,28 +13,83 @@ pub struct AtomicFile {
     /// Map of existing outstanding writes. Note the key is the end of the write minus one.
     pub map: Mutex<BTreeMap<u64, DataSlice>>,
     pub stg: Box<dyn Storage>,
+    pub upd: Box<dyn Storage>,
 }
 
 impl AtomicFile {
-    pub fn new(stg: Box<dyn Storage>) -> Self {
-        Self {
+    pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Self {
+        let result = Self {
             map: Mutex::new(BTreeMap::new()),
             stg,
+            upd,
+        };
+        result.init();
+        result
+    }
+
+    /// Apply outstanding updates.
+    fn init(&self) {
+        let end = self.upd.read_u64(0);
+        let size = self.upd.read_u64(8);
+        if end == 0 {
+            return;
         }
-    }
-
-    fn read0(&self, off: u64, bytes: &mut [u8]) {
-        self.stg.read(off, bytes);
-    }
-
-    fn write0(&self, off: u64, bytes: &[u8]) {
-        self.stg.write(off, bytes);
+        let mut pos = 16;
+        while pos < end {
+            let start = self.upd.read_u64(pos);
+            pos += 8;
+            let len = self.upd.read_u64(pos) as usize;
+            pos += 8;
+            let mut buf = vec![0; len];
+            self.upd.read(start, &mut buf);
+            self.stg.write(start, &buf);
+        }
+        self.stg.commit(size);
+        self.upd.commit(0);
     }
 }
 
 const TRACE: bool = false; // For debugging.
 
 impl Storage for AtomicFile {
+    fn commit(&self, size: u64) {
+        let mut map = self.map.lock().unwrap();
+
+        // Write the updates to upd.
+        // First set the end position to zero.
+        self.upd.write_u64(0, 0);
+        self.upd.write_u64(8, size);
+        self.upd.commit(16);
+
+        // Now write the update records.
+        let mut pos: u64 = 16;
+        for (k, v) in map.iter() {
+            let start = k + 1 - v.len as u64;
+            let len = v.len as u64;
+            self.upd.write_u64(pos, start);
+            pos += 8;
+            self.upd.write_u64(pos, len);
+            pos += 8;
+            self.upd.write(pos, &v.data[v.off..v.off + v.len]);
+            pos += len;
+        }
+        self.upd.commit(pos);
+
+        // Set the end position.
+        self.upd.write_u64(0, pos);
+        self.upd.write_u64(8, size);
+        self.upd.commit(pos);
+
+        // Hopeflly updates are now securely stored in upd file.
+
+        for (k, v) in map.iter() {
+            let start = k + 1 - v.len as u64;
+            self.stg.write(start, &v.data[v.off..v.off + v.len]);
+        }
+        map.clear();
+        self.stg.commit(size);
+    }
+
     fn size(&self) -> u64 {
         self.stg.size()
     }
@@ -47,6 +102,9 @@ impl Storage for AtomicFile {
 
         let mut done: usize = 0;
         let mut todo: usize = data.len();
+        if todo == 0 {
+            return;
+        }
 
         let map = self.map.lock().unwrap();
         for (k, v) in map.range(start..) {
@@ -54,7 +112,8 @@ impl Storage for AtomicFile {
             if estart > start + done as u64 {
                 let lim = (estart - (start + done as u64)) as usize;
                 let amount = min(todo, lim) as usize;
-                self.read0(start + done as u64, &mut data[done..done + amount]);
+                self.stg
+                    .read(start + done as u64, &mut data[done..done + amount]);
                 if TRACE {
                     println!(
                         "Read from underlying file at {} amount={}",
@@ -88,7 +147,8 @@ impl Storage for AtomicFile {
             }
         }
         if todo > 0 {
-            self.read0(start + done as u64, &mut data[done..done + todo]);
+            self.stg
+                .read(start + done as u64, &mut data[done..done + todo]);
             if TRACE {
                 println!(
                     "Read from underlying file at {} amount={}",
@@ -121,30 +181,23 @@ impl Storage for AtomicFile {
                 }
                 break;
             }
-            // (b) New write starts after existing write. Should not happen due to range condition.
-            else if start > eend {
-                if TRACE {
-                    println!("{} > {} so panic", start, eend);
-                }
-                panic!();
-            }
-            // (c) New write subsumes existing write entirely, remove existing write.
+            // (b) New write subsumes existing write entirely, remove existing write.
             else if start <= estart && end >= eend {
                 remove.push(eend - 1);
                 if TRACE {
-                    println!("Case (c), removing {}", estart);
+                    println!("Case (b), removing {}", estart);
                 }
             }
-            // (d) New write starts before existing write, but doesn't subsume it. Trim existing write.
+            // (c) New write starts before existing write, but doesn't subsume it. Trim existing write.
             else if start <= estart {
                 let trim = (end - estart) as usize;
                 v.len -= trim;
                 v.off += trim;
                 if TRACE {
-                    println!("Case (d), estart={} v.len={}", estart, v.len);
+                    println!("Case (c), estart={} v.len={}", estart, v.len);
                 }
             }
-            // (e) New write starts in middle of existing write, ends before end of existing write...
+            // (d) New write starts in middle of existing write, ends before end of existing write...
             // .. put start of existing write in add list, trim existing write.
             else if start > estart && end < eend {
                 let remain = (start - estart) as usize;
@@ -156,12 +209,12 @@ impl Storage for AtomicFile {
 
                 if TRACE {
                     println!(
-                        "Case (e), estart={} remain={} v.len={}",
+                        "Case (d), estart={} remain={} v.len={}",
                         estart, remain, v.len
                     );
                 }
             }
-            // (f) New write starts in middle of existing write, ends after existing write...
+            // (e) New write starts in middle of existing write, ends after existing write...
             // ... put start of existing write in add list, remove existing write,
             else {
                 let remain = (start - estart) as usize;
@@ -170,7 +223,7 @@ impl Storage for AtomicFile {
                 remove.push(eend - 1);
 
                 if TRACE {
-                    println!("Case (f), estart={} remain={}", estart, remain);
+                    println!("Case (e), estart={} remain={}", estart, remain);
                 }
             }
         }
@@ -189,33 +242,24 @@ impl Storage for AtomicFile {
         let d = Arc::new(data.to_vec());
         self.write_data(start, d, 0, len);
     }
-
-    fn commit(&self, size: u64) {
-        // ToDo : first write the updates to a special file (for roll forward in case of an abort/crash).
-        let mut map = self.map.lock().unwrap();
-        for (k, v) in map.iter() {
-            let start = k + 1 - v.len as u64;
-            self.write0(start, &v.data[v.off..v.off + v.len]);
-        }
-        map.clear();
-        self.stg.commit(size);
-    }
 }
 
 #[test]
-pub fn atomic_file_test() {
+pub fn test() {
     use rand::Rng;
     /* Idea of test is to check AtomicFile and MemFile behave the same */
 
+    let mut rng = rand::thread_rng();
+
     for _ in 0..1000 {
-        let s1 = stg::MemFile::new();
-        let s2 = AtomicFile::new(Box::new(s1));
+        let s0 = Box::new(stg::MemFile::new());
+        let s1 = Box::new(stg::MemFile::new());
+        let s2 = AtomicFile::new(s0,s1);
         let s3 = stg::MemFile::new();
 
-        let mut rng = rand::thread_rng();
         for _ in 0..1000 {
-            let off: usize = rng.gen::<usize>() % 50;
-            let mut len = 1 + rng.gen::<usize>() % 10;
+            let off: usize = rng.gen::<usize>() % 100;
+            let mut len = 1 + rng.gen::<usize>() % 20;
             let w: bool = rng.gen();
             if w {
                 let mut bytes = Vec::new();
