@@ -64,6 +64,7 @@ impl PageInfo {
 }
 
 /// Central store of data.
+#[derive(Default)]
 pub struct Stash {
     /// Write time - number of writes.
     pub time: u64,
@@ -140,17 +141,6 @@ impl Stash {
                 // println!("Stash trim page {}", lpnum);
                 p.lock().unwrap().trim(rt);
             }
-        }
-    }
-}
-
-impl Default for Stash {
-    fn default() -> Self {
-        Self {
-            time: 0,
-            pages: HashMap::new(),
-            readers: BTreeMap::new(),
-            updates: BTreeMap::new(),
         }
     }
 }

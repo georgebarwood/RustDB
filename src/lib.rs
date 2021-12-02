@@ -146,7 +146,7 @@ pub mod init;
 /// Backing storage for database. See also [AtomicFile].
 pub mod stg;
 
-/// [Page] storage.
+/// Page storage.
 pub mod pstore;
 
 /// [AtomicFile]
@@ -190,7 +190,7 @@ pub mod compile;
 mod compile;
 
 #[cfg(feature = "max")]
-/// Instruction execution.
+/// [EvalEnv] : execution of instructions..
 pub mod exec;
 #[cfg(not(feature = "max"))]
 mod exec;
@@ -237,10 +237,10 @@ pub mod table;
 #[cfg(not(feature = "max"))]
 mod table;
 
-#[cfg(feature = "max")]
+#[cfg(feature = "builtin")]
 /// Run-time [Value].
 pub mod value;
-#[cfg(not(feature = "max"))]
+#[cfg(not(feature = "builtin"))]
 mod value;
 
 // End of modules.

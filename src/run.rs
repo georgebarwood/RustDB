@@ -29,7 +29,7 @@ pub enum Instruction {
 pub trait CExp<T> {
     fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> T;
 }
-/// Pointer to CExp.
+/// Pointer to [CExp].
 pub type CExpPtr<T> = Box<dyn CExp<T>>;
 
 /// Function that compiles a builtin function call ( see [Database]::register ).
