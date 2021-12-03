@@ -164,6 +164,7 @@ async fn h_get(
     path: Path<String>,
     params: Query<BTreeMap<String, String>>,
     cookies: Cookies,
+
 ) -> ServerTrans {
     // Build the ServerTrans.
     let mut sq = ServerTrans::new();
@@ -200,27 +201,25 @@ async fn h_post(
     } else {
         st.x.qy.parts = map_parts(multipart).await;
     }
-
     // Send transaction to database thread ( and get it back ).
     let (tx, rx) = oneshot::channel::<ServerTrans>();
     let _err = state.tx.send(ServerMessage { st, tx }).await;
     let result = rx.await.unwrap();
-
     result
 }
 
 use axum::{
-    body::{Bytes, Full},
+    body::{boxed,BoxBody,Full},
     http::{header::HeaderName, status::StatusCode, HeaderValue, Response},
     response::IntoResponse,
 };
 
 impl IntoResponse for ServerTrans {
-    type Body = Full<Bytes>;
-    type BodyError = std::convert::Infallible;
 
-    fn into_response(self) -> Response<Self::Body> {
-        let mut res = Response::new(Full::from(self.x.rp.output));
+  fn into_response(self) -> Response<BoxBody> 
+  {
+        let mybody = boxed(Full::from(self.x.rp.output));
+        let mut res = Response::builder().body(mybody).unwrap();
 
         *res.status_mut() = StatusCode::from_u16(self.x.rp.status_code).unwrap();
 
