@@ -63,7 +63,7 @@
 //!
 //! Implement string(n), binary(n) where n is number of bytes stored inline. (DONE)
 //!
-//! Also simplify tinyint, smallint, int, bigint to int(1), int(2), int(4), int(8) = default. (MOSTLY DONE)
+//! Also simplify tinyint, smallint, int, INT to int(1), int(2), int(4), int(8) = default. (MOSTLY DONE)
 //!
 //! Unify GenTransaction and WebTransaction.
 //!
@@ -290,26 +290,26 @@ impl Database {
         let sys_table = tb.nt(
             "Table",
             &[
-                ("Root", BIGINT),
-                ("Schema", BIGINT),
+                ("Root", INT),
+                ("Schema", INT),
                 ("Name", STRING),
-                ("IsView", TINYINT),
+                ("IsView", INT1),
                 ("Def", STRING),
-                ("IdGen", BIGINT),
+                ("IdGen", INT),
             ],
         );
         let sys_column = tb.nt(
             "Column",
-            &[("Table", BIGINT), ("Name", STRING), ("Type", BIGINT)],
+            &[("Table", INT), ("Name", STRING), ("Type", INT)],
         );
         let sys_index = tb.nt(
             "Index",
-            &[("Root", BIGINT), ("Table", BIGINT), ("Name", STRING)],
+            &[("Root", INT), ("Table", INT), ("Name", STRING)],
         );
-        let sys_index_col = tb.nt("IndexColumn", &[("Index", BIGINT), ("ColId", BIGINT)]);
+        let sys_index_col = tb.nt("IndexColumn", &[("Index", INT), ("ColId", INT)]);
         let sys_function = tb.nt(
             "Function",
-            &[("Schema", BIGINT), ("Name", STRING), ("Def", BIGSTR)],
+            &[("Schema", INT), ("Name", STRING), ("Def", BIGSTR)],
         );
         sys_schema.add_index(7, vec![0]);
         sys_table.add_index(8, vec![1, 2]);
@@ -351,11 +351,11 @@ impl Database {
 CREATE SCHEMA sys
 GO
 CREATE TABLE sys.Schema( Name string )
-CREATE TABLE sys.Table( Root bigint, Schema bigint, Name string, IsView tinyint, Def string, IdGen bigint )
-CREATE TABLE sys.Column( Table bigint, Name string, Type bigint )
-CREATE TABLE sys.Index( Root bigint, Table bigint, Name string )
-CREATE TABLE sys.IndexColumn( Index bigint, ColId bigint )
-CREATE TABLE sys.Function( Schema bigint, Name string, Def string(249) )
+CREATE TABLE sys.Table( Root int, Schema int, Name string, IsView int(1), Def string, IdGen int )
+CREATE TABLE sys.Column( Table int, Name string, Type int )
+CREATE TABLE sys.Index( Root int, Table int, Name string )
+CREATE TABLE sys.IndexColumn( Index int, ColId int )
+CREATE TABLE sys.Function( Schema int, Name string, Def string(249) )
 GO
 CREATE INDEX ByName ON sys.Schema(Name)
 CREATE INDEX BySchemaName ON sys.Table(Schema,Name)

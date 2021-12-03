@@ -7,12 +7,8 @@ BEGIN
   SET p = t / 8
   RETURN CASE 
     WHEN t = 0 THEN 'none'
-    WHEN t = 11 THEN 'tinyint'
     WHEN t = 13 THEN 'bool'
-    WHEN t = 19 THEN 'smallint'
-    WHEN t = 35 THEN 'int'
     WHEN t = 36 THEN 'float' 
-    WHEN t = 67 THEN 'bigint'
     WHEN t = 68 THEN 'double'
     WHEN t = 129 THEN 'binary'
     WHEN t = 130 THEN 'string'
@@ -1168,7 +1164,7 @@ SELECT '<h1>Manual</h1>
 <h3>CREATE TABLE</h3><p>CREATE TABLE schema.tablename ( Colname1 Coltype1, Colname2 Coltype2, ... )
 <p>Creates a new base table. Every base table is automatically given an Id column, which auto-increments on INSERT ( if no explicit value is supplied).<p>The data types are as follows:
 <ul>
-<li>int(n), 1 <= n <= 8. Signed n-byte integer. Default is 4 bytes.</li>
+<li>int(n), 1 <= n <= 8. Signed n-byte integer. Default is 8 bytes.</li>
 <li>float, double : floating point numbers of size 4 and 8 bytes respectively.</li>
 <li>string(n) : a variable length string of unicode characters. n (optional, default 15) specifies number of bytes stored inline.</li>
 <li>binary(n) : a variable length string of bytes. n (optional, default 15) specifies number of bytes stored inline.</li>
@@ -1203,7 +1199,7 @@ SELECT '<h1>Manual</h1>
 <p>Rows in the table which satisfy the WHERE condition are removed.
 <h2>Local variable declaration and assignment statements</h2>
 <h3>DECLARE</h3><p>DECLARE name1 type1, name2 type2 ....
-<p>Local variables are declared with the specified types. Note that the precision makes no difference, tinyint, smallint, int and bigint are all equivalent in this context. The variables are initialised to default values ( but only once, not each time the DECLARE is encountered if there is a loop ).
+<p>Local variables are declared with the specified types. The variables are initialised to default values ( but only once, not each time the DECLARE is encountered if there is a loop ).
 <h3>SET</h3>
 <p>SET name1 = exp1, name2 = exp2 .... [ FROM table ] [ WHERE bool-exp ] [ GROUP BY expressions ]
 <p>Local variables are assigned. If the FROM clause is specified, the values are taken from a table row which satisfies the WHERE condition. If there is no such row, the values of the local variables remain unchanged.
@@ -1599,7 +1595,7 @@ CREATE INDEX [ByCust] ON [dbo].[Order]([Cust])
 GO
 CREATE FN [dbo].[Testing]() AS
 BEGIN
-CREATE TABLE dbo.Test( x string, y bigint )
+CREATE TABLE dbo.Test( x string, y int )
 DECLARE i int
 SET i = 0
 WHILE i < 2000
@@ -1787,9 +1783,9 @@ END
 GO
 --############################################
 CREATE SCHEMA [email]
-CREATE TABLE [email].[Msg]([from] string,[to] string,[title] string,[body] string,[format] tinyint,[status] tinyint) 
+CREATE TABLE [email].[Msg]([from] string,[to] string,[title] string,[body] string,[format] int(1),[status] int(1)) 
 GO
-CREATE TABLE [email].[Queue]([msg] bigint,[sendtime] bigint,[retry] int) 
+CREATE TABLE [email].[Queue]([msg] int,[sendtime] int,[retry] int) 
 GO
 CREATE INDEX [BySendTime] ON [email].[Queue]([sendtime])
 GO
@@ -1803,21 +1799,21 @@ GO
 
 --############################################
 CREATE SCHEMA [rtest]
-CREATE TABLE [rtest].[Gen]([x] bigint) 
+CREATE TABLE [rtest].[Gen]([x] int) 
 GO
-CREATE TABLE [rtest].[t0]([x] string,[y] bigint) 
+CREATE TABLE [rtest].[t0]([x] string,[y] int) 
 GO
-CREATE TABLE [rtest].[t1]([x] string,[y] bigint) 
+CREATE TABLE [rtest].[t1]([x] string,[y] int) 
 GO
-CREATE TABLE [rtest].[t2]([x] string,[y] bigint,[z] string) 
+CREATE TABLE [rtest].[t2]([x] string,[y] int,[z] string) 
 GO
-CREATE TABLE [rtest].[t3]([x] string,[y] bigint) 
+CREATE TABLE [rtest].[t3]([x] string,[y] int) 
 GO
-CREATE TABLE [rtest].[t4]([x] string,[y] bigint) 
+CREATE TABLE [rtest].[t4]([x] string,[y] int) 
 GO
-CREATE TABLE [rtest].[t5]([x] string,[y] bigint,[z] string) 
+CREATE TABLE [rtest].[t5]([x] string,[y] int,[z] string) 
 GO
-CREATE TABLE [rtest].[t6]([x] string,[y] bigint) 
+CREATE TABLE [rtest].[t6]([x] string,[y] int) 
 GO
 CREATE FN [rtest].[OneTest]() AS
 BEGIN 
@@ -1841,8 +1837,8 @@ BEGIN
 
   SET sql = CASE 
     WHEN exists = '' THEN 
-      CASE WHEN r % 2 =1 THEN 'CREATE TABLE rtest.[' | tname | '](x string, y bigint)'
-      ELSE 'CREATE TABLE rtest.[' | tname | '](x string, y bigint, z string )'
+      CASE WHEN r % 2 =1 THEN 'CREATE TABLE rtest.[' | tname | '](x string, y int)'
+      ELSE 'CREATE TABLE rtest.[' | tname | '](x string, y int, z string )'
       END
     WHEN r % 10 = 0 THEN 'DROP TABLE rtest.[' | tname | ']'
     WHEN r % 2 = 1 THEN 'INSERT INTO rtest.[' | tname | '](y) VALUES (' | (r % 10) | ')'

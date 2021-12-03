@@ -55,7 +55,7 @@ pub fn c_check(b: &Block, e: &mut Expr) {
         ExprIs::Const(x) => {
             e.data_type = match *x {
                 Value::Bool(_) => BOOL,
-                Value::Int(_) => BIGINT,
+                Value::Int(_) => INT,
                 Value::Float(_) => DOUBLE,
                 Value::String(_) => STRING,
                 Value::RcBinary(_) => BINARY,
@@ -517,7 +517,7 @@ pub fn name_to_col(b: &Block, name: &str) -> (usize, DataType) {
         if let Some(num) = info.get(name) {
             let colnum = *num;
             if colnum == usize::MAX {
-                return (0, BIGINT);
+                return (0, INT);
             }
             return (info.off[colnum], info.typ[colnum]);
         }
@@ -531,7 +531,7 @@ pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
         if let Some(num) = info.get(name) {
             let colnum = *num;
             if colnum == usize::MAX {
-                return (colnum, BIGINT);
+                return (colnum, INT);
             }
             return (colnum, info.typ[colnum]);
         }
