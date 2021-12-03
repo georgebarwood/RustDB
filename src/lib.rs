@@ -11,9 +11,7 @@
 //!use std::net::TcpListener;
 //!use std::sync::Arc;
 //!
-//!    let sfs = Box::new(SimpleFileStorage::new(
-//!        "c:\\Users\\pc\\rust\\sftest01.rustdb",
-//!    ));
+//!    let sfs = Box::new(SimpleFileStorage::new( "..\\test.rustdb" ));
 //!    let spd = Arc::new(SharedPagedData::new(sfs));
 //!    let apd = spd.open_write();
 //!    let db = Database::new(apd, INITSQL);
@@ -140,10 +138,10 @@ mod util;
 
 // Modules that are always public.
 
-/// General Transaction ( implementation of Transaction ).
+/// [GenTransaction] ( implementation of [Transaction] ).
 pub mod gentrans;
 
-/// WebTransaction ( alternative implementation of Transaction with http support ).
+/// WebTransaction ( alternative implementation of [Transaction] with http support ).
 pub mod webtrans;
 
 /// Initial SQL
@@ -357,7 +355,7 @@ CREATE TABLE sys.Table( Root bigint, Schema bigint, Name string, IsView tinyint,
 CREATE TABLE sys.Column( Table bigint, Name string, Type bigint )
 CREATE TABLE sys.Index( Root bigint, Table bigint, Name string )
 CREATE TABLE sys.IndexColumn( Index bigint, ColId bigint )
-CREATE TABLE sys.Function( Schema bigint, Name string, Def string(250) )
+CREATE TABLE sys.Function( Schema bigint, Name string, Def string(249) )
 GO
 CREATE INDEX ByName ON sys.Schema(Name)
 CREATE INDEX BySchemaName ON sys.Table(Schema,Name)
