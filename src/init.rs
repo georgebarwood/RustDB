@@ -1174,8 +1174,8 @@ SELECT '<h1>Manual</h1>
 <li>binary(n) : a variable length string of bytes. n (optional, default 15) specifies number of bytes stored inline.</li>
 <li>bool : boolean ( true or false ).</li>
 </ul>
-Note: all local float and integer variables are 8 bytes (64 bits), and arithmetic is performed with 64-bit numbers, the size only applies when a value is stored in column of a table. String and binary values that do not fit inline are slightly slower to store and retrieve.
-<p>Each data type has a default value : zero for numbers, a zero length string for string and binary, and false for the boolean type. The variable length data types are stored in a special system tables.
+
+<p>Each data type has a default value : zero for numbers, a zero length string for string and binary, and false for the boolean type. The variable length data types are stored in a special system table if the length exceeds the reserved inline storage, meaning they are slightly slower to store and retrieve. Local float and integer variables and arithmetic operations are all 64 bits (8 bytes). The lower precision only applies when a value is stored in column of a table.
 <h3>ALTER TABLE</h3>
 <p>ALTER TABLE schema.tablename action1, action2 .... <p>The actions are as follows:
 <ul>
@@ -1731,7 +1731,7 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (116,1,99,1034461)
 (117,1,99,1034465)
 (118,5,999,1035114)
-(120,8,5000,1035114)
+(120,8,500,1035114)
 (121,5,99,1035114)
 (122,8,50,1035123)
 GO
