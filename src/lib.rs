@@ -63,9 +63,9 @@
 //!
 //!# ToDo List
 //!
-//! Implement string(n), binary(n) where n is number of bytes stored inline.
+//! Implement string(n), binary(n) where n is number of bytes stored inline. (DONE)
 //!
-//! Also simplify tinyint, smallint, int, bigint to int(1), int(2), int(4), int(8) = default.s
+//! Also simplify tinyint, smallint, int, bigint to int(1), int(2), int(4), int(8) = default. (MOSTLY DONE)
 //!
 //! Unify GenTransaction and WebTransaction.
 //!
