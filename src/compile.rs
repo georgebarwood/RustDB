@@ -174,12 +174,11 @@ pub fn c_int(b: &Block, e: &mut Expr) -> CExpPtr<i64> {
     match &mut e.exp {
         ExprIs::ColName(x) => {
             let (off, typ) = name_to_col(b, x);
-            match data_size(typ) {
+            let size = data_size(typ);
+            match size {
                 8 => Box::new(cexp::ColumnI64 { off }),
-                4 => Box::new(cexp::ColumnI32 { off }),
-                2 => Box::new(cexp::ColumnI16 { off }),
                 1 => Box::new(cexp::ColumnI8 { off }),
-                _ => panic!(),
+                _ => Box::new(cexp::ColumnI { off, size }),
             }
         }
         ExprIs::Const(Value::Int(b)) => Box::new(cexp::Const::<i64> { value: *b }),
@@ -194,6 +193,7 @@ pub fn c_int(b: &Block, e: &mut Expr) -> CExpPtr<i64> {
         _ => panic!(),
     }
 }
+
 /// Compile float expression.
 pub fn c_float(b: &Block, e: &mut Expr) -> CExpPtr<f64> {
     if b.kind(e) != DataKind::Float {

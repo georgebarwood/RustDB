@@ -150,7 +150,7 @@ pub mod init;
 /// Backing storage for database. See also [AtomicFile].
 pub mod stg;
 
-/// Page storage.
+/// Page storage and sharing.
 pub mod pstore;
 
 /// [AtomicFile]
