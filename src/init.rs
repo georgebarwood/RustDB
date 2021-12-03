@@ -18,8 +18,8 @@ BEGIN
     WHEN t = 130 THEN 'string'
     ELSE 
     CASE 
-       WHEN t % 8 = 1 THEN 'binary(' | p | ')'
-       WHEN t % 8 = 2 THEN 'string(' | p | ')'
+       WHEN t % 8 = 1 THEN 'binary(' | (p-1) | ')'
+       WHEN t % 8 = 2 THEN 'string(' | (p-1) | ')'
        WHEN t % 8 = 3 THEN 'int(' | p | ')'
        ELSE '???'
     END
@@ -1168,12 +1168,13 @@ SELECT '<h1>Manual</h1>
 <h3>CREATE TABLE</h3><p>CREATE TABLE schema.tablename ( Colname1 Coltype1, Colname2 Coltype2, ... )
 <p>Creates a new base table. Every base table is automatically given an Id column, which auto-increments on INSERT ( if no explicit value is supplied).<p>The data types are as follows:
 <ul>
-<li>tinyint, smallint, int, bigint : signed integers of size 1, 2, 4 and 8 bytes respectively.</li>
+<li>int(n), 1 <= n <= 8. Signed n-byte integer. Default is 4 bytes.</li>
 <li>float, double : floating point numbers of size 4 and 8 bytes respectively.</li>
-<li>string : a string of unicode characters.</li>
-<li>binary : a string of bytes.</li>
+<li>string(n) : a variable length string of unicode characters. n (optional, default 15) specifies number of bytes stored inline.</li>
+<li>binary(n) : a variable length string of bytes. n (optional, default 15) specifies number of bytes stored inline.</li>
 <li>bool : boolean ( true or false ).</li>
 </ul>
+Note: all local float and integer variables are 8 bytes (64 bits), and arithmetic is performed with 64-bit numbers, the size only applies when a value is stored in column of a table. String and binary values that do not fit inline are slightly slower to store and retrieve.
 <p>Each data type has a default value : zero for numbers, a zero length string for string and binary, and false for the boolean type. The variable length data types are stored in a special system tables.
 <h3>ALTER TABLE</h3>
 <p>ALTER TABLE schema.tablename action1, action2 .... <p>The actions are as follows:

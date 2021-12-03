@@ -351,16 +351,17 @@ impl<'a> Parser<'a> {
             _ => panic!("Datatype expected"),
         };
         if self.test(Token::LBra) {
-            let n = self.decimal_int as usize;
+            let mut n = self.decimal_int as usize;
             self.read(Token::Number);
             self.read(Token::RBra);
             match t {
                 BINARY | STRING => {
+                    n += 1;
                     if n > 255 {
-                        panic!("Maximum size is 255");
+                        n = 255;
                     }
-                    if n < 16 {
-                        panic!("Minimum size is 16");
+                    if n < 9 {
+                        n = 9;
                     }
                 }
                 INT => {
