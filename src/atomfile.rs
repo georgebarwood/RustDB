@@ -18,6 +18,7 @@ pub struct AtomicFile {
 }
 
 impl AtomicFile {
+    /// Construct a new AtomicFle. stg is the main underlying storage, upd is temporary storage for updates during commit.
     pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Self {
         let result = Self {
             map: Mutex::new(BTreeMap::new()),

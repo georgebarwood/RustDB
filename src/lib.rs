@@ -298,14 +298,8 @@ impl Database {
                 ("IdGen", INT),
             ],
         );
-        let sys_column = tb.nt(
-            "Column",
-            &[("Table", INT), ("Name", STRING), ("Type", INT)],
-        );
-        let sys_index = tb.nt(
-            "Index",
-            &[("Root", INT), ("Table", INT), ("Name", STRING)],
-        );
+        let sys_column = tb.nt("Column", &[("Table", INT), ("Name", STRING), ("Type", INT)]);
+        let sys_index = tb.nt("Index", &[("Root", INT), ("Table", INT), ("Name", STRING)]);
         let sys_index_col = tb.nt("IndexColumn", &[("Index", INT), ("ColId", INT)]);
         let sys_function = tb.nt(
             "Function",

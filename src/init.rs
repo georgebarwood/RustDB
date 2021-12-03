@@ -1116,7 +1116,11 @@ BEGIN
   EXECUTE( browse.ShowSql( t, k ) )
 END
 GO
-CREATE FN [handler].[/Rtest]() AS BEGIN EXEC rtest.OneTest() END
+CREATE FN [handler].[/Rtest]() AS 
+BEGIN 
+  -- Can be invoked repeatedly with for /l %x in (1, 1, 100) do curl -X POST http://localhost:3000/Rtest
+  EXEC rtest.OneTest() 
+END
 GO
 CREATE FN [handler].[/OrderSummary]() AS
 BEGIN
