@@ -37,7 +37,7 @@ impl Value {
                 code = u;
                 Value::RcBinary(Rc::new(bytes))
             }
-            DataKind::String => {                
+            DataKind::String => {
                 let (bytes, u) = get_bytes(db, &data[off..], size);
                 code = u;
                 let str = String::from_utf8(bytes).unwrap();
@@ -45,12 +45,14 @@ impl Value {
             }
             DataKind::Bool => Value::Bool(data[off] != 0),
             DataKind::Float => {
-                let f = if size == 4 { util::getf32(data,off) as f64 } else { util::getf64(data,off) };
+                let f = if size == 4 {
+                    util::getf32(data, off) as f64
+                } else {
+                    util::getf64(data, off)
+                };
                 Value::Float(f)
-            }                
-            _ => {
-                Value::Int(util::iget(data, off, size) as i64)
             }
+            _ => Value::Int(util::iget(data, off, size) as i64),
         };
         (val, code)
     }

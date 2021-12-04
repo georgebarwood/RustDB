@@ -1,9 +1,10 @@
 use crate::{
-    c_int, c_value, Block, CExp, CExpPtr, CompileFunc, DataKind, EvalEnv, Expr, Rc, Value, DB,
+    c_int, c_value, Block, BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, EvalEnv, Expr, Rc,
+    Value,
 };
 
-/// Registers builtin functions - called from `Database`::new.
-pub fn register_builtins(db: &DB) {
+/// Add builtin functions to specified HashMap.
+pub fn standard_builtins(map: &mut BuiltinMap) {
     let list = [
         ("ARG", DataKind::String, CompileFunc::Value(c_arg)),
         ("HEADER", DataKind::Int, CompileFunc::Int(c_header)),
@@ -37,7 +38,7 @@ pub fn register_builtins(db: &DB) {
         ("LASTID", DataKind::Int, CompileFunc::Int(c_lastid)),
     ];
     for (name, typ, cf) in list {
-        db.register(name, typ, cf);
+        map.insert(name.to_string(), (typ, cf));
     }
 }
 /// Check number and kinds of arguments.

@@ -10,7 +10,7 @@ pub fn c_check(b: &Block, e: &mut Expr) {
     e.is_constant = true;
     match &mut e.exp {
         ExprIs::BuiltinCall(name, args) => {
-            if let Some((dk, _cf)) = b.db.builtins.borrow().get(name) {
+            if let Some((dk, _cf)) = b.db.builtins.get(name) {
                 e.data_type = *dk as DataType;
                 for pe in args {
                     c_check(b, pe);
@@ -126,7 +126,7 @@ pub fn c_check(b: &Block, e: &mut Expr) {
 }
 /// Compile a call to a builtin function that returns a Value.
 fn c_builtin_value(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<Value> {
-    if let Some((_dk, CompileFunc::Value(cf))) = b.db.builtins.borrow().get(name) {
+    if let Some((_dk, CompileFunc::Value(cf))) = b.db.builtins.get(name) {
         return cf(b, args);
     }
     panic!()
@@ -328,14 +328,14 @@ where
 }
 /// Compile a call to a builtin function that returns an integer.
 fn c_builtin_int(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<i64> {
-    if let Some((_dk, CompileFunc::Int(cf))) = b.db.builtins.borrow().get(name) {
+    if let Some((_dk, CompileFunc::Int(cf))) = b.db.builtins.get(name) {
         return cf(b, args);
     }
     panic!()
 }
 /// Compile a call to a builtin function that returns a float.
 fn c_builtin_float(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<f64> {
-    if let Some((_dk, CompileFunc::Float(cf))) = b.db.builtins.borrow().get(name) {
+    if let Some((_dk, CompileFunc::Float(cf))) = b.db.builtins.get(name) {
         return cf(b, args);
     }
     panic!()
