@@ -131,15 +131,6 @@ impl Transaction for WebTransaction {
                     Rc::new(String::new())
                 }
             }
-            10 => {
-                self.headers.push_str(s);
-                self.headers.push_str("\r\n");
-                Rc::new(String::new())
-            }
-            11 => {
-                self.status_code = s.to_string();
-                Rc::new(String::new())
-            }
             _ => panic!(),
         }
     }

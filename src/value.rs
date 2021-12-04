@@ -30,23 +30,25 @@ impl Value {
     /// Get a Value from byte data.
     pub fn load(db: &DB, typ: DataType, data: &[u8], off: usize) -> (Value, u64) {
         let mut code = u64::MAX;
+        let size = data_size(typ);
         let val = match data_kind(typ) {
-            DataKind::Bool => Value::Bool(data[off] != 0),
-            DataKind::String => {
-                let size = data_size(typ);
+            DataKind::Binary => {
+                let (bytes, u) = get_bytes(db, &data[off..], size);
+                code = u;
+                Value::RcBinary(Rc::new(bytes))
+            }
+            DataKind::String => {                
                 let (bytes, u) = get_bytes(db, &data[off..], size);
                 code = u;
                 let str = String::from_utf8(bytes).unwrap();
                 Value::String(Rc::new(str))
             }
-            DataKind::Binary => {
-                let size = data_size(typ);
-                let (bytes, u) = get_bytes(db, &data[off..], size);
-                code = u;
-                Value::RcBinary(Rc::new(bytes))
-            }
+            DataKind::Bool => Value::Bool(data[off] != 0),
+            DataKind::Float => {
+                let f = if size == 4 { util::getf32(data,off) as f64 } else { util::getf64(data,off) };
+                Value::Float(f)
+            }                
             _ => {
-                let size = data_size(typ);
                 Value::Int(util::iget(data, off, size) as i64)
             }
         };
@@ -94,7 +96,7 @@ impl Value {
             _ => panic!("str not implemented"),
         }
     }
-    /// Append a String.
+    /// Append to a String.
     pub fn append(&mut self, val: &Value) {
         if let Value::String(s) = self {
             let val = val.str();
