@@ -142,7 +142,8 @@ impl CompactFile {
             while old_ext > ext {
                 old_ext -= 1;
                 let fp = util::getu64(&info, 2 + old_ext * 8);
-                self.ep_free.insert(fp);
+                info.resize(info.len() - 8, 0); // Important or info could over-write data later.  
+                self.ep_free.insert(fp);                              
             }
             // Allocate new pages.
             while old_ext < ext {
@@ -169,6 +170,7 @@ impl CompactFile {
         debug_assert!(done == size);
 
         // Write the info.
+        debug_assert!( info.len() == 2 + ext * 8 );
         self.stg.write_vec(foff, info);
     }
 
