@@ -1,4 +1,7 @@
-use rustdb::{AtomicFile, Database, SharedPagedData, SimpleFileStorage, WebTransaction, INITSQL};
+use rustdb::{
+    standard_builtins, AtomicFile, BuiltinMap, Database, SharedPagedData, SimpleFileStorage,
+    WebTransaction, INITSQL,
+};
 use std::net::TcpListener;
 use std::sync::Arc;
 
@@ -9,7 +12,9 @@ fn main() {
     let spd = Arc::new(SharedPagedData::new(stg));
 
     let apd = spd.open_write();
-    let db = Database::new(apd, INITSQL);
+    let mut bmap = BuiltinMap::new();
+    standard_builtins(&mut bmap);
+    let db = Database::new(apd, INITSQL, Arc::new(bmap));
 
     let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
     for tcps in listener.incoming() {

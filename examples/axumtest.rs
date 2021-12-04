@@ -16,9 +16,9 @@ use tower_cookies::{CookieManagerLayer, Cookies};
 use tokio::sync::{mpsc, oneshot};
 
 use rustdb::{
-    c_value, check_types, AccessPagedData, AtomicFile, Block, CExp, CExpPtr, CompileFunc, DataKind,
-    Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData, SimpleFileStorage, Value, DB,
-    INITSQL,
+    c_value, check_types, AccessPagedData, AtomicFile, Block, BuiltinMap, CExp, CExpPtr,
+    CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData,
+    SimpleFileStorage, Value, DB, INITSQL, standard_builtins
 };
 
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
@@ -49,15 +49,12 @@ struct SharedState {
     tx: mpsc::Sender<ServerMessage>,
     /// Shared storage used for read-only queries.
     spd: Arc<SharedPagedData>,
+    bmap: Arc<BuiltinMap>,
 }
 
 /// Get database with extra registered builtin functions.
-fn get_db(apd: AccessPagedData, sql: &str) -> DB {
-    let db = Database::new(apd, sql);
-    let list = [("ARGON", DataKind::Binary, CompileFunc::Value(c_argon))];
-    for (name, typ, cf) in list {
-        db.register(name, typ, cf);
-    }
+fn get_db(apd:AccessPagedData, sql: &str, bmap: Arc<BuiltinMap>) -> DB {
+    let db = Database::new(apd, sql, bmap );
     db
 }
 
@@ -74,7 +71,15 @@ async fn main() {
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
     let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
 
-    let state = Arc::new(SharedState { tx, spd });
+    let mut bmap = BuiltinMap::new();
+    standard_builtins( &mut bmap );
+    let list = [("ARGON", DataKind::Binary, CompileFunc::Value(c_argon))];
+    for (name, typ, cf) in list {
+        bmap.insert(name.to_string(), (typ, cf));
+    }
+    let bmap = Arc::new(bmap);
+
+    let state = Arc::new(SharedState { tx, spd, bmap: bmap.clone()});
     let wapd = state.spd.open_write();
 
     // This is the logging thread *synchronous)
@@ -83,8 +88,8 @@ async fn main() {
     });
 
     // This is the server thread (synchronous).
-    thread::spawn(move || {
-        let db = get_db(wapd, INITSQL);
+    thread::spawn(move || {    
+        let db = get_db(wapd, INITSQL, bmap);    
         loop {
             let mut sm = rx.blocking_recv().unwrap();
             db.run_timed("EXEC web.Main()", &mut *sm.st.x);
@@ -164,7 +169,6 @@ async fn h_get(
     path: Path<String>,
     params: Query<BTreeMap<String, String>>,
     cookies: Cookies,
-
 ) -> ServerTrans {
     // Build the ServerTrans.
     let mut sq = ServerTrans::new();
@@ -175,7 +179,7 @@ async fn h_get(
     let blocking_task = tokio::task::spawn_blocking(move || {
         // GET requests should be read-only.
         let apd = state.spd.open_read();
-        let db = get_db(apd, "");
+        let db = get_db(apd, "", state.bmap.clone());
         db.run_timed("EXEC web.Main()", &mut *sq.x);
         sq
     });
@@ -209,15 +213,13 @@ async fn h_post(
 }
 
 use axum::{
-    body::{boxed,BoxBody,Full},
+    body::{boxed, BoxBody, Full},
     http::{header::HeaderName, status::StatusCode, HeaderValue, Response},
     response::IntoResponse,
 };
 
 impl IntoResponse for ServerTrans {
-
-  fn into_response(self) -> Response<BoxBody> 
-  {
+    fn into_response(self) -> Response<BoxBody> {
         let mybody = boxed(Full::from(self.x.rp.output));
         let mut res = Response::builder().body(mybody).unwrap();
 
