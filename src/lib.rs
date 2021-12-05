@@ -62,23 +62,23 @@
 //!
 //! [SharedPagedData] allows logical database pages to be shared to allow concurrent readers.
 //!
+//! [AtomicFile] ensures that database updates are all or nothing.
+//!
 //!# ToDo List
 //!
-//! Implement string(n), binary(n) where n is number of bytes stored inline. (DONE)
+//! Decide whether to implement feastures like views, IN operator, INSERT from SELECT, etc.
+//! or simply remove them from manual and everywhere else.
+//! They can always be added later....!
 //!
-//! Also simplify tinyint, smallint, int, INT to int(1), int(2), int(4), int(8) = default. (MOSTLY DONE)
+//! Unify GenTransaction and WebTransaction. Check multiple filed upload works ok with local http parsing.
 //!
-//! Unify GenTransaction and WebTransaction.
+//! Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
 //!
-//!Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
+//! Implement email in example program. Replication of log files. Server status.
 //!
-//!Consider replication/backup/durability issues [Here](https://en.wikipedia.org/wiki/Durability_(database_systems))
+//! Sort out error handling for PARSEINT etc.
 //!
-//!Implement email in example program. Replication of log files. Server status.
-//!
-//!Sort out error handling for PARSEINT etc.
-//!
-//!Work on improving/testing SQL code, browse schema, float I/O. Login.
+//! Work on improving/testing SQL code, browse schema, float I/O. Login.
 //!
 
 pub use crate::{
@@ -228,7 +228,7 @@ pub mod run;
 mod run;
 
 #[cfg(feature = "max")]
-/// Sorted [Record] storage.
+/// [SortedFile] : [Record] storage.
 pub mod sortedfile;
 #[cfg(not(feature = "max"))]
 mod sortedfile;
@@ -398,8 +398,9 @@ GO
             start.elapsed().as_micros()
         );
     }
+
     /// Run a batch of SQL.
-    pub fn go(self: &DB, source: &str, tr: &mut dyn Transaction) -> Option<SqlError> {
+    pub(crate) fn go(self: &DB, source: &str, tr: &mut dyn Transaction) -> Option<SqlError> {
         let mut p = Parser::new(source, self);
         let result = std::panic::catch_unwind(panic::AssertUnwindSafe(|| {
             p.batch(tr);
@@ -459,7 +460,7 @@ GO
     }
 
     /// Get the named table.
-    pub fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr> {
+    pub(crate) fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr> {
         if let Some(t) = self.tables.borrow().get(name) {
             return Some(t.clone());
         }
@@ -467,7 +468,7 @@ GO
     }
 
     /// Get the named function.
-    pub fn get_function(self: &DB, name: &ObjRef) -> Option<FunctionPtr> {
+    pub(crate) fn get_function(self: &DB, name: &ObjRef) -> Option<FunctionPtr> {
         if let Some(f) = self.functions.borrow().get(name) {
             return Some(f.clone());
         }
@@ -475,13 +476,13 @@ GO
     }
 
     /// Insert the table into the map of tables.
-    pub fn publish_table(&self, table: TablePtr) {
+    pub(crate) fn publish_table(&self, table: TablePtr) {
         let name = table.info.name.clone();
         self.tables.borrow_mut().insert(name, table);
     }
 
     /// Get code for value.
-    pub fn encode(self: &DB, val: &Value, size: usize) -> u64 {
+    pub(crate) fn encode(self: &DB, val: &Value, size: usize) -> u64 {
         let bytes = match val {
             Value::RcBinary(x) => &**x,
             Value::ArcBinary(x) => &**x,
@@ -497,22 +498,22 @@ GO
     }
 
     /// Decode u64 to bytes.
-    pub fn decode(self: &DB, code: u64, inline: usize) -> Vec<u8> {
+    pub(crate) fn decode(self: &DB, code: u64, inline: usize) -> Vec<u8> {
         self.bs.decode(self, code, inline)
     }
 
     /// Delete encoding.
-    pub fn delcode(self: &DB, code: u64) {
+    pub(crate) fn delcode(self: &DB, code: u64) {
         self.bs.delcode(self, code);
     }
 
     /// Allocate a page of underlying file storage.
-    pub fn alloc_page(self: &DB) -> u64 {
+    pub(crate) fn alloc_page(self: &DB) -> u64 {
         self.file.alloc_page()
     }
 
     /// Free a page of underyling file storage.
-    pub fn free_page(self: &DB, lpnum: u64) {
+    pub(crate) fn free_page(self: &DB, lpnum: u64) {
         self.file.free_page(lpnum);
     }
 } // end impl Database

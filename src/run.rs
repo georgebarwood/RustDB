@@ -25,10 +25,24 @@ pub enum Instruction {
     PushBool(CExpPtr<bool>),
 }
 
+/// Compiled Function.
+pub struct Function {
+    pub param_count: usize,
+    pub return_type: DataType,
+    pub local_typ: Vec<DataType>,
+    pub source: Rc<String>,
+    pub ilist: RefCell<Vec<Instruction>>, // Valid when compiled is true.
+    pub compiled: Cell<bool>,
+}
+
+/// ```Rc<Function>```
+pub type FunctionPtr = Rc<Function>;
+
 /// Compiled expression which yields type T when evaluated.
 pub trait CExp<T> {
     fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> T;
 }
+
 /// Pointer to [CExp].
 pub type CExpPtr<T> = Box<dyn CExp<T>>;
 
@@ -47,11 +61,13 @@ pub type DataSource = Box<dyn Iterator<Item = (PagePtr, usize)>>;
 pub struct ForState {
     pub data_source: DataSource,
 }
+
 /// State for FOR loop (sorted case).
 pub struct ForSortState {
     pub ix: usize,
     pub rows: Vec<Vec<Value>>,
 }
+
 /// Info for ForNext Inst.
 pub struct ForNextInfo {
     pub for_id: usize,
@@ -59,6 +75,7 @@ pub struct ForNextInfo {
     pub exps: Vec<CExpPtr<Value>>,
     pub wher: Option<CExpPtr<bool>>,
 }
+
 /// Compiled Table Expression.
 pub enum CTableExpression {
     // Select( SelectExpression ),
@@ -67,6 +84,7 @@ pub enum CTableExpression {
     IxGet(TablePtr, Vec<CExpPtr<Value>>, usize),
     Values(Vec<Vec<CExpPtr<Value>>>),
 }
+
 impl CTableExpression {
     pub fn table(&self) -> TablePtr {
         match self {
@@ -77,6 +95,7 @@ impl CTableExpression {
         }
     }
 }
+
 /// Compiled Select Expression.
 pub struct CSelectExpression {
     pub colnames: Vec<String>,
@@ -87,6 +106,7 @@ pub struct CSelectExpression {
     pub orderby: Vec<CExpPtr<Value>>,
     pub desc: Vec<bool>,
 }
+
 /// Database Operation
 pub enum DO {
     CreateTable(ColInfo),
@@ -112,6 +132,7 @@ pub enum DO {
     ),
     Delete(CTableExpression, Option<CExpPtr<bool>>),
 }
+
 /// Actions for altering columns of a table.
 pub enum AlterAction {
     Add(String, DataType),
@@ -119,14 +140,3 @@ pub enum AlterAction {
     Rename(String, String),
     Modify(String, DataType),
 }
-/// Compiled Function.
-pub struct Function {
-    pub param_count: usize,
-    pub return_type: DataType,
-    pub local_typ: Vec<DataType>,
-    pub source: Rc<String>,
-    pub ilist: RefCell<Vec<Instruction>>, // Valid when compiled is true.
-    pub compiled: Cell<bool>,
-}
-/// ```Rc<Function>```
-pub type FunctionPtr = Rc<Function>;

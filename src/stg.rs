@@ -51,6 +51,7 @@ impl Storage for MemFile {
         let v = self.v.lock().unwrap();
         v.len() as u64
     }
+
     fn read(&self, off: u64, bytes: &mut [u8]) {
         let off = off as usize;
         let len = bytes.len();
@@ -60,6 +61,7 @@ impl Storage for MemFile {
         }
         bytes.copy_from_slice(&v[off..off + len]);
     }
+
     fn write(&self, off: u64, bytes: &[u8]) {
         let off = off as usize;
         let len = bytes.len();
@@ -69,6 +71,7 @@ impl Storage for MemFile {
         }
         v[off..off + len].copy_from_slice(bytes);
     }
+
     fn commit(&self, size: u64) {
         let mut v = self.v.lock().unwrap();
         v.resize(size as usize, 0);
@@ -103,16 +106,19 @@ impl Storage for SimpleFileStorage {
         let mut f = self.file.lock().unwrap();
         f.seek(SeekFrom::End(0)).unwrap()
     }
+
     fn read(&self, off: u64, bytes: &mut [u8]) {
         let mut f = self.file.lock().unwrap();
         f.seek(SeekFrom::Start(off)).unwrap();
         let _x = f.read_exact(bytes);
     }
+
     fn write(&self, off: u64, bytes: &[u8]) {
         let mut f = self.file.lock().unwrap();
         f.seek(SeekFrom::Start(off)).unwrap();
         let _x = f.write(bytes);
     }
+
     fn commit(&self, size: u64) {
         let f = self.file.lock().unwrap();
         f.set_len(size).unwrap();

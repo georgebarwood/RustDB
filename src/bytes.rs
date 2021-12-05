@@ -1,9 +1,11 @@
 use crate::{util, Cell, Ordering, Rc, Record, SaveOp, SortedFile, DB};
+
 /// Storage of variable size values.
 pub struct ByteStorage {
     pub file: Rc<SortedFile>,
     pub id_gen: Cell<u64>,
 }
+
 impl ByteStorage {
     pub fn new(root_page: u64) -> Self {
         let file = Rc::new(SortedFile::new(9 + BPF, 8, root_page));
@@ -12,6 +14,7 @@ impl ByteStorage {
             id_gen: Cell::new(0),
         }
     }
+
     pub fn init(&self, db: &DB) {
         // Initialise id_gen to id of last record.
         let start = Fragment::new(u64::MAX);
@@ -20,9 +23,11 @@ impl ByteStorage {
             self.id_gen.set(1 + util::getu64(&p.data, off));
         }
     }
+
     pub fn save(&self, db: &DB, op: SaveOp) {
         self.file.save(db, op);
     }
+
     pub fn encode(&self, db: &DB, bytes: &[u8]) -> u64 {
         let result = self.id_gen.get();
         let mut r = Fragment::new(0);
@@ -50,6 +55,7 @@ impl ByteStorage {
         }
         result
     }
+
     pub fn decode(&self, db: &DB, mut id: u64, inline: usize) -> Vec<u8> {
         let mut result = vec![0_u8; inline]; // inline bytes will be filled in from inline data.
         let start = Fragment::new(id);
@@ -67,6 +73,7 @@ impl ByteStorage {
         }
         result
     }
+
     pub fn delcode(&self, db: &DB, id: u64) {
         let start = Fragment::new(id);
         let mut n = 0;
@@ -100,6 +107,7 @@ struct Fragment {
     len: u8,
     bytes: [u8; BPF],
 }
+
 impl Fragment {
     pub fn new(id: u64) -> Self {
         Fragment {
@@ -109,11 +117,13 @@ impl Fragment {
         }
     }
 }
+
 impl Record for Fragment {
     fn compare(&self, _db: &DB, data: &[u8]) -> Ordering {
         let val = util::getu64(data, 0);
         self.id.cmp(&val)
     }
+
     fn save(&self, data: &mut [u8]) {
         util::setu64(data, self.id);
         data[8] = self.len;

@@ -10,6 +10,7 @@ BEGIN
     WHEN t = 13 THEN 'bool'
     WHEN t = 36 THEN 'float' 
     WHEN t = 68 THEN 'double'
+    WHEN t = 67 THEN 'int'
     WHEN t = 129 THEN 'binary'
     WHEN t = 130 THEN 'string'
     ELSE 
@@ -1302,9 +1303,9 @@ SELECT '<h1>Manual</h1>
 <h3>sys</h3>
 <p>Has core system tables for language objects and related functions.
 <h3>web</h3>
-<p>Has the procedure that handles web requests ( web.main ) and other functions related to handling web requests.
+<p>Has the function that handles web requests ( web.main ) and other functions related to handling web requests.
 <h3>handler</h3>
-<p>Has handler procedures, one for each web page.
+<p>Has handler functions, one for each web page.
 <h3>htm</h3>
 <p>Has functions related to encoding html.
 <h3>browse</h3><p>Has tables and functions for displaying, editing arbitrary tables in the database.
@@ -1397,15 +1398,25 @@ BEGIN
   DECLARE t int SET t = PARSEINT( web.Query('t') )
   DECLARE k int SET k = PARSEINT( web.Query('k') )
   DECLARE ex string
-  IF web.Form( '$submit' ) != '' 
+  DECLARE submit string SET submit = web.Form( '$submit' )
+  IF submit != '' 
   BEGIN
-    EXECUTE( browse.UpdateSql( t, k ) ) 
-    SET ex = EXCEPTION()
-    IF ex = '' 
+    IF submit = 'Save'
     BEGIN
-      EXEC web.Redirect( 'ShowRow?t=' | t | '&k=' | k )
-      RETURN
+      EXECUTE( browse.UpdateSql( t, k ) ) 
+      SET ex = EXCEPTION()
+      IF ex = '' 
+      BEGIN
+        EXEC web.Redirect( 'ShowRow?t=' | t | '&k=' | k )
+        RETURN
+      END
     END
+    ELSE IF submit = 'Delete'
+    BEGIN
+      EXECUTE( 'DELETE FROM ' | sys.TableName( t ) | ' WHERE Id =' | k )
+      EXEC web.Redirect( 'Menu' )
+      RETURN
+    END      
   END
  
   EXEC web.Head( 'Edit ' | browse.TableTitle( t ) )
@@ -1413,7 +1424,7 @@ BEGIN
   SELECT '<form method=post>' 
   
   EXECUTE( browse.FormUpdateSql( t, k ) )
-  SELECT '<p><input name=\"$submit\" type=submit value=Save></form>'
+  SELECT '<p><input name=\"$submit\" type=submit value=Save> <input name=\"$submit\" type=submit value=Delete></form>'
   EXEC web.Trailer()
 END
 GO
@@ -1658,9 +1669,7 @@ INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode]) VALUES
 (4,'Peter','Perfect',36,'')
 (5,'George','Washington',31,'WC1')
 (6,'Ron','Williams',49,'')
-(7,'Adam','Baker',0,'')
-(8,'George','Barwood',65,'GL2 4LZ')
-(9,'Fred','Flintstone',88,'XYZ')
+(8,'George','Barwood',63,'GL2 4LZ')
 GO
 
 INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES 
@@ -1669,7 +1678,6 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (53,3,20,1034273)
 (54,4,30,1034273)
 (55,1,40,1034273)
-(56,1,50,1034451)
 (57,1,60,1034338)
 (58,1,35,1034273)
 (59,2,45,1034273)
@@ -1805,19 +1813,17 @@ GO
 CREATE SCHEMA [rtest]
 CREATE TABLE [rtest].[Gen]([x] int) 
 GO
-CREATE TABLE [rtest].[t0]([x] string,[y] int) 
+CREATE TABLE [rtest].[t0]([x] string,[y] int(5)) 
 GO
-CREATE TABLE [rtest].[t1]([x] string,[y] int) 
+CREATE TABLE [rtest].[t1]([x] string,[y] int(3),[z] string) 
 GO
-CREATE TABLE [rtest].[t2]([x] string,[y] int,[z] string) 
+CREATE TABLE [rtest].[t2]([x] string,[y] int(3),[z] string) 
 GO
-CREATE TABLE [rtest].[t3]([x] string,[y] int) 
+CREATE TABLE [rtest].[t3]([x] string,[y] int(5)) 
 GO
-CREATE TABLE [rtest].[t4]([x] string,[y] int) 
+CREATE TABLE [rtest].[t4]([x] string,[y] int(3),[z] string) 
 GO
-CREATE TABLE [rtest].[t5]([x] string,[y] int,[z] string) 
-GO
-CREATE TABLE [rtest].[t6]([x] string,[y] int) 
+CREATE TABLE [rtest].[t5]([x] string,[y] int(3),[z] string) 
 GO
 CREATE FN [rtest].[OneTest]() AS
 BEGIN 
@@ -1841,8 +1847,8 @@ BEGIN
 
   SET sql = CASE 
     WHEN exists = '' THEN 
-      CASE WHEN r % 2 =1 THEN 'CREATE TABLE rtest.[' | tname | '](x string, y int)'
-      ELSE 'CREATE TABLE rtest.[' | tname | '](x string, y int, z string )'
+      CASE WHEN r % 2 =1 THEN 'CREATE TABLE rtest.[' | tname | '](x string, y int(5))'
+      ELSE 'CREATE TABLE rtest.[' | tname | '](x string, y int(3), z string )'
       END
     WHEN r % 10 = 0 THEN 'DROP TABLE rtest.[' | tname | ']'
     WHEN r % 2 = 1 THEN 'INSERT INTO rtest.[' | tname | '](y) VALUES (' | (r % 10) | ')'
@@ -1856,64 +1862,53 @@ BEGIN
 END
 GO
 INSERT INTO [rtest].[Gen](Id,[x]) VALUES 
-(1,811869393)
+(1,1770286136)
 GO
 
 INSERT INTO [rtest].[t0](Id,[x],[y]) VALUES 
 (2,'',5)
 (3,'',3)
-(4,'',3)
-(5,'',1)
-(6,'',9)
-(7,'',3)
-(8,'',5)
-(9,'',1)
+(4,'',9)
+(5,'',7)
 GO
 
-INSERT INTO [rtest].[t1](Id,[x],[y]) VALUES 
-(1,'',3)
-(2,'',7)
-(3,'',1)
-(4,'',9)
-(5,'',3)
-(6,'',3)
-(7,'',5)
-(8,'',5)
+INSERT INTO [rtest].[t1](Id,[x],[y],[z]) VALUES 
+(1,'',5,'')
+(2,'',5,'')
+(3,'',7,'')
+(4,'',1,'')
 GO
 
 INSERT INTO [rtest].[t2](Id,[x],[y],[z]) VALUES 
-(1,'',3,'')
-(2,'',9,'')
-(3,'',9,'')
-(4,'',9,'')
-(7,'',7,'')
-(8,'',3,'')
-(9,'',5,'')
-(10,'',1,'')
-(11,'',9,'')
-(12,'',1,'')
-(13,'',9,'')
-(14,'',3,'')
+(1,'',7,'')
+(2,'',7,'')
+(3,'',3,'')
 GO
 
 INSERT INTO [rtest].[t3](Id,[x],[y]) VALUES 
-(1,'',1)
-(2,'',3)
-(3,'',7)
+(2,'',5)
+(3,'',5)
+(4,'',3)
+(5,'',9)
+(6,'',3)
+(8,'',9)
+(9,'',1)
 GO
 
-INSERT INTO [rtest].[t4](Id,[x],[y]) VALUES 
-(1,'',5)
-(2,'',5)
-(5,'',7)
-(6,'',3)
+INSERT INTO [rtest].[t4](Id,[x],[y],[z]) VALUES 
+(1,'',9,'')
+(2,'',5,'')
+(3,'',1,'')
+(4,'',1,'')
 GO
 
 INSERT INTO [rtest].[t5](Id,[x],[y],[z]) VALUES 
-(1,'',1,'')
-GO
-
-INSERT INTO [rtest].[t6](Id,[x],[y]) VALUES 
+(1,'',3,'')
+(2,'',9,'')
+(3,'',3,'')
+(5,'',9,'')
+(6,'',9,'')
+(7,'',9,'')
 GO
 
 DECLARE tid int, sid int, cid int
@@ -2033,8 +2028,4 @@ GO
 DECLARE tid int, sid int, cid int
 SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
 SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't5'
-GO
-DECLARE tid int, sid int, cid int
-SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
-SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't6'
 GO";

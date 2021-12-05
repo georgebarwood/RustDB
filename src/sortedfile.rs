@@ -19,6 +19,7 @@ pub struct SortedFile {
     /// Status
     pub ok: Cell<bool>,
 }
+
 impl SortedFile {
     /// Create File with specified record size, key size, root page.
     pub fn new(rec_size: usize, key_size: usize, root_page: u64) -> Self {
@@ -31,6 +32,7 @@ impl SortedFile {
             ok: Cell::new(true),
         }
     }
+
     /// Save changes to underlying storage.
     pub fn save(&self, db: &DB, op: SaveOp) {
         if op == SaveOp::RollBack {
@@ -58,23 +60,27 @@ impl SortedFile {
             }
         }
     }
+
     /// Clear the cache, changes are discarded instead of being saved.
     pub fn rollback(&self) {
         self.pages.borrow_mut().clear();
         self.dirty_pages.borrow_mut().clear();
     }
+
     /// Free the underlying storage. File is not useable after this.
     pub fn free_pages(&self, db: &DB, r: &dyn Record) {
         self.free_page(db, self.root_page, r);
         self.rollback();
         self.ok.set(false);
     }
+
     /// Insert a Record. If the key is a duplicate, the record is not saved.
     pub fn insert(&self, db: &DB, r: &dyn Record) {
         while !self.insert_leaf(db, self.root_page, r, None) {
             // We get here if a child page needed to be split.
         }
     }
+
     /// Remove a Record.
     pub fn remove(&self, db: &DB, r: &dyn Record) {
         let mut pp = self.load_page(db, self.root_page);
@@ -91,6 +97,7 @@ impl SortedFile {
             pp = self.load_page(db, cpnum);
         }
     }
+
     /// Free a page and any child pages if this is a parent page.
     fn free_page(&self, db: &DB, pnum: u64, r: &dyn Record) {
         let pp = self.load_page(db, pnum);
@@ -105,6 +112,7 @@ impl SortedFile {
         }
         db.free_page(pnum);
     }
+
     /// Free a parent node.
     fn free_parent_node(&self, db: &DB, p: &Page, x: usize, r: &dyn Record) {
         if x != 0 {
@@ -119,6 +127,7 @@ impl SortedFile {
             }
         }
     }
+
     /// Locate a record with matching key. Result is PagePtr and offset of data.
     pub fn get(&self, db: &DB, r: &dyn Record) -> Option<(PagePtr, usize)> {
         let mut pp = self.load_page(db, self.root_page);
@@ -140,14 +149,17 @@ impl SortedFile {
         }
         Some((pp, off))
     }
+
     /// For iteration in ascending order from start.
     pub fn asc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Asc {
         Asc::new(db, start, self)
     }
+
     /// For iteration in descending order from start.
     pub fn dsc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Dsc {
         Dsc::new(db, start, self)
     }
+
     /// Insert a record into a leaf page.
     fn insert_leaf(&self, db: &DB, pnum: u64, r: &dyn Record, pi: Option<&ParentInfo>) -> bool {
         let pp = self.load_page(db, pnum);
@@ -187,6 +199,7 @@ impl SortedFile {
         };
         self.insert_leaf(db, cpnum, r, Some(&ParentInfo { pnum, parent: pi }))
     }
+
     /// Insert child into a non-leaf page.
     fn insert_page(&self, db: &DB, into: &ParentInfo, r: &dyn Record, cpnum: u64) {
         let pp = self.load_page(db, into.pnum);
@@ -222,6 +235,7 @@ impl SortedFile {
             }
         }
     }
+
     /// Append child to a non-leaf page. Used when a new root page has just been created.
     fn append_page(&self, db: &DB, into: u64, k: &dyn Record, cpnum: u64) {
         let pp = self.load_page(db, into);
@@ -229,6 +243,7 @@ impl SortedFile {
         self.set_dirty(p, &pp);
         p.append_page(k, cpnum);
     }
+
     /// Construct a new empty page.
     fn new_page(&self, level: u8) -> Page {
         Page::new(
@@ -242,12 +257,14 @@ impl SortedFile {
             u64::MAX,
         )
     }
+
     /// Allocate a page number, publish the page in the cache.
     fn alloc_page(&self, db: &DB, p: Page) -> u64 {
         let pnum = db.alloc_page();
         self.publish_page(pnum, p);
         pnum
     }
+
     /// Publish a page in the cache with specified page number.
     fn publish_page(&self, pnum: u64, p: Page) {
         let pp = util::new(p);
@@ -258,6 +275,7 @@ impl SortedFile {
         }
         self.pages.borrow_mut().insert(pnum, pp);
     }
+
     /// Get a page from the cache, or if it is not in the cache, load it from external storage.
     fn load_page(&self, db: &DB, pnum: u64) -> PagePtr {
         if !self.ok.get() {
@@ -283,6 +301,7 @@ impl SortedFile {
             }
         }
     }
+
     /// Mark a page as changed.
     pub fn set_dirty(&self, p: &mut Page, pp: &PagePtr) {
         if !p.is_dirty {
@@ -290,12 +309,14 @@ impl SortedFile {
             self.dirty_pages.borrow_mut().push(pp.clone());
         }
     }
-} // end impl File
+} // end impl SortedFile
+
 /// Used to pass parent page number for insert operations.
 struct ParentInfo<'a> {
     pnum: u64,
     parent: Option<&'a ParentInfo<'a>>,
 }
+
 /// For dividing full pages into two.
 struct Split {
     count: usize,
@@ -304,6 +325,7 @@ struct Split {
     left: Page,
     right: Page,
 }
+
 impl Split {
     /// Split the records of p into two new pages.
     fn new(p: &mut Page) -> Self {
@@ -334,7 +356,8 @@ impl Split {
             self.split(p, p.right(x));
         }
     }
-} // end impl split
+} // end impl Split
+
 /// A record to be stored in a SortedFile.
 pub trait Record {
     /// Compare record with stored bytes.
@@ -350,24 +373,29 @@ pub trait Record {
     /// Drop parent key ( may need to delete codes ).
     fn drop_key(&self, _db: &DB, _data: &[u8]) {}
 }
+
 /// Id record.
 pub struct Id {
     pub id: u64,
 }
+
 impl Record for Id {
     fn compare(&self, _db: &DB, data: &[u8]) -> Ordering {
         let id = util::getu64(data, 0);
         self.id.cmp(&id)
     }
+
     fn save(&self, data: &mut [u8]) {
         util::setu64(data, self.id);
     }
 }
+
 /// Fetch records from SortedFile in ascending order. The iterator result is a PagePtr and offset of the data.
 pub struct Asc {
     stk: Stack,
     file: Rc<SortedFile>,
 }
+
 impl Asc {
     fn new(db: &DB, start: Box<dyn Record>, file: &Rc<SortedFile>) -> Self {
         let root_page = file.root_page;
@@ -382,15 +410,18 @@ impl Asc {
 }
 impl Iterator for Asc {
     type Item = (PagePtr, usize);
+
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         self.stk.next(&self.file)
     }
 }
+
 /// Fetch records from SortedFile in descending order.
 pub struct Dsc {
     stk: Stack,
     file: Rc<SortedFile>,
 }
+
 impl Dsc {
     fn new(db: &DB, start: Box<dyn Record>, file: &Rc<SortedFile>) -> Self {
         let root_page = file.root_page;
@@ -402,12 +433,15 @@ impl Dsc {
         result
     }
 }
+
 impl Iterator for Dsc {
     type Item = (PagePtr, usize);
+
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         self.stk.prev(&self.file)
     }
 }
+
 /// Stack for implementing iteration.
 struct Stack {
     v: Vec<(PagePtr, usize)>,
@@ -415,6 +449,7 @@ struct Stack {
     seeking: bool,
     db: DB,
 }
+
 impl Stack {
     /// Create a new Stack with specified start key.
     fn new(db: &DB, start: Box<dyn Record>) -> Self {
@@ -425,9 +460,12 @@ impl Stack {
             db: db.clone(),
         }
     }
+
+    /// Push page ptr and offset onto stack.
     fn push(&mut self, pp: &PagePtr, off: usize) {
         self.v.push((pp.clone(), off));
     }
+
     /// Fetch the next record.
     fn next(&mut self, file: &SortedFile) -> Option<(PagePtr, usize)> {
         while let Some((pp, x)) = self.v.pop() {
@@ -448,6 +486,8 @@ impl Stack {
         }
         None
     }
+
+    /// Fetch the previous record.
     fn prev(&mut self, file: &SortedFile) -> Option<(PagePtr, usize)> {
         while let Some((pp, x)) = self.v.pop() {
             let p = &pp.borrow();
@@ -462,6 +502,7 @@ impl Stack {
         }
         None
     }
+
     /// Seek ascending order. Note that smaller keys are in the right sub-tree.
     fn seek_asc(&mut self, p: &Page, pp: &PagePtr, mut x: usize) {
         while x != 0 {
@@ -479,6 +520,7 @@ impl Stack {
             }
         }
     }
+
     /// Returns true if a node is found which is <= start.
     /// This is used to decide whether the the preceding child page is added.
     fn seek_dsc(&mut self, p: &Page, pp: &PagePtr, mut x: usize) -> bool {
@@ -502,18 +544,21 @@ impl Stack {
         }
         false
     }
+
     fn add_asc(&mut self, p: &Page, pp: &PagePtr, mut x: usize) {
         while x != 0 {
             self.push(pp, x);
             x = p.right(x);
         }
     }
+
     fn add_dsc(&mut self, p: &Page, pp: &PagePtr, mut x: usize) {
         while x != 0 {
             self.push(pp, x);
             x = p.left(x);
         }
     }
+
     fn add_page_asc(&mut self, file: &SortedFile, pp: PagePtr) {
         let p = &pp.borrow();
         if p.level != 0 {
@@ -527,6 +572,7 @@ impl Stack {
             self.add_asc(p, &pp, root);
         }
     }
+
     fn add_page_dsc(&mut self, file: &SortedFile, mut pnum: u64) {
         loop {
             let pp = file.load_page(&self.db, pnum);
