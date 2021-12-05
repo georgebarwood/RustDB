@@ -7,13 +7,13 @@
 //!
 //!# Examples
 //! ```
-//!use rustdb::{standard_builtins, Database, SharedPagedData, SimpleFileStorage, WebTransaction, INITSQL, BuiltinMap};
+//!use rustdb::{standard_builtins, AccessPagedData, Database, SharedPagedData, SimpleFileStorage, WebTransaction, INITSQL, BuiltinMap};
 //!use std::net::TcpListener;
 //!use std::sync::Arc;
 //!
 //!    let sfs = Box::new(SimpleFileStorage::new( "..\\test.rustdb" ));
 //!    let spd = Arc::new(SharedPagedData::new(sfs));
-//!    let apd = spd.open_write();
+//!    let apd = AccessPagedData::new_writer(spd);
 //!    let mut bmap = BuiltinMap::new();
 //!    standard_builtins( &mut bmap );
 //!    let bmap = Arc::new(bmap);
@@ -63,8 +63,6 @@
 //! [SharedPagedData] allows logical database pages to be shared to allow concurrent readers.
 //!
 //!# ToDo List
-//!
-//! Change the way builtin registration works ( pass map in when db is constructed ).
 //!
 //! Implement string(n), binary(n) where n is number of bytes stored inline. (DONE)
 //!
@@ -153,7 +151,7 @@ pub mod webtrans;
 /// Initial SQL
 pub mod init;
 
-/// Backing storage for database. See also [AtomicFile].
+/// Backing [Storage] for database. See also [AtomicFile].
 pub mod stg;
 
 /// Page storage and sharing, [SharedPagedData] and [AccessPagedData]
@@ -292,6 +290,8 @@ pub struct Database {
 
 impl Database {
     /// Construct a new DB, based on the specified file.
+    /// initsql is used to initialised a new database.
+    /// builtins specifies the functions callable in SQL code such as SUBSTR, REPLACE etc.
     pub fn new(file: AccessPagedData, initsql: &str, builtins: Arc<BuiltinMap>) -> DB {
         let mut dq = DummyTransaction {};
         let is_new = file.is_new();

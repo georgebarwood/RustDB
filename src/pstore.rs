@@ -167,25 +167,6 @@ impl SharedPagedData {
             ep_size,
         }
     }
-
-    /// Access to a virtual read-only copy of the database logical pages.
-    pub fn open_read(self: &Arc<SharedPagedData>) -> AccessPagedData {
-        let mut stash = self.stash.write().unwrap();
-        AccessPagedData {
-            writer: false,
-            time: stash.begin_read(),
-            spd: self.clone(),
-        }
-    }
-
-    /// Write access to the database logical pages.
-    pub fn open_write(self: &Arc<SharedPagedData>) -> AccessPagedData {
-        AccessPagedData {
-            writer: true,
-            time: 0,
-            spd: self.clone(),
-        }
-    }
 }
 
 /// Access to shared paged data.
@@ -196,6 +177,25 @@ pub struct AccessPagedData {
 }
 
 impl AccessPagedData {
+    /// Construct access to a virtual read-only copy of the database logical pages.
+    pub fn new_reader(spd: Arc<SharedPagedData>) -> Self {
+        let time = spd.stash.write().unwrap().begin_read();
+        AccessPagedData {
+            writer: false,
+            time,
+            spd,
+        }
+    }
+
+    /// Construct access to the database logical pages.
+    pub fn new_writer(spd: Arc<SharedPagedData>) -> Self {
+        AccessPagedData {
+            writer: true,
+            time: 0,
+            spd,
+        }
+    }
+
     /// Get the Data for the specified page.
     pub fn get_page(&self, lpnum: u64) -> Data {
         // Get PageInfoPtr for the specified page.
