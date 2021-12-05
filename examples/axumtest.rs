@@ -86,7 +86,7 @@ async fn main() {
         bmap: bmap.clone(),
     });
 
-    // Start the logging thread *synchronous)
+    // Start the logging thread (synchronous)
     thread::spawn(move || {
         log_loop(log_rx);
     });
@@ -108,7 +108,7 @@ async fn main() {
         }
     });
 
-    // Build the auxm app with a single route.
+    // Build the axum app with a single route.
     let app = Router::new().route("/*key", get(h_get).post(h_post)).layer(
         ServiceBuilder::new()
             .layer(CookieManagerLayer::new())
@@ -195,7 +195,7 @@ impl IntoResponse for ServerTrans {
 }
 
 /////////////////////////////////////////////
-// Helper functions for buulding ServerTrans.
+// Helper functions for building ServerTrans.
 
 /// Get BTreeMap of cookies from Cookies.
 fn map_cookies(cookies: Cookies) -> BTreeMap<String, String> {
