@@ -1,6 +1,6 @@
 use rustdb::{
-    standard_builtins, AtomicFile, BuiltinMap, Database, SharedPagedData, SimpleFileStorage,
-    WebTransaction, INITSQL,
+    standard_builtins, AccessPagedData, AtomicFile, BuiltinMap, Database, SharedPagedData,
+    SimpleFileStorage, WebTransaction, INITSQL,
 };
 use std::net::TcpListener;
 use std::sync::Arc;
@@ -10,8 +10,7 @@ fn main() {
     let upd = Box::new(SimpleFileStorage::new("..\\test.upd"));
     let stg = Box::new(AtomicFile::new(file, upd));
     let spd = Arc::new(SharedPagedData::new(stg));
-
-    let apd = spd.open_write();
+    let apd = AccessPagedData::new_writer(spd);
     let mut bmap = BuiltinMap::new();
     standard_builtins(&mut bmap);
     let db = Database::new(apd, INITSQL, Arc::new(bmap));

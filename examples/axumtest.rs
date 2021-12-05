@@ -10,8 +10,8 @@ use axum::{
     AddExtensionLayer, Router,
 };
 use rustdb::{
-    c_value, check_types, standard_builtins, AtomicFile, Block, BuiltinMap, CExp, CExpPtr,
-    CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData,
+    c_value, check_types, standard_builtins, AccessPagedData, AtomicFile, Block, BuiltinMap, CExp,
+    CExpPtr, CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData,
     SimpleFileStorage, Value, INITSQL,
 };
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
@@ -62,10 +62,6 @@ async fn main() {
     // Note that readers never have to wait, they get a "virtual" read-only copy of the database.
     let spd = Arc::new(SharedPagedData::new(stg));
 
-    // Construct thread communication channels.
-    let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
-    let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
-
     // Construct map of "builtin" functions that can be called in SQL code.
     // Include the Argon hash function as well as the standard functions.
     let mut bmap = BuiltinMap::new();
@@ -76,15 +72,19 @@ async fn main() {
     }
     let bmap = Arc::new(bmap);
 
+    // Get write-access to database ( there will only be one of these ).
+    let wapd = AccessPagedData::new_writer(spd.clone());
+
+    // Construct thread communication channels.
+    let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
+    let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
+
     // Construct shared state.
     let ss = Arc::new(SharedState {
         tx,
         spd,
         bmap: bmap.clone(),
     });
-
-    // Get write-access to database ( there will only be one of these ).
-    let wapd = ss.spd.open_write();
 
     // Start the logging thread *synchronous)
     thread::spawn(move || {
@@ -137,7 +137,7 @@ async fn h_get(
 
     let blocking_task = tokio::task::spawn_blocking(move || {
         // GET requests should be read-only.
-        let apd = state.spd.open_read();
+        let apd = AccessPagedData::new_reader(state.spd.clone());
         let db = Database::new(apd, "", state.bmap.clone());
         db.run_timed("EXEC web.Main()", &mut *sq.x);
         sq
