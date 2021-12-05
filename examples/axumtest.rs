@@ -4,23 +4,19 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static MEMALLOC: MiMalloc = MiMalloc;
 
+use rustdb::{
+    c_value, check_types, standard_builtins, AtomicFile, Block, BuiltinMap, CExp, CExpPtr,
+    CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData,
+    SimpleFileStorage, Value, INITSQL,
+};
 use axum::{
     extract::{Extension, Form, Multipart, Path, Query},
     routing::get,
     AddExtensionLayer, Router,
 };
-
 use tower::ServiceBuilder;
 use tower_cookies::{CookieManagerLayer, Cookies};
-
 use tokio::sync::{mpsc, oneshot};
-
-use rustdb::{
-    c_value, check_types, AccessPagedData, AtomicFile, Block, BuiltinMap, CExp, CExpPtr,
-    CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData,
-    SimpleFileStorage, Value, DB, INITSQL, standard_builtins
-};
-
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
 
 /// Transaction to be sent to server thread, implements IntoResponse.
@@ -49,13 +45,8 @@ struct SharedState {
     tx: mpsc::Sender<ServerMessage>,
     /// Shared storage used for read-only queries.
     spd: Arc<SharedPagedData>,
+    /// Map of builtin SQL functions for Database.
     bmap: Arc<BuiltinMap>,
-}
-
-/// Get database with extra registered builtin functions.
-fn get_db(apd:AccessPagedData, sql: &str, bmap: Arc<BuiltinMap>) -> DB {
-    let db = Database::new(apd, sql, bmap );
-    db
 }
 
 #[tokio::main]
@@ -63,33 +54,47 @@ fn get_db(apd:AccessPagedData, sql: &str, bmap: Arc<BuiltinMap>) -> DB {
 async fn main() {
     // console_subscriber::init();
 
+    // First construct an AtomicFile. This ensures that updates to the database are "all or nothing".
     let file = Box::new(SimpleFileStorage::new("..\\test.rustdb"));
     let upd = Box::new(SimpleFileStorage::new("..\\test.upd"));
     let stg = Box::new(AtomicFile::new(file, upd));
+
+    // SharedPagedData allows for one writer and multiple readers.
+    // Note that readers never have to wait, they get a "virtual" read-only copy of the database.
     let spd = Arc::new(SharedPagedData::new(stg));
 
+    // Construct thread communication channels.
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
     let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
 
+    // Construct map of "builtin" functions that can be called in SQL code.
+    // Include the Argon hash function as well as the standard functions.
     let mut bmap = BuiltinMap::new();
-    standard_builtins( &mut bmap );
+    standard_builtins(&mut bmap);
     let list = [("ARGON", DataKind::Binary, CompileFunc::Value(c_argon))];
     for (name, typ, cf) in list {
         bmap.insert(name.to_string(), (typ, cf));
     }
     let bmap = Arc::new(bmap);
 
-    let state = Arc::new(SharedState { tx, spd, bmap: bmap.clone()});
-    let wapd = state.spd.open_write();
+    // Construct shared state.
+    let ss = Arc::new(SharedState {
+        tx,
+        spd,
+        bmap: bmap.clone(),
+    });
+
+    // Get write-access to database ( there will only be one of these ).
+    let wapd = ss.spd.open_write();
 
     // This is the logging thread *synchronous)
     thread::spawn(move || {
         log_loop(log_rx);
     });
 
-    // This is the server thread (synchronous).
-    thread::spawn(move || {    
-        let db = get_db(wapd, INITSQL, bmap);    
+    // Start the server thread that updates the database (synchronous).
+    thread::spawn(move || {
+        let db = Database::new(wapd, INITSQL, bmap);
         loop {
             let mut sm = rx.blocking_recv().unwrap();
             db.run_timed("EXEC web.Main()", &mut *sm.st.x);
@@ -104,63 +109,18 @@ async fn main() {
         }
     });
 
-    // build our application with a single route
+    // Build the auxm app with a single route.
     let app = Router::new().route("/*key", get(h_get).post(h_post)).layer(
         ServiceBuilder::new()
             .layer(CookieManagerLayer::new())
-            .layer(AddExtensionLayer::new(state)),
+            .layer(AddExtensionLayer::new(ss)),
     );
 
-    // run it with hyper on localhost:3000
+    // Run it with hyper on localhost:3000
     axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();
-}
-
-/// Get BTreeMap of cookies from Cookies.
-fn map_cookies(cookies: Cookies) -> BTreeMap<String, String> {
-    let mut result = BTreeMap::new();
-    for cookie in cookies.list() {
-        let (name, value) = cookie.name_value();
-        result.insert(name.to_string(), value.to_string());
-    }
-    result
-}
-
-/// Get Vec of Parts from MultiPart.
-async fn map_parts(mp: Option<Multipart>) -> Vec<Part> {
-    let mut result = Vec::new();
-    if let Some(mut mp) = mp {
-        while let Some(field) = mp.next_field().await.unwrap() {
-            let name = field.name().unwrap().to_string();
-            let file_name = match field.file_name() {
-                Some(s) => s.to_string(),
-                None => "".to_string(),
-            };
-            let content_type = match field.content_type() {
-                Some(s) => s.to_string(),
-                None => "".to_string(),
-            };
-            let mut data = Vec::new();
-            let mut text = "".to_string();
-            if content_type.is_empty() {
-                if let Ok(s) = field.text().await {
-                    text = s;
-                }
-            } else if let Ok(bytes) = field.bytes().await {
-                data = bytes.to_vec()
-            }
-            result.push(Part {
-                name,
-                file_name,
-                content_type,
-                data: Arc::new(data),
-                text,
-            });
-        }
-    }
-    result
 }
 
 /// Handler for http GET requests.
@@ -179,7 +139,7 @@ async fn h_get(
     let blocking_task = tokio::task::spawn_blocking(move || {
         // GET requests should be read-only.
         let apd = state.spd.open_read();
-        let db = get_db(apd, "", state.bmap.clone());
+        let db = Database::new(apd, "", state.bmap.clone());
         db.run_timed("EXEC web.Main()", &mut *sq.x);
         sq
     });
@@ -233,6 +193,54 @@ impl IntoResponse for ServerTrans {
         }
         res
     }
+}
+
+/////////////////////////////////////////////
+// Helper functions for buulding ServerTrans.
+
+/// Get BTreeMap of cookies from Cookies.
+fn map_cookies(cookies: Cookies) -> BTreeMap<String, String> {
+    let mut result = BTreeMap::new();
+    for cookie in cookies.list() {
+        let (name, value) = cookie.name_value();
+        result.insert(name.to_string(), value.to_string());
+    }
+    result
+}
+
+/// Get Vec of Parts from MultiPart.
+async fn map_parts(mp: Option<Multipart>) -> Vec<Part> {
+    let mut result = Vec::new();
+    if let Some(mut mp) = mp {
+        while let Some(field) = mp.next_field().await.unwrap() {
+            let name = field.name().unwrap().to_string();
+            let file_name = match field.file_name() {
+                Some(s) => s.to_string(),
+                None => "".to_string(),
+            };
+            let content_type = match field.content_type() {
+                Some(s) => s.to_string(),
+                None => "".to_string(),
+            };
+            let mut data = Vec::new();
+            let mut text = "".to_string();
+            if content_type.is_empty() {
+                if let Ok(s) = field.text().await {
+                    text = s;
+                }
+            } else if let Ok(bytes) = field.bytes().await {
+                data = bytes.to_vec()
+            }
+            result.push(Part {
+                name,
+                file_name,
+                content_type,
+                data: Arc::new(data),
+                text,
+            });
+        }
+    }
+    result
 }
 
 /////////////////////////////
