@@ -4,20 +4,20 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static MEMALLOC: MiMalloc = MiMalloc;
 
-use rustdb::{
-    c_value, check_types, standard_builtins, AtomicFile, Block, BuiltinMap, CExp, CExpPtr,
-    CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData,
-    SimpleFileStorage, Value, INITSQL,
-};
 use axum::{
     extract::{Extension, Form, Multipart, Path, Query},
     routing::get,
     AddExtensionLayer, Router,
 };
+use rustdb::{
+    c_value, check_types, standard_builtins, AtomicFile, Block, BuiltinMap, CExp, CExpPtr,
+    CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData,
+    SimpleFileStorage, Value, INITSQL,
+};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
+use tokio::sync::{mpsc, oneshot};
 use tower::ServiceBuilder;
 use tower_cookies::{CookieManagerLayer, Cookies};
-use tokio::sync::{mpsc, oneshot};
-use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
 
 /// Transaction to be sent to server thread, implements IntoResponse.
 struct ServerTrans {
@@ -39,7 +39,6 @@ struct ServerMessage {
 }
 
 /// State shared with handlers.
-#[derive(Clone)]
 struct SharedState {
     /// Sender channel for sending queries to server thread.
     tx: mpsc::Sender<ServerMessage>,
@@ -87,7 +86,7 @@ async fn main() {
     // Get write-access to database ( there will only be one of these ).
     let wapd = ss.spd.open_write();
 
-    // This is the logging thread *synchronous)
+    // Start the logging thread *synchronous)
     thread::spawn(move || {
         log_loop(log_rx);
     });
