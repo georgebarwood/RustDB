@@ -1120,7 +1120,7 @@ SELECT '<h1>Manual</h1>
 <h2>Schema definition</h2>
 <h3>CREATE SCHEMA</h3>
 <p>CREATE SCHEMA name
-<p>Creates a new schema. Every database object (Table, Function) has an associated schema. Schemas are used to organise database objects into logical categories.
+<p>Creates a new schema. Every database object (Table, Function) has an associated schema. Schemas are used to organise database objects into logical categories.gr
 <h2>Table definition</h2>
 <h3>CREATE TABLE</h3><p>CREATE TABLE schema.tablename ( Colname1 Coltype1, Colname2 Coltype2, ... )
 <p>Creates a new base table. Every base table is automatically given an Id column, which auto-increments on INSERT ( if no explicit value is supplied).<p>The data types are as follows:
@@ -1147,8 +1147,8 @@ SELECT '<h1>Manual</h1>
 <p>The specified values are inserted into the table. The values may be any expressions ( possibly involving local variables or function calls ).
 <p>INSERT INTO schema.tablename ( Colname1, Colname2 ... ) select-expression
 <p>The values specified by the select-expression are inserted into the table.
-<h3>SELECT</h3><p>SELECT expressions FROM source-table [WHERE bool-exp ] [GROUP BY expressions] [ORDER BY expressions]
-<p>A new table is computed, based on the list of expressions and the WHERE, GROUP BY and ORDER BY clauses.
+<h3>SELECT</h3><p>SELECT expressions FROM source-table [WHERE bool-exp ] [ORDER BY expressions]
+<p>A new table is computed, based on the list of expressions and the WHERE and ORDER BY clauses.
 <p>If the keyword DESC is placed after an ORDER BY expression, the order is reversed ( descending order ).
 <p>The SELECT expressions can be given names using AS.
 <p>When used as a stand-alone statement, the results are passed to the code that invoked the batch, and may be displayed to a user or sent to a client for further processing and eventual display. 
@@ -1161,9 +1161,9 @@ SELECT '<h1>Manual</h1>
 <h3>DECLARE</h3><p>DECLARE name1 type1, name2 type2 ....
 <p>Local variables are declared with the specified types. The variables are initialised to default values ( but only once, not each time the DECLARE is encountered if there is a loop ).
 <h3>SET</h3>
-<p>SET name1 = exp1, name2 = exp2 .... [ FROM table ] [ WHERE bool-exp ] [ GROUP BY expressions ]
+<p>SET name1 = exp1, name2 = exp2 .... [ FROM table ] [ WHERE bool-exp ]
 <p>Local variables are assigned. If the FROM clause is specified, the values are taken from a table row which satisfies the WHERE condition. If there is no such row, the values of the local variables remain unchanged.
-<h3>FOR</h3><p>FOR name1 = exp1, name2 = exp2 .... FROM table [ WHERE bool-exp ] [ GROUP BY expressions ] [ORDER BY expressions] Statement
+<h3>FOR</h3><p>FOR name1 = exp1, name2 = exp2 .... FROM table [ WHERE bool-exp ] [ORDER BY expressions] Statement
 <p>Statement is repeatedly executed for each row from the table which satisfies the WHERE condition, with the named local variables being assigned expressions which depend on the rows.
 <h2>Control flow statements</h2>
 <h3>BEGIN .. END</h3><p>BEGIN Statement1 Statement2 ... END
@@ -1624,7 +1624,7 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (99,7,50,1034785)
 (100,1,25,1034273)
 (101,1,99,1034273)
-(102,5,99,1034273)
+(102,5,102,1034273)
 (103,4,111,1034273)
 (104,1,50,1034273)
 (105,1,99,1034273)
@@ -1648,8 +1648,6 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 GO
 
 --############################################
-CREATE SCHEMA [ft]
---############################################
 CREATE SCHEMA [email]
 CREATE TABLE [email].[Msg]([from] string,[to] string,[title] string,[body] string,[format] int(1),[status] int(1)) 
 GO
@@ -1671,11 +1669,13 @@ CREATE TABLE [rtest].[Gen]([x] int)
 GO
 CREATE TABLE [rtest].[t0]([x] string,[y] int(5)) 
 GO
-CREATE TABLE [rtest].[t1]([x] string,[y] int(5)) 
+CREATE TABLE [rtest].[t1]([x] string,[y] int(3),[z] string) 
 GO
-CREATE TABLE [rtest].[t2]([x] string,[y] int(3),[z] string) 
+CREATE TABLE [rtest].[t2]([x] string,[y] int(5)) 
 GO
 CREATE TABLE [rtest].[t3]([x] string,[y] int(3),[z] string) 
+GO
+CREATE TABLE [rtest].[t4]([x] string,[y] int(3),[z] string) 
 GO
 CREATE TABLE [rtest].[t5]([x] string,[y] int(5)) 
 GO
@@ -1718,34 +1718,54 @@ BEGIN
 END
 GO
 INSERT INTO [rtest].[Gen](Id,[x]) VALUES 
-(1,1375700538)
+(1,2089351775)
 GO
 
 INSERT INTO [rtest].[t0](Id,[x],[y]) VALUES 
-(1,'',3)
-GO
-
-INSERT INTO [rtest].[t1](Id,[x],[y]) VALUES 
-(1,'',5)
-(2,'',3)
-(3,'',3)
+(1,'',9)
+(2,'',5)
+(3,'',9)
 (4,'',3)
-(5,'',3)
+(5,'',7)
 (6,'',7)
-(7,'',5)
+(7,'',1)
 GO
 
-INSERT INTO [rtest].[t2](Id,[x],[y],[z]) VALUES 
+INSERT INTO [rtest].[t1](Id,[x],[y],[z]) VALUES 
+(2,'',5,'')
+(4,'',5,'')
+(5,'',9,'')
+(6,'',5,'')
+(7,'',5,'')
+(8,'',9,'')
+(9,'',7,'')
+(10,'',5,'')
+GO
+
+INSERT INTO [rtest].[t2](Id,[x],[y]) VALUES 
+(1,'',1)
 GO
 
 INSERT INTO [rtest].[t3](Id,[x],[y],[z]) VALUES 
+(2,'',5,'')
+(4,'',1,'')
+(5,'',5,'')
+(7,'',1,'')
+(8,'',5,'')
+(9,'',5,'')
+(10,'',5,'')
+(11,'',1,'')
+(13,'',7,'')
+(14,'',3,'')
+(16,'',1,'')
+GO
+
+INSERT INTO [rtest].[t4](Id,[x],[y],[z]) VALUES 
 GO
 
 INSERT INTO [rtest].[t5](Id,[x],[y]) VALUES 
-(1,'',7)
-(2,'',1)
-(3,'',7)
-(4,'',1)
+(1,'',1)
+(2,'',7)
 GO
 
 INSERT INTO [rtest].[t6](Id,[x],[y]) VALUES 
@@ -1860,6 +1880,10 @@ GO
 DECLARE tid int, sid int, cid int
 SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
 SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't3'
+GO
+DECLARE tid int, sid int, cid int
+SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
+SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't4'
 GO
 DECLARE tid int, sid int, cid int
 SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
