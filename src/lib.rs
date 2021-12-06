@@ -65,10 +65,8 @@
 //! [AtomicFile] ensures that database updates are all or nothing.
 //!
 //!# ToDo List
-//!
-//! Decide whether to implement feastures like views, IN operator, INSERT from SELECT, etc.
-//! or simply remove them from manual and everywhere else.
-//! They can always be added later....!
+//! Decide whether to have several crates : "Core", "Lang", "Server" say.
+//! Core being data storage, Lang being SQL-subset, Server being interfacing to http/serde etc.
 //!
 //! Unify GenTransaction and WebTransaction. Check multiple file upload works ok with local http parsing.
 //!
@@ -303,8 +301,6 @@ impl Database {
                 ("Root", INT),
                 ("Schema", INT),
                 ("Name", STRING),
-                ("IsView", INT1),
-                ("Def", STRING),
                 ("IdGen", INT),
             ],
         );
@@ -355,7 +351,7 @@ impl Database {
 CREATE SCHEMA sys
 GO
 CREATE TABLE sys.Schema( Name string )
-CREATE TABLE sys.Table( Root int, Schema int, Name string, IsView int(1), Def string, IdGen int )
+CREATE TABLE sys.Table( Root int, Schema int, Name string, IdGen int )
 CREATE TABLE sys.Column( Table int, Name string, Type int )
 CREATE TABLE sys.Index( Root int, Table int, Name string )
 CREATE TABLE sys.IndexColumn( Index int, ColId int )

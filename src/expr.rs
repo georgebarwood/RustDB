@@ -2,6 +2,7 @@ use crate::*;
 use Instruction::*;
 
 /// Holds function name, line, column and message.
+#[derive(Clone)]
 pub struct SqlError {
     pub rname: String,
     pub line: usize,

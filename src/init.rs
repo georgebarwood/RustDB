@@ -223,8 +223,7 @@ BEGIN
   DECLARE schema string, name string
   SET schema = Name FROM sys.Schema WHERE Id = sid
   FOR name = Name FROM sys.Function WHERE Schema = sid EXECUTE( 'DROP FN ' | sys.Dot(schema,name) )
-  -- FOR name = Name FROM sys.Table WHERE Schema = sid AND IsView = 1 EXECUTE( 'DROP VIEW ' | sys.Dot(schema,name) )
-  FOR name = Name FROM sys.Table WHERE Schema = sid AND IsView = 0 EXECUTE( 'DROP TABLE ' | sys.Dot(schema,name) )
+  FOR name = Name FROM sys.Table WHERE Schema = sid EXECUTE( 'DROP TABLE ' | sys.Dot(schema,name) )
   DELETE FROM sys.Schema WHERE Id = sid
 END
 GO
@@ -1098,12 +1097,7 @@ BEGIN
   SELECT '<h1>Schema ' | s | '</h1>'
   SELECT '<h2>Tables</h2>'
   SELECT '<p><a href=\"ShowTable?k=' | Id | '\">' | Name | '</a>'
-  FROM sys.Table WHERE Schema = sid AND IsView = 0 ORDER BY Name
-/*
-  SELECT '<h2>Views</h2>'
-  SELECT '<p><a href=\"EditView?s=' | s | '&n=' | Name | '\">' | Name | '</a>'
-  FROM sys.Table WHERE Schema = sid AND IsView = 1 ORDER BY Name
-*/
+  FROM sys.Table WHERE Schema = sid ORDER BY Name
   SELECT '<h2>Functions</h2>' 
   SELECT '<p><a href=\"EditFunc?s=' | s | '&n=' | Name | '\">' | Name | '</a>'
   FROM sys.Function WHERE Schema = sid ORDER BY Name
@@ -1126,16 +1120,25 @@ GO
 CREATE FN [handler].[/OrderSummary]() AS
 BEGIN
   EXEC web.Head( 'Order Summary' )
-  SELECT '<table><tr><th>Cust<th>Total<th>#<th>Avg<th>Min<th>Max</tr>'
-  SELECT '<tr><td><a href=ShowRow?t=11&k=' | Cust | '>' | dbo.CustName(Cust) | '</a>' 
-   | '<td align=right>' | Total
-   | '<td align=right>' | Count
-   | '<td align=right>' | Total / Count
-   | '<td align=right>' | Min
-   | '<td align=right>' | Max
-   | '</tr>'
-  FROM dbo.OrderSummary
-  ORDER BY Total / Count DESC
+  SELECT '<table><tr><th>Cust<th>Sum<th>Count</tr>'
+
+  DECLARE cc int, cust int, total int, sum int, count int, finished bool
+  FOR cust = Cust, total = Total FROM dbo.Order ORDER BY dbo.CustName(Cust)
+  BEGIN
+    IF cust != cc
+    BEGIN
+      output:
+      IF cc != 0 SELECT '<tr><td><a href=ShowRow?t=10&k=' | cc | '>' | dbo.CustName(cc) | '</a>' 
+        | '<td align=right>' | sum | '<td align=right>' | count
+      IF finished GOTO exit
+      SET sum = 0, count= 0, cc = cust
+    END
+    SET sum = sum + total, count = count + 1
+  END
+  SET finished = true
+  GOTO output
+
+exit:
   SELECT '</table>'
   EXEC web.Trailer()
 END
@@ -1144,8 +1147,7 @@ CREATE FN [handler].[/Menu]() AS
 BEGIN
    EXEC web.Head('Menu')
    SELECT '
-<p><a href=\"/ShowTable?k=10\">Customers</a>
-<p><a href=/OrderSummary>Order Summary</a>
+<p><a href=\"/ShowTable?k=10\">Customers</a> | <a href=\"/OrderSummary\">Order Summary</a>
 <h1>System</h1>
 <p><a href=/Execute>Execute SQL</a>
 <p><a href=/ListFile>Files</a>
@@ -1164,7 +1166,7 @@ SELECT '<h1>Manual</h1>
 <h2>Schema definition</h2>
 <h3>CREATE SCHEMA</h3>
 <p>CREATE SCHEMA name
-<p>Creates a new schema. Every database object (Table,View,Procedure,Function) has an associated schema. Schemas are used to organise database objects into logical categories.
+<p>Creates a new schema. Every database object (Table, Function) has an associated schema. Schemas are used to organise database objects into logical categories.
 <h2>Table definition</h2>
 <h3>CREATE TABLE</h3><p>CREATE TABLE schema.tablename ( Colname1 Coltype1, Colname2 Coltype2, ... )
 <p>Creates a new base table. Every base table is automatically given an Id column, which auto-increments on INSERT ( if no explicit value is supplied).<p>The data types are as follows:
@@ -1195,7 +1197,6 @@ SELECT '<h1>Manual</h1>
 <p>A new table is computed, based on the list of expressions and the WHERE, GROUP BY and ORDER BY clauses.
 <p>If the keyword DESC is placed after an ORDER BY expression, the order is reversed ( descending order ).
 <p>The SELECT expressions can be given names using AS.
-<p>source-table can be a named base table, a view or another SELECT enclosed in brackets.
 <p>When used as a stand-alone statement, the results are passed to the code that invoked the batch, and may be displayed to a user or sent to a client for further processing and eventual display. 
 <p>See the web schema for stored procedures that can be used to generate http responses.
 <h3>UPDATE</h3><p>UPDATE schema.tablename SET Colname1 = Exp1, Colname2 = Exp2 .... WHERE bool-exp
@@ -1224,7 +1225,7 @@ SELECT '<h1>Manual</h1>
 <p>Execution of the enclosing FOR or WHILE loop is terminated.
 <h2>Batch execution</h2><p>EXECUTE ( string-expression )
 <p>Evaluates the string expression, and then executes the result ( which should be a list of SQL statements ).
-<p>Note that database objects ( tables, views, stored routines ) must be created in a prior batch before being used. A GO statement may be used to signify the start of a new batch.
+<p>Note that database objects ( tables, function ) must be created in a prior batch before being used. A GO statement may be used to signify the start of a new batch.
 <h2>Stored Functions</h2>
 <h3>CREATE FN</h3><p>CREATE FN schema.name ( param1 type1, param2 type2... ) AS BEGIN statements END
 <p>A stored function ( no return value ) is created, which can later be called by an EXEC statement.
@@ -1241,7 +1242,7 @@ SELECT '<h1>Manual</h1>
 <p>Returns a value from a stored function. RETURN with no expression returns from a stored function with no return value.
 <p>The pre-defined local variable result can be assigned instead to set the return value.
 <h2>Expressions</h2>
-<p>Expressions are composed from literals, named local variables, local parameters and named columns from tables or views. These may be combined using operators, stored functions, pre-defined functions. There is also the CASE expression, which has syntax CASE WHEN bool1 THEN exp1 WHEN bool2 THEN exp2 .... ELSE exp END - the result is the expression associated with the first bool expression which evaluates to true.
+<p>Expressions are composed from literals, named local variables, local parameters and named columns from tables. These may be combined using operators, stored functions, pre-defined functions. There is also the CASE expression, which has syntax CASE WHEN bool1 THEN exp1 WHEN bool2 THEN exp2 .... ELSE exp END - the result is the expression associated with the first bool expression which evaluates to true.
 <h3>Literals</h3>
 <p>String literals are written enclosed in single quotes. If a single quote is needed in a string literal, it is written as two single quotes. Binary literals are written in hexadecimal preceded by 0x. Integers are a list of digits (0-9). The bool literals are true and false.
 <h3>Names</h3><p>Names are enclosed in square brackets and are case sensitive ( although language keywords such as CREATE SELECT are case insensitive, and are written without the square brackets, often in upper case only by convention ). The square brackets can be omitted if the name consists of only letters (A-Z,a-z).
@@ -1252,7 +1253,6 @@ SELECT '<h1>Manual</h1>
 <li>+ - : addition, subtraction of numbers.</li>
 <li>| : concatenation of strings. The second expression is automatically converted to string if necessary.</li>
 <li>= != > < >= <= : comparison of any data type.</li>
-<li>IN : tests whether an expression in is in a set. The set may be a list of expressions or a select expression enclosed in brackets.</li>
 <li>NOT : boolean negation ( result is true if arg is false, false if arg is true ).</li>
 <li>AND : boolean operator ( result is true if both args are true )</li>
 <li>OR : boolean operator  ( result is true if either arg is true )</li>
@@ -1260,7 +1260,6 @@ SELECT '<h1>Manual</h1>
 <p>Brackets can be used where necessary, for example ( a + b ) * c.
 <h3>Pre-defined functions</h3>
 <ul>
-<li>MIN,MAX,SUM,COUNT : these are used in conjunction with GROUP BY to calculate an aggregate value. If the value of an expression in the SELECT list varies over the grouping, but no aggregate function is specified, the result will be computed from the first input row, prior to grouping - this is probably not useful, but is not an error.</li>
 <li>LEN( s string ) : returns the length of s, which must be a string expression.</li>
 <li>SUBSTRING( s string, start int, len int ) : returns the substring of s from start (1-based) length len.</li>
 <li>REPLACE( s string, pat string, sub string ) : returns a copy of s where every occurrence of pat is replaced with sub.</li>
@@ -1272,17 +1271,14 @@ SELECT '<h1>Manual</h1>
 </ul>
 <h3>Conversions</h3>
 <p>To be decided. Currently the only implicit conversion is to string for operands of string concatenation.
-<h2>Views</h2>
-<h3>CREATE VIEW</h3>
-<p>CREATE VIEW schema.viewname AS SELECT expressions FROM table [WHERE bool-exp ] [GROUP BY expressions]<p>Creates a new view. Every expression must have a unique name.
 <h2>Indexes
 <h3>CREATE INDEX</h3><p>CREATE INDEX indexname ON schema.tablename( Colname1, Colname2 ... )<p>Creates a new index. Indexes allow efficient access to rows other than by Id values. 
 <p>For example, <br>CREATE INDEX ByCust ON dbo.Order(Cust) 
 <br>creates an index allowing the orders associated with a particular customer to be efficiently retrieved without scanning the entire order table.
 <h2>Rename and Drop</h2>
 <h3>RENAME</h3><p>RENAME object-type object-name TO object-name
-<p>object-type can be any one of SCHEMA,TABLE,VIEW,PROCEDURE or FUNCTION. The name of the specified object is changed.
-<h3>DROP object-type object-name</h3><p>object-type can be any one of SCHEMA,TABLE,VIEW,PROCEDURE or FUNCTION.
+<p>object-type can be any one of SCHEMA, TABLE, FUNCTION. The name of the specified object is changed.
+<h3>DROP object-type object-name</h3><p>object-type can be any one of SCHEMA,TABLE or FUNCTION.
 <p>The specified object is removed from the database. In the case of a SCHEMA, all objects in the SCHEMA are also removed. In the case of TABLE, all the rows in the table are also removed.
 <h3>DROP INDEX</h3><p>DROP INDEX indexname ON schema.tablename<p>The specified index is removed from the database.
 <h2>Comments</h2>
@@ -1291,12 +1287,11 @@ SELECT '<h1>Manual</h1>
 <p>Similarly there is a single binary datatype \"binary\" equivalent to varbinary(max) in MSSQL.
 <p>Every table automatically gets an integer Id field ( it does not have to be specified ), which is automatically filled in if not specified in an INSERT statement. Id values must be unique ( an attempt to insert or assign a duplicate Id will raise an exception ). 
 <p>WHERE condition is not optional in UPDATE and DELETE statements - WHERE true can be used if you really want to UPDATE or DELETE all rows. This is a \"safety\" feature.
-<p>PROCEDURE parameters are in brackets, the procedure body must be enclosed by BEGIN ... END.
 <p>Local variables cannot be assigned with SELECT, instead SET or FOR is used, can be FROM a table, e.g.
 <p>DECLARE s string SET s = Name FROM sys.Schema WHERE Id = schema
 <p>No cursors ( use FOR instead ).
 <p>Local variables cannot be assigned in a DECLARE statement.
-<p>No default schemas. Schema of tables, routines, functions, views etc. must always be stated explicitly.
+<p>No default schemas. Schema of tables and functions must always be stated explicitly.
 <p>No nulls. Columns are initialised to default a value if not specified by INSERT, or when new columns are added to a table by ALTER TABLE.
 <p>No triggers. No joins. No outer references.
 <h2>Guide to the pre-defined schemas</h2>
@@ -1362,35 +1357,11 @@ BEGIN
      | '<br>EXEC date.Test( 2020, 1, 1, 60 )'
      | '<br>CREATE TABLE dbo.Cust( LastName string, Age int )'
      | '<br>CREATE INDEX ByLastName on dbo.Cust(LastName)'
-     | '<br>CREATE VIEW dbo.OrderSummary AS SELECT Cust, SUM(Total) as Total, COUNT() as Count FROM dbo.Order GROUP BY Cust'
      | '<br>CREATE FN handler.[/MyPage]() AS BEGIN END'
      | '<br>SELECT ''hash='' | ARGON( ''argon2i!'', ''delicious salt'' )'
      | '<br>EXEC web.SetCookie(''username'',''fred'',''Max-Age=1000000000'')'
      | '<br>EXEC rtest.OneTest()'
    EXEC web.Trailer()
-END
-GO
-CREATE FN [handler].[/EditView]() AS
-BEGIN
-  DECLARE s string SET s = web.Query('s')
-  DECLARE n string SET n = web.Query('n')
-  DECLARE sid int SET sid = Id FROM sys.Schema WHERE Name = s
-  DECLARE def string, ex string
-  SET def = web.Form('def')
-  IF def != '' 
-  BEGIN
-    EXECUTE( 'ALTER VIEW ' | sys.Dot(s,n) | ' AS ' | def )
-    SET ex = EXCEPTION()
-  END
-  ELSE SET def = Def FROM sys.Table WHERE Schema = sid AND Name = n AND IsView = 1
-  EXEC web.Head( 'Edit ' | n )
-  IF ex != '' SELECT '<p>Error :' | htm.Encode( ex )
-  SELECT 
-     '<form method=post>'
-     | '<input type=submit value=\"ALTER VIEW\"> <a href=ShowSchema?s=' | s | '>' | s | '</a> .' | n | ' AS '
-     | '<br><textarea name=def rows=20 cols=100>' | htm.Encode(def) | '</textarea>'
-     | '</form>'
-  EXEC web.Trailer()
 END
 GO
 CREATE FN [handler].[/EditRow]() AS 
@@ -1669,7 +1640,7 @@ INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode]) VALUES
 (4,'Peter','Perfect',36,'')
 (5,'George','Washington',31,'WC1')
 (6,'Ron','Williams',49,'')
-(8,'George','Barwood',63,'GL2 4LZ')
+(8,'Alex','Barwood',63,'GL2 4LZ')
 GO
 
 INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES 

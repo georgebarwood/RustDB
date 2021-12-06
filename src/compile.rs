@@ -488,13 +488,8 @@ pub fn c_function(b: &Block, name: &ObjRef) -> FunctionPtr {
             }));
             if let Err(x) = result {
                 r.compiled.set(false);
-                std::panic::panic_any(if let Some(e) = x.downcast_ref::<SqlError>() {
-                    SqlError {
-                        msg: e.msg.clone(),
-                        line: e.line,
-                        column: e.column,
-                        rname: e.rname.clone(),
-                    }
+                std::panic::panic_any(if let Some(sqe) = x.downcast_ref::<SqlError>() {
+                    sqe.clone()
                 } else if let Some(s) = x.downcast_ref::<&str>() {
                     p.make_error((*s).to_string())
                 } else if let Some(s) = x.downcast_ref::<String>() {

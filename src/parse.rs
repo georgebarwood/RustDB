@@ -959,17 +959,7 @@ impl<'a> Parser<'a> {
                 .dop(DO::CreateIndex(IndexInfo { tname, iname, cols }));
         }
     }
-    fn create_view(&mut self, alter: bool) {
-        let r = self.obj_ref();
-        self.read_id(b"AS");
-        let source_start = self.token_start;
-        self.read_id(b"SELECT");
-        let _se = self.select_expression(false);
-        let source = self.source_from(source_start, self.token_start);
-        if !self.b.parse_only {
-            self.b.dop(DO::CreateView(r, alter, source));
-        }
-    }
+
     fn create_function(&mut self, alter: bool) {
         let rref: ObjRef = self.obj_ref();
         let source_start: usize = self.source_ix - 2;
@@ -989,7 +979,6 @@ impl<'a> Parser<'a> {
         match self.id_ref() {
             b"FN" => self.create_function(false),
             b"TABLE" => self.create_table(),
-            b"VIEW" => self.create_view(false),
             b"SCHEMA" => {
                 let name = self.id();
                 self.b.dop(DO::CreateSchema(name));
@@ -1002,7 +991,6 @@ impl<'a> Parser<'a> {
         match self.id_ref() {
             b"FN" => self.create_function(true),
             b"TABLE" => self.s_alter_table(),
-            b"VIEW" => self.create_view(true),
             _ => panic!("ALTER : TABLE,FN.. expected"),
         }
     }
@@ -1011,10 +999,6 @@ impl<'a> Parser<'a> {
             b"TABLE" => {
                 let tr = self.obj_ref();
                 self.b.dop(DO::DropTable(tr));
-            }
-            b"VIEW" => {
-                let vr = self.obj_ref();
-                self.b.dop(DO::DropView(vr));
             }
             b"INDEX" => {
                 let ix = self.id();
@@ -1048,12 +1032,6 @@ impl<'a> Parser<'a> {
                 self.read_id(b"TO");
                 let n = self.obj_ref();
                 self.b.dop(DO::RenameTsble(o, n));
-            }
-            b"VIEW" => {
-                let o = self.obj_ref();
-                self.read_id(b"TO");
-                let n = self.obj_ref();
-                self.b.dop(DO::RenameView(o, n));
             }
             b"FN" => {
                 let o = self.obj_ref();

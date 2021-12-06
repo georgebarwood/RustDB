@@ -23,14 +23,12 @@ pub fn create_table(db: &DB, info: &ColInfo) {
             let root = db.alloc_page();
             let t = &db.sys_table;
             let mut row = t.row();
-            // Columns are root, schema, name, is_view, definition, id_gen
+            // Columns are root, schema, name, id_gen
             row.id = t.alloc_id() as i64;
             row.values[0] = Value::Int(root as i64);
             row.values[1] = Value::Int(schema_id);
             row.values[2] = Value::String(Rc::new(info.name.name.clone()));
-            row.values[3] = Value::Bool(false);
-            row.values[4] = Value::String(Rc::new(String::new()));
-            row.values[5] = Value::Int(1);
+            row.values[3] = Value::Int(1);
             t.insert(db, &mut row);
             row.id
         } else {
@@ -153,7 +151,7 @@ pub fn get_schema(db: &DB, sname: &str) -> Option<i64> {
 fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)> {
     if let Some(schema_id) = get_schema(db, &name.schema) {
         let t = &db.sys_table;
-        // Columns are root, schema, name, is_view, definition, id_gen
+        // Columns are root, schema, name, id_gen
         let keys = vec![
             Value::Int(schema_id),
             Value::String(Rc::new(name.name.to_string())),
@@ -161,7 +159,7 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)> {
         if let Some((pp, off)) = t.ix_get(db, keys, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);
-            return Some((a.id() as i64, a.int(0), a.int(5)));
+            return Some((a.id() as i64, a.int(0), a.int(3)));
         }
     }
     None
@@ -273,7 +271,7 @@ pub fn get_id_gen(db: &DB, id: u64) -> i64 {
     let p = &pp.borrow();
     let a = t.access(p, off);
     debug_assert!(a.id() == id);
-    a.int(5)
+    a.int(3)
 }
 
 /// Update IdGen field for a table.
@@ -283,6 +281,6 @@ pub fn save_id_gen(db: &DB, id: u64, val: i64) {
     let p = &mut pp.borrow_mut();
     let mut wa = t.write_access(p, off);
     debug_assert!(wa.id() == id);
-    wa.set_int(5, val);
+    wa.set_int(3, val);
     t.file.set_dirty(p, &pp);
 }
