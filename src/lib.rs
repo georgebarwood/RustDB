@@ -82,6 +82,8 @@
 //! Decide whether to have several crates : "Core", "Lang", "Server" say.
 //! Core being data storage, Lang being SQL-subset, Server being interfacing to http/serde etc.
 //!
+//! Call web.Main directly ( using function ptr ).
+//!
 //! Unify GenTransaction and WebTransaction. Check multiple file upload works ok with local http parsing.
 //!
 //! Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
@@ -473,7 +475,7 @@ GO
     }
 
     /// Get the named table.
-    pub(crate) fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr> {
+    pub fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr> {
         if let Some(t) = self.tables.borrow().get(name) {
             return Some(t.clone());
         }

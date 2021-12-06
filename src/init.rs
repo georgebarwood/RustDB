@@ -1145,14 +1145,11 @@ SELECT '<h1>Manual</h1>
 <h3>INSERT</h3>
 <p>INSERT INTO schema.tablename ( Colname1, Colname2 ... ) VALUES ( Val1, Val2... ) [,] ( Val3, Val4 ...) ...
 <p>The specified values are inserted into the table. The values may be any expressions ( possibly involving local variables or function calls ).
-<p>INSERT INTO schema.tablename ( Colname1, Colname2 ... ) select-expression
-<p>The values specified by the select-expression are inserted into the table.
 <h3>SELECT</h3><p>SELECT expressions FROM source-table [WHERE bool-exp ] [ORDER BY expressions]
 <p>A new table is computed, based on the list of expressions and the WHERE and ORDER BY clauses.
 <p>If the keyword DESC is placed after an ORDER BY expression, the order is reversed ( descending order ).
 <p>The SELECT expressions can be given names using AS.
 <p>When used as a stand-alone statement, the results are passed to the code that invoked the batch, and may be displayed to a user or sent to a client for further processing and eventual display. 
-<p>See the web schema for stored procedures that can be used to generate http responses.
 <h3>UPDATE</h3><p>UPDATE schema.tablename SET Colname1 = Exp1, Colname2 = Exp2 .... WHERE bool-exp
 <p>Rows in the table which satisfy the WHERE condition are updated.
 <h3>DELETE</h3><p>DELETE FROM schema.tablename WHERE bool-exp

@@ -94,7 +94,7 @@ pub fn c_check(b: &Block, e: &mut Expr) {
             e.data_type = x.data_type;
         }
         ExprIs::FuncCall(name, parms) => {
-            let f = c_function(b, name);
+            let f = c_function(&b.db, name);
             e.data_type = f.return_type;
             if parms.len() != f.param_count {
                 panic!(
@@ -475,13 +475,14 @@ pub fn c_table(b: &Block, name: &ObjRef) -> TablePtr {
         panic!("table {} not found", name.str())
     }
 }
+
 /// Compile named function (if it is if not already compiled ).
-pub fn c_function(b: &Block, name: &ObjRef) -> FunctionPtr {
-    if let Some(r) = b.db.get_function(name) {
+pub fn c_function(db: &DB, name: &ObjRef) -> FunctionPtr {
+    if let Some(r) = db.get_function(name) {
         let (compiled, src) = { (r.compiled.get(), r.source.clone()) };
         if !compiled {
             r.compiled.set(true);
-            let mut p = Parser::new(&src, &b.db);
+            let mut p = Parser::new(&src, db);
             p.function_name = Some(name);
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 p.parse_function();
@@ -535,7 +536,7 @@ pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
 }
 /// Compile ExprCall to CExpPtr<Value>, checking parameter types.
 pub fn c_call(b: &Block, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value> {
-    let fp = c_function(b, name);
+    let fp = c_function(&b.db, name);
     let mut pv = Vec::new();
     let mut pk = Vec::new();
     for e in parms {
@@ -575,7 +576,7 @@ pub fn push(b: &mut Block, e: &mut Expr) -> DataKind {
             }
         },
         ExprIs::FuncCall(name, parms) => {
-            let rp = c_function(b, name);
+            let rp = c_function(&b.db, name);
             {
                 for e in parms.iter_mut() {
                     push(b, e);

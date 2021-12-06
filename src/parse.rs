@@ -891,7 +891,7 @@ impl<'a> Parser<'a> {
     fn s_check(&mut self) {
         let name = self.obj_ref();
         if !self.b.parse_only {
-            c_function(&self.b, &name);
+            c_function(&self.b.db, &name);
         }
     }
 
@@ -918,7 +918,7 @@ impl<'a> Parser<'a> {
             self.read(Token::RBra);
         }
         if !self.b.parse_only {
-            let func = c_function(&self.b, &name);
+            let func = c_function(&self.b.db, &name);
             self.b.check_types(&func, &pkinds);
             self.b.add(Call(func));
         }
