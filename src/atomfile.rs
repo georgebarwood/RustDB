@@ -11,7 +11,7 @@ pub struct DataSlice {
 /// AtomicFile makes sure that database updates are all-or-nothing.
 /// Keeps a list of outstanding writes which have not yet been written to the underlying file.
 pub struct AtomicFile {
-    /// Map of existing outstanding writes. Note the key is the end of the write minus one.
+    /// Map of existing outstanding writes. Note the key is the file address of the last byte written.
     pub map: Mutex<BTreeMap<u64, DataSlice>>,
     pub stg: Box<dyn Storage>,
     pub upd: Box<dyn Storage>,

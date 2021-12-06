@@ -147,25 +147,9 @@ BEGIN
   SET result = Name FROM sys.Schema WHERE Id = schema
 END
 GO
-CREATE FN [sys].[RecreateModifiedIndexes]() AS 
-BEGIN
-  DECLARE table int, name string, cols string
-  FOR table = Table, name = Name, cols = sys.IndexCols( Id )
-  FROM sys.Index WHERE Modified = 1
-  BEGIN
-    EXECUTE( 'DROP INDEX ' | name | ' ON ' | sys.TableName( table ) )
-    EXECUTE( 'CREATE INDEX ' | name | ' ON ' | sys.TableName( table ) | cols )
-  END
-END
-GO
 CREATE FN [sys].[QuoteName]( s string ) RETURNS string AS
 BEGIN
   RETURN '[' | REPLACE( s, ']', ']]' ) | ']'
-END
-GO
-CREATE FN [sys].[ModifiedColumn]( t int, colId int ) AS 
-BEGIN
-  UPDATE sys.Index SET Modified = 1 WHERE Id IN ( SELECT Index FROM sys.IndexColumn WHERE Table = t AND ColId = colId )
 END
 GO
 CREATE FN [sys].[IndexName]( index int ) RETURNS string AS
@@ -180,20 +164,6 @@ BEGIN
   FOR col = sys.QuoteName(sys.ColName( table, ColId )) FROM sys.IndexColumn WHERE Index = index
     SET list |= CASE WHEN  list = '' THEN col ELSE ',' | col END
   RETURN '(' | list | ')'
-END
-GO
-CREATE FN [sys].[DroppedColumn]( t int, colId int ) AS 
-BEGIN 
-  /* Called internally during ALTER TABLE */
-  DECLARE index int
-  WHILE 1 = 1 
-  BEGIN
-    SET index = 0
-    SET index = Index FROM sys.IndexColumn WHERE Table = t AND ColId = colId
-    IF index = 0 BREAK 
-    EXECUTE( 'DROP INDEX ' | sys.IndexName(index) | ' ON ' | sys.TableName(t) )
-  END
-  UPDATE sys.IndexColumn SET ColId = ColId - 1 WHERE Table = t AND ColId >= colId
 END
 GO
 CREATE FN [sys].[DropTable]( t int ) AS 
@@ -1045,24 +1015,6 @@ END
 GO
 --############################################
 CREATE SCHEMA [handler]
-CREATE FN [handler].[/Slow]() AS
-BEGIN
-  EXEC web.Head( 'Slow' )
-  DECLARE n int, a int, total int
-  SET n = 0
-  WHILE n < 100000 -- Intended to take a long time
-  BEGIN
-    FOR a = y FROM dbo.Test  
-    BEGIN
-      SET total = total + a
-    END
-    SET n = n + 1
-  END
-  SELECT 'Total = ' | total
-  SELECT '<p>' | LastName FROM dbo.Cust
-  EXEC web.Trailer()
-END
-GO
 CREATE FN [handler].[/ShowTable]() AS 
 BEGIN 
   DECLARE t int SET t = PARSEINT( web.Query('k') )
@@ -1111,9 +1063,20 @@ BEGIN
   EXECUTE( browse.ShowSql( t, k ) )
 END
 GO
+CREATE FN [handler].[/ScriptAll]() AS 
+BEGIN 
+  EXEC web.SetContentType( 'text/plain;charset=utf-8' )
+  DECLARE s int
+  FOR s = Id FROM sys.Schema
+    EXEC sys.ScriptSchema(s)
+  FOR s = Id FROM sys.Schema
+    EXEC sys.ScriptSchemaBrowse(s)
+END
+GO
 CREATE FN [handler].[/Rtest]() AS 
 BEGIN 
-  -- Can be invoked repeatedly with for /l %x in (1, 1, 100) do curl -X POST http://localhost:3000/Rtest
+  -- Can be invoked repeatedly with e.g. for /l %x in (1, 1, 100) do curl -X POST http://localhost:3000/Rtest
+  -- Depending on the server, a POST request is needed, as GET requests maybe be assumed to be read-only.
   EXEC rtest.OneTest() 
 END
 GO
@@ -1122,23 +1085,14 @@ BEGIN
   EXEC web.Head( 'Order Summary' )
   SELECT '<table><tr><th>Cust<th>Sum<th>Count</tr>'
 
-  DECLARE cc int, cust int, total int, sum int, count int, finished bool
-  FOR cust = Cust, total = Total FROM dbo.Order ORDER BY dbo.CustName(Cust)
+  DECLARE cust int, total int, sum int, count int
+  FOR cust = Id FROM dbo.Cust ORDER BY FirstName, LastName
   BEGIN
-    IF cust != cc
-    BEGIN
-      output:
-      IF cc != 0 SELECT '<tr><td><a href=ShowRow?t=10&k=' | cc | '>' | dbo.CustName(cc) | '</a>' 
-        | '<td align=right>' | sum | '<td align=right>' | count
-      IF finished GOTO exit
-      SET sum = 0, count= 0, cc = cust
-    END
-    SET sum = sum + total, count = count + 1
+    SET sum = 0, count = 0
+    FOR total = Total FROM dbo.Order WHERE Cust = cust SET sum = sum + total, count = count + 1
+    SELECT '<tr><td><a href=ShowRow?t=10&k=' | cust | '>' | dbo.CustName(cust) | '</a>' 
+      | '<td align=right>' | sum | '<td align=right>' | count
   END
-  SET finished = true
-  GOTO output
-
-exit:
   SELECT '</table>'
   EXEC web.Trailer()
 END
@@ -1152,7 +1106,7 @@ BEGIN
 <p><a href=/Execute>Execute SQL</a>
 <p><a href=/ListFile>Files</a>
 <p><a href=/FileUpload>File Upload</a>
-<p><a target=_blank href=/Dump>Dump</a>
+<p><a target=_blank href=/ScriptAll>Script entire database</a>
 <p><a href=/CheckAll>Check all functions compile ok</a>
 <h1>Schemas</h1>'
    SELECT '<p><a href=ShowSchema?s=' | Name | '>' | Name | '</a>' FROM sys.Schema ORDER BY Name
@@ -1442,20 +1396,11 @@ BEGIN
   END
 END
 GO
-CREATE FN [handler].[/Dump]() AS 
-BEGIN 
-  EXEC web.SetContentType( 'text/plain;charset=utf-8' )
-  DECLARE s int
-  FOR s = Id FROM sys.Schema
-    EXEC sys.ScriptSchema(s)
-  FOR s = Id FROM sys.Schema
-    EXEC sys.ScriptSchemaBrowse(s)
-END
-GO
 CREATE FN [handler].[/CheckAll]() AS 
 BEGIN
   EXEC web.Head('Check All Functions compile')
-  DECLARE sid int, sname string, fname string
+  DECLARE sid int, sname string, fname string, err int, n int
+
   FOR sid = Id, sname = sys.QuoteName(Name) FROM sys.Schema
   BEGIN
     FOR fname = sys.QuoteName(Name) FROM sys.Function WHERE Schema = sid
@@ -1463,9 +1408,15 @@ BEGIN
       -- SELECT '<br>Checking ' | sname | '.' | fname
       EXECUTE( 'CHECK ' | sname | '.' | fname )
       DECLARE ex string SET ex = EXCEPTION()
-      IF ex != '' SELECT '<br>Error : ' | htm.Encode(ex)
+      IF ex != '' 
+      BEGIN
+        SELECT '<br>Error : ' | htm.Encode(ex)
+        SET err = err + 1
+      END
+      SET n = n + 1
     END
   END
+  SELECT '<p>' | n | ' functions checked, errors=' | err | '.'
   EXEC web.Trailer()
 END
 GO
@@ -1579,28 +1530,6 @@ CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int)
 GO
 CREATE INDEX [ByCust] ON [dbo].[Order]([Cust])
 GO
-CREATE FN [dbo].[Testing]() AS
-BEGIN
-CREATE TABLE dbo.Test( x string, y int )
-DECLARE i int
-SET i = 0
-WHILE i < 2000
-BEGIN
-  INSERT INTO dbo.Test(x,y) VALUES ( 'Hello', i )
-  SET i = i + 1
-END
-DECLARE n int, a int, total int
-SET n = 0
-WHILE n < 10000 -- Intended to take a long time
-BEGIN
-  SET n = n + 1
-  FOR a = y FROM dbo.Test  
-  BEGIN
-    SET total = total + a
-  END
-END
-END
-GO
 CREATE FN [dbo].[MakeOrders]() AS
 BEGIN 
   DELETE FROM dbo.Order WHERE 1 = 1
@@ -1616,12 +1545,15 @@ GO
 CREATE FN [dbo].[CustSelect]( colId int, sel int ) RETURNS string AS
 BEGIN
   DECLARE col string SET col = Name FROM sys.Column WHERE Id = colId
+
   DECLARE opt string, options string
+
   FOR opt = '<option ' | CASE WHEN Id = sel THEN ' selected' ELSE '' END 
   | ' value=' | Id | '>' | htm.Encode( dbo.CustName(Id) ) | '</option>'
   FROM dbo.Cust
   ORDER BY LastName, FirstName
   SET options |= opt
+
   RETURN '<select id=\"' | col | '\" name=\"' | col | '\">' | options 
     | '<option ' | CASE WHEN sel = 0 THEN ' selected' ELSE '' END | ' value=0></option>'
     | '</select>'
@@ -1684,7 +1616,6 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (90,1,50,1034273)
 (91,6,160,1034465)
 (92,1,70,1037195)
-(93,1,55,1034285)
 (94,2,55,1034273)
 (95,3,10,1034273)
 (96,4,20,1034273)
@@ -1712,58 +1643,12 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (118,5,999,1035114)
 (120,8,500,1035114)
 (121,5,99,1035114)
-(122,8,50,1035123)
+(122,8,100,1035123)
+(123,8,99,1035142)
 GO
 
 --############################################
 CREATE SCHEMA [ft]
-CREATE FN [ft].[PersonName]( id int ) RETURNS string AS
-BEGIN
-  SET result = Firstname | ' ' | Surname | ' ' 
-   | CASE WHEN BirthYear > 0 THEN '' | BirthYear ELSE '' END 
-   | '-' 
-   | CASE WHEN DeathYear > 0 THEN '' | DeathYear ELSE '' END
-  FROM ft.Person WHERE Id = id
-END
-GO
-CREATE FN [ft].[MotherSelect]( colId int, sel int ) RETURNS string AS
-BEGIN
-  DECLARE col string SET col = Name FROM sys.Column WHERE Id = colId
-  DECLARE opt string, options string
-  DECLARE by int, k int, ks string SET ks = web.Query( 'k' )
-  IF ks != '' SET k = Id, by = BirthYear FROM ft.Person WHERE Id = PARSEINT(ks)  
-  
-  FOR opt = '<option ' | CASE WHEN Id = sel THEN ' selected' ELSE '' END 
-    | ' value=' | Id | '>' | htm.Encode( ft.PersonName(Id) ) | '</option>'
-  FROM ft.Person
-  WHERE ( NOT Male ) AND Id != k AND ( BirthYear < by - 10 OR by = 0 )
-  ORDER BY Surname, Firstname, BirthYear,  BirthMonth, BirthDay
-  SET options |= opt
-  RETURN '<select id=\"' | col | '\" name=\"' | col | '\">' 
-    | options 
-    | '<option ' | CASE WHEN sel = 0 THEN ' selected' ELSE '' END | ' value=0></option>'
-    | '</select>'
-END
-GO
-CREATE FN [ft].[FatherSelect]( colId int, sel int ) RETURNS string AS
-BEGIN
-  DECLARE col string SET col = Name FROM sys.Column WHERE Id = colId
-  DECLARE opt string, options string
-  DECLARE by int, k int, ks string SET ks = web.Query( 'k' )
-  IF ks != '' SET k = Id, by = BirthYear FROM ft.Person WHERE Id = PARSEINT(ks)  
-  
-  FOR opt = '<option ' | CASE WHEN Id = sel THEN ' selected' ELSE '' END 
-    | ' value=' | Id | '>' | htm.Encode( ft.PersonName(Id) ) | '</option>'
-  FROM ft.Person
-  WHERE Male AND Id != k AND ( BirthYear < by - 10 OR by = 0 )
-  ORDER BY Surname, Firstname, BirthYear,  BirthMonth, BirthDay
-  SET options |= opt
-  RETURN '<select id=\"' | col | '\" name=\"' | col | '\">' 
-    | options 
-    | '<option ' | CASE WHEN sel = 0 THEN ' selected' ELSE '' END | ' value=0></option>'
-    | '</select>'
-END
-GO
 --############################################
 CREATE SCHEMA [email]
 CREATE TABLE [email].[Msg]([from] string,[to] string,[title] string,[body] string,[format] int(1),[status] int(1)) 
@@ -1786,15 +1671,15 @@ CREATE TABLE [rtest].[Gen]([x] int)
 GO
 CREATE TABLE [rtest].[t0]([x] string,[y] int(5)) 
 GO
-CREATE TABLE [rtest].[t1]([x] string,[y] int(3),[z] string) 
+CREATE TABLE [rtest].[t1]([x] string,[y] int(5)) 
 GO
 CREATE TABLE [rtest].[t2]([x] string,[y] int(3),[z] string) 
 GO
-CREATE TABLE [rtest].[t3]([x] string,[y] int(5)) 
+CREATE TABLE [rtest].[t3]([x] string,[y] int(3),[z] string) 
 GO
-CREATE TABLE [rtest].[t4]([x] string,[y] int(3),[z] string) 
+CREATE TABLE [rtest].[t5]([x] string,[y] int(5)) 
 GO
-CREATE TABLE [rtest].[t5]([x] string,[y] int(3),[z] string) 
+CREATE TABLE [rtest].[t6]([x] string,[y] int(5)) 
 GO
 CREATE FN [rtest].[OneTest]() AS
 BEGIN 
@@ -1833,53 +1718,37 @@ BEGIN
 END
 GO
 INSERT INTO [rtest].[Gen](Id,[x]) VALUES 
-(1,1770286136)
+(1,1375700538)
 GO
 
 INSERT INTO [rtest].[t0](Id,[x],[y]) VALUES 
-(2,'',5)
-(3,'',3)
-(4,'',9)
-(5,'',7)
+(1,'',3)
 GO
 
-INSERT INTO [rtest].[t1](Id,[x],[y],[z]) VALUES 
-(1,'',5,'')
-(2,'',5,'')
-(3,'',7,'')
-(4,'',1,'')
+INSERT INTO [rtest].[t1](Id,[x],[y]) VALUES 
+(1,'',5)
+(2,'',3)
+(3,'',3)
+(4,'',3)
+(5,'',3)
+(6,'',7)
+(7,'',5)
 GO
 
 INSERT INTO [rtest].[t2](Id,[x],[y],[z]) VALUES 
-(1,'',7,'')
-(2,'',7,'')
-(3,'',3,'')
 GO
 
-INSERT INTO [rtest].[t3](Id,[x],[y]) VALUES 
-(2,'',5)
-(3,'',5)
-(4,'',3)
-(5,'',9)
-(6,'',3)
-(8,'',9)
-(9,'',1)
+INSERT INTO [rtest].[t3](Id,[x],[y],[z]) VALUES 
 GO
 
-INSERT INTO [rtest].[t4](Id,[x],[y],[z]) VALUES 
-(1,'',9,'')
-(2,'',5,'')
-(3,'',1,'')
-(4,'',1,'')
+INSERT INTO [rtest].[t5](Id,[x],[y]) VALUES 
+(1,'',7)
+(2,'',1)
+(3,'',7)
+(4,'',1)
 GO
 
-INSERT INTO [rtest].[t5](Id,[x],[y],[z]) VALUES 
-(1,'',3,'')
-(2,'',9,'')
-(3,'',3,'')
-(5,'',9,'')
-(6,'',9,'')
-(7,'',9,'')
+INSERT INTO [rtest].[t6](Id,[x],[y]) VALUES 
 GO
 
 DECLARE tid int, sid int, cid int
@@ -1994,9 +1863,9 @@ SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't3'
 GO
 DECLARE tid int, sid int, cid int
 SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
-SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't4'
+SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't5'
 GO
 DECLARE tid int, sid int, cid int
 SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
-SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't5'
+SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't6'
 GO";

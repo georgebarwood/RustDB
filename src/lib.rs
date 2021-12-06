@@ -1,56 +1,57 @@
 //! This crate (rustdb) implements a high-performance database written entirely in [Rust](https://www.rust-lang.org/).
 //!
 //! The SQL-like language is relatively minimal, and does not (currently) include features such as joins or views.
-//! Instead it has high performance SET .. FROM ... and FOR .. FROM statements to access database tables, 
-//! generally using an INDEX. 
+//! Instead it has high performance SET .. FROM ... and FOR .. FROM statements to access database tables,
+//! generally using an INDEX.
 //!
-//! The complete language manual is available at run-time via the pre-configured (but optional) [init::INITSQL] 
-//! database initialisation string, which also includes many functions which illustrate how the language works, 
+//! The complete language manual is available at run-time via the pre-configured (but optional) [init::INITSQL]
+//! database initialisation string, which also includes many functions which illustrate how the language works,
 //! including generic table browsing/editing, date and other functions.
 //!
 //! Read-only transactions run immediately and concurrently on a virtual read-only copy of the database, and cannot be blocked.
-//! Write transactions run sequentially (and should typically execute in around 100 micro-seconds). The [Storage] trait allows a variety of underlying storage, including [SimpleFileStorage], [MemFile] and [AtomicFile]. 
+//! Write transactions run sequentially (and should typically execute in around 100 micro-seconds). The [Storage] trait allows a variety of underlying storage, including [SimpleFileStorage], [MemFile] and [AtomicFile].
 
 //!# Interface
 //!
-//!The method [Database::run] (or alternatively [Database::run_timed]) is called to execute an SQL query.
-//!This takes a [Transaction] parameter which accumulates SELECT results and which also has methods
-//!for accessing the environment and controlling output. Custom builtin functions implement [CExp] and have access to the query
-//!via an [EvalEnv] parameter, which can be downcast if necessary.   
+//! The method [Database::run] (or alternatively [Database::run_timed]) is called to execute an SQL query.
+//! This takes a [Transaction] parameter which accumulates SELECT results and which also has methods
+//! for accessing input parameters and controlling output. Custom builtin functions implement [CExp]
+//! and have access to the transaction via an [EvalEnv] parameter, which can be downcast if necessary.   
 //!
 //!# Examples
+//! (a) Simple single-threaded web server using SimpleFileStorage as underlying storage.s
 //! ```
-//!use rustdb::{standard_builtins, AccessPagedData, Database, SharedPagedData, SimpleFileStorage, WebTransaction, INITSQL, BuiltinMap};
-//!use std::net::TcpListener;
-//!use std::sync::Arc;
+//! use rustdb::{standard_builtins, AccessPagedData, Database, SharedPagedData, SimpleFileStorage, WebTransaction, INITSQL, BuiltinMap};
+//! use std::net::TcpListener;
+//! use std::sync::Arc;
 //!
-//!    let sfs = Box::new(SimpleFileStorage::new( "..\\test.rustdb" ));
-//!    let spd = Arc::new(SharedPagedData::new(sfs));
-//!    let apd = AccessPagedData::new_writer(spd);
-//!    let mut bmap = BuiltinMap::new();
-//!    standard_builtins( &mut bmap );
-//!    let bmap = Arc::new(bmap);
-//!    let db = Database::new(apd, INITSQL, bmap);
+//! let sfs = Box::new(SimpleFileStorage::new( "..\\test.rustdb" ));
+//! let spd = Arc::new(SharedPagedData::new(sfs));
+//! let apd = AccessPagedData::new_writer(spd);
+//! let mut bmap = BuiltinMap::new();
+//! standard_builtins( &mut bmap );
+//! let bmap = Arc::new(bmap);
+//! let db = Database::new(apd, INITSQL, bmap);
 //!
-//!    let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
-//!    for tcps in listener.incoming() {
-//!        if let Ok(mut tcps) = tcps {
-//!            if let Ok(mut tr) = WebTransaction::new(&tcps) {
-//!                // tr.trace();
-//!                let sql = "EXEC web.Main()";
-//!                // Execute SQL. http response, SQL output, (status,headers,content) is accumulated in wq.
-//!                db.run_timed(&sql, &mut tr);
-//!                // Write the http response to the TCP stream.
-//!                let _err = tr.write(&mut tcps);
-//!                // Save database changes to disk.
-//!                db.save();
-//!            }
-//!        }
-//!    }
+//! let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
+//! for tcps in listener.incoming() {
+//!     if let Ok(mut tcps) = tcps {
+//!         if let Ok(mut tr) = WebTransaction::new(&tcps) {
+//!             // tr.trace();
+//!             let sql = "EXEC web.Main()";
+//!             // Execute SQL. http response, SQL output, (status,headers,content) is accumulated in wq.
+//!             db.run_timed(&sql, &mut tr);
+//!             // Write the http response to the TCP stream.
+//!             let _err = tr.write(&mut tcps);
+//!             // Save database changes to disk.
+//!             db.save();
+//!         }
+//!     }
+//! }
 //!```
 //!
-//![See here](https://github.com/georgebarwood/RustDB/blob/main/examples/axumtest.rs) for more advanced example
-//! ( Axum webserver example using [AtomicFile], with ARGON hash function, read-only queries and query logging ).
+//! (b) [See here](https://github.com/georgebarwood/RustDB/blob/main/examples/axumtest.rs) for more advanced example -
+//! an Axum-based webserver using [AtomicFile], the ARGON hash function, read-only queries and query logging.
 //!
 //!# Features
 //!
@@ -97,7 +98,7 @@ pub use crate::{
     gentrans::{GenTransaction, Part},
     init::INITSQL,
     pstore::{AccessPagedData, SharedPagedData},
-    stg::{MemFile,SimpleFileStorage},
+    stg::{MemFile, SimpleFileStorage},
     webtrans::WebTransaction,
 };
 
@@ -159,7 +160,10 @@ pub mod gentrans;
 /// [WebTransaction] ( alternative implementation of [Transaction] with http support ).
 pub mod webtrans;
 
-/// Initial SQL
+/// Initial SQL.
+///
+/// Note : the [init::INITSQL] string can be generated using the "Script entire database" link in the runtime main menu,
+/// then using an editor to escape every `"` character as `\"`.
 pub mod init;
 
 /// Backing [Storage] for database. See also [AtomicFile].
@@ -215,7 +219,7 @@ pub mod exec;
 mod exec;
 
 #[cfg(feature = "builtin")]
-/// Expression types, result of parsing. [Expr]
+/// Expression types, result of parsing. [Expr].
 pub mod expr;
 #[cfg(not(feature = "builtin"))]
 mod expr;
