@@ -1,7 +1,6 @@
 # rustdb
 
-
-Database with SQL-like language implemented in Ruts.
+Database with SQL-like language implemented in Rust.
 
 The SQL-like language is relatively minimal, and does not (currently) include features such as joins or views. Instead it has high performance SET .. FROM … and FOR .. FROM statements to access database tables, generally using an INDEX.
 
