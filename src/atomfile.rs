@@ -108,8 +108,8 @@ impl Storage for AtomicFile {
         let mut done: usize = 0;
 
         let map = self.map.lock().unwrap();
-        for (k, v) in map.range(start..) {
-            let estart = *k + 1 - v.len as u64;
+        for (&k, v) in map.range(start..) {
+            let estart = k + 1 - v.len as u64;
             if estart > start + done as u64 {
                 let lim = (estart - (start + done as u64)) as usize;
                 let amount = min(todo, lim) as usize;
@@ -149,8 +149,8 @@ impl Storage for AtomicFile {
         let end = start + len as u64;
 
         let mut map = self.map.lock().unwrap();
-        for (k, v) in map.range_mut(start..) {
-            let eend = *k + 1; // end of existing write.
+        for (&k, v) in map.range_mut(start..) {
+            let eend = k + 1; // end of existing write.
             let estart = eend - v.len as u64; // start of existing write.
 
             // (a) New write ends before existing write.

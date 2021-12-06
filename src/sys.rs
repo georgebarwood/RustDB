@@ -133,8 +133,8 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool) 
 
 /// Get the id of a schema from a name.
 pub fn get_schema(db: &DB, sname: &str) -> Option<i64> {
-    if let Some(id) = db.schemas.borrow().get(sname) {
-        return Some(*id);
+    if let Some(&id) = db.schemas.borrow().get(sname) {
+        return Some(id);
     }
     let t = &db.sys_schema;
     let keys = vec![Value::String(Rc::new(sname.to_string()))];

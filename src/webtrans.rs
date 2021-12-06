@@ -1,9 +1,7 @@
 use crate::{panic, util, HashMap, Rc, Transaction, Value};
 use std::{io::Read, io::Write, net::TcpStream};
 
-/// Response content is accumulated in result.
-///
-/// ToDo : cookies, files.
+/// Response content is accumulated in output.
 pub struct WebTransaction {
     pub method: Rc<String>,
     pub path: Rc<String>,

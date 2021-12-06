@@ -22,6 +22,7 @@ pub enum AssignOp {
 }
 /// Vector of local variable numbers and AssignOp( assign or append ).
 pub type Assigns = Vec<(usize, AssignOp)>;
+
 /// Select Expression ( not yet compiled ).
 pub struct SelectExpression {
     pub colnames: Vec<String>,
@@ -31,6 +32,7 @@ pub struct SelectExpression {
     pub wher: Option<Expr>,
     pub orderby: Vec<(Expr, bool)>,
 }
+
 /// Parsing token.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub enum Token {
@@ -64,12 +66,14 @@ pub enum Token {
     Unknown,
     EndOfFile,
 }
+
 impl Token {
     pub fn precedence(self) -> i8 {
         const PA: [i8; 15] = [10, 10, 10, 10, 10, 10, 10, 20, 20, 30, 30, 30, 15, 8, 5];
         PA[self as usize]
     }
 }
+
 /// Scalar Expression (uncompiled).
 pub struct Expr {
     pub exp: ExprIs,
@@ -78,6 +82,7 @@ pub struct Expr {
     pub checked: bool,
     pub col: usize,
 }
+
 impl Expr {
     pub fn new(exp: ExprIs) -> Self {
         Expr {
@@ -89,6 +94,7 @@ impl Expr {
         }
     }
 }
+
 /// Scalar Expression variants.
 pub enum ExprIs {
     Const(Value),
@@ -103,12 +109,14 @@ pub enum ExprIs {
     ScalarSelect(Box<SelectExpression>),
     List(Vec<Expr>),
 }
+
 /// Object reference ( Schema.Name ).
 #[derive(PartialEq, PartialOrd, Eq, Hash, Clone)]
 pub struct ObjRef {
     pub schema: String,
     pub name: String,
 }
+
 impl ObjRef {
     pub fn new(s: &str, n: &str) -> Self {
         Self {
@@ -121,6 +129,7 @@ impl ObjRef {
         format!("[{}].[{}]", &self.schema, &self.name)
     }
 }
+
 /// Binary=1, String=2, Int=3, Float=4, Bool=5.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub enum DataKind {
@@ -131,8 +140,10 @@ pub enum DataKind {
     Float = 4,
     Bool = 5,
 }
-/// Low 3 (=KBITS) bits are DataKind, next 5 bits are size in bytes, or p ( for DECIMAL ).
+
+/// Low 3 (=[KBITS]) bits are DataKind, rest is size in bytes.
 pub type DataType = usize;
+
 pub const KBITS: usize = 3;
 pub const NONE: DataType = DataKind::None as usize;
 pub const BINARY: DataType = DataKind::Binary as usize + (16 << KBITS);
@@ -145,6 +156,7 @@ pub const INT1: DataType = DataKind::Int as usize + (1 << KBITS);
 pub const FLOAT: DataType = DataKind::Float as usize + (4 << KBITS);
 pub const DOUBLE: DataType = DataKind::Float as usize + (8 << KBITS);
 pub const BOOL: DataType = DataKind::Bool as usize + (1 << KBITS);
+
 /// Compute the DataKind of a DataType.
 pub fn data_kind(x: DataType) -> DataKind {
     const DKLOOK: [DataKind; 6] = [
@@ -157,11 +169,13 @@ pub fn data_kind(x: DataType) -> DataKind {
     ];
     DKLOOK[x % (1 << KBITS)]
 }
+
 /// Compute the number of bytes required to store a value of the specified DataType.
 #[must_use]
 pub fn data_size(x: DataType) -> usize {
     (x >> KBITS) & 31
 }
+
 /// Compilation block ( body of function or batch section ).
 pub struct Block<'a> {
     pub param_count: usize,
@@ -179,6 +193,7 @@ pub struct Block<'a> {
     local_map: HashMap<&'a [u8], usize>,
     locals: Vec<&'a [u8]>,
 }
+
 impl<'a> Block<'a> {
     /// Construct a new block.
     pub fn new(db: DB) -> Self {
@@ -197,6 +212,7 @@ impl<'a> Block<'a> {
             parse_only: false,
         }
     }
+
     /// Check labels are all defined and patch jump instructions.
     pub fn resolve_jumps(&mut self) {
         for (k, v) in &self.labels {
@@ -213,18 +229,21 @@ impl<'a> Block<'a> {
             }
         }
     }
+
     /// Add an instruction to the instruction list.
     pub fn add(&mut self, s: Instruction) {
         if !self.parse_only {
             self.ilist.push(s);
         }
     }
+
     /// Add a Data Operation (DO) to the instruction list.
     pub fn dop(&mut self, dop: DO) {
         if !self.parse_only {
             self.add(DataOp(Box::new(dop)));
         }
     }
+
     pub fn check_types(&self, r: &FunctionPtr, pkinds: &[DataKind]) {
         if pkinds.len() != r.param_count {
             panic!("param count mismatch");
@@ -237,7 +256,9 @@ impl<'a> Block<'a> {
             }
         }
     }
+
     // Helper functions for other statements.
+
     /// Define a local variable ( parameter or declared ).
     pub fn def_local(&mut self, name: &'a [u8], dt: DataType) {
         let local_id = self.local_typ.len();
@@ -248,30 +269,36 @@ impl<'a> Block<'a> {
         }
         self.local_map.insert(name, local_id);
     }
+
     /// Get the number of a local variable from a name.
     pub fn get_local(&self, name: &[u8]) -> Option<&usize> {
         self.local_map.get(name)
     }
+
     /// Get the name of a local variable from a number.
     pub fn local_name(&self, num: usize) -> &[u8] {
         self.locals[num]
     }
+
     /// Get a local jump id.
     pub fn get_jump_id(&mut self) -> usize {
         let result = self.jumps.len();
         self.jumps.push(usize::MAX);
         result
     }
+
     /// Set instruction location of jump id.
     pub fn set_jump(&mut self, jump_id: usize) {
         self.jumps[jump_id] = self.ilist.len();
     }
+
     /// Get a local jump id to current location.
     pub fn get_loop_id(&mut self) -> usize {
         let result = self.get_jump_id();
         self.set_jump(result);
         result
     }
+
     /// Get a number for a local goto label.
     pub fn get_goto_label(&mut self, s: &'a [u8]) -> usize {
         if let Some(jump_id) = self.labels.get(s) {
@@ -282,6 +309,7 @@ impl<'a> Block<'a> {
             jump_id
         }
     }
+
     /// Set the local for a local goto lable.
     pub fn set_goto_label(&mut self, s: &'a [u8]) {
         if let Some(jump_id) = self.labels.get(s) {

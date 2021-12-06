@@ -70,7 +70,7 @@
 //! or simply remove them from manual and everywhere else.
 //! They can always be added later....!
 //!
-//! Unify GenTransaction and WebTransaction. Check multiple filed upload works ok with local http parsing.
+//! Unify GenTransaction and WebTransaction. Check multiple file upload works ok with local http parsing.
 //!
 //! Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
 //!

@@ -1,8 +1,8 @@
 use crate::*;
 /// Simple value ( Binary, String, Int, Float, Bool ).
 ///
-/// When stored in a database record, Binary and String values are allocated 16 bytes.
-/// If the value is more than 15 bytes, the first 7 bytes are stored inline, and the rest are coded.
+/// When stored in a database record, binary(n) and string(n) values are allocated (n+1) bytes (n>=8).
+/// If the value is more than n bytes, the length and the first (n-8) bytes are stored inline, and the rest are coded.
 
 #[derive(Clone)]
 pub enum Value {
@@ -16,6 +16,7 @@ pub enum Value {
     For(Rc<RefCell<run::ForState>>),
     ForSort(Rc<RefCell<run::ForSortState>>),
 }
+
 impl Value {
     /// Get the default Value for a DataType.
     pub fn default(t: DataType) -> Value {
@@ -27,6 +28,7 @@ impl Value {
             _ => Value::Int(0),
         }
     }
+
     /// Get a Value from byte data.
     pub fn load(db: &DB, typ: DataType, data: &[u8], off: usize) -> (Value, u64) {
         let mut code = u64::MAX;
@@ -56,6 +58,7 @@ impl Value {
         };
         (val, code)
     }
+
     /// Save a Value to byte data.
     pub fn save(&self, typ: DataType, data: &mut [u8], off: usize, code: u64) {
         let size = data_size(typ);
@@ -87,6 +90,7 @@ impl Value {
             _ => {}
         }
     }
+
     /// Convert a Value to a String.
     pub fn str(&self) -> Rc<String> {
         match self {
@@ -98,6 +102,7 @@ impl Value {
             _ => panic!("str not implemented"),
         }
     }
+
     /// Append to a String.
     pub fn append(&mut self, val: &Value) {
         if let Value::String(s) = self {
@@ -115,6 +120,7 @@ impl Value {
         }
     }
 }
+
 /// Value comparison.
 impl std::cmp::Ord for Value {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -139,11 +145,13 @@ impl std::cmp::Ord for Value {
         panic!()
     }
 }
+
 impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
+
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         if let Some(eq) = self.partial_cmp(other) {
@@ -153,7 +161,9 @@ impl PartialEq for Value {
         }
     }
 }
+
 impl Eq for Value {}
+
 /// Decode bytes. Result is bytes and code ( or u64::MAX if no code ).
 pub fn get_bytes(db: &DB, data: &[u8], size: usize) -> (Vec<u8>, u64) {
     let n = data[0] as usize;
@@ -168,7 +178,8 @@ pub fn get_bytes(db: &DB, data: &[u8], size: usize) -> (Vec<u8>, u64) {
         (bytes, code)
     }
 }
-/// Save bytes. If more than 15 bytes, a code is needed.
+
+/// Save bytes.
 pub fn save_bytes(bytes: &[u8], data: &mut [u8], code: u64, size: usize) {
     let n = bytes.len();
     if n < size {

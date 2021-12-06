@@ -50,7 +50,7 @@ impl<'r> EvalEnv<'r> {
                         ip = *x;
                     }
                 }
-                Call(x) => self.call(&*(*x)),
+                Call(x) => self.call(x),
                 Return => break,
                 Throw => {
                     let s = self.pop_string();

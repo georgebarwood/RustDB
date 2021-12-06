@@ -121,14 +121,15 @@ pub fn to_hex(bytes: &[u8]) -> String {
     String::from_utf8(s).unwrap()
 }
 
-/// Set of usize, optimised for elements < 64.
+/// Set of usize, optimised for elements < 64. default() is empty set.
 #[derive(Default)]
 pub struct SmallSet {
-    bitset: u64,
-    overflow: BTreeSet<usize>,
+    pub bitset: u64,
+    pub overflow: BTreeSet<usize>,
 }
 
 impl SmallSet {
+    /// Insert x into set.
     pub fn insert(&mut self, x: usize) {
         if x < 64 {
             self.bitset |= 1 << x;
@@ -136,6 +137,8 @@ impl SmallSet {
             self.overflow.insert(x);
         }
     }
+
+    /// Test whether set contains x.
     pub fn contains(&self, x: usize) -> bool {
         if x < 64 {
             self.bitset & (1 << x) != 0
@@ -144,6 +147,7 @@ impl SmallSet {
         }
     }
 
+    /// Remove x from set, result is whether set contained x.
     pub fn remove(&mut self, x: usize) -> bool {
         if x < 64 {
             let bit: u64 = 1 << x;

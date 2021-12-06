@@ -50,6 +50,7 @@ impl Table {
             id_gen_dirty: Cell::new(false),
         })
     }
+
     /// Save or Rollback underlying files.
     pub fn save(&self, db: &DB, op: SaveOp) {
         self.file.save(db, op);
@@ -57,6 +58,7 @@ impl Table {
             f.save(db, op);
         }
     }
+
     /// Drop the underlying file storage ( the table is not useable after this ).
     pub fn free_pages(&self, db: &DB) {
         let row = self.row();
@@ -66,6 +68,7 @@ impl Table {
             f.free_pages(db, &ixr);
         }
     }
+
     /// Insert specified row into the table.
     pub fn insert(&self, db: &DB, row: &mut Row) {
         row.encode(db); // Calculate codes for Binary and String values.
@@ -76,6 +79,7 @@ impl Table {
             f.insert(db, &ixr);
         }
     }
+
     /// Remove specified loaded row from the table.
     pub fn remove(&self, db: &DB, row: &Row) {
         self.file.remove(db, row);
@@ -85,6 +89,7 @@ impl Table {
         }
         row.delcodes(db); // Deletes codes for Binary and String values.
     }
+
     /// Look for indexed table expression based on supplied WHERE expression (we).
     pub fn index_from(
         self: &TablePtr,
@@ -143,10 +148,12 @@ impl Table {
         // println!("No index found for table {}", self.info.name.to_str());
         (Some(c_bool(b, we)), None)
     }
+
     /// Get record with specified id.
     pub fn id_get(&self, db: &DB, id: u64) -> Option<(PagePtr, usize)> {
         self.file.get(db, &Id { id })
     }
+
     /// Get record with matching key, using specified index.
     pub fn ix_get(&self, db: &DB, key: Vec<Value>, index: usize) -> Option<(PagePtr, usize)> {
         let list = &*self.ixlist.borrow();
@@ -160,10 +167,12 @@ impl Table {
         }
         None
     }
+
     /// Scan all the records in the table.
     pub fn scan(&self, db: &DB) -> Asc {
         self.file.asc(db, Box::new(Zero {}))
     }
+
     /// Get a single record with specified id.
     pub fn scan_id(self: &TablePtr, db: &DB, id: i64) -> IdScan {
         IdScan {
@@ -173,11 +182,13 @@ impl Table {
             done: false,
         }
     }
+
     /// Get records with matching key.
     pub fn scan_key(self: &TablePtr, db: &DB, key: Value, index: usize) -> IndexScan {
         let keys = vec![key];
         self.scan_keys(db, keys, index)
     }
+
     /// Get records with matching keys.
     pub fn scan_keys(self: &TablePtr, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan {
         let ixlist = &*self.ixlist.borrow();
@@ -192,6 +203,7 @@ impl Table {
             db: db.clone(),
         }
     }
+
     /// Add the specified index to the table.
     pub fn add_index(&self, root: u64, cols: Vec<usize>) {
         let key_size = self.info.index_key_size(&cols) + 8;
@@ -199,6 +211,7 @@ impl Table {
         let list = &mut self.ixlist.borrow_mut();
         list.push((sf, Rc::new(cols)));
     }
+
     /// Utility for accessing fields by number.
     pub fn access<'d, 't>(&'t self, p: &'d Page, off: usize) -> Access<'d, 't> {
         Access::<'d, 't> {
@@ -206,6 +219,7 @@ impl Table {
             info: &self.info,
         }
     }
+
     /// Utility for updating fields by number.
     pub fn write_access<'d, 't>(&'t self, p: &'d mut Page, off: usize) -> WriteAccess<'d, 't> {
         let data = Data::make_mut(&mut p.data);
@@ -214,10 +228,12 @@ impl Table {
             info: &self.info,
         }
     }
+
     /// Construct a row for the table.
     pub fn row(&self) -> Row {
         Row::new(self.info.clone())
     }
+
     /// Allocate row id.
     pub fn alloc_id(&self) -> i64 {
         let result = self.id_gen.get();
@@ -225,6 +241,7 @@ impl Table {
         self.id_gen_dirty.set(true);
         result
     }
+
     /// Update id allocator if supplied row id exceeds current value.
     pub fn id_allocated(&self, id: i64) {
         if id >= self.id_gen.get() {
@@ -255,6 +272,7 @@ impl<'d, 'i> Access<'d, 'i> {
     pub fn int(&self, colnum: usize) -> i64 {
         util::get(self.data, self.info.off[colnum], self.info.siz(colnum)) as i64
     }
+
     /// Extract string from byte data for column number colnum.
     pub fn str(&self, db: &DB, colnum: usize) -> String {
         let off = self.info.off[colnum];
@@ -262,6 +280,7 @@ impl<'d, 'i> Access<'d, 'i> {
         let bytes = get_bytes(db, &self.data[off..], size).0;
         String::from_utf8(bytes).unwrap()
     }
+
     /// Extract Id from byte data.
     pub fn id(&self) -> u64 {
         util::getu64(self.data, 0)
@@ -284,10 +303,12 @@ impl<'d, 'i> WriteAccess<'d, 'i> {
             self.info.siz(colnum),
         );
     }
+
     /// Extract int from byte data for column number colnum.
     pub fn int(&self, colnum: usize) -> i64 {
         util::get(self.data, self.info.off[colnum], self.info.siz(colnum)) as i64
     }
+
     /// Extract Id from byte data.
     pub fn id(&self) -> u64 {
         util::getu64(self.data, 0)
@@ -322,6 +343,7 @@ impl ColInfo {
             total: 8,
         }
     }
+
     /// Construct a new ColInfo struct using supplied list of column names and types.
     pub fn new(name: ObjRef, ct: &[(&str, DataType)]) -> Self {
         let mut result = Self::empty(name);
@@ -330,6 +352,7 @@ impl ColInfo {
         }
         result
     }
+
     /// Add a column. If the column already exists ( an error ) the result is true.
     pub fn add(&mut self, name: String, typ: DataType) -> bool {
         if self.colmap.contains_key(&name) {
@@ -344,6 +367,7 @@ impl ColInfo {
         self.colmap.insert(name, cn);
         false
     }
+
     /// Get a column number from a column name.
     /// usize::MAX is returned for "Id".
     pub fn get(&self, name: &str) -> Option<&usize> {
@@ -353,10 +377,12 @@ impl ColInfo {
             self.colmap.get(name)
         }
     }
+
     /// Get the data size of specified column.
     fn siz(&self, col: usize) -> usize {
         data_size(self.typ[col])
     }
+
     /// Calculate the total data size for a list of index columns.
     fn index_key_size(&self, cols: &[usize]) -> usize {
         cols.iter().map(|cnum| self.siz(*cnum)).sum()
@@ -393,6 +419,7 @@ impl Row {
         }
         result
     }
+
     /// Calculate codes for current row values.
     pub fn encode(&mut self, db: &DB) {
         self.codes.clear();
@@ -402,6 +429,7 @@ impl Row {
             self.codes.push(u);
         }
     }
+
     /// Delete current codes.
     pub fn delcodes(&self, db: &DB) {
         for u in &self.codes {
@@ -410,6 +438,7 @@ impl Row {
             }
         }
     }
+
     /// Load the row values and codes from data.
     pub fn load(&mut self, db: &DB, data: &[u8]) {
         self.values.clear();
@@ -435,6 +464,7 @@ impl Record for Row {
             off += data_size(*typ);
         }
     }
+
     fn compare(&self, _db: &DB, data: &[u8]) -> Ordering {
         let id = util::getu64(data, 0) as i64;
         self.id.cmp(&id)
@@ -469,6 +499,7 @@ impl IndexRow {
             codes,
         }
     }
+
     // Load IndexRow from data ( note: new codes are computed, as old codes may be deleted ).
     // Since it's unusual for long strings to be keys, code computation should be rare.
     fn load(&mut self, db: &DB, data: &[u8]) {
@@ -506,6 +537,7 @@ impl Record for IndexRow {
             }
         }
     }
+
     fn save(&self, data: &mut [u8]) {
         util::setu64(data, self.rowid as u64);
         let mut off = 8;
@@ -515,6 +547,7 @@ impl Record for IndexRow {
             off += data_size(typ);
         }
     }
+
     fn key(&self, db: &DB, data: &[u8]) -> Box<dyn Record> {
         let mut result = Box::new(IndexRow {
             cols: self.cols.clone(),
@@ -526,6 +559,7 @@ impl Record for IndexRow {
         result.load(db, data);
         result
     }
+
     fn drop_key(&self, db: &DB, data: &[u8]) {
         let mut off = 8;
         for col in &*self.cols {
@@ -605,6 +639,7 @@ impl IndexScan {
 
 impl Iterator for IndexScan {
     type Item = (PagePtr, usize);
+
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         if let Some((pp, off)) = self.ixa.next() {
             let p = pp.borrow();
@@ -629,6 +664,7 @@ pub struct IdScan {
 
 impl Iterator for IdScan {
     type Item = (PagePtr, usize);
+
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         if self.done {
             return None;
@@ -663,8 +699,8 @@ fn get_known_cols(we: &Expr, kc: &mut SmallSet) {
 /// Counts the number of index columns that are known.
 fn covered(clist: &[usize], kc: &SmallSet) -> usize {
     let mut result = 0;
-    for c in clist {
-        if !kc.contains(*c) {
+    for &c in clist {
+        if !kc.contains(c) {
             break;
         }
         result += 1;
