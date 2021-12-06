@@ -1120,7 +1120,7 @@ SELECT '<h1>Manual</h1>
 <h2>Schema definition</h2>
 <h3>CREATE SCHEMA</h3>
 <p>CREATE SCHEMA name
-<p>Creates a new schema. Every database object (Table, Function) has an associated schema. Schemas are used to organise database objects into logical categories.gr
+<p>Creates a new schema. Every database object (Table, Function) has an associated schema. Schemas are used to organise database objects into logical categories.
 <h2>Table definition</h2>
 <h3>CREATE TABLE</h3><p>CREATE TABLE schema.tablename ( Colname1 Coltype1, Colname2 Coltype2, ... )
 <p>Creates a new base table. Every base table is automatically given an Id column, which auto-increments on INSERT ( if no explicit value is supplied).<p>The data types are as follows:
