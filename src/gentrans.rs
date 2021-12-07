@@ -1,10 +1,11 @@
-use crate::{panic, Any, BTreeMap, Data, Rc, Transaction, Value};
+use crate::{panic, Arc, Any, BTreeMap, Data, Rc, Transaction, Value};
 
 use serde::{Deserialize, Serialize};
 
 /// General Query.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenQuery {
+    pub sql: Arc<String>,
     pub path: String,
     pub params: BTreeMap<String, String>,
     pub form: BTreeMap<String, String>,
@@ -49,6 +50,7 @@ impl GenTransaction {
         let status_code = 200;
         Self {
             qy: GenQuery {
+                sql: Arc::new("EXEC web.Main()".to_string()),
                 path: String::new(),
                 params: BTreeMap::new(),
                 form: BTreeMap::new(),
