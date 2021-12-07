@@ -1,6 +1,5 @@
 pub const INITSQL : &str = "
 
-
 CREATE FN [sys].[TypeName]( t int ) RETURNS string AS 
 BEGIN 
   DECLARE p int
@@ -486,6 +485,19 @@ BEGIN
     WHEN m = 12 THEN 'Dec'
     ELSE '???'
   END
+END
+GO
+CREATE FN [date].[MicroSecToString](micro int) RETURNS string AS
+BEGIN
+  DECLARE day int, sec int, min int, hour int
+  SET sec = micro / 1000000
+  SET day = sec / 86400 + 366 -- 86400 = 24 * 60 * 60, seconds in a day.
+  SET sec = sec % 86400
+  SET min = sec / 60
+  SET sec = sec % 60
+  SET hour = min / 60
+  SET min = min % 60
+  RETURN date.DaysToString(  day ) | ' ' | hour | ':' | min | ':' | sec
 END
 GO
 CREATE FN [date].[IsLeapYear]( y int ) RETURNS bool AS
@@ -1564,7 +1576,7 @@ END
 GO
 INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode]) VALUES 
 (1,'Mary','Poppins',65,'EC4 2NX')
-(2,'Clare','Smith',29,'GL3')
+(2,'Clare','Smith',31,'GL3')
 (3,'Ron','Jones',45,'')
 (4,'Peter','Perfect',36,'')
 (5,'George','Washington',31,'WC1')
@@ -1602,7 +1614,7 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (79,1,30,1034273)
 (80,2,40,1034273)
 (81,3,50,1034273)
-(82,1,60,1034465)
+(82,1,60,1006305)
 (83,2,70,1034273)
 (84,6,25,1035297)
 (85,7,35,1035297)
@@ -1628,7 +1640,7 @@ INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES
 (106,1,0,1034273)
 (107,1,56,1034273)
 (108,5,99,1034273)
-(109,5,67,1034274)
+(109,5,67,1034281)
 (110,5,29,1034273)
 (111,1,99,1034273)
 (112,4,19,1034273)
@@ -1652,12 +1664,16 @@ CREATE TABLE [email].[Queue]([msg] int,[sendtime] int,[retry] int)
 GO
 CREATE INDEX [BySendTime] ON [email].[Queue]([sendtime])
 GO
+CREATE FN [email].[Sent](id int) AS
+BEGIN
+  DELETE FROM email.Queue WHERE msg = id
+END
+GO
 INSERT INTO [email].[Msg](Id,[from],[to],[title],[body],[format],[status]) VALUES 
 (1,'george.barwood@gmail.com','george.barwood@outlook.com','Test','Hello there George!',1,0)
 GO
 
 INSERT INTO [email].[Queue](Id,[msg],[sendtime],[retry]) VALUES 
-(1,1,1035139,0)
 GO
 
 --############################################
@@ -1856,7 +1872,7 @@ INSERT INTO browse.Column(Id,[Position],[Label],[Description],[RefersTo],[Defaul
 VALUES (cid, 0,'','',0,'',0,'',0,0,'','')
 SET cid=Id FROM sys.Column WHERE Table = tid AND Name = 'sendtime'
 INSERT INTO browse.Column(Id,[Position],[Label],[Description],[RefersTo],[Default],[InputCols],[InputFunction],[InputRows],[Style],[DisplayFunction],[ParseFunction]) 
-VALUES (cid, 0,'','',0,'',0,'browse.InputYearMonthDay',0,0,'date.YearMonthDayToString','date.StringToYearMonthDay')
+VALUES (cid, 0,'','',0,'date.Ticks()',0,'',0,0,'date.MicroSecToString','')
 GO
 DECLARE tid int, sid int, cid int
 SET sid = Id FROM sys.Schema WHERE Name = 'rtest'

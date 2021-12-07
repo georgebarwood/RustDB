@@ -476,6 +476,16 @@ GO
         self.file.save(op)
     }
 
+    #[cfg(not(feature = "max"))]
+    /// Get the named table.
+    pub(crate) fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr> {
+        if let Some(t) = self.tables.borrow().get(name) {
+            return Some(t.clone());
+        }
+        sys::get_table(self, name)
+    }
+
+    #[cfg(feature = "max")]
     /// Get the named table.
     pub fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr> {
         if let Some(t) = self.tables.borrow().get(name) {
@@ -569,7 +579,7 @@ impl TableBuilder {
 }
 
 /// Input/Output message. Query and Response.
-pub trait Transaction {
+pub trait Transaction : Any {
     /// STATUSCODE builtin function. sets the response status code.
     fn status_code(&mut self, _code: i64) {}
 
