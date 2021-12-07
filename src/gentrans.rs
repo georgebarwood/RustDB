@@ -1,4 +1,4 @@
-use crate::{panic, BTreeMap, Data, Rc, Transaction, Value};
+use crate::{panic, Arc, Any, BTreeMap, Data, Rc, Transaction, Value};
 
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +25,7 @@ pub struct GenResponse {
 pub struct GenTransaction {
     pub qy: GenQuery,
     pub rp: GenResponse,
+    pub ext: Arc<dyn Any+Send+Sync>,
 }
 
 /// Part of multipart data ( uploaded files ).
@@ -61,6 +62,7 @@ impl GenTransaction {
                 status_code,
                 headers,
             },
+            ext: Arc::new(0)
         }
     }
     /// Append string to output.
@@ -166,8 +168,14 @@ impl Transaction for GenTransaction {
         };
         Rc::new(result.to_string())
     }
+
     fn file_content(&mut self, k: i64) -> Data {
         self.qy.parts[k as usize].data.clone()
+    }
+
+    fn get_extension(&self) -> Arc<dyn Any+Send+Sync>
+    {
+      self.ext.clone()
     }
 }
 

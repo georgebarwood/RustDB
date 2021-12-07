@@ -94,6 +94,7 @@
 //!
 //! Work on improving/testing SQL code, browse schema, float I/O. Login.
 //!
+//! Error handling for out of disk space, out of memory etc.
 
 pub use crate::{
     atomfile::AtomicFile,
@@ -138,6 +139,7 @@ use crate::{
 };
 
 use std::{
+    any::Any,
     cell::{Cell, RefCell},
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -567,7 +569,7 @@ impl TableBuilder {
 }
 
 /// Input/Output message. Query and Response.
-pub trait Transaction: std::any::Any {
+pub trait Transaction {
     /// STATUSCODE builtin function. sets the response status code.
     fn status_code(&mut self, _code: i64) {}
 
@@ -604,6 +606,9 @@ pub trait Transaction: std::any::Any {
     fn get_error(&mut self) -> String {
         String::new()
     }
+
+    /// Get the extension.
+    fn get_extension(&self) -> Arc<dyn Any+Send+Sync>;
 }
 
 /// Query where output is printed to console (used for initialisation ).
@@ -613,5 +618,9 @@ impl Transaction for DummyTransaction {
     /// Called if a panic ( error ) occurs.
     fn set_error(&mut self, err: String) {
         println!("Error: {}", err);
+    }
+    fn get_extension(&self) -> Arc<dyn Any+Send+Sync>
+    {
+        Arc::new(0)
     }
 }

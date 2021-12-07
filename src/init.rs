@@ -1182,7 +1182,7 @@ SELECT '<h1>Manual</h1>
 <p>A stored function ( no return value ) is created, which can later be called by an EXEC statement.
 <h3>EXEC</h3><p>EXEC schema.name( exp1, exp2 ... )
 <p>The stored function is called with the supplied parameters.
-<h3>Exceptions</h3><p>An exception will terminate the execution of a procedure or EXECUTE batch. EXCEPTION() can be used to obtain a string describing the most recent exception (and clears the exception string). If any exception occurs, the database is left unchanged.
+<h3>Exceptions</h3><p>An exception will terminate the execution of a function or batch. EXCEPTION() can be used to obtain a string describing the most recent exception (and clears the exception string). If any exception occurs, the database is left unchanged.
 <h3>THROW</h3>
 <p>THROW string-expression 
 <p>An exception is raised, with the error message being set to the string.
