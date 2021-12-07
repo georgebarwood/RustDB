@@ -12,7 +12,7 @@ use axum::{
 use rustdb::{
     c_value, check_types, expr::ObjRef, standard_builtins, AccessPagedData, AtomicFile, Block,
     BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction,
-    Part, SharedPagedData, SimpleFileStorage, Value, INITSQL, Transaction
+    Part, SharedPagedData, SimpleFileStorage, Transaction, Value, INITSQL,
 };
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
 use tokio::sync::{mpsc, oneshot};
@@ -64,6 +64,14 @@ struct SharedState {
     email_tx: mpsc::Sender<()>,
 }
 
+impl SharedState {
+    pub async fn process(&self, st: ServerTrans) -> ServerTrans {
+        let (tx, rx) = oneshot::channel::<ServerTrans>();
+        let _err = self.tx.send(ServerMessage { st, tx }).await;
+        rx.await.unwrap()
+    }
+}
+
 #[tokio::main]
 /// Execution starts here.
 async fn main() {
@@ -104,7 +112,7 @@ async fn main() {
         tx,
         spd,
         bmap: bmap.clone(),
-        email_tx
+        email_tx,
     });
 
     // Start the logging thread (synchronous)
@@ -190,21 +198,17 @@ async fn h_post(
     } else {
         st.x.qy.parts = map_parts(multipart).await;
     }
-    // Send transaction to database thread ( and get it back ).
-    let (tx, rx) = oneshot::channel::<ServerTrans>();
-    let _err = state.tx.send(ServerMessage { st, tx }).await;
-    let mut result = rx.await.unwrap();
 
-    {
-      let ext = result.x.get_extension();
-      if let Some(ext) = ext.downcast_ref::<TransExt>() 
-      {
+    let mut st = state.process(st).await;
+
+    // Check if email needs sending.
+    let ext = st.x.get_extension();
+    if let Some(ext) = ext.downcast_ref::<TransExt>() {
         if ext.email_tx {
-          let _err = state.email_tx.send(()).await;
+            let _err = state.email_tx.send(()).await;
         }
-      }
     }
-    result
+    st
 }
 
 use axum::{
@@ -289,9 +293,8 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
                 sent.push(msg);
             }
         }
-        for msg in sent
-        {
-          email_sent(&state,msg).await;
+        for msg in sent {
+            email_sent(&state, msg).await;
         }
     }
 }
@@ -299,10 +302,7 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
 async fn email_sent(state: &SharedState, msg: u64) {
     let mut st = ServerTrans::new();
     st.sql = "EXEC email.Sent(".to_string() + &msg.to_string() + ")";
-    // Send transaction to database thread ( and get it back ).
-    let (tx, rx) = oneshot::channel::<ServerTrans>();
-    let _err = state.tx.send(ServerMessage { st, tx }).await;
-    let _result = rx.await.unwrap();
+    state.process(st).await;
 }
 
 /////////////////////////////////////////////
