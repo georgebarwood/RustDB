@@ -21,12 +21,12 @@ use tower_cookies::{CookieManagerLayer, Cookies};
 
 /// Transaction to be sent to server thread, implements IntoResponse.
 struct ServerTrans {
-    pub sql: String,
-    pub x: Box<GenTransaction>,
+    sql: String,
+    x: Box<GenTransaction>,
 }
 
 impl ServerTrans {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             sql: "EXEC web.Main()".to_string(),
             x: Box::new(GenTransaction::new()),
@@ -36,19 +36,19 @@ impl ServerTrans {
 
 /// Message to server thread, includes oneshot Sender for reply.
 struct ServerMessage {
-    pub st: ServerTrans,
-    pub tx: oneshot::Sender<ServerTrans>,
+    st: ServerTrans,
+    tx: oneshot::Sender<ServerTrans>,
 }
 
 /// Extra transaction data.
 #[derive(Default)]
 struct TransExt {
     /// Signals there is new email to be sent.
-    pub email_tx: bool,
+    email_tx: bool,
 }
 
 impl TransExt {
-    pub fn new() -> Box<Self> {
+    fn new() -> Box<Self> {
         Box::new(Self::default())
     }
 }
@@ -65,7 +65,7 @@ struct SharedState {
 }
 
 impl SharedState {
-    pub async fn process(&self, st: ServerTrans) -> ServerTrans {
+    async fn process(&self, st: ServerTrans) -> ServerTrans {
         let (tx, rx) = oneshot::channel::<ServerTrans>();
         let _err = self.tx.send(ServerMessage { st, tx }).await;
         rx.await.unwrap()
