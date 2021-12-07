@@ -186,7 +186,7 @@ impl Transaction for WebTransaction {
     }
 
     fn get_extension(&mut self) -> Box<dyn Any + Send + Sync> {
-        std::mem::replace(&mut self.ext, Box::new(0))
+        std::mem::replace(&mut self.ext, Box::new(()))
     }
 }
 /// Parser for http request.

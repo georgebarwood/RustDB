@@ -19,7 +19,7 @@
 //! and have access to the transaction via an [EvalEnv] parameter, which can be downcast if necessary.   
 //!
 //!# Examples
-//! (a) Simple single-threaded web server using SimpleFileStorage as underlying storage.s
+//! (a) Simple single-threaded web server using SimpleFileStorage as underlying storage.
 //! ```
 //! use rustdb::{standard_builtins, AccessPagedData, Database, SharedPagedData, SimpleFileStorage, WebTransaction, INITSQL, BuiltinMap};
 //! use std::net::TcpListener;
