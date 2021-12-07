@@ -156,7 +156,6 @@ async fn h_get(
 ) -> ServerTrans {
     // Build the ServerTrans.
     let mut st = ServerTrans::new();
-    st.x.ext = TransExt::new();
     st.x.qy.path = path.0;
     st.x.qy.params = params.0;
     st.x.qy.cookies = map_cookies(cookies);
