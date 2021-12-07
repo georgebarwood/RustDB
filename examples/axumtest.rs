@@ -10,9 +10,9 @@ use axum::{
     AddExtensionLayer, Router,
 };
 use rustdb::{
-    c_value, check_types, standard_builtins, AccessPagedData, AtomicFile, Block, BuiltinMap, CExp,
-    CExpPtr, CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData,
-    SimpleFileStorage, Transaction, Value, INITSQL,
+    c_value, check_types, expr::ObjRef, standard_builtins, AccessPagedData, AtomicFile, Block,
+    BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction,
+    Part, SharedPagedData, SimpleFileStorage, Value, INITSQL, Transaction
 };
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
 use tokio::sync::{mpsc, oneshot};
@@ -21,12 +21,14 @@ use tower_cookies::{CookieManagerLayer, Cookies};
 
 /// Transaction to be sent to server thread, implements IntoResponse.
 struct ServerTrans {
+    pub sql: String,
     pub x: Box<GenTransaction>,
 }
 
 impl ServerTrans {
     pub fn new() -> Self {
         Self {
+            sql: "EXEC web.Main()".to_string(),
             x: Box::new(GenTransaction::new()),
         }
     }
@@ -59,6 +61,7 @@ struct SharedState {
     spd: Arc<SharedPagedData>,
     /// Map of builtin SQL functions for Database.
     bmap: Arc<BuiltinMap>,
+    email_tx: mpsc::Sender<()>,
 }
 
 #[tokio::main]
@@ -94,13 +97,14 @@ async fn main() {
     // Construct thread communication channels.
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
     let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
-    let (email_tx, email_rx) = std::sync::mpsc::channel::<()>();
+    let (email_tx, email_rx) = mpsc::channel::<()>(1);
 
     // Construct shared state.
     let ss = Arc::new(SharedState {
         tx,
         spd,
         bmap: bmap.clone(),
+        email_tx
     });
 
     // Start the logging thread (synchronous)
@@ -108,17 +112,16 @@ async fn main() {
         log_loop(log_rx);
     });
 
-    // Start the email thread (synchronous)
-    thread::spawn(move || {
-        email_loop(email_rx);
-    });
+    // Start the email thread (asynchronous)
+    let email_ss = ss.clone();
+    tokio::spawn(async move { email_loop(email_rx, email_ss).await });
 
     // Start the server thread that updates the database (synchronous).
     thread::spawn(move || {
         let db = Database::new(wapd, INITSQL, bmap);
         loop {
             let mut sm = rx.blocking_recv().unwrap();
-            db.run_timed("EXEC web.Main()", &mut *sm.st.x);
+            db.run_timed(&sm.st.sql, &mut *sm.st.x);
             let updates = db.save();
             if updates > 0 {
                 println!("Pages updated={}", updates);
@@ -126,14 +129,7 @@ async fn main() {
                 // println!("Serialised query={}", ser);
                 let _err = log_tx.send(ser);
             }
-            let mut ext = sm.st.x.get_extension();
             let _x = sm.tx.send(sm.st);
-
-            if let Some(ext) = ext.downcast_mut::<TransExt>() {
-                if ext.email_tx {
-                    let _err = email_tx.send(());
-                }
-            }
         }
     });
 
@@ -169,7 +165,7 @@ async fn h_get(
         // GET requests should be read-only.
         let apd = AccessPagedData::new_reader(state.spd.clone());
         let db = Database::new(apd, "", state.bmap.clone());
-        db.run_timed("EXEC web.Main()", &mut *st.x);
+        db.run_timed(&st.sql, &mut *st.x);
         st
     });
     blocking_task.await.unwrap()
@@ -198,7 +194,17 @@ async fn h_post(
     // Send transaction to database thread ( and get it back ).
     let (tx, rx) = oneshot::channel::<ServerTrans>();
     let _err = state.tx.send(ServerMessage { st, tx }).await;
-    let result = rx.await.unwrap();
+    let mut result = rx.await.unwrap();
+
+    {
+      let mut ext = result.x.get_extension();
+      if let Some(ext) = ext.downcast_mut::<TransExt>() 
+      {
+        if ext.email_tx {
+          let _err = state.email_tx.send(()).await;
+        }
+      }
+    }
     result
 }
 
@@ -242,11 +248,62 @@ fn log_loop(rx: std::sync::mpsc::Receiver<String>) {
 }
 
 // thread that sends emails
-fn email_loop(rx: std::sync::mpsc::Receiver<()>) {
+async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
     loop {
-        let _ = rx.recv().unwrap();
-        println!("Send Emails (todo)");
+        let mut sent = Vec::new();
+        {
+            let _ = rx.recv().await;
+            let apd = AccessPagedData::new_reader(state.spd.clone());
+            let db = Database::new(apd, "", state.bmap.clone());
+            let qt = db.get_table(&ObjRef::new("email", "Queue")).unwrap();
+
+            let keys = Vec::new();
+            for (pp, off) in qt.scan_keys(&db, keys, 0) {
+                let p = &pp.borrow();
+                let a = qt.access(p, off);
+                let msg = a.int(0) as u64;
+                let st = a.int(1);
+
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    .unwrap();
+                let now = now.as_micros() as i64 + 62135596800000000; // Per date.Ticks
+
+                println!(
+                    "Queued email id ={} seconds till send={}",
+                    msg,
+                    (st - now) / 1000000
+                );
+                let mt = db.get_table(&ObjRef::new("email", "Msg")).unwrap();
+                let (pp, off) = mt.id_get(&db, msg).unwrap();
+                let p = &pp.borrow();
+                let a = mt.access(p, off);
+                let from = a.str(&db, 0);
+                let to = a.str(&db, 1);
+                let title = a.str(&db, 2);
+                let body = a.str(&db, 3);
+                println!(
+                    "Email from={} to={} title={} body={}",
+                    from, to, title, body
+                );
+                // Actual sending of email not yet implemented...
+                sent.push(msg);
+            }
+        }
+        for msg in sent
+        {
+          email_sent(&state,msg).await;
+        }
     }
+}
+
+async fn email_sent(state: &SharedState, msg: u64) {
+    let mut st = ServerTrans::new();
+    st.sql = "EXEC email.Sent(".to_string() + &msg.to_string() + ")";
+    // Send transaction to database thread ( and get it back ).
+    let (tx, rx) = oneshot::channel::<ServerTrans>();
+    let _err = state.tx.send(ServerMessage { st, tx }).await;
+    let _result = rx.await.unwrap();
 }
 
 /////////////////////////////////////////////
