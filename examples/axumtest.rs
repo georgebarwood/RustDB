@@ -196,8 +196,8 @@ async fn h_post(
     let mut result = rx.await.unwrap();
 
     {
-      let mut ext = result.x.get_extension();
-      if let Some(ext) = ext.downcast_mut::<TransExt>() 
+      let ext = result.x.get_extension();
+      if let Some(ext) = ext.downcast_ref::<TransExt>() 
       {
         if ext.email_tx {
           let _err = state.email_tx.send(()).await;
