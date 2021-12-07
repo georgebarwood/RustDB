@@ -21,14 +21,12 @@ use tower_cookies::{CookieManagerLayer, Cookies};
 
 /// Transaction to be sent to server thread, implements IntoResponse.
 struct ServerTrans {
-    sql: String,
     x: Box<GenTransaction>,
 }
 
 impl ServerTrans {
     fn new() -> Self {
         Self {
-            sql: "EXEC web.Main()".to_string(),
             x: Box::new(GenTransaction::new()),
         }
     }
@@ -129,7 +127,8 @@ async fn main() {
         let db = Database::new(wapd, INITSQL, bmap);
         loop {
             let mut sm = rx.blocking_recv().unwrap();
-            db.run_timed(&sm.st.sql, &mut *sm.st.x);
+            let sql = sm.st.x.qy.sql.clone();
+            db.run_timed(&sql, &mut *sm.st.x);
             let updates = db.save();
             if updates > 0 {
                 println!("Pages updated={}", updates);
@@ -172,7 +171,8 @@ async fn h_get(
         // GET requests should be read-only.
         let apd = AccessPagedData::new_reader(state.spd.clone());
         let db = Database::new(apd, "", state.bmap.clone());
-        db.run_timed(&st.sql, &mut *st.x);
+        let sql = st.x.qy.sql.clone();
+        db.run_timed(&sql, &mut *st.x);
         st
     });
     blocking_task.await.unwrap()
@@ -301,7 +301,7 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
 
 async fn email_sent(state: &SharedState, msg: u64) {
     let mut st = ServerTrans::new();
-    st.sql = "EXEC email.Sent(".to_string() + &msg.to_string() + ")";
+    st.x.qy.sql = Arc::new( "EXEC email.Sent(".to_string() + &msg.to_string() + ")" );
     state.process(st).await;
 }
 
