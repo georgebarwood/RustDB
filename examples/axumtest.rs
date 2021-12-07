@@ -12,9 +12,9 @@ use axum::{
 use rustdb::{
     c_value, check_types, standard_builtins, AccessPagedData, AtomicFile, Block, BuiltinMap, CExp,
     CExpPtr, CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData,
-    SimpleFileStorage, Value, INITSQL,
+    SimpleFileStorage, Value, INITSQL
 };
-use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
+use std::{collections::BTreeMap, rc::Rc, sync::{Arc,Mutex}, thread};
 use tokio::sync::{mpsc, oneshot};
 use tower::ServiceBuilder;
 use tower_cookies::{CookieManagerLayer, Cookies};
@@ -36,6 +36,20 @@ impl ServerTrans {
 struct ServerMessage {
     pub st: ServerTrans,
     pub tx: oneshot::Sender<ServerTrans>,
+}
+
+#[derive(Default)]
+struct TransExt
+{
+    pub sigemail: Mutex<bool>,
+}
+
+impl TransExt
+{
+    pub fn new() -> Arc<Self>
+    {
+      Arc::new(Self::default())
+    }
 }
 
 /// State shared with handlers.
@@ -66,7 +80,10 @@ async fn main() {
     // Include the Argon hash function as well as the standard functions.
     let mut bmap = BuiltinMap::new();
     standard_builtins(&mut bmap);
-    let list = [("ARGON", DataKind::Binary, CompileFunc::Value(c_argon))];
+    let list = [
+     ("ARGON", DataKind::Binary, CompileFunc::Value(c_argon)),
+     ("SIGEMAIL", DataKind::Int, CompileFunc::Int(c_sigemail))
+    ];
     for (name, typ, cf) in list {
         bmap.insert(name.to_string(), (typ, cf));
     }
@@ -130,17 +147,18 @@ async fn h_get(
     cookies: Cookies,
 ) -> ServerTrans {
     // Build the ServerTrans.
-    let mut sq = ServerTrans::new();
-    sq.x.qy.path = path.0;
-    sq.x.qy.params = params.0;
-    sq.x.qy.cookies = map_cookies(cookies);
+    let mut st = ServerTrans::new();
+    st.x.ext = TransExt::new();
+    st.x.qy.path = path.0;
+    st.x.qy.params = params.0;
+    st.x.qy.cookies = map_cookies(cookies);
 
     let blocking_task = tokio::task::spawn_blocking(move || {
         // GET requests should be read-only.
         let apd = AccessPagedData::new_reader(state.spd.clone());
         let db = Database::new(apd, "", state.bmap.clone());
-        db.run_timed("EXEC web.Main()", &mut *sq.x);
-        sq
+        db.run_timed("EXEC web.Main()", &mut *st.x);
+        st
     });
     blocking_task.await.unwrap()
 }
@@ -156,6 +174,7 @@ async fn h_post(
 ) -> ServerTrans {
     // Build the Server Transaction.
     let mut st = ServerTrans::new();
+    st.x.ext = TransExt::new();
     st.x.qy.path = path.0;
     st.x.qy.params = params.0;
     st.x.qy.cookies = map_cookies(cookies);
@@ -246,6 +265,21 @@ async fn map_parts(mp: Option<Multipart>) -> Vec<Part> {
 
 use argon2rs::argon2i_simple;
 
+use std::{fs::OpenOptions, io::Write};
+fn log_loop(log_rx: std::sync::mpsc::Receiver<String>) {
+    let filename = "../test.logfile";
+    let mut logfile = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(filename)
+        .unwrap();
+    loop {
+        let logstr = log_rx.recv().unwrap();
+        let _err = logfile.write_all(logstr.as_bytes());
+        let _err = logfile.write_all(b"\r\n");
+    }
+}
+
 /// Compile call to ARGON.
 fn c_argon(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[DataKind::String, DataKind::String]);
@@ -269,17 +303,23 @@ impl CExp<Value> for Argon {
     }
 }
 
-use std::{fs::OpenOptions, io::Write};
-fn log_loop(log_rx: std::sync::mpsc::Receiver<String>) {
-    let filename = "../test.logfile";
-    let mut logfile = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(filename)
-        .unwrap();
-    loop {
-        let logstr = log_rx.recv().unwrap();
-        let _err = logfile.write_all(logstr.as_bytes());
-        let _err = logfile.write_all(b"\r\n");
+/// Compile call to SIGEMAIL.
+fn c_sigemail(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[]);
+    Box::new(SigEmail {})
+}
+
+/// Compiled call to SIGEMAIL
+struct SigEmail {
+}
+impl CExp<i64> for SigEmail {
+    fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> i64 {
+        if let Some(te) = ee.tr.get_extension().downcast_ref::<TransExt>()
+        {
+          println!("SIGEMAIL called");
+          let mut x = te.sigemail.lock().unwrap();
+          *x = true;
+        }
+        0
     }
 }
