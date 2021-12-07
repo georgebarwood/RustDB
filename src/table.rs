@@ -597,6 +597,9 @@ impl Record for IndexKey {
         let mut ix = 0;
         let mut off = 8;
         loop {
+            if ix == self.key.len() {
+                return self.def;
+            }
             let typ = self.tinfo.typ[self.cols[ix]];
             let val = Value::load(db, typ, data, off).0;
             let cf = val.cmp(&self.key[ix]);
@@ -604,9 +607,6 @@ impl Record for IndexKey {
                 return cf;
             }
             ix += 1;
-            if ix == self.key.len() {
-                return self.def;
-            }
             off += data_size(typ);
         }
     }

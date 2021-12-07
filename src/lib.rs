@@ -608,11 +608,12 @@ pub trait Transaction {
     }
 
     /// Set the extension.
-    fn set_extension(&mut self, _ext: Box<dyn Any+Send+Sync>){ }
+    fn set_extension(&mut self, _ext: Box<dyn Any + Send + Sync>) {}
 
     /// Get the extension. Note: this takes ownership, so extension needs to be set afterwards.
-    fn get_extension(&mut self) -> Box<dyn Any+Send+Sync> { Box::new(()) }
-  
+    fn get_extension(&mut self) -> Box<dyn Any + Send + Sync> {
+        Box::new(())
+    }
 }
 
 /// Query where output is printed to console (used for initialisation ).

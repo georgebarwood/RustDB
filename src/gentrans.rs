@@ -25,7 +25,7 @@ pub struct GenResponse {
 pub struct GenTransaction {
     pub qy: GenQuery,
     pub rp: GenResponse,
-    pub ext: Box<dyn Any+Send+Sync>,
+    pub ext: Box<dyn Any + Send + Sync>,
 }
 
 /// Part of multipart data ( uploaded files ).
@@ -62,7 +62,7 @@ impl GenTransaction {
                 status_code,
                 headers,
             },
-            ext: Box::new(())
+            ext: Box::new(()),
         }
     }
     /// Append string to output.
@@ -173,14 +173,12 @@ impl Transaction for GenTransaction {
         self.qy.parts[k as usize].data.clone()
     }
 
-    fn set_extension(&mut self, ext: Box<dyn Any+Send+Sync>)
-    {
+    fn set_extension(&mut self, ext: Box<dyn Any + Send + Sync>) {
         self.ext = ext;
     }
 
-    fn get_extension(&mut self) -> Box<dyn Any+Send+Sync>
-    {
-      std::mem::replace( &mut self.ext, Box::new(0) )
+    fn get_extension(&mut self) -> Box<dyn Any + Send + Sync> {
+        std::mem::replace(&mut self.ext, Box::new(0))
     }
 }
 
