@@ -607,8 +607,12 @@ pub trait Transaction {
         String::new()
     }
 
-    /// Get the extension.
-    fn get_extension(&self) -> Arc<dyn Any+Send+Sync>;
+    /// Set the extension.
+    fn set_extension(&mut self, _ext: Box<dyn Any+Send+Sync>){ }
+
+    /// Get the extension. Note: this takes ownership, so extension needs to be set afterwards.
+    fn get_extension(&mut self) -> Box<dyn Any+Send+Sync> { Box::new(()) }
+  
 }
 
 /// Query where output is printed to console (used for initialisation ).
@@ -618,9 +622,5 @@ impl Transaction for DummyTransaction {
     /// Called if a panic ( error ) occurs.
     fn set_error(&mut self, err: String) {
         println!("Error: {}", err);
-    }
-    fn get_extension(&self) -> Arc<dyn Any+Send+Sync>
-    {
-        Arc::new(0)
     }
 }

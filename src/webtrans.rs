@@ -1,4 +1,4 @@
-use crate::{panic, util, Arc, Any, HashMap, Rc, Transaction, Value};
+use crate::{panic, util, Any, HashMap, Rc, Transaction, Value};
 use std::{io::Read, io::Write, net::TcpStream};
 
 /// Response content is accumulated in output.
@@ -14,7 +14,7 @@ pub struct WebTransaction {
     pub status_code: String,
     pub headers: String,
     pub now: i64, // Micro-seconds since January 1, 1970 0:00:00 UTC
-    pub ext: Arc<dyn Any+Send+Sync>,
+    pub ext: Box<dyn Any+Send+Sync>,
 }
 
 /// Map for query, form, cookies.
@@ -76,7 +76,7 @@ impl WebTransaction {
             parts,
             err: String::new(),
             now,
-            ext: Arc::new(0)
+            ext: Box::new(())
         })
     }
     pub fn trace(&self) {
@@ -181,9 +181,14 @@ impl Transaction for WebTransaction {
         self.headers.push_str(&hdr);
     }
 
-    fn get_extension(&self) -> Arc<dyn Any+Send+Sync>
+    fn set_extension(&mut self, ext: Box<dyn Any+Send+Sync>)
     {
-      self.ext.clone()
+        self.ext = ext;
+    }
+
+    fn get_extension(&mut self) -> Box<dyn Any+Send+Sync>
+    {
+      std::mem::replace( &mut self.ext, Box::new(0) )
     }
 }
 /// Parser for http request.
