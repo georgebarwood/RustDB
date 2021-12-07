@@ -12,9 +12,9 @@ use axum::{
 use rustdb::{
     c_value, check_types, standard_builtins, AccessPagedData, AtomicFile, Block, BuiltinMap, CExp,
     CExpPtr, CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction, Part, SharedPagedData,
-    SimpleFileStorage, Value, INITSQL
+    SimpleFileStorage, Transaction, Value, INITSQL,
 };
-use std::{collections::BTreeMap, rc::Rc, sync::{Arc,Mutex}, thread};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
 use tokio::sync::{mpsc, oneshot};
 use tower::ServiceBuilder;
 use tower_cookies::{CookieManagerLayer, Cookies};
@@ -38,17 +38,16 @@ struct ServerMessage {
     pub tx: oneshot::Sender<ServerTrans>,
 }
 
+/// Extra transaction data.
 #[derive(Default)]
-struct TransExt
-{
-    pub sigemail: Mutex<bool>,
+struct TransExt {
+    /// Signals there is new email to be sent.
+    pub email_tx: bool,
 }
 
-impl TransExt
-{
-    pub fn new() -> Arc<Self>
-    {
-      Arc::new(Self::default())
+impl TransExt {
+    pub fn new() -> Box<Self> {
+        Box::new(Self::default())
     }
 }
 
@@ -81,8 +80,8 @@ async fn main() {
     let mut bmap = BuiltinMap::new();
     standard_builtins(&mut bmap);
     let list = [
-     ("ARGON", DataKind::Binary, CompileFunc::Value(c_argon)),
-     ("SIGEMAIL", DataKind::Int, CompileFunc::Int(c_sigemail))
+        ("ARGON", DataKind::Binary, CompileFunc::Value(c_argon)),
+        ("EMAILTX", DataKind::Int, CompileFunc::Int(c_email_tx)),
     ];
     for (name, typ, cf) in list {
         bmap.insert(name.to_string(), (typ, cf));
@@ -95,6 +94,7 @@ async fn main() {
     // Construct thread communication channels.
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
     let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
+    let (email_tx, email_rx) = std::sync::mpsc::channel::<()>();
 
     // Construct shared state.
     let ss = Arc::new(SharedState {
@@ -106,6 +106,11 @@ async fn main() {
     // Start the logging thread (synchronous)
     thread::spawn(move || {
         log_loop(log_rx);
+    });
+
+    // Start the email thread (synchronous)
+    thread::spawn(move || {
+        email_loop(email_rx);
     });
 
     // Start the server thread that updates the database (synchronous).
@@ -121,7 +126,14 @@ async fn main() {
                 // println!("Serialised query={}", ser);
                 let _err = log_tx.send(ser);
             }
+            let mut ext = sm.st.x.get_extension();
             let _x = sm.tx.send(sm.st);
+
+            if let Some(ext) = ext.downcast_mut::<TransExt>() {
+                if ext.email_tx {
+                    let _err = email_tx.send(());
+                }
+            }
         }
     });
 
@@ -213,6 +225,30 @@ impl IntoResponse for ServerTrans {
     }
 }
 
+/// thread that logs write transactions to a file.
+fn log_loop(rx: std::sync::mpsc::Receiver<String>) {
+    use std::{fs::OpenOptions, io::Write};
+    let filename = "../test.logfile";
+    let mut logfile = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(filename)
+        .unwrap();
+    loop {
+        let logstr = rx.recv().unwrap();
+        let _err = logfile.write_all(logstr.as_bytes());
+        let _err = logfile.write_all(b"\r\n");
+    }
+}
+
+// thread that sends emails
+fn email_loop(rx: std::sync::mpsc::Receiver<()>) {
+    loop {
+        let _ = rx.recv().unwrap();
+        println!("Send Emails (todo)");
+    }
+}
+
 /////////////////////////////////////////////
 // Helper functions for building ServerTrans.
 
@@ -265,21 +301,6 @@ async fn map_parts(mp: Option<Multipart>) -> Vec<Part> {
 
 use argon2rs::argon2i_simple;
 
-use std::{fs::OpenOptions, io::Write};
-fn log_loop(log_rx: std::sync::mpsc::Receiver<String>) {
-    let filename = "../test.logfile";
-    let mut logfile = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(filename)
-        .unwrap();
-    loop {
-        let logstr = log_rx.recv().unwrap();
-        let _err = logfile.write_all(logstr.as_bytes());
-        let _err = logfile.write_all(b"\r\n");
-    }
-}
-
 /// Compile call to ARGON.
 fn c_argon(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[DataKind::String, DataKind::String]);
@@ -303,23 +324,21 @@ impl CExp<Value> for Argon {
     }
 }
 
-/// Compile call to SIGEMAIL.
-fn c_sigemail(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+/// Compile call to EMAILTX.
+fn c_email_tx(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(b, args, &[]);
-    Box::new(SigEmail {})
+    Box::new(EmailTx {})
 }
 
-/// Compiled call to SIGEMAIL
-struct SigEmail {
-}
-impl CExp<i64> for SigEmail {
+/// Compiled call to EMAILTX
+struct EmailTx {}
+impl CExp<i64> for EmailTx {
     fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> i64 {
-        if let Some(te) = ee.tr.get_extension().downcast_ref::<TransExt>()
-        {
-          println!("SIGEMAIL called");
-          let mut x = te.sigemail.lock().unwrap();
-          *x = true;
+        let mut ext = ee.tr.get_extension();
+        if let Some(mut ext) = ext.downcast_mut::<TransExt>() {
+            ext.email_tx = true;
         }
+        ee.tr.set_extension(ext);
         0
     }
 }
