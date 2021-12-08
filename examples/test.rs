@@ -11,7 +11,7 @@ fn main() {
     let stg = Box::new(AtomicFile::new(file, upd));
     let spd = Arc::new(SharedPagedData::new(stg));
     let apd = AccessPagedData::new_writer(spd);
-    let mut bmap = BuiltinMap::new();
+    let mut bmap = BuiltinMap::default();
     standard_builtins(&mut bmap);
     let db = Database::new(apd, INITSQL, Arc::new(bmap));
 

@@ -86,7 +86,7 @@ async fn main() {
 
     // Construct map of "builtin" functions that can be called in SQL code.
     // Include the Argon hash function as well as the standard functions.
-    let mut bmap = BuiltinMap::new();
+    let mut bmap = BuiltinMap::default();
     standard_builtins(&mut bmap);
     let list = [
         ("ARGON", DataKind::Binary, CompileFunc::Value(c_argon)),
