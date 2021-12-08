@@ -140,18 +140,10 @@ impl Transaction for WebTransaction {
             _ => panic!(),
         }
     }
+
     fn selected(&mut self, values: &[Value]) {
         for v in values {
             match v {
-                Value::String(s) => {
-                    self.push_str(s);
-                }
-                Value::Int(x) => {
-                    self.push_str(&x.to_string());
-                }
-                Value::Float(x) => {
-                    self.push_str(&x.to_string());
-                }
                 Value::RcBinary(x) => {
                     self.output.extend_from_slice(x);
                 }
@@ -159,14 +151,16 @@ impl Transaction for WebTransaction {
                     self.output.extend_from_slice(x);
                 }
                 _ => {
-                    panic!("Unexpected value selected")
+                    self.push_str(&v.str());
                 }
             }
         }
     }
+
     fn set_error(&mut self, err: String) {
         self.err = err;
     }
+
     fn get_error(&mut self) -> String {
         let result = self.err.to_string();
         self.err = String::new();
@@ -189,6 +183,7 @@ impl Transaction for WebTransaction {
         std::mem::replace(&mut self.ext, Box::new(()))
     }
 }
+
 /// Parser for http request.
 ///
 /// A http request starts with a line with the method, target and protocol version.
@@ -225,6 +220,7 @@ pub struct HttpRequestParser<'a> {
     content_type: String,
     eof: bool,
 }
+
 /*
   Note: this code needs attention, probably doesn't cope with all error possibilities accurately.
   Also cookies are todo and multipart may not work for multiple files ( or at all ).
@@ -428,6 +424,7 @@ impl<'a> HttpRequestParser<'a> {
         self.end_content = self.base + self.index + self.content_length;
         self.read_map()
     }
+
     pub fn read_multipart(&mut self) -> Result<Vec<Part>, WebErr> {
         /* Typical multipart body would be:
         ------WebKitFormBoundaryVXXOTFUWdfGpOcFK

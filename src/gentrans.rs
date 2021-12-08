@@ -117,21 +117,10 @@ impl Transaction for GenTransaction {
             _ => panic!(),
         }
     }
+
     fn selected(&mut self, values: &[Value]) {
         for v in values {
             match v {
-                Value::String(s) => {
-                    self.push_str(s);
-                }
-                Value::Int(x) => {
-                    self.push_str(&x.to_string());
-                }
-                Value::Bool(x) => {
-                    self.push_str(&x.to_string());
-                }
-                Value::Float(x) => {
-                    self.push_str(&x.to_string());
-                }
                 Value::RcBinary(x) => {
                     self.rp.output.extend_from_slice(x);
                 }
@@ -139,19 +128,22 @@ impl Transaction for GenTransaction {
                     self.rp.output.extend_from_slice(x);
                 }
                 _ => {
-                    panic!()
+                    self.push_str(&v.str());
                 }
             }
         }
     }
+
     fn set_error(&mut self, err: String) {
         self.rp.err = err;
     }
+
     fn get_error(&mut self) -> String {
         let result = self.rp.err.to_string();
         self.rp.err = String::new();
         result
     }
+
     fn file_attr(&mut self, k: i64, x: i64) -> Rc<String> {
         let k = k as usize;
         let result: &str = {
