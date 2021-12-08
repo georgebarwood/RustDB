@@ -16,7 +16,9 @@
 //! The method [Database::run] (or alternatively [Database::run_timed]) is called to execute an SQL query.
 //! This takes a [Transaction] parameter which accumulates SELECT results and which also has methods
 //! for accessing input parameters and controlling output. Custom builtin functions implement [CExp]
-//! and have access to the transaction via an [EvalEnv] parameter, which can be downcast if necessary.   
+//! and have access to the transaction via an [EvalEnv] parameter, which can be downcast if necessary. 
+//!
+//! It is also possible to access the table data directly, see email_loop in example (b).   
 //!
 //!# Examples
 //! (a) Simple single-threaded web server using SimpleFileStorage as underlying storage.

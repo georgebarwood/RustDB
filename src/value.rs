@@ -96,6 +96,7 @@ impl Value {
         match self {
             Value::String(s) => s.clone(),
             Value::Int(x) => Rc::new(x.to_string()),
+            Value::Bool(x) => Rc::new(x.to_string()),
             Value::Float(x) => Rc::new(x.to_string()),
             Value::RcBinary(x) => Rc::new(util::to_hex(x)),
             Value::ArcBinary(x) => Rc::new(util::to_hex(x)),
