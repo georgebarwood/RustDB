@@ -80,7 +80,7 @@ impl Stash {
     /// Set the value of the specified page for the current time.
     pub fn set(&mut self, lpnum: u64, data: Data) {
         let time = self.time;
-        let u = self.updates.entry(time).or_insert_with(HashSet::new);
+        let u = self.updates.entry(time).or_insert_with(HashSet::default);
         if u.insert(lpnum) {
             let p = self.pages.entry(lpnum).or_insert_with(PageInfo::new);
             p.lock().unwrap().set(time, data);

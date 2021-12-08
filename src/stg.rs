@@ -3,7 +3,7 @@ use crate::{Arc, Data};
 /// Interface for database storage.
 pub trait Storage: Send + Sync {
     /// Get the size of the underlying storage.
-    /// Note : this is valid initially and after a commit but is no updated by write operations.
+    /// Note : this is valid initially and after a commit but is not updated by write operations.
     fn size(&self) -> u64;
 
     /// Read data from storage.

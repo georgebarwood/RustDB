@@ -1,5 +1,6 @@
 use crate::*;
 use std::collections::hash_map::Entry;
+
 /// Sorted Record storage.
 ///
 /// SortedFile is a tree of pages.

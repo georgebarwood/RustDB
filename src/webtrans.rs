@@ -47,7 +47,7 @@ impl WebTransaction {
         let mut hp = HttpRequestParser::new(s);
         let (method, path, query, _version) = hp.read_request()?;
         let cookies = hp.read_headers()?;
-        let mut form = HashMap::new();
+        let mut form = HashMap::default();
         let mut parts = Vec::new();
         // println!("content_type='{}'", hp.content_type);
         if hp.content_type == "application/x-www-form-urlencoded" {
@@ -328,7 +328,7 @@ impl<'a> HttpRequestParser<'a> {
     }
 
     fn read_map(&mut self) -> Result<Map, WebErr> {
-        let mut result = HashMap::new();
+        let mut result = HashMap::default();
         loop {
             let b = self.get_byte()?;
             if b == b' ' {
@@ -347,7 +347,7 @@ impl<'a> HttpRequestParser<'a> {
 
     fn read_target(&mut self) -> Result<Target, WebErr> {
         let mut path = Vec::new();
-        let mut query = HashMap::new();
+        let mut query = HashMap::default();
         loop {
             let b = self.get_byte()?;
             if b == b' ' {
@@ -377,7 +377,7 @@ impl<'a> HttpRequestParser<'a> {
     }
 
     pub fn read_headers(&mut self) -> Result<Map, WebErr> {
-        let mut cookies = HashMap::new();
+        let mut cookies = HashMap::default();
         loop {
             if self.get_byte()? != 10 {
                 break;

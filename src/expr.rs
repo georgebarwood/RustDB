@@ -201,8 +201,8 @@ impl<'a> Block<'a> {
         Block {
             ilist: Vec::new(),
             jumps: Vec::new(),
-            labels: HashMap::new(),
-            local_map: HashMap::new(),
+            labels: HashMap::default(),
+            local_map: HashMap::default(),
             locals: Vec::new(),
             local_typ: Vec::new(),
             break_id: 0,

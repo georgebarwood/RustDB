@@ -12,7 +12,7 @@ pub fn nd() -> Data {
 
 /// Construct a new map wrapped in a RefCell.
 pub fn newmap<K, T>() -> RefCell<HashMap<K, T>> {
-    RefCell::new(HashMap::new())
+    RefCell::new(HashMap::default())
 }
 
 /// Extract u64 from byte data.

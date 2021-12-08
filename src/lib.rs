@@ -30,7 +30,7 @@
 //! let sfs = Box::new(SimpleFileStorage::new( "..\\test.rustdb" ));
 //! let spd = Arc::new(SharedPagedData::new(sfs));
 //! let apd = AccessPagedData::new_writer(spd);
-//! let mut bmap = BuiltinMap::new();
+//! let mut bmap = BuiltinMap::default();
 //! standard_builtins( &mut bmap );
 //! let bmap = Arc::new(bmap);
 //! let db = Database::new(apd, INITSQL, bmap);
@@ -144,11 +144,14 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     cmp::Ordering,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     panic,
     rc::Rc,
     sync::{Arc, Mutex, RwLock},
 };
+
+// use std::collections::{HashMap,HashSet};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet };
 
 /// Utility functions and macros, [SmallSet].
 #[cfg(feature = "max")]
