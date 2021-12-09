@@ -61,11 +61,21 @@ pub type DataSource = Box<dyn Iterator<Item = (PagePtr, usize)>>;
 pub struct ForState {
     pub data_source: DataSource,
 }
+impl std::fmt::Debug for ForState {
+    fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
+       Ok(())
+    }
+}
 
 /// State for FOR loop (sorted case).
 pub struct ForSortState {
     pub ix: usize,
     pub rows: Vec<Vec<Value>>,
+}
+impl std::fmt::Debug for ForSortState {
+    fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
+       Ok(())
+    }
 }
 
 /// Info for ForNext Inst.

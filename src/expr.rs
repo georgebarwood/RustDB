@@ -174,7 +174,7 @@ pub fn data_kind(x: DataType) -> DataKind {
 /// Compute the number of bytes required to store a value of the specified DataType.
 #[must_use]
 pub fn data_size(x: DataType) -> usize {
-    (x >> KBITS) & 31
+    x >> KBITS
 }
 
 /// Compilation block ( body of function or batch section ).

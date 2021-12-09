@@ -77,7 +77,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
             }
         }
         // ToDo: initialise the index from table data.
-        if root > 9 {
+        if root > SYS_ROOT_LAST /* Should work out better way of doing this test!! */ {
             table.add_index(root, info.cols.clone());
         }
     } else {

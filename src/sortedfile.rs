@@ -298,6 +298,19 @@ impl SortedFile {
                     pnum,
                 ));
                 e.insert(p.clone());
+
+                if false {
+                    let p = p.borrow();
+                    println!(
+                        "Loaded page {} root={} count={} node_size={} size={}",
+                        p.pnum,
+                        self.root_page,
+                        p.count,
+                        p.node_size,
+                        p.size()
+                    );
+                }
+
                 p
             }
         }

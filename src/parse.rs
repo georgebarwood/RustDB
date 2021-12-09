@@ -361,8 +361,8 @@ impl<'a> Parser<'a> {
             match t {
                 BINARY | STRING => {
                     n += 1;
-                    if n > 255 {
-                        n = 255;
+                    if n > 250 {
+                        n = 250;
                     }
                     if n < 9 {
                         n = 9;

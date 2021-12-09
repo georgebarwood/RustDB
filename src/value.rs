@@ -1,10 +1,16 @@
 use crate::*;
 /// Simple value ( Binary, String, Int, Float, Bool ).
 ///
-/// When stored in a database record, binary(n) and string(n) values are allocated (n+1) bytes (n>=8).
+/// When stored in a database record, binary(n) and string(n) values are allocated (n+1) bytes (8<=n<=249).
 /// If the value is more than n bytes, the length and the first (n-8) bytes are stored inline, and the rest are coded.
 
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug)]
+pub struct Code {
+    pub id: u64,
+    pub ft: usize,
+}
+
+#[derive(Clone, Debug)]
 pub enum Value {
     None,
     RcBinary(Rc<Vec<u8>>),
@@ -30,8 +36,11 @@ impl Value {
     }
 
     /// Get a Value from byte data.
-    pub fn load(db: &DB, typ: DataType, data: &[u8], off: usize) -> (Value, u64) {
-        let mut code = u64::MAX;
+    pub fn load(db: &DB, typ: DataType, data: &[u8], off: usize) -> (Value, Code) {
+        let mut code = Code {
+            id: u64::MAX,
+            ft: 0,
+        };
         let size = data_size(typ);
         let val = match data_kind(typ) {
             DataKind::Binary => {
@@ -43,6 +52,7 @@ impl Value {
                 let (bytes, u) = get_bytes(db, &data[off..], size);
                 code = u;
                 let str = String::from_utf8(bytes).unwrap();
+                // println!("loaded str {} code={:?}", str, code);
                 Value::String(Rc::new(str))
             }
             DataKind::Bool => Value::Bool(data[off] != 0),
@@ -60,7 +70,7 @@ impl Value {
     }
 
     /// Save a Value to byte data.
-    pub fn save(&self, typ: DataType, data: &mut [u8], off: usize, code: u64) {
+    pub fn save(&self, typ: DataType, data: &mut [u8], off: usize, code: Code) {
         let size = data_size(typ);
         match self {
             Value::Bool(x) => {
@@ -166,14 +176,22 @@ impl PartialEq for Value {
 impl Eq for Value {}
 
 /// Decode bytes. Result is bytes and code ( or u64::MAX if no code ).
-pub fn get_bytes(db: &DB, data: &[u8], size: usize) -> (Vec<u8>, u64) {
+pub fn get_bytes(db: &DB, data: &[u8], size: usize) -> (Vec<u8>, Code) {
     let n = data[0] as usize;
     if n < size {
         let mut bytes = vec![0_u8; n];
         bytes[0..n].copy_from_slice(&data[1..=n]);
-        (bytes, u64::MAX)
+        (
+            bytes,
+            Code {
+                id: u64::MAX,
+                ft: 0,
+            },
+        )
     } else {
-        let code = util::getu64(data, size - 8);
+        let id = util::getu64(data, size - 8);
+        let ft = 255 - n;
+        let code = Code { id, ft };
         let mut bytes = db.decode(code, size - 9);
         bytes[0..size - 9].copy_from_slice(&data[1..size - 8]);
         (bytes, code)
@@ -181,15 +199,15 @@ pub fn get_bytes(db: &DB, data: &[u8], size: usize) -> (Vec<u8>, u64) {
 }
 
 /// Save bytes.
-pub fn save_bytes(bytes: &[u8], data: &mut [u8], code: u64, size: usize) {
+pub fn save_bytes(bytes: &[u8], data: &mut [u8], code: Code, size: usize) {
     let n = bytes.len();
     if n < size {
         data[0] = n as u8;
         data[1..=n].copy_from_slice(&bytes[0..n]);
     } else {
         // Store first (size-9) bytes and code.
-        data[0] = 255;
+        data[0] = 255 - code.ft as u8;
         data[1..size - 8].copy_from_slice(&bytes[0..size - 9]);
-        util::setu64(&mut data[size - 8..], code);
+        util::setu64(&mut data[size - 8..], code.id);
     }
 }

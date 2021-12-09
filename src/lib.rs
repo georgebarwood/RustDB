@@ -16,7 +16,7 @@
 //! The method [Database::run] (or alternatively [Database::run_timed]) is called to execute an SQL query.
 //! This takes a [Transaction] parameter which accumulates SELECT results and which also has methods
 //! for accessing input parameters and controlling output. Custom builtin functions implement [CExp]
-//! and have access to the transaction via an [EvalEnv] parameter, which can be downcast if necessary. 
+//! and have access to the transaction via an [EvalEnv] parameter, which can be downcast if necessary.
 //!
 //! It is also possible to access the table data directly, see email_loop in example (b).   
 //!
@@ -81,11 +81,6 @@
 //! [AtomicFile] ensures that database updates are all or nothing.
 //!
 //!# ToDo List
-//! Decide whether to have several crates : "Core", "Lang", "Server" say.
-//! Core being data storage, Lang being SQL-subset, Server being interfacing to http/serde etc.
-//!
-//! Call web.Main directly ( using function ptr ).
-//!
 //! Unify GenTransaction and WebTransaction. Check multiple file upload works ok with local http parsing.
 //!
 //! Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
@@ -95,8 +90,6 @@
 //! Sort out error handling for PARSEINT etc.
 //!
 //! Work on improving/testing SQL code, browse schema, float I/O. Login.
-//!
-//! Error handling for out of disk space, out of memory etc.
 
 pub use crate::{
     atomfile::AtomicFile,
@@ -151,7 +144,7 @@ use std::{
 };
 
 // use std::collections::{HashMap,HashSet};
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet };
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 /// Utility functions and macros, [SmallSet].
 #[cfg(feature = "max")]
@@ -192,7 +185,7 @@ pub mod atomfile;
 // pub mod stgwin;
 
 #[cfg(feature = "max")]
-/// Compilation of builtin functions.
+/// Compilation of builtin functions, [standard_builtins].
 pub mod builtin;
 #[cfg(not(feature = "max"))]
 mod builtin;
@@ -298,7 +291,7 @@ pub struct Database {
     pub sys_index_col: TablePtr,
     pub sys_function: TablePtr,
     /// Storage of variable length data.
-    pub bs: ByteStorage,
+    pub bs: Vec<ByteStorage>,
     // Various maps for named database objects.
     pub schemas: RefCell<HashMap<String, i64>>,
     pub tables: RefCell<HashMap<ObjRef, TablePtr>>,
@@ -311,6 +304,8 @@ pub struct Database {
     /// Has there been an error since last save?
     pub err: Cell<bool>,
 }
+
+const SYS_ROOT_LAST : u64 = 15;
 
 impl Database {
     /// Construct a new DB, based on the specified file.
@@ -337,12 +332,17 @@ impl Database {
             "Function",
             &[("Schema", INT), ("Name", STRING), ("Def", BIGSTR)],
         );
-        sys_schema.add_index(7, vec![0]);
-        sys_table.add_index(8, vec![1, 2]);
-        sys_column.add_index(9, vec![0]);
-        sys_index.add_index(10, vec![1]);
-        sys_index_col.add_index(11, vec![0]);
-        sys_function.add_index(12, vec![0, 1]);
+        sys_schema.add_index(tb.rt(), vec![0]);
+        sys_table.add_index(tb.rt(), vec![1, 2]);
+        sys_column.add_index(tb.rt(), vec![0]);
+        sys_index.add_index(tb.rt(), vec![1]);
+        sys_index_col.add_index(tb.rt(), vec![0]);
+        sys_function.add_index(tb.rt(), vec![0, 1]);
+
+        let mut bs = Vec::new();
+        for ft in 0..bytes::NFT {
+            bs.push(ByteStorage::new(ft as u64, ft));
+        }
 
         let db = Rc::new(Database {
             file,
@@ -352,7 +352,7 @@ impl Database {
             sys_index,
             sys_index_col,
             sys_function,
-            bs: ByteStorage::new(0),
+            bs,
             schemas: newmap(),
             functions: newmap(),
             tables: newmap(),
@@ -361,10 +361,14 @@ impl Database {
             lastid: Cell::new(0),
             err: Cell::new(false),
         });
+
+        assert!(  tb.alloc as u64 - 1 == SYS_ROOT_LAST );
+
         if is_new {
-            db.alloc_page(); // Allocate page for byte storage.
+            for _ft in 0..bytes::NFT {
+                db.alloc_page(); // Allocate page for byte storage.
+            }
         }
-        db.bs.init(&db);
         for t in &tb.list {
             if !is_new {
                 t.id_gen.set(sys::get_id_gen(&db, t.id as u64));
@@ -456,7 +460,9 @@ GO
         } else {
             SaveOp::Save
         };
-        self.bs.save(self, op);
+        for bs in &self.bs {
+            bs.save(self, op);
+        }
         let tm = &*self.tables.borrow();
         for t in tm.values() {
             if t.id_gen_dirty.get() {
@@ -514,29 +520,38 @@ GO
     }
 
     /// Get code for value.
-    pub(crate) fn encode(self: &DB, val: &Value, size: usize) -> u64 {
+    pub(crate) fn encode(self: &DB, val: &Value, size: usize) -> Code {
         let bytes = match val {
             Value::RcBinary(x) => &**x,
             Value::ArcBinary(x) => &**x,
             Value::String(x) => x.as_bytes(),
             _ => {
-                return u64::MAX;
+                return Code {
+                    id: u64::MAX,
+                    ft: 0,
+                };
             }
         };
         if bytes.len() < size {
-            return u64::MAX;
+            return Code {
+                id: u64::MAX,
+                ft: 0,
+            };
         }
-        self.bs.encode(self, &bytes[size - 9..])
+        let tbe = &bytes[size - 9..];
+        let ft = bytes::fragment_type(tbe.len());
+        let id = self.bs[ft].encode(self, &bytes[size - 9..]);
+        Code { id, ft }
     }
 
     /// Decode u64 to bytes.
-    pub(crate) fn decode(self: &DB, code: u64, inline: usize) -> Vec<u8> {
-        self.bs.decode(self, code, inline)
+    pub(crate) fn decode(self: &DB, code: Code, inline: usize) -> Vec<u8> {
+        self.bs[code.ft].decode(self, code.id, inline)
     }
 
     /// Delete encoding.
-    pub(crate) fn delcode(self: &DB, code: u64) {
-        self.bs.delcode(self, code);
+    pub(crate) fn delcode(self: &DB, code: Code) {
+        self.bs[code.ft].delcode(self, code.id);
     }
 
     /// Allocate a page of underlying file storage.
@@ -561,30 +576,39 @@ impl Drop for Database {
 
 /// For creating system tables.
 struct TableBuilder {
-    alloc: i64,
+    alloc: usize,
     list: Vec<TablePtr>,
 }
 impl TableBuilder {
     fn new() -> Self {
         Self {
-            alloc: 1,
+            alloc: bytes::NFT,
             list: Vec::new(),
         }
     }
+
     fn nt(&mut self, name: &str, ct: &[(&str, DataType)]) -> TablePtr {
-        let id = self.alloc;
-        let root_page = id as u64;
-        self.alloc += 1;
+        let root = self.rt();
+        let id = 1 + (root - bytes::NFT as u64);
+        // println!("Table builder name={} id={} root={}", name, id, root);
+
         let name = ObjRef::new("sys", name);
         let info = ColInfo::new(name, ct);
-        let table = Table::new(id, root_page, 1, Rc::new(info));
+        let table = Table::new(id as i64, root, 1, Rc::new(info));
         self.list.push(table.clone());
         table
+    }
+
+    fn rt(&mut self) -> u64
+    {
+       let result = self.alloc;
+       self.alloc += 1;
+       result as u64
     }
 }
 
 /// Input/Output message. Query and Response.
-pub trait Transaction : Any {
+pub trait Transaction: Any {
     /// STATUSCODE builtin function. sets the response status code.
     fn status_code(&mut self, _code: i64) {}
 

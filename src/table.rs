@@ -35,6 +35,32 @@ pub struct Table {
 }
 
 impl Table {
+    pub fn dump(&self, db: &DB)
+    {
+      println!("Dumping Table {}", self.info.name.str() );
+      let mut row = self.row();
+      for ( pp, off ) in self.scan(db)
+      {
+        let p = pp.borrow();
+        let data = &p.data[off..];
+        row.load(&db, data);
+        println!( "row id={} values={:?}", row.id, row.values );
+      }
+    }
+    pub fn dump_index(self : &TablePtr, db: &DB, ix: usize)
+    {
+      println!("Dumping Index {} ix={}", self.info.name.str(), ix );
+      let mut row = self.row();
+      let keys = Vec::new();
+      for ( pp, off ) in self.scan_keys(db,keys,ix)
+      {
+        let p = pp.borrow();
+        let data = &p.data[off..];
+        row.load(&db, data);
+        println!( "row id={} values={:?}", row.id, row.values );
+      }
+    }
+
     /// Construct a table with specified info.
     pub fn new(id: i64, root_page: u64, id_gen: i64, info: Rc<ColInfo>) -> TablePtr {
         let rec_size = info.total;
@@ -263,20 +289,20 @@ impl Record for Zero {
 
 /// Helper class to read byte data using ColInfo.
 pub struct Access<'d, 'i> {
-    data: &'d [u8],
-    info: &'i ColInfo,
+    pub data: &'d [u8],
+    pub info: &'i ColInfo,
 }
 
 impl<'d, 'i> Access<'d, 'i> {
-    /// Extract int from byte data for column number colnum.
+    /// Extract int from byte data for specified column.
     pub fn int(&self, colnum: usize) -> i64 {
-        util::get(self.data, self.info.off[colnum], self.info.siz(colnum)) as i64
+        util::iget(self.data, self.info.off[colnum], self.info.siz(colnum)) as i64
     }
 
-    /// Extract string from byte data for column number colnum.
+    /// Extract string from byte data for specified column.
     pub fn str(&self, db: &DB, colnum: usize) -> String {
         let off = self.info.off[colnum];
-        let size = data_size(self.info.typ[colnum]);
+        let size = self.info.siz(colnum);
         let bytes = get_bytes(db, &self.data[off..], size).0;
         String::from_utf8(bytes).unwrap()
     }
@@ -289,8 +315,8 @@ impl<'d, 'i> Access<'d, 'i> {
 
 /// Helper class to write byte data using ColInfo.
 pub struct WriteAccess<'d, 'i> {
-    data: &'d mut [u8],
-    info: &'i ColInfo,
+    pub data: &'d mut [u8],
+    pub info: &'i ColInfo,
 }
 
 impl<'d, 'i> WriteAccess<'d, 'i> {
@@ -402,7 +428,7 @@ pub struct Row {
     pub id: i64,
     pub values: Vec<Value>,
     pub info: Rc<ColInfo>,
-    pub codes: Vec<u64>,
+    pub codes: Vec<Code>,
 }
 
 impl Row {
@@ -433,7 +459,7 @@ impl Row {
     /// Delete current codes.
     pub fn delcodes(&self, db: &DB) {
         for u in &self.codes {
-            if *u != u64::MAX {
+            if u.id != u64::MAX {
                 db.delcode(*u);
             }
         }
@@ -476,7 +502,7 @@ pub struct IndexRow {
     pub tinfo: Rc<ColInfo>,
     pub cols: Rc<Vec<usize>>,
     pub keys: Vec<Value>,
-    pub codes: Vec<u64>,
+    pub codes: Vec<Code>,
     pub rowid: i64,
 }
 
@@ -565,7 +591,7 @@ impl Record for IndexRow {
         for col in &*self.cols {
             let typ = self.tinfo.typ[*col];
             let code = Value::load(db, typ, data, off).1;
-            if code != u64::MAX {
+            if code.id != u64::MAX {
                 db.delcode(code);
             }
             off += data_size(typ);
