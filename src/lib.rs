@@ -143,8 +143,8 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-use std::collections::{HashMap,HashSet};
-// use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+// use std::collections::{HashMap,HashSet};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 /// Utility functions and macros, [SmallSet].
 #[cfg(feature = "max")]

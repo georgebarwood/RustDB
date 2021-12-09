@@ -45,7 +45,7 @@ impl SortedFile {
             let p = &mut *pp.borrow_mut();
             if p.pnum != u64::MAX {
                 p.compress(db);
-                if true {
+                if false {
                     println!(
                         "Saving page {} root={} count={} node_size={} size={}",
                         p.pnum,
