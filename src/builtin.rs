@@ -3,7 +3,7 @@ use crate::{
     Value,
 };
 
-/// Add builtin functions to specified HashMap.
+/// Add builtin functions to specified [BuiltinMap].
 pub fn standard_builtins(map: &mut BuiltinMap) {
     let list = [
         ("ARG", DataKind::String, CompileFunc::Value(c_arg)),

@@ -168,6 +168,9 @@ GO
 CREATE FN [sys].[DropTable]( t int ) AS 
 /* Note: this should not be called directly, instead use DROP TABLE statement */
 BEGIN
+  /* Delete the rows */
+  EXECUTE( 'DELETE FROM ' | sys.TableName(t) | ' WHERE true' )
+
   DECLARE id int
   /* Delete the Index data */
   FOR id = Id FROM sys.Index WHERE Table = t
@@ -1680,24 +1683,19 @@ GO
 CREATE SCHEMA [rtest]
 CREATE TABLE [rtest].[Gen]([x] int) 
 GO
-CREATE TABLE [rtest].[t0]([x] string,[y] int(5)) 
-GO
-CREATE TABLE [rtest].[t1]([x] string,[y] int(3),[z] string) 
-GO
-CREATE TABLE [rtest].[t2]([x] string,[y] int(5)) 
-GO
-CREATE TABLE [rtest].[t3]([x] string,[y] int(3),[z] string) 
-GO
-CREATE TABLE [rtest].[t4]([x] string,[y] int(3),[z] string) 
-GO
-CREATE TABLE [rtest].[t5]([x] string,[y] int(5)) 
-GO
-CREATE TABLE [rtest].[t6]([x] string,[y] int(5)) 
+CREATE FN [rtest].[repeat]( s string, n int ) RETURNS string AS
+BEGIN
+  WHILE n > 0
+  BEGIN
+    SET result |= s
+    SET n = n - 1
+  END
+END
 GO
 CREATE FN [rtest].[OneTest]() AS
 BEGIN 
-  DECLARE rtest int
-  SET rtest = Id FROM sys.Schema WHERE Name = 'rtest'
+  DECLARE rtestdata int
+  SET rtestdata = Id FROM sys.Schema WHERE Name = 'rtestdata'
 
   DECLARE r int
   SET r = x FROM rtest.Gen
@@ -1712,16 +1710,16 @@ BEGIN
 
   DECLARE exists string
   SET exists = ''
-  SET exists = Name FROM sys.Table WHERE Schema = rtest AND Name = tname
+  SET exists = Name FROM sys.Table WHERE Schema = rtestdata AND Name = tname
 
   SET sql = CASE 
     WHEN exists = '' THEN 
-      CASE WHEN r % 2 =1 THEN 'CREATE TABLE rtest.[' | tname | '](x string, y int(5))'
-      ELSE 'CREATE TABLE rtest.[' | tname | '](x string, y int(3), z string )'
+      CASE WHEN r % 2 =1 THEN 'CREATE TABLE rtestdata.[' | tname | '](x string, y int(5))'
+      ELSE 'CREATE TABLE rtestdata.[' | tname | '](x string, y int(3), z string )'
       END
-    WHEN r % 10 = 0 THEN 'DROP TABLE rtest.[' | tname | ']'
-    WHEN r % 2 = 1 THEN 'INSERT INTO rtest.[' | tname | '](y) VALUES (' | (r % 10) | ')'
-    ELSE 'DELETE FROM rtest.[' | tname | '] WHERE y = ' | ( r%15)
+    WHEN r % 10 = 0 THEN 'DROP TABLE rtestdata.[' | tname | ']'
+    WHEN r % 2 = 1 THEN 'INSERT INTO rtestdata.[' | tname | '](x,y) VALUES ( rtest.repeat(''George'','|(r % 100)|'),' | (r % 10) | ')'
+    ELSE 'DELETE FROM rtestdata.[' | tname | '] WHERE y = ' | ( r%15)
   END
   
   SELECT 'sql=' | sql
@@ -1731,57 +1729,7 @@ BEGIN
 END
 GO
 INSERT INTO [rtest].[Gen](Id,[x]) VALUES 
-(1,2089351775)
-GO
-
-INSERT INTO [rtest].[t0](Id,[x],[y]) VALUES 
-(1,'',9)
-(2,'',5)
-(3,'',9)
-(4,'',3)
-(5,'',7)
-(6,'',7)
-(7,'',1)
-GO
-
-INSERT INTO [rtest].[t1](Id,[x],[y],[z]) VALUES 
-(2,'',5,'')
-(4,'',5,'')
-(5,'',9,'')
-(6,'',5,'')
-(7,'',5,'')
-(8,'',9,'')
-(9,'',7,'')
-(10,'',5,'')
-GO
-
-INSERT INTO [rtest].[t2](Id,[x],[y]) VALUES 
-(1,'',1)
-GO
-
-INSERT INTO [rtest].[t3](Id,[x],[y],[z]) VALUES 
-(2,'',5,'')
-(4,'',1,'')
-(5,'',5,'')
-(7,'',1,'')
-(8,'',5,'')
-(9,'',5,'')
-(10,'',5,'')
-(11,'',1,'')
-(13,'',7,'')
-(14,'',3,'')
-(16,'',1,'')
-GO
-
-INSERT INTO [rtest].[t4](Id,[x],[y],[z]) VALUES 
-GO
-
-INSERT INTO [rtest].[t5](Id,[x],[y]) VALUES 
-(1,'',1)
-(2,'',7)
-GO
-
-INSERT INTO [rtest].[t6](Id,[x],[y]) VALUES 
+(1,250698715)
 GO
 
 DECLARE tid int, sid int, cid int
@@ -1877,32 +1825,4 @@ GO
 DECLARE tid int, sid int, cid int
 SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
 SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 'Gen'
-GO
-DECLARE tid int, sid int, cid int
-SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
-SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't0'
-GO
-DECLARE tid int, sid int, cid int
-SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
-SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't1'
-GO
-DECLARE tid int, sid int, cid int
-SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
-SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't2'
-GO
-DECLARE tid int, sid int, cid int
-SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
-SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't3'
-GO
-DECLARE tid int, sid int, cid int
-SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
-SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't4'
-GO
-DECLARE tid int, sid int, cid int
-SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
-SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't5'
-GO
-DECLARE tid int, sid int, cid int
-SET sid = Id FROM sys.Schema WHERE Name = 'rtest'
-SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 't6'
 GO";

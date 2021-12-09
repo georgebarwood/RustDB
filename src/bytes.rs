@@ -23,6 +23,7 @@ pub fn fragment_type(len: usize) -> usize {
             result = ft;
         }
     }
+    println!("fragment_type for len={} = {}", len, result );
     result
 }
 

@@ -98,7 +98,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool) 
             if let Some((pp, off)) = t.ix_get(db, keys, 0) {
                 let p = &mut *pp.borrow_mut();
                 let off = off + t.info.off[2];
-                let (val, oldcode) = Value::load(db, STRING, &p.data, off);
+                let (val, oldcode) = Value::load(db, BIGSTR, &p.data, off);
                 if val.str() != source {
                     db.delcode(oldcode);
                     let val = Value::String(source);

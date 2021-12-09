@@ -143,8 +143,8 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-// use std::collections::{HashMap,HashSet};
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::collections::{HashMap,HashSet};
+// use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 /// Utility functions and macros, [SmallSet].
 #[cfg(feature = "max")]
@@ -551,7 +551,10 @@ GO
 
     /// Delete encoding.
     pub(crate) fn delcode(self: &DB, code: Code) {
-        self.bs[code.ft].delcode(self, code.id);
+        if code.id != u64::MAX
+        {
+            self.bs[code.ft].delcode(self, code.id);
+        }
     }
 
     /// Allocate a page of underlying file storage.
