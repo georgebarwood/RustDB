@@ -171,7 +171,7 @@ pub mod init;
 /// Backing [Storage] for database. See also [AtomicFile].
 pub mod stg;
 
-/// Page storage and sharing, [SharedPagedData] and [AccessPagedData]
+/// Page storage and sharing, [SharedPagedData] and [AccessPagedData].
 pub mod pstore;
 
 /// [AtomicFile]
@@ -221,7 +221,7 @@ pub mod exec;
 mod exec;
 
 #[cfg(feature = "builtin")]
-/// Expression types, result of parsing. [Expr].
+/// Expression types, result of parsing. [Expr], [DataKind], [ObjRef].
 pub mod expr;
 #[cfg(not(feature = "builtin"))]
 mod expr;
@@ -305,7 +305,7 @@ pub struct Database {
     pub err: Cell<bool>,
 }
 
-const SYS_ROOT_LAST : u64 = 15;
+const SYS_ROOT_LAST: u64 = 15;
 
 impl Database {
     /// Construct a new DB, based on the specified file.
@@ -330,7 +330,7 @@ impl Database {
         let sys_index_col = tb.nt("IndexColumn", &[("Index", INT), ("ColId", INT)]);
         let sys_function = tb.nt(
             "Function",
-            &[("Schema", INT), ("Name", STRING), ("Def", BIGSTR)],
+            &[("Schema", INT), ("Name", NAMESTR), ("Def", BIGSTR)],
         );
         sys_schema.add_index(tb.rt(), vec![0]);
         sys_table.add_index(tb.rt(), vec![1, 2]);
@@ -362,7 +362,7 @@ impl Database {
             err: Cell::new(false),
         });
 
-        assert!(  tb.alloc as u64 - 1 == SYS_ROOT_LAST );
+        assert!(tb.alloc as u64 - 1 == SYS_ROOT_LAST);
 
         if is_new {
             for _ft in 0..bytes::NFT {
@@ -385,7 +385,7 @@ CREATE TABLE sys.Table( Root int, Schema int, Name string, IdGen int )
 CREATE TABLE sys.Column( Table int, Name string, Type int )
 CREATE TABLE sys.Index( Root int, Table int, Name string )
 CREATE TABLE sys.IndexColumn( Index int, ColId int )
-CREATE TABLE sys.Function( Schema int, Name string, Def string(249) )
+CREATE TABLE sys.Function( Schema int, Name string(31), Def string(249) )
 GO
 CREATE INDEX ByName ON sys.Schema(Name)
 CREATE INDEX BySchemaName ON sys.Table(Schema,Name)
@@ -551,8 +551,7 @@ GO
 
     /// Delete encoding.
     pub(crate) fn delcode(self: &DB, code: Code) {
-        if code.id != u64::MAX
-        {
+        if code.id != u64::MAX {
             self.bs[code.ft].delcode(self, code.id);
         }
     }
@@ -602,11 +601,10 @@ impl TableBuilder {
         table
     }
 
-    fn rt(&mut self) -> u64
-    {
-       let result = self.alloc;
-       self.alloc += 1;
-       result as u64
+    fn rt(&mut self) -> u64 {
+        let result = self.alloc;
+        self.alloc += 1;
+        result as u64
     }
 }
 

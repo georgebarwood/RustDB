@@ -149,6 +149,7 @@ pub const KBITS: usize = 3;
 pub const NONE: DataType = DataKind::None as usize;
 pub const BINARY: DataType = DataKind::Binary as usize + (16 << KBITS);
 pub const STRING: DataType = DataKind::String as usize + (16 << KBITS);
+pub const NAMESTR: DataType = DataKind::String as usize + (32 << KBITS);
 pub const BIGSTR: DataType = DataKind::String as usize + (250 << KBITS);
 pub const INT: DataType = DataKind::Int as usize + (8 << KBITS);
 pub const INT4: DataType = DataKind::Int as usize + (4 << KBITS);

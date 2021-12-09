@@ -35,30 +35,26 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn dump(&self, db: &DB)
-    {
-      println!("Dumping Table {}", self.info.name.str() );
-      let mut row = self.row();
-      for ( pp, off ) in self.scan(db)
-      {
-        let p = pp.borrow();
-        let data = &p.data[off..];
-        row.load(&db, data);
-        println!( "row id={} values={:?}", row.id, row.values );
-      }
+    pub fn dump(&self, db: &DB) {
+        println!("Dumping Table {}", self.info.name.str());
+        let mut row = self.row();
+        for (pp, off) in self.scan(db) {
+            let p = pp.borrow();
+            let data = &p.data[off..];
+            row.load(&db, data);
+            println!("row id={} values={:?}", row.id, row.values);
+        }
     }
-    pub fn dump_index(self : &TablePtr, db: &DB, ix: usize)
-    {
-      println!("Dumping Index {} ix={}", self.info.name.str(), ix );
-      let mut row = self.row();
-      let keys = Vec::new();
-      for ( pp, off ) in self.scan_keys(db,keys,ix)
-      {
-        let p = pp.borrow();
-        let data = &p.data[off..];
-        row.load(&db, data);
-        println!( "row id={} values={:?}", row.id, row.values );
-      }
+    pub fn dump_index(self: &TablePtr, db: &DB, ix: usize) {
+        println!("Dumping Index {} ix={}", self.info.name.str(), ix);
+        let mut row = self.row();
+        let keys = Vec::new();
+        for (pp, off) in self.scan_keys(db, keys, ix) {
+            let p = pp.borrow();
+            let data = &p.data[off..];
+            row.load(&db, data);
+            println!("row id={} values={:?}", row.id, row.values);
+        }
     }
 
     /// Construct a table with specified info.

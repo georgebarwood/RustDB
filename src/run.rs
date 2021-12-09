@@ -63,7 +63,7 @@ pub struct ForState {
 }
 impl std::fmt::Debug for ForState {
     fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
-       Ok(())
+        Ok(())
     }
 }
 
@@ -74,7 +74,7 @@ pub struct ForSortState {
 }
 impl std::fmt::Debug for ForSortState {
     fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
-       Ok(())
+        Ok(())
     }
 }
 

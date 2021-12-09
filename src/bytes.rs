@@ -56,9 +56,8 @@ impl ByteStorage {
             if let Some((pp, off)) = self.file.clone().dsc(db, Box::new(start)).next() {
                 let p = pp.borrow();
                 result = 1 + util::getu64(&p.data, off);
-                
             }
-           self.id_gen.set(result);
+            self.id_gen.set(result);
         }
         result
     }
