@@ -1074,7 +1074,7 @@ impl<'a> Parser<'a> {
                 let o = self.obj_ref();
                 self.read_id(b"TO");
                 let n = self.obj_ref();
-                self.b.dop(DO::RenameTsble(o, n));
+                self.b.dop(DO::RenameTable(o, n));
             }
             b"FN" => {
                 let o = self.obj_ref();

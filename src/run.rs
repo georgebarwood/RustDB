@@ -125,7 +125,7 @@ pub enum DO {
     CreateFunction(ObjRef, Rc<String>, bool),
     AlterTable(ObjRef, Vec<AlterAction>),
     RenameSchema(String, String),
-    RenameTsble(ObjRef, ObjRef),
+    RenameTable(ObjRef, ObjRef),
     RenameFunction(ObjRef, ObjRef),
     DropSchema(String),
     DropTable(ObjRef),

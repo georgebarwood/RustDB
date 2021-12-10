@@ -244,7 +244,13 @@ impl<'r> EvalEnv<'r> {
             DO::DropSchema(name) => self.drop_schema(name),
             DO::DropTable(name) => self.drop_table(name),
             DO::DropFunction(name) => self.drop_function(name),
-            _ => panic!(),
+            DO::DropIndex(_,_) => panic!(),
+
+            DO::RenameSchema(_,_) => panic!(),
+            DO::RenameTable(_,_) => panic!(),
+            DO::RenameFunction(_,_) => panic!(),
+
+            DO::AlterTable(_,_) => panic!(),
         }
     }
 

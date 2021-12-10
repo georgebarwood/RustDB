@@ -81,9 +81,11 @@
 //! [AtomicFile] ensures that database updates are all or nothing.
 //!
 //!# ToDo List
-//! Unify GenTransaction and WebTransaction. Check multiple file upload works ok with local http parsing.
+//! Unify GenTransaction and WebTransaction. File upload doesn't work with WebTranasaction currently.
 //!
-//! Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX(DONE).
+//! Implement DROP INDEX, ALTER TABLE, RENAME(SCHEMA/TABLE/FUNCTION).
+//!
+//! Combine SortedFile pages after deletes ( either at once or later ).
 //!
 //! Implement email in example program. Replication of log files. Server status.
 //!
