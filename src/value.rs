@@ -52,9 +52,6 @@ impl Value {
                 let (bytes, u) = get_bytes(db, &data[off..], size);
                 code = u;
                 let str = String::from_utf8(bytes).unwrap();
-                if true && code.id != u64::MAX {
-                    println!("loaded str {} code={:?}", str, code);
-                }
                 Value::String(Rc::new(str))
             }
             DataKind::Bool => Value::Bool(data[off] != 0),

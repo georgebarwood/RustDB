@@ -76,8 +76,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
                 t.insert(db, &mut row);
             }
         }
-        if root > SYS_ROOT_LAST
-        {
+        if root > SYS_ROOT_LAST {
             table.add_index(root, info.cols.clone());
             table.init_index(db);
         }

@@ -41,7 +41,7 @@ impl Table {
         for (pp, off) in self.scan(db) {
             let p = pp.borrow();
             let data = &p.data[off..];
-            row.load(&db, data);
+            row.load(db, data);
             println!("row id={} values={:?}", row.id, row.values);
         }
     }
@@ -52,7 +52,7 @@ impl Table {
         for (pp, off) in self.scan_keys(db, keys, ix) {
             let p = pp.borrow();
             let data = &p.data[off..];
-            row.load(&db, data);
+            row.load(db, data);
             println!("row id={} values={:?}", row.id, row.values);
         }
     }
@@ -235,14 +235,12 @@ impl Table {
     }
 
     /// Initialises last index ( called just after add_index ).
-    pub fn init_index(&self, db: &DB)
-    {
+    pub fn init_index(&self, db: &DB) {
         let mut row = self.row();
         let ixlist = self.ixlist.borrow();
-        let (f,cols) = ixlist.last().unwrap();
+        let (f, cols) = ixlist.last().unwrap();
 
-        for (pp,off) in self.scan(db)
-        {
+        for (pp, off) in self.scan(db) {
             let p = pp.borrow();
             let data = &p.data[off..];
             row.load(db, data);

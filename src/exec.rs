@@ -235,6 +235,7 @@ impl<'r> EvalEnv<'r> {
             DO::Insert(tp, cols, values) => self.insert(tp.clone(), cols, values),
             DO::Update(assigns, from, wher) => self.update(assigns, from, wher),
             DO::Delete(from, wher) => self.delete(from, wher),
+
             DO::CreateSchema(name) => sys::create_schema(&self.db, name),
             DO::CreateTable(ti) => sys::create_table(&self.db, ti),
             DO::CreateIndex(x) => sys::create_index(&self.db, x),
@@ -244,13 +245,13 @@ impl<'r> EvalEnv<'r> {
             DO::DropSchema(name) => self.drop_schema(name),
             DO::DropTable(name) => self.drop_table(name),
             DO::DropFunction(name) => self.drop_function(name),
-            DO::DropIndex(_,_) => panic!(),
+            DO::DropIndex(_, _) => panic!(),
 
-            DO::RenameSchema(_,_) => panic!(),
-            DO::RenameTable(_,_) => panic!(),
-            DO::RenameFunction(_,_) => panic!(),
+            DO::RenameSchema(_, _) => panic!(),
+            DO::RenameTable(_, _) => panic!(),
+            DO::RenameFunction(_, _) => panic!(),
 
-            DO::AlterTable(_,_) => panic!(),
+            DO::AlterTable(_, _) => panic!(),
         }
     }
 
