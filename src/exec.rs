@@ -509,7 +509,7 @@ impl<'r> EvalEnv<'r> {
         }
     }
 
-    fn drop_index(&mut self, tname: &ObjRef, iname: &String) {
+    fn drop_index(&mut self, tname: &ObjRef, iname: &str) {
         let (t, ix, id) = sys::get_index(&self.db, tname, iname);
         let sql = "EXEC sys.DropIndex(".to_string() + &id.to_string() + ")";
         self.db.run(&sql, self.tr);
