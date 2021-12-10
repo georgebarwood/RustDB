@@ -234,6 +234,15 @@ impl Table {
         list.push((sf, Rc::new(cols)));
     }
 
+    // Delete the specified index.
+    pub fn delete_index(&self, db: &DB, ix: usize) {
+        let ixlist = &*self.ixlist.borrow();
+        let (f, cols) = &ixlist[ix];
+        let row = self.row();
+        let ixr = IndexRow::new(self, cols.clone(), &row);
+        f.free_pages(db, &ixr);
+    }
+
     /// Initialises last index ( called just after add_index ).
     pub fn init_index(&self, db: &DB) {
         let mut row = self.row();

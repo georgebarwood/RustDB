@@ -1063,29 +1063,11 @@ impl<'a> Parser<'a> {
     }
 
     fn s_rename(&mut self) {
-        match self.id_ref() {
-            b"SCHEMA" => {
-                let s = self.id();
-                self.read_id(b"TO");
-                let t = self.id();
-                self.b.dop(DO::RenameSchema(s, t));
-            }
-            b"TABLE" => {
-                let o = self.obj_ref();
-                self.read_id(b"TO");
-                let n = self.obj_ref();
-                self.b.dop(DO::RenameTable(o, n));
-            }
-            b"FN" => {
-                let o = self.obj_ref();
-                self.read_id(b"TO");
-                let n = self.obj_ref();
-                self.b.dop(DO::RenameFunction(o, n));
-            }
-            _ => {
-                panic!("RENAME : TABLE,FN.. expected");
-            }
-        }
+        self.read_id(b"TABLE");
+        let o = self.obj_ref();
+        self.read_id(b"TO");
+        let n = self.obj_ref();
+        self.b.dop(DO::RenameTable(o, n));
     }
 
     fn s_alter_table(&mut self) {

@@ -245,12 +245,8 @@ impl<'r> EvalEnv<'r> {
             DO::DropSchema(name) => self.drop_schema(name),
             DO::DropTable(name) => self.drop_table(name),
             DO::DropFunction(name) => self.drop_function(name),
-            DO::DropIndex(_, _) => panic!(),
-
-            DO::RenameSchema(_, _) => panic!(),
+            DO::DropIndex(tname, iname) => self.drop_index(tname, iname),
             DO::RenameTable(_, _) => panic!(),
-            DO::RenameFunction(_, _) => panic!(),
-
             DO::AlterTable(_, _) => panic!(),
         }
     }
@@ -511,5 +507,14 @@ impl<'r> EvalEnv<'r> {
         } else {
             panic!("Drop Function not found {}", name.str());
         }
+    }
+
+    fn drop_index(&mut self, tname: &ObjRef, iname: &String) {
+        let (t, ix, id) = sys::get_index(&self.db, tname, iname);
+        let sql = "EXEC sys.DropIndex(".to_string() + &id.to_string() + ")";
+        self.db.run(&sql, self.tr);
+        self.db.tables.borrow_mut().remove(tname);
+        self.db.function_reset.set(true);
+        t.delete_index(&self.db, ix);
     }
 } // impl EvalEnv

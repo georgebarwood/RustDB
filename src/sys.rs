@@ -165,6 +165,27 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)> {
     None
 }
 
+pub fn get_index(db: &DB, tname: &ObjRef, iname: &String) -> (TablePtr, usize, u64) {
+    if let Some(t) = get_table(db, tname) {
+        // Loop through indexes. Columns are Root, Table, Name.
+        let ixt = &db.sys_index;
+        let mut ix = 0;
+        let key = Value::Int(t.id);
+        for (pp, off) in ixt.scan_key(db, key, 0) {
+            let p = &pp.borrow();
+            let a = ixt.access(p, off);
+            if &a.str(db, 2) == iname {
+                let id = a.id();
+                return (t, ix, id);
+            }
+            ix += 1;
+        }
+        panic!("index {} not found", iname);
+    } else {
+        panic!("table {} not found", tname.str());
+    }
+}
+
 /// Gets a table from the database.
 pub fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr> {
     if let Some((table_id, root, id_gen)) = get_table0(db, name) {

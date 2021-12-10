@@ -83,7 +83,7 @@
 //!# ToDo List
 //! Unify GenTransaction and WebTransaction. File upload doesn't work with WebTranasaction currently.
 //!
-//! Implement DROP INDEX, ALTER TABLE, RENAME(SCHEMA/TABLE/FUNCTION).
+//! Implement ALTER TABLE, RENAME TABLE.
 //!
 //! Combine SortedFile pages after deletes ( either at once or later ).
 //!

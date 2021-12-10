@@ -1,5 +1,6 @@
 pub const INITSQL : &str = "
 
+
 CREATE FN [sys].[TypeName]( t int ) RETURNS string AS 
 BEGIN 
   DECLARE p int
@@ -197,6 +198,12 @@ BEGIN
   FOR name = Name FROM sys.Function WHERE Schema = sid EXECUTE( 'DROP FN ' | sys.Dot(schema,name) )
   FOR name = Name FROM sys.Table WHERE Schema = sid EXECUTE( 'DROP TABLE ' | sys.Dot(schema,name) )
   DELETE FROM sys.Schema WHERE Id = sid
+END
+GO
+CREATE FN [sys].[DropIndex]( ix int ) AS
+BEGIN
+  DELETE FROM sys.IndexColumn WHERE Index = ix
+  DELETE FROM sys.Index WHERE Id = ix
 END
 GO
 CREATE FN [sys].[Dot]( schema string, name string ) RETURNS string AS
@@ -1738,6 +1745,9 @@ SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 'Column'
 SET cid=Id FROM sys.Column WHERE Table = tid AND Name = 'Table'
 INSERT INTO browse.Column(Id,[Position],[Label],[Description],[RefersTo],[Default],[InputCols],[InputFunction],[InputRows],[Style],[DisplayFunction],[ParseFunction]) 
 VALUES (cid, 0,'','',2,'',0,'',0,0,'','')
+SET cid=Id FROM sys.Column WHERE Table = tid AND Name = 'Type'
+INSERT INTO browse.Column(Id,[Position],[Label],[Description],[RefersTo],[Default],[InputCols],[InputFunction],[InputRows],[Style],[DisplayFunction],[ParseFunction]) 
+VALUES (cid, 0,'','',0,'',0,'',0,0,'sys.TypeName','')
 GO
 DECLARE tid int, sid int, cid int
 SET sid = Id FROM sys.Schema WHERE Name = 'sys'
@@ -1817,7 +1827,7 @@ SET sid = Id FROM sys.Schema WHERE Name = 'email'
 SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 'Queue'
 SET cid=Id FROM sys.Column WHERE Table = tid AND Name = 'msg'
 INSERT INTO browse.Column(Id,[Position],[Label],[Description],[RefersTo],[Default],[InputCols],[InputFunction],[InputRows],[Style],[DisplayFunction],[ParseFunction]) 
-VALUES (cid, 0,'','',0,'',0,'',0,0,'','')
+VALUES (cid, 0,'','',12,'',0,'',0,0,'','')
 SET cid=Id FROM sys.Column WHERE Table = tid AND Name = 'sendtime'
 INSERT INTO browse.Column(Id,[Position],[Label],[Description],[RefersTo],[Default],[InputCols],[InputFunction],[InputRows],[Style],[DisplayFunction],[ParseFunction]) 
 VALUES (cid, 0,'','',0,'date.Ticks()',0,'',0,0,'date.MicroSecToString','')
