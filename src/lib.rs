@@ -83,7 +83,7 @@
 //!# ToDo List
 //! Unify GenTransaction and WebTransaction. Check multiple file upload works ok with local http parsing.
 //!
-//! Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX.
+//! Implement DROP INDEX, ALTER TABLE, fully implement CREATE INDEX(DONE).
 //!
 //! Implement email in example program. Replication of log files. Server status.
 //!

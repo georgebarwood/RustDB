@@ -234,6 +234,23 @@ impl Table {
         list.push((sf, Rc::new(cols)));
     }
 
+    /// Initialises last index ( called just after add_index ).
+    pub fn init_index(&self, db: &DB)
+    {
+        let mut row = self.row();
+        let ixlist = self.ixlist.borrow();
+        let (f,cols) = ixlist.last().unwrap();
+
+        for (pp,off) in self.scan(db)
+        {
+            let p = pp.borrow();
+            let data = &p.data[off..];
+            row.load(db, data);
+            let ixr = IndexRow::new(self, cols.clone(), &row);
+            f.insert(db, &ixr);
+        }
+    }
+
     /// Utility for accessing fields by number.
     pub fn access<'d, 't>(&'t self, p: &'d Page, off: usize) -> Access<'d, 't> {
         Access::<'d, 't> {

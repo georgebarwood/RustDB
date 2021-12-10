@@ -79,6 +79,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
         if root > SYS_ROOT_LAST
         {
             table.add_index(root, info.cols.clone());
+            table.init_index(db);
         }
     } else {
         panic!("table not found: {}", &info.tname.str());

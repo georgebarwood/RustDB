@@ -1322,7 +1322,7 @@ BEGIN
      | '<br>SELECT Cust, Total FROM dbo.Order'
      | '<br>EXEC date.Test( 2020, 1, 1, 60 )'
      | '<br>CREATE TABLE dbo.Cust( LastName string, Age int )'
-     | '<br>CREATE INDEX ByLastName on dbo.Cust(LastName)'
+     | '<br>CREATE INDEX ByLastName ON dbo.Cust(LastName)'
      | '<br>CREATE FN handler.[/MyPage]() AS BEGIN END'
      | '<br>SELECT ''hash='' | ARGON( ''argon2i!'', ''delicious salt'' )'
      | '<br>EXEC web.SetCookie(''username'',''fred'',''Max-Age=1000000000'')'
