@@ -1,5 +1,5 @@
 use crate::*;
-use Instruction::*;
+use Instruction::{DataOp, ForNext, ForSortNext, Jump, JumpIfFalse};
 
 /// Holds function name, line, column and message.
 #[derive(Clone)]
@@ -246,6 +246,7 @@ impl<'a> Block<'a> {
         }
     }
 
+    /// Check the parameter kinds match the function.
     pub fn check_types(&self, r: &FunctionPtr, pkinds: &[DataKind]) {
         if pkinds.len() != r.param_count {
             panic!("param count mismatch");
