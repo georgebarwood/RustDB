@@ -9,6 +9,7 @@ pub struct EvalEnv<'r> {
     pub tr: &'r mut dyn Transaction,
     pub call_depth: usize,
 }
+
 impl<'r> EvalEnv<'r> {
     /// Construct a new EvalEnv.
     pub fn new(db: DB, tr: &'r mut dyn Transaction) -> Self {
@@ -590,7 +591,6 @@ impl<'r> EvalEnv<'r> {
                 oldrow.load(db, data);
                 newrow.id = oldrow.id;
                 for (i, j) in colmap.iter().enumerate() {
-                    
                     newrow.values[i] = oldrow.values[*j].clone();
                 }
                 nt.insert(db, &mut newrow);
@@ -600,9 +600,9 @@ impl<'r> EvalEnv<'r> {
             t.free_pages(db);
             sys::set_root(db, nt.id, root);
 
-            self.db.tables.borrow_mut().remove(name);
-            self.db.tables.borrow_mut().insert(name.clone(),nt);
-            self.db.function_reset.set(true);
+            db.tables.borrow_mut().remove(name);
+            db.tables.borrow_mut().insert(name.clone(), nt);
+            db.function_reset.set(true);
         } else {
             panic!("Alter Table not found {}", name.str());
         }

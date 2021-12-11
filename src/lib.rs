@@ -83,12 +83,8 @@
 //!# ToDo List
 //! Unify GenTransaction and WebTransaction. File upload doesn't work with WebTransaction currently.
 //!
-//! Implement ALTER TABLE, RENAME TABLE.
+//! Implement RENAME TABLE.
 //! Design of ALTER TABLE : want to preserve Table Id and all Field Ids.
-//!
-//! Make copy of existing Table Info, adjust it, based on AlterActions.
-//! Copy all reords to new file.
-//! Add indexes.
 //!
 //! Combine SortedFile pages after deletes ( either at once or later ).
 //!
@@ -97,6 +93,9 @@
 //! Sort out error handling for PARSEINT etc.
 //!
 //! Work on improving/testing SQL code, browse schema, float I/O. Login.
+//!
+//! If updating several databases atomically, want to be able to share the upd file.
+//! So have mechanism to put updates to several files in one upd file.
 
 pub use crate::{
     atomfile::AtomicFile,

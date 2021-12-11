@@ -1,7 +1,7 @@
 pub const INITSQL : &str = "
 
 
-CREATE FN [sys].[AddColumn]( t int, name string, typ string ) 
+CREATE FN [sys].[AddColumn]( t int, name string, typ int ) 
 AS 
 BEGIN 
   INSERT INTO sys.Column( Table, Name, Type ) VALUES (t, name, typ)
@@ -1293,6 +1293,10 @@ BEGIN
      | '<br>SELECT ''hash='' | ARGON( ''argon2i!'', ''delicious salt'' )'
      | '<br>EXEC web.SetCookie(''username'',''fred'',''Max-Age=1000000000'')'
      | '<br>EXEC rtest.OneTest()'
+     | '<br>DROP INDEX ByLastName ON dbo.Cust'  
+     | '<br>ALTER TABLE dbo.Cust MODIFY FirstName string(20), ADD [City] string, PostCode string'
+     | '<br>ALTER TABLE dbo.Cust DROP PostCode'
+     | '<br>DROP TABLE dbo.Cust'
    EXEC web.Trailer()
 END
 GO
@@ -1487,17 +1491,20 @@ GO
 CREATE FN [handler].[/OrderSummary]() AS
 BEGIN
   EXEC web.Head( 'Order Summary' )
-  SELECT '<table><tr><th>Cust<th>Sum<th>Count</tr>'
+  SELECT '<table><tr><th>Cust<th>Total<th>Count</tr>'
 
-  DECLARE cust int, total int, sum int, count int
+  DECLARE cust int, total int, sum int, count int, gsum int, gcount int
   FOR cust = Id FROM dbo.Cust ORDER BY FirstName, LastName
   BEGIN
     SET sum = 0, count = 0
-    FOR total = Total FROM dbo.Order WHERE Cust = cust SET sum = sum + total, count = count + 1
+    FOR total = Total FROM dbo.Order WHERE Cust = cust 
+      SET sum = sum + total, count = count + 1
     SELECT '<tr><td><a href=ShowRow?t=10&k=' | cust | '>' | dbo.CustName(cust) | '</a>' 
       | '<td align=right>' | sum | '<td align=right>' | count
+    SET gsum = gsum + sum, gcount = gcount + count
   END
   SELECT '</table>'
+  SELECT '<p>Grand total =' | gsum | ' count=' | gcount
   EXEC web.Trailer()
 END
 GO
@@ -1568,9 +1575,7 @@ END
 GO
 --############################################
 CREATE SCHEMA [dbo]
-CREATE TABLE [dbo].[Cust]([FirstName] string,[LastName] string,[Age] int,[Postcode] string) 
-GO
-CREATE INDEX [ByLastName] ON [dbo].[Cust]([LastName])
+CREATE TABLE [dbo].[Cust]([FirstName] string(20),[LastName] string,[Age] int,[Postcode] string,[City] string) 
 GO
 CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int) 
 GO
@@ -1602,95 +1607,28 @@ GO
 CREATE FN [dbo].[MakeOrders]() AS
 BEGIN 
   DELETE FROM dbo.Order WHERE 1 = 1
+  DECLARE date int SET date = date.DaysToYearMonthDay(date.Today())
   DECLARE @I int 
   SET @I=0 
-  WHILE @I < 50 -- Use 5000000 to stress system a bit!
+  WHILE @I < 5000 -- Use 5000000 to stress system a bit!
   BEGIN 
-    INSERT INTO dbo.[Order](Cust,Total) VALUES(1+@I%7, ( 501 * (@I%11+@I%7) ) / 100 ) 
+    INSERT INTO dbo.[Order](Cust,Total,Date) VALUES(1+@I%7, ( 501 * (@I%11+@I%7) ) / 100, date ) 
     SET @I=@I+1 
   END
 END
 GO
-INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode]) VALUES 
-(1,'Mary','Poppins',65,'EC4 2NX')
-(2,'Clare','Smith',31,'GL3')
-(3,'Ron','Jones',45,'')
-(4,'Peter','Perfect',36,'')
-(5,'George','Washington',31,'WC1')
-(6,'Ron','Williams',49,'')
-(8,'Alex','Barwood',63,'GL2 4LZ')
+INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode],[City]) VALUES 
+(1,'Mary','Poppins',65,'EC4 2NX','')
+(2,'Clare','Smith',31,'GL3','')
+(3,'Ron','Jones',45,'','')
+(4,'Peter','Perfect',36,'','')
+(5,'George','Washington',31,'WC1','')
+(6,'Ron','Williams',49,'','')
+(7,'Ben','Johnson',0,'','')
+(8,'Alex','Barwood',63,'GL2 4LZ','')
 GO
 
 INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date]) VALUES 
-(51,1,75,1034482)
-(52,2,10,1034273)
-(53,3,20,1034273)
-(54,4,30,1034273)
-(55,1,40,1034273)
-(57,1,60,1034338)
-(58,1,35,1034273)
-(59,2,45,1034273)
-(60,3,55,1034273)
-(61,4,65,1034273)
-(62,1,22,1034437)
-(63,1,30,1033842)
-(64,7,42,1036563)
-(65,1,15,1034273)
-(66,2,25,1034273)
-(67,3,35,1034273)
-(68,4,45,1034273)
-(70,6,65,1035809)
-(71,7,75,1036097)
-(72,1,50,1034273)
-(73,2,5,1034273)
-(74,3,15,1034273)
-(75,4,25,1034273)
-(76,5,35,1034273)
-(77,1,45,1034785)
-(78,7,55,1034273)
-(79,1,30,1034273)
-(80,2,40,1034273)
-(81,3,50,1034273)
-(82,1,60,1006305)
-(83,2,70,1034273)
-(84,6,25,1035297)
-(85,7,35,1035297)
-(86,1,10,1034273)
-(87,2,20,1034273)
-(88,3,30,1034273)
-(89,4,40,1034273)
-(90,1,50,1034273)
-(91,6,160,1034465)
-(92,1,70,1037195)
-(94,2,55,1034273)
-(95,3,10,1034273)
-(96,4,20,1034273)
-(97,5,30,1036986)
-(98,6,40,1034785)
-(99,7,50,1034785)
-(100,1,25,1034273)
-(101,1,99,1034273)
-(102,5,102,1034273)
-(103,4,111,1034273)
-(104,1,50,1034273)
-(105,1,99,1034273)
-(106,1,0,1034273)
-(107,1,56,1034273)
-(108,5,99,1034273)
-(109,5,67,1034281)
-(110,5,29,1034273)
-(111,1,99,1034273)
-(112,4,19,1034273)
-(113,4,123,1034273)
-(114,1,56,1034273)
-(115,1,77,1034273)
-(116,1,99,1034461)
-(117,1,99,1034465)
-(118,5,999,1035114)
-(120,8,500,1035114)
-(121,5,99,1035114)
-(122,8,100,1035123)
-(123,8,99,1035142)
 GO
 
 --############################################
