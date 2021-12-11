@@ -582,7 +582,7 @@ impl<'r> EvalEnv<'r> {
                 }
                 nt.insert(db, &mut newrow);
             }
-            let sql = format!("EXEC sys.AlterTable({})", t.id);
+            let sql = format!("EXEC sys.ClearTable({})", t.id);
             db.run(&sql, self.tr);
             t.free_pages(db);
             sys::set_root(db, nt.id, root);

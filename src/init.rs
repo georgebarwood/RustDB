@@ -1,18 +1,14 @@
 pub const INITSQL : &str = "
 
-
 CREATE FN [sys].[AddColumn]( t int, name string, typ int ) 
 AS 
 BEGIN 
   INSERT INTO sys.Column( Table, Name, Type ) VALUES (t, name, typ)
 END
 GO
-CREATE FN [sys].[AlterTable](t int) AS 
+CREATE FN [sys].[ClearTable](t int) AS 
 BEGIN 
-
-  /* Delete the rows */
   EXECUTE( 'DELETE FROM ' | sys.TableName(t) | ' WHERE true' )
-
 END
 GO
 CREATE FN [sys].[ColName]( table int, colId int ) RETURNS string AS
@@ -1572,7 +1568,7 @@ END
 GO
 --############################################
 CREATE SCHEMA [dbo]
-CREATE TABLE [dbo].[Cust]([FirstName] string(20),[LastName] string,[Age] int,[Postcode] string,[City] string) 
+CREATE TABLE [dbo].[Cust]([FirstName] string(10),[LastName] string(20),[Age] int,[Postcode] string(10),[City] string) 
 GO
 CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int) 
 GO
