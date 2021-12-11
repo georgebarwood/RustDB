@@ -15,6 +15,8 @@ use rustdb::{
     Part, SharedPagedData, SimpleFileStorage, Transaction, Value, INITSQL,
 };
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
+use std::{fs, fs::OpenOptions, io::Write};
+
 use tokio::sync::{mpsc, oneshot};
 use tower::ServiceBuilder;
 use tower_cookies::{CookieManagerLayer, Cookies};
@@ -75,10 +77,17 @@ impl SharedState {
 async fn main() {
     // console_subscriber::init();
 
-    // First construct an AtomicFile. This ensures that updates to the database are "all or nothing".
+    // Construct an AtomicFile. This ensures that updates to the database are "all or nothing".
     let file = Box::new(SimpleFileStorage::new("..\\test.rustdb"));
     let upd = Box::new(SimpleFileStorage::new("..\\test.upd"));
     let stg = Box::new(AtomicFile::new(file, upd));
+
+    // File for logging transactions.
+    let logfile = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("../test.logfile")
+        .unwrap();
 
     // SharedPagedData allows for one writer and multiple readers.
     // Note that readers never have to wait, they get a "virtual" read-only copy of the database.
@@ -115,7 +124,7 @@ async fn main() {
 
     // Start the logging thread (synchronous)
     thread::spawn(move || {
-        log_loop(log_rx);
+        log_loop(log_rx, logfile);
     });
 
     // Start the email thread (asynchronous)
@@ -235,14 +244,7 @@ impl IntoResponse for ServerTrans {
 }
 
 /// thread that logs write transactions to a file.
-fn log_loop(rx: std::sync::mpsc::Receiver<String>) {
-    use std::{fs::OpenOptions, io::Write};
-    let filename = "../test.logfile";
-    let mut logfile = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(filename)
-        .unwrap();
+fn log_loop(rx: std::sync::mpsc::Receiver<String>, mut logfile: fs::File) {
     loop {
         let logstr = rx.recv().unwrap();
         let _err = logfile.write_all(logstr.as_bytes());
@@ -285,15 +287,25 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
                 let to = a.str(&db, 1);
                 let title = a.str(&db, 2);
                 let body = a.str(&db, 3);
+
+                // Temporary test to see what happens with rogue async task...
+                // println!("Sleeping for 60 seconds");
+                // std::thread::sleep( std::time::Duration::from_secs(60) );
+                // println!("Doing big sum");
+                // let mut x = 0; for i in 0..1000000000000u64 { x += i % 10; }
+                // println!("Done big sum, x={}", x );
+
                 println!(
                     "Email from={} to={} title={} body={}",
                     from, to, title, body
                 );
+
                 // Actual sending of email not yet implemented...
                 sent.push(msg);
             }
         }
         for msg in sent {
+            tokio::task::yield_now().await;
             email_sent(&state, msg).await;
         }
     }
@@ -301,7 +313,7 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
 
 async fn email_sent(state: &SharedState, msg: u64) {
     let mut st = ServerTrans::new();
-    st.x.qy.sql = Arc::new( "EXEC email.Sent(".to_string() + &msg.to_string() + ")" );
+    st.x.qy.sql = Arc::new("EXEC email.Sent(".to_string() + &msg.to_string() + ")");
     state.process(st).await;
 }
 
