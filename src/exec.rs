@@ -519,22 +519,54 @@ impl<'r> EvalEnv<'r> {
     }
 
     fn alter_table(&mut self, name: &ObjRef, actions: &[AlterCol]) {
-        if let Some(t) = sys::get_table(&self.db, name) {
+        let db = &self.db;
+        if let Some(t) = sys::get_table(db, name) {
+            if t.ixlist.borrow().len() > 0 {
+                panic!("alter table indexes have to be dropped first");
+            }
+
             for act in actions {
                 match act {
-                    AlterCol::Drop(name) | AlterCol::Modify(name, _) => {
+                    AlterCol::Add(name, _) | AlterCol::Modify(name, _) | AlterCol::Drop(name) => {
                         if !t.info.colmap.contains_key(name) {
                             panic!("column not found {}", name);
                         }
                     }
-                    _ => {}
                 }
+                let sql = match act {
+                    AlterCol::Add(name, typ) => {
+                        "EXEC sys.AddColumn(".to_string()
+                            + &t.id.to_string()
+                            + ",'"
+                            + name
+                            + "',"
+                            + &typ.to_string()
+                            + ")"
+                    }
+                    AlterCol::Modify(name, typ) => {
+                        "EXEC sys.ModifyColumn(".to_string()
+                            + &t.id.to_string()
+                            + ",'"
+                            + name
+                            + "',"
+                            + &typ.to_string()
+                            + ")"
+                    }
+                    AlterCol::Drop(name) => {
+                        "EXEC sys.DropColumn(".to_string() + &t.id.to_string() + ",'" + name + "')"
+                    }
+                };
+                db.run(&sql, self.tr);
             }
 
             let mut nci = ColInfo::empty(name.clone());
             let ci = &t.info;
+
+            let mut colmap = Vec::new(); // colmap is columns that need to be copied from old to new table.
             for i in 0..ci.colnames.len() {
-                nci.add_altered(ci, i, actions);
+                if nci.add_altered(ci, i, actions) {
+                    colmap.push(i);
+                }
             }
 
             for act in actions {
@@ -544,8 +576,32 @@ impl<'r> EvalEnv<'r> {
                     }
                 }
             }
+            let nci = Rc::new(nci);
 
-            panic!("alter table not yet fully implemented");
+            let root = db.alloc_page();
+            let nt = Table::new(t.id, root, t.id_gen.get(), nci);
+
+            let mut oldrow = t.row();
+            let mut newrow = nt.row();
+            for (pp, off) in t.scan(db) {
+                let p = pp.borrow();
+                let data = &p.data[off..];
+                oldrow.load(db, data);
+                newrow.id = oldrow.id;
+                for (i, j) in colmap.iter().enumerate() {
+                    
+                    newrow.values[i] = oldrow.values[*j].clone();
+                }
+                nt.insert(db, &mut newrow);
+            }
+            let sql = "EXEC sys.AlterTable(".to_string() + &t.id.to_string() + ")";
+            db.run(&sql, self.tr);
+            t.free_pages(db);
+            sys::set_root(db, nt.id, root);
+
+            self.db.tables.borrow_mut().remove(name);
+            self.db.tables.borrow_mut().insert(name.clone(),nt);
+            self.db.function_reset.set(true);
         } else {
             panic!("Alter Table not found {}", name.str());
         }

@@ -303,3 +303,15 @@ pub fn save_id_gen(db: &DB, id: u64, val: i64) {
     wa.set_int(3, val);
     t.file.set_dirty(p, &pp);
 }
+
+/// Update root page for table ( for ALTER TABLE ).
+pub fn set_root(db: &DB, id: i64, new_root: u64) {
+    let id = id as u64;
+    let t = &db.sys_table;
+    let (pp, off) = t.id_get(db, id).unwrap();
+    let p = &mut pp.borrow_mut();
+    let mut wa = t.write_access(p, off);
+    debug_assert!(wa.id() == id);
+    wa.set_int(0, new_root as i64);
+    t.file.set_dirty(p, &pp);
+}

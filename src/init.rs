@@ -1,6 +1,20 @@
 pub const INITSQL : &str = "
 
 
+CREATE FN [sys].[AddColumn]( t int, name string, typ string ) 
+AS 
+BEGIN 
+  INSERT INTO sys.Column( Table, Name, Type ) VALUES (t, name, typ)
+END
+GO
+CREATE FN [sys].[AlterTable](t int) AS 
+BEGIN 
+
+  /* Delete the rows */
+  EXECUTE( 'DELETE FROM ' | sys.TableName(t) | ' WHERE true' )
+
+END
+GO
 CREATE FN [sys].[ColName]( table int, colId int ) RETURNS string AS
 BEGIN
   DECLARE i int
@@ -47,6 +61,11 @@ GO
 CREATE FN [sys].[Dot]( schema string, name string ) RETURNS string AS
 BEGIN
   RETURN sys.QuoteName( schema ) | '.' | sys.QuoteName( name )
+END
+GO
+CREATE FN [sys].[DropColumn]( t int, cname string ) AS 
+BEGIN 
+  DELETE FROM sys.Column WHERE Table = t AND Name = cname
 END
 GO
 CREATE FN [sys].[DropIndex]( ix int ) AS
@@ -102,6 +121,11 @@ GO
 CREATE FN [sys].[IndexName]( index int ) RETURNS string AS
 BEGIN
   SET result = sys.QuoteName(Name) FROM sys.Index WHERE Id = index
+END
+GO
+CREATE FN [sys].[ModifyColumn]( t int, cname string, typ int ) AS 
+BEGIN 
+   UPDATE sys.Column SET Type = typ WHERE Table = t AND Name = cname
 END
 GO
 CREATE FN [sys].[QuoteName]( s string ) RETURNS string AS

@@ -392,14 +392,14 @@ impl ColInfo {
         false
     }
 
-    pub fn add_altered(&mut self, ci: &ColInfo, cnum: usize, actions: &[AlterCol]) {
+    pub fn add_altered(&mut self, ci: &ColInfo, cnum: usize, actions: &[AlterCol]) -> bool {
         let cname = &ci.colnames[cnum];
         let mut typ = ci.typ[cnum];
         for act in actions {
             match act {
                 AlterCol::Drop(name) => {
                     if name == cname {
-                        return;
+                        return false;
                     }
                 }
                 AlterCol::Modify(name, dt) => {
@@ -414,6 +414,7 @@ impl ColInfo {
             }
         }
         self.add(cname.clone(), typ);
+        true
     }
 
     /// Get a column number from a column name.
