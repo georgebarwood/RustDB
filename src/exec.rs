@@ -248,7 +248,6 @@ impl<'r> EvalEnv<'r> {
             DO::DropFunction(name) => self.drop_function(name),
             DO::DropIndex(tname, iname) => self.drop_index(tname, iname),
             DO::AlterTable(tname, actions) => self.alter_table(tname, actions),
-            DO::RenameTable(_, _) => panic!(),
         }
     }
 

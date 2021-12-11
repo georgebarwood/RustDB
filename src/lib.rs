@@ -83,9 +83,6 @@
 //!# ToDo List
 //! Unify GenTransaction and WebTransaction. File upload doesn't work with WebTransaction currently.
 //!
-//! Implement RENAME TABLE.
-//! Design of ALTER TABLE : want to preserve Table Id and all Field Ids.
-//!
 //! Combine SortedFile pages after deletes ( either at once or later ).
 //!
 //! Implement email in example program. Replication of log files. Server status.

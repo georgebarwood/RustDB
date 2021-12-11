@@ -1349,7 +1349,6 @@ SELECT '<h1>Manual</h1>
 <p>ALTER TABLE schema.tablename action1, action2 .... <p>The actions are as follows:
 <ul>
 <li>ADD Colname Coltype : a new column is added to the table.</li>
-<li>RENAME Colname TO NewColname : the column is renamed.</li>
 <li>MODIFY Colname Coltype : the datatype of an existing column is changed. The only changes allowed are between the different sizes of integers, and between float and double.</li>
 <li>DROP Colname : the column is removed from the table.</li>
 </ul>
@@ -1438,9 +1437,7 @@ SELECT '<h1>Manual</h1>
 <h3>CREATE INDEX</h3><p>CREATE INDEX indexname ON schema.tablename( Colname1, Colname2 ... )<p>Creates a new index. Indexes allow efficient access to rows other than by Id values. 
 <p>For example, <br>CREATE INDEX ByCust ON dbo.Order(Cust) 
 <br>creates an index allowing the orders associated with a particular customer to be efficiently retrieved without scanning the entire order table.
-<h2>Rename and Drop</h2>
-<h3>RENAME</h3><p>RENAME object-type object-name TO object-name
-<p>object-type can be any one of SCHEMA, TABLE, FUNCTION. The name of the specified object is changed.
+<h2>Drop</h2>
 <h3>DROP object-type object-name</h3><p>object-type can be any one of SCHEMA,TABLE or FUNCTION.
 <p>The specified object is removed from the database. In the case of a SCHEMA, all objects in the SCHEMA are also removed. In the case of TABLE, all the rows in the table are also removed.
 <h3>DROP INDEX</h3><p>DROP INDEX indexname ON schema.tablename<p>The specified index is removed from the database.

@@ -88,7 +88,6 @@ impl<'a> Parser<'a> {
                     b"GOTO" => self.s_goto(),
                     b"IF" => self.s_if(),
                     b"INSERT" => self.s_insert(),
-                    b"RENAME" => self.s_rename(),
                     b"RETURN" => self.s_return(),
                     b"SELECT" => self.s_select(),
                     b"SET" => self.s_set(),
@@ -1060,14 +1059,6 @@ impl<'a> Parser<'a> {
                 panic!("DROP : TABLE,FN .. expected");
             }
         }
-    }
-
-    fn s_rename(&mut self) {
-        self.read_id(b"TABLE");
-        let o = self.obj_ref();
-        self.read_id(b"TO");
-        let n = self.obj_ref();
-        self.b.dop(DO::RenameTable(o, n));
     }
 
     fn s_alter_table(&mut self) {

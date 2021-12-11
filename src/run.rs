@@ -124,7 +124,6 @@ pub enum DO {
     CreateSchema(String),
     CreateFunction(ObjRef, Rc<String>, bool),
     AlterTable(ObjRef, Vec<AlterCol>),
-    RenameTable(ObjRef, ObjRef),
     DropSchema(String),
     DropTable(ObjRef),
     DropIndex(ObjRef, String),
