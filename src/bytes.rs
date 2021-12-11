@@ -18,7 +18,7 @@ pub fn fragment_type(len: usize) -> usize {
     let mut result = 0;
     for ft in 0..NFT {
         let t = total(len, ft);
-        if t < best {
+        if t <= best {
             best = t;
             result = ft;
         }
