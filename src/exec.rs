@@ -478,7 +478,7 @@ impl<'r> EvalEnv<'r> {
 
     fn drop_schema(&mut self, name: &str) {
         if let Some(sid) = sys::get_schema(&self.db, name) {
-            let sql = "EXEC sys.DropSchema(".to_string() + &sid.to_string() + ")";
+            let sql = format!( "EXEC sys.DropSchema({})", sid);
             self.db.run(&sql, self.tr);
             self.db.schemas.borrow_mut().remove(name);
             self.db.function_reset.set(true);
@@ -489,7 +489,7 @@ impl<'r> EvalEnv<'r> {
 
     fn drop_table(&mut self, name: &ObjRef) {
         if let Some(t) = sys::get_table(&self.db, name) {
-            let sql = "EXEC sys.DropTable(".to_string() + &t.id.to_string() + ")";
+            let sql = format!( "EXEC sys.DropTable({})", t.id);
             self.db.run(&sql, self.tr);
             self.db.tables.borrow_mut().remove(name);
             self.db.function_reset.set(true);
@@ -501,7 +501,7 @@ impl<'r> EvalEnv<'r> {
 
     fn drop_function(&mut self, name: &ObjRef) {
         if let Some(fid) = sys::get_function_id(&self.db, name) {
-            let sql = "DELETE FROM sys.Function WHERE Id = ".to_string() + &fid.to_string();
+            let sql = format!("DELETE FROM sys.Function WHERE Id = {}", fid);
             self.db.run(&sql, self.tr);
             self.db.function_reset.set(true);
         } else {
@@ -511,7 +511,7 @@ impl<'r> EvalEnv<'r> {
 
     fn drop_index(&mut self, tname: &ObjRef, iname: &str) {
         let (t, ix, id) = sys::get_index(&self.db, tname, iname);
-        let sql = "EXEC sys.DropIndex(".to_string() + &id.to_string() + ")";
+        let sql = format!( "EXEC sys.DropIndex({})", id );
         self.db.run(&sql, self.tr);
         self.db.tables.borrow_mut().remove(tname);
         self.db.function_reset.set(true);
@@ -536,25 +536,13 @@ impl<'r> EvalEnv<'r> {
                 }
                 let sql = match act {
                     AlterCol::Add(name, typ) => {
-                        "EXEC sys.AddColumn(".to_string()
-                            + &t.id.to_string()
-                            + ",'"
-                            + name
-                            + "',"
-                            + &typ.to_string()
-                            + ")"
+                        format!("EXEC sys.AddColumn({},'{}',{})", t.id, name, typ)
                     }
                     AlterCol::Modify(name, typ) => {
-                        "EXEC sys.ModifyColumn(".to_string()
-                            + &t.id.to_string()
-                            + ",'"
-                            + name
-                            + "',"
-                            + &typ.to_string()
-                            + ")"
+                        format!("EXEC sys.ModifyColumn({},'{}',{})", t.id, name, typ)
                     }
                     AlterCol::Drop(name) => {
-                        "EXEC sys.DropColumn(".to_string() + &t.id.to_string() + ",'" + name + "')"
+                        format!("EXEC sys.DropColumn({},'{}')", t.id, name)
                     }
                 };
                 db.run(&sql, self.tr);
@@ -594,7 +582,7 @@ impl<'r> EvalEnv<'r> {
                 }
                 nt.insert(db, &mut newrow);
             }
-            let sql = "EXEC sys.AlterTable(".to_string() + &t.id.to_string() + ")";
+            let sql = format!("EXEC sys.AlterTable({})", t.id);
             db.run(&sql, self.tr);
             t.free_pages(db);
             sys::set_root(db, nt.id, root);
