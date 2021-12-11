@@ -81,9 +81,14 @@
 //! [AtomicFile] ensures that database updates are all or nothing.
 //!
 //!# ToDo List
-//! Unify GenTransaction and WebTransaction. File upload doesn't work with WebTranasaction currently.
+//! Unify GenTransaction and WebTransaction. File upload doesn't work with WebTransaction currently.
 //!
 //! Implement ALTER TABLE, RENAME TABLE.
+//! Design of ALTER TABLE : want to preserve Table Id and all Field Ids.
+//!
+//! Make copy of existing Table Info, adjust it, based on AlterActions.
+//! Copy all reords to new file.
+//! Add indexes.
 //!
 //! Combine SortedFile pages after deletes ( either at once or later ).
 //!

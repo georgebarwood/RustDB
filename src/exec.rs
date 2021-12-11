@@ -246,8 +246,8 @@ impl<'r> EvalEnv<'r> {
             DO::DropTable(name) => self.drop_table(name),
             DO::DropFunction(name) => self.drop_function(name),
             DO::DropIndex(tname, iname) => self.drop_index(tname, iname),
+            DO::AlterTable(tname, actions) => self.alter_table(tname, actions),
             DO::RenameTable(_, _) => panic!(),
-            DO::AlterTable(_, _) => panic!(),
         }
     }
 
@@ -516,5 +516,38 @@ impl<'r> EvalEnv<'r> {
         self.db.tables.borrow_mut().remove(tname);
         self.db.function_reset.set(true);
         t.delete_index(&self.db, ix);
+    }
+
+    fn alter_table(&mut self, name: &ObjRef, actions: &[AlterCol]) {
+        if let Some(t) = sys::get_table(&self.db, name) {
+            for act in actions {
+                match act {
+                    AlterCol::Drop(name) | AlterCol::Modify(name, _) => {
+                        if !t.info.colmap.contains_key(name) {
+                            panic!("column not found {}", name);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            let mut nci = ColInfo::empty(name.clone());
+            let ci = &t.info;
+            for i in 0..ci.colnames.len() {
+                nci.add_altered(ci, i, actions);
+            }
+
+            for act in actions {
+                if let AlterCol::Add(name, typ) = act {
+                    if nci.add(name.clone(), *typ) {
+                        panic!("duplicate column name {}", name);
+                    }
+                }
+            }
+
+            panic!("alter table not yet fully implemented");
+        } else {
+            panic!("Alter Table not found {}", name.str());
+        }
     }
 } // impl EvalEnv

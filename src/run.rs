@@ -123,7 +123,7 @@ pub enum DO {
     CreateIndex(IndexInfo),
     CreateSchema(String),
     CreateFunction(ObjRef, Rc<String>, bool),
-    AlterTable(ObjRef, Vec<AlterAction>),
+    AlterTable(ObjRef, Vec<AlterCol>),
     RenameTable(ObjRef, ObjRef),
     DropSchema(String),
     DropTable(ObjRef),
@@ -139,9 +139,8 @@ pub enum DO {
 }
 
 /// Actions for altering columns of a table.
-pub enum AlterAction {
+pub enum AlterCol {
     Add(String, DataType),
     Drop(String),
-    Rename(String, String),
     Modify(String, DataType),
 }

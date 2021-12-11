@@ -571,6 +571,8 @@ GO
 CREATE SCHEMA [web]
 CREATE TABLE [web].[File]([Path] string,[ContentType] string,[ContentLength] int,[Content] binary) 
 GO
+CREATE INDEX [ByPath] ON [web].[File]([Path])
+GO
 CREATE FN [web].[Cookie]( name string ) RETURNS string AS
 BEGIN
   RETURN ARG( 3, name )
@@ -1677,7 +1679,7 @@ CREATE INDEX [BySendTime] ON [email].[Queue]([sendtime])
 GO
 CREATE FN [email].[MsgName](id int) RETURNS string AS
 BEGIN
-  SET result = 'Email ' | id
+  SET result = '' | id
 END
 GO
 CREATE FN [email].[MsgSelect]( colId int, sel int ) RETURNS string AS
@@ -1846,14 +1848,14 @@ DECLARE tid int, sid int, cid int
 SET sid = Id FROM sys.Schema WHERE Name = 'email'
 SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 'Msg'
 INSERT INTO browse.Table(Id,NameFunction, SelectFunction, DefaultOrder, Title, Description, Role) 
-VALUES (tid,'email.MsgName','','','','',0)
+VALUES (tid,'email.MsgName','email.MsgSelect','','','',0)
 GO
 DECLARE tid int, sid int, cid int
 SET sid = Id FROM sys.Schema WHERE Name = 'email'
 SET tid = Id FROM sys.Table WHERE Schema = sid AND Name = 'Queue'
 SET cid=Id FROM sys.Column WHERE Table = tid AND Name = 'msg'
 INSERT INTO browse.Column(Id,[Position],[Label],[Description],[RefersTo],[Default],[InputCols],[InputFunction],[InputRows],[Style],[DisplayFunction],[ParseFunction]) 
-VALUES (cid, 0,'','',12,'',0,'email.MsgSelect',0,0,'','')
+VALUES (cid, 0,'','',12,'',0,'',0,0,'','')
 SET cid=Id FROM sys.Column WHERE Table = tid AND Name = 'sendtime'
 INSERT INTO browse.Column(Id,[Position],[Label],[Description],[RefersTo],[Default],[InputCols],[InputFunction],[InputRows],[Style],[DisplayFunction],[ParseFunction]) 
 VALUES (cid, 0,'','',0,'date.Ticks()',0,'',0,0,'date.MicroSecToString','')

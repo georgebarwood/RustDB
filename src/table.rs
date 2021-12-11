@@ -145,7 +145,7 @@ impl Table {
                 }
             }
         }
-        // println!("No index found for table {}", self.info.name.to_str());
+        println!("No index found for table {}", self.info.name.str());
         (Some(c_bool(b, we)), None)
     }
 
@@ -390,6 +390,30 @@ impl ColInfo {
         self.colnames.push(name.clone());
         self.colmap.insert(name, cn);
         false
+    }
+
+    pub fn add_altered(&mut self, ci: &ColInfo, cnum: usize, actions: &[AlterCol]) {
+        let cname = &ci.colnames[cnum];
+        let mut typ = ci.typ[cnum];
+        for act in actions {
+            match act {
+                AlterCol::Drop(name) => {
+                    if name == cname {
+                        return;
+                    }
+                }
+                AlterCol::Modify(name, dt) => {
+                    if name == cname {
+                        if data_kind(typ) != data_kind(*dt) {
+                            panic!("Cannot change column data kind");
+                        }
+                        typ = *dt;
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.add(cname.clone(), typ);
     }
 
     /// Get a column number from a column name.

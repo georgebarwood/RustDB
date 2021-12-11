@@ -1077,19 +1077,14 @@ impl<'a> Parser<'a> {
             if self.test_id(b"ADD") {
                 let col = self.id();
                 let datatype = self.read_data_type();
-                list.push(AlterAction::Add(col, datatype));
+                list.push(AlterCol::Add(col, datatype));
             } else if self.test_id(b"DROP") {
                 let col = self.id();
-                list.push(AlterAction::Drop(col));
-            } else if self.test_id(b"RENAME") {
-                let col = self.id();
-                self.read_id(b"TO");
-                let to = self.id();
-                list.push(AlterAction::Rename(col, to));
+                list.push(AlterCol::Drop(col));
             } else if self.test_id(b"MODIFY") {
                 let col = self.id();
                 let datatype = self.read_data_type();
-                list.push(AlterAction::Modify(col, datatype));
+                list.push(AlterCol::Modify(col, datatype));
             } else {
                 break;
             }
