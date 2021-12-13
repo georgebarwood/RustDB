@@ -21,7 +21,7 @@ pub struct Table {
     /// Type information about the columns.
     pub info: Rc<ColInfo>,
 
-    /// List of indexes.
+    /// List of indexes. ( Maybe could eliminate the RefCell )
     pub ixlist: RefCell<IxList>,
 
     /// Table id in sys.Table.
@@ -57,6 +57,11 @@ impl Table {
         for (f, _) in &*self.ixlist.borrow() {
             f.save(db, op);
         }
+    }
+
+    pub fn repack(&self, db: &DB, _k: i64) -> i64 {
+        let r = self.row();
+        self.file.repack(db, &r)
     }
 
     /// Drop the underlying file storage ( the table is not useable after this ).

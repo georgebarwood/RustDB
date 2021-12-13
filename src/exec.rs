@@ -478,7 +478,7 @@ impl<'r> EvalEnv<'r> {
 
     fn drop_schema(&mut self, name: &str) {
         if let Some(sid) = sys::get_schema(&self.db, name) {
-            let sql = format!( "EXEC sys.DropSchema({})", sid);
+            let sql = format!("EXEC sys.DropSchema({})", sid);
             self.db.run(&sql, self.tr);
             self.db.schemas.borrow_mut().remove(name);
             self.db.function_reset.set(true);
@@ -489,7 +489,7 @@ impl<'r> EvalEnv<'r> {
 
     fn drop_table(&mut self, name: &ObjRef) {
         if let Some(t) = sys::get_table(&self.db, name) {
-            let sql = format!( "EXEC sys.DropTable({})", t.id);
+            let sql = format!("EXEC sys.DropTable({})", t.id);
             self.db.run(&sql, self.tr);
             self.db.tables.borrow_mut().remove(name);
             self.db.function_reset.set(true);
@@ -511,7 +511,7 @@ impl<'r> EvalEnv<'r> {
 
     fn drop_index(&mut self, tname: &ObjRef, iname: &str) {
         let (t, ix, id) = sys::get_index(&self.db, tname, iname);
-        let sql = format!( "EXEC sys.DropIndex({})", id );
+        let sql = format!("EXEC sys.DropIndex({})", id);
         self.db.run(&sql, self.tr);
         self.db.tables.borrow_mut().remove(tname);
         self.db.function_reset.set(true);

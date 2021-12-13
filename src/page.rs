@@ -364,6 +364,17 @@ impl Page {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.root = 0;
+        self.count = 0;
+        self.alloc = 0;
+        self.resize_data();
+    }
+
+    pub fn drop_key(&self, db: &DB, x: usize, r: &dyn Record) {
+        r.drop_key(db, &self.data[self.rec_offset(x)..]);
+    }
+
     /// Resize data.
     fn resize_data(&mut self) {
         let size = self.size();

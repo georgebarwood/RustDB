@@ -53,49 +53,54 @@ impl AtomicFile {
         self.stg.commit(size);
         self.upd.commit(0);
     }
-}
 
-impl Storage for AtomicFile {
-    fn commit(&self, size: u64) {
+    pub fn commit_phase(&self, size: u64, phase: u8) {
         let mut map = self.map.lock().unwrap();
         if map.is_empty() {
             return;
         }
 
-        // Write the updates to upd.
-        // First set the end position to zero.
-        self.upd.write_u64(0, 0);
-        self.upd.write_u64(8, size);
-        self.upd.commit(16); // Not clear if this is necessary.
+        if phase == 1 {
+            // Write the updates to upd.
+            // First set the end position to zero.
+            self.upd.write_u64(0, 0);
+            self.upd.write_u64(8, size);
+            self.upd.commit(16); // Not clear if this is necessary.
 
-        // Write the update records.
-        let mut pos: u64 = 16;
-        for (k, v) in map.iter() {
-            let start = k + 1 - v.len as u64;
-            let len = v.len as u64;
-            self.upd.write_u64(pos, start);
-            pos += 8;
-            self.upd.write_u64(pos, len);
-            pos += 8;
-            self.upd.write(pos, &v.data[v.off..v.off + v.len]);
-            pos += len;
+            // Write the update records.
+            let mut pos: u64 = 16;
+            for (k, v) in map.iter() {
+                let start = k + 1 - v.len as u64;
+                let len = v.len as u64;
+                self.upd.write_u64(pos, start);
+                pos += 8;
+                self.upd.write_u64(pos, len);
+                pos += 8;
+                self.upd.write(pos, &v.data[v.off..v.off + v.len]);
+                pos += len;
+            }
+            self.upd.commit(pos); // Not clear if this is necessary.
+
+            // Set the end position.
+            self.upd.write_u64(0, pos);
+            self.upd.write_u64(8, size);
+            self.upd.commit(pos);
+        } else {
+            for (k, v) in map.iter() {
+                let start = k + 1 - v.len as u64;
+                self.stg.write(start, &v.data[v.off..v.off + v.len]);
+            }
+            map.clear();
+            self.stg.commit(size);
+            self.upd.commit(0);
         }
-        self.upd.commit(pos); // Not clear if this is necessary.
+    }
+}
 
-        // Set the end position.
-        self.upd.write_u64(0, pos);
-        self.upd.write_u64(8, size);
-        self.upd.commit(pos);
-
-        // Hopefully updates are now securely stored in upd file.
-
-        for (k, v) in map.iter() {
-            let start = k + 1 - v.len as u64;
-            self.stg.write(start, &v.data[v.off..v.off + v.len]);
-        }
-        map.clear();
-        self.stg.commit(size);
-        self.upd.commit(0);
+impl Storage for AtomicFile {
+    fn commit(&self, size: u64) {
+        self.commit_phase(size, 1);
+        self.commit_phase(size, 2);
     }
 
     fn size(&self) -> u64 {

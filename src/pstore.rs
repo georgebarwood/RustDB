@@ -156,7 +156,7 @@ pub struct SharedPagedData {
 impl SharedPagedData {
     /// Construct SharedPageData based on specified underlying storage.
     pub fn new(file: Box<dyn Storage>) -> Self {
-        let file = CompactFile::new(file, 400, 1024);
+        let file = CompactFile::new(file, 144, 1024);
         // Note : if it's not a new file, sp_size and ep_size are read from file header.
         let sp_size = file.sp_size;
         let ep_size = file.ep_size;

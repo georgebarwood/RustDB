@@ -36,6 +36,7 @@ pub fn standard_builtins(map: &mut BuiltinMap) {
             CompileFunc::Value(c_exception),
         ),
         ("LASTID", DataKind::Int, CompileFunc::Int(c_lastid)),
+        ("REPACKFILE", DataKind::Int, CompileFunc::Int(c_repackfile)),
     ];
     for (name, typ, cf) in list {
         map.insert(name.to_string(), (typ, cf));
@@ -317,5 +318,32 @@ impl CExp<Value> for FileContent {
         let k = self.k.eval(ee, d);
         let result = ee.tr.file_content(k);
         Value::ArcBinary(result)
+    }
+}
+
+/////////////////////////////
+/// Compile call to REPACKFILE.
+fn c_repackfile(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(
+        b,
+        args,
+        &[DataKind::Int, DataKind::String, DataKind::String],
+    );
+    let k = c_int(b, &mut args[0]);
+    let s = c_value(b, &mut args[1]);
+    let n = c_value(b, &mut args[2]);
+    Box::new(RepackFile { k, s, n })
+}
+struct RepackFile {
+    k: CExpPtr<i64>,
+    s: CExpPtr<Value>,
+    n: CExpPtr<Value>,
+}
+impl CExp<i64> for RepackFile {
+    fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> i64 {
+        let k = self.k.eval(ee, d);
+        let s = self.s.eval(ee, d).str();
+        let n = self.n.eval(ee, d).str();
+        ee.db.repack_file(k, &s, &n)
     }
 }

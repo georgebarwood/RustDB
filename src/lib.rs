@@ -84,6 +84,14 @@
 //! Unify GenTransaction and WebTransaction. File upload doesn't work with WebTransaction currently.
 //!
 //! Combine SortedFile pages after deletes ( either at once or later ).
+//! Compress function ( called on SortedFile ):
+//!   Objective is to free 1 or more logical pages.
+//!   Start traversing the parent pages.
+//!   For each parent page, calculate the total size of all the child pages.
+//!   Calculate the number of child pages required.
+//!   If it is less, re-write the child pages, which should free up at least one child page.
+//!   Stop the process once the total number of pages written exceeds some limit.
+//!   ( after committing the changes, the process can continue )
 //!
 //! Implement email in example program. Replication of log files. Server status.
 //!
@@ -99,7 +107,7 @@ pub use crate::{
     gentrans::{GenTransaction, Part},
     init::INITSQL,
     pstore::{AccessPagedData, SharedPagedData},
-    stg::{MemFile, SimpleFileStorage},
+    stg::{MemFile, SimpleFileStorage, Storage},
     webtrans::WebTransaction,
 };
 
@@ -130,7 +138,6 @@ use crate::{
     parse::Parser,
     run::*,
     sortedfile::{Asc, Id, Record, SortedFile},
-    stg::Storage,
     table::{ColInfo, IndexInfo, Row, SaveOp, Table, TablePtr},
     util::{nd, newmap, SmallSet},
     value::*,
@@ -452,6 +459,25 @@ GO
         } else {
             None
         }
+    }
+
+    pub(crate) fn repack_file(self: &DB, k: i64, schema: &str, tname: &str) -> i64 {
+        if k >= 0 {
+            let name = ObjRef::new(schema, tname);
+            if let Some(t) = self.get_table(&name) {
+                return t.repack(self, k);
+            }
+        } else {
+            let k = (-k - 1) as usize;
+            if k < 4 {
+                return self.bs[k].repack_file(self);
+            }
+        }
+        -1
+    }
+
+    pub(crate) fn page_size(&self, pnum: u64) -> u64 {
+        self.file.spd.file.read().unwrap().page_size(pnum) as u64
     }
 
     /// Save updated tables to underlying file ( or rollback if there was an error ).

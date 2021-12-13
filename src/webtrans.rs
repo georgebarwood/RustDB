@@ -1,4 +1,4 @@
-use crate::{panic, util, Any, HashMap, Rc, Transaction, Value};
+use crate::{panic, util, Any, Arc, Data, HashMap, Rc, Transaction, Value};
 use std::{io::Read, io::Write, net::TcpStream};
 
 /// Response content is accumulated in output.
@@ -175,6 +175,29 @@ impl Transaction for WebTransaction {
         self.headers.push_str(&hdr);
     }
 
+    fn file_attr(&mut self, k: i64, x: i64) -> Rc<String> {
+        let k = k as usize;
+        let result: &str = {
+            if k >= self.parts.len() {
+                ""
+            } else {
+                let p = &self.parts[k];
+                match x {
+                    0 => &p.name,
+                    1 => &p.content_type,
+                    2 => &p.file_name,
+                    3 => &p.text,
+                    _ => panic!(),
+                }
+            }
+        };
+        Rc::new(result.to_string())
+    }
+
+    fn file_content(&mut self, k: i64) -> Data {
+        self.parts[k as usize].data.clone()
+    }
+
     fn set_extension(&mut self, ext: Box<dyn Any + Send + Sync>) {
         self.ext = ext;
     }
@@ -218,6 +241,7 @@ pub struct HttpRequestParser<'a> {
     end_content: usize, // End of content.
     content_length: usize,
     content_type: String,
+    content_disposition: String,
     eof: bool,
 }
 
@@ -237,6 +261,7 @@ impl<'a> HttpRequestParser<'a> {
             end_content: usize::MAX,
             content_length: 0,
             content_type: String::new(),
+            content_disposition: String::new(),
             eof: false,
         }
     }
@@ -399,6 +424,10 @@ impl<'a> HttpRequestParser<'a> {
                     self.content_type = value.clone();
                 } else if name == "Content-Length" {
                     self.content_length = value.parse::<usize>().unwrap();
+                } else if name == "Content-Disposition" {
+                    self.content_disposition = value.clone();
+                } else {
+                    // println!("header name={} value={}", name, value );
                 }
             }
         }
@@ -441,7 +470,7 @@ impl<'a> HttpRequestParser<'a> {
         */
         self.end_content = self.base + self.index + self.content_length;
 
-        let result = Vec::new();
+        let mut result = Vec::new();
         let seperator = self.read_to_bytes(13)?;
 
         /* Now need to repeated read multipart headers, then body.
@@ -449,8 +478,8 @@ impl<'a> HttpRequestParser<'a> {
         */
         let mut ok = true;
         while ok {
-            self.read_headers()?;
-            // println!("headers={:?}", _headers);
+            let _headers = self.read_headers()?;
+            println!("headers={:?}", _headers);
             let mut body = Vec::new();
             ok = false;
             while !self.eof {
@@ -459,6 +488,16 @@ impl<'a> HttpRequestParser<'a> {
                 // Check to see if we matched separator
                 if ends_with(&body, &seperator) {
                     println!("Got seperator");
+                    println!("Content disposition={}", self.content_disposition);
+                    let part = Part {
+                        name: Rc::new("file".to_string()),
+                        content_type: self.content_type.clone(),
+                        file_name: Rc::new("todo".to_string()),
+                        text: Rc::new("ToDo".to_string()),
+                        data: Arc::new(body),
+                    };
+                    println!("content type={}", part.content_type);
+                    result.push(part);
                     let b = self.get_byte()?;
                     ok = b == 13;
                     break;
@@ -485,6 +524,9 @@ fn ends_with(body: &[u8], sep: &[u8]) -> bool {
 }
 
 pub struct Part {
-    pub filename: Rc<String>,
-    pub data: Rc<Vec<u8>>,
+    pub name: Rc<String>,
+    pub text: Rc<String>,
+    pub file_name: Rc<String>,
+    pub content_type: String,
+    pub data: Data,
 }
