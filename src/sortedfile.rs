@@ -111,16 +111,20 @@ impl SortedFile {
 
         let pp = self.load_page(db, pnum);
         let p = &mut pp.borrow_mut();
-        self.set_dirty(p, &pp);
 
-        //println!("Repacking page {} level={}", pnum, p.level );
         if p.level == 0 {
             return 0;
         }
 
         if p.level > 1 {
             result += self.repack_page(db, p.first_page, r);
+            if result >= REPACK_LIMIT {
+                return result;
+            }
             result += self.repack_children(db, p, p.root, r);
+            if result >= REPACK_LIMIT {
+                return result;
+            }
         }
 
         let (x, y) = self.page_total(db, p, p.root, r);
@@ -134,6 +138,8 @@ impl SortedFile {
         if space < full / 10 {
             return result;
         }
+
+        self.set_dirty(p, &pp);
 
         // Iterate over the page child records. Append them into a list of new pages.
         let mut plist = PageList::default();
@@ -200,7 +206,7 @@ impl SortedFile {
         let cp_size = db.page_size(cp);
         let (n1, t1) = self.page_total(db, p, p.left(x), r);
         let (n2, t2) = self.page_total(db, p, p.right(x), r);
-        return (1 + n1 + n2, cp_size + t1 + t2);
+        (1 + n1 + n2, cp_size + t1 + t2)
     }
 
     /// Free a page and any child pages if this is a parent page.
@@ -725,6 +731,9 @@ struct PageList {
 }
 
 const TRACE_PACK: bool = true;
+
+/// Limit on how many pages to free in one transaction.
+const REPACK_LIMIT: i64 = 10;
 
 impl PageList {
     fn store_to(&mut self, db: &DB, p: &mut Page, file: &SortedFile) -> i64 {

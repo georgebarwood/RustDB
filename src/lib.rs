@@ -465,7 +465,7 @@ GO
         if k >= 0 {
             let name = ObjRef::new(schema, tname);
             if let Some(t) = self.get_table(&name) {
-                return t.repack(self, k);
+                return t.repack(self, k as usize);
             }
         } else {
             let k = (-k - 1) as usize;

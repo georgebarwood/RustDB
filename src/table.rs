@@ -59,11 +59,6 @@ impl Table {
         }
     }
 
-    pub fn repack(&self, db: &DB, _k: i64) -> i64 {
-        let r = self.row();
-        self.file.repack(db, &r)
-    }
-
     /// Drop the underlying file storage ( the table is not useable after this ).
     pub fn free_pages(&self, db: &DB) {
         let row = self.row();
@@ -93,6 +88,22 @@ impl Table {
             f.remove(db, &ixr);
         }
         row.delcodes(db); // Deletes codes for Binary and String values.
+    }
+
+    pub fn repack(&self, db: &DB, k: usize) -> i64 {
+        let row = self.row();
+        if k == 0 {
+            self.file.repack(db, &row)
+        } else {
+            let list = &*self.ixlist.borrow();
+            if k <= list.len() {
+                let (f, cols) = &list[k - 1];
+                let ixr = IndexRow::new(self, cols.clone(), &row);
+                f.repack(db, &ixr)
+            } else {
+                -1
+            }
+        }
     }
 
     /// Look for indexed table expression based on supplied WHERE expression (we).
