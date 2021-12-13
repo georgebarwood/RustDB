@@ -76,11 +76,6 @@ impl SortedFile {
         self.ok.set(false);
     }
 
-    /// Attempt to free up logical pages by re-packing child pages.
-    pub fn repack(&self, db: &DB, r: &dyn Record) -> i64 {
-        self.repack_page(db, self.root_page, r)
-    }
-
     /// Insert a Record. If the key is a duplicate, the record is not saved.
     pub fn insert(&self, db: &DB, r: &dyn Record) {
         while !self.insert_leaf(db, self.root_page, r, None) {
@@ -103,110 +98,6 @@ impl SortedFile {
             };
             pp = self.load_page(db, cpnum);
         }
-    }
-
-    /// Repack a page. Result is number of pages freed.
-    fn repack_page(&self, db: &DB, pnum: u64, r: &dyn Record) -> i64 {
-        let mut result = 0;
-
-        let pp = self.load_page(db, pnum);
-        let p = &mut pp.borrow_mut();
-
-        if p.level == 0 {
-            return 0;
-        }
-
-        if p.level > 1 {
-            result += self.repack_page(db, p.first_page, r);
-            if result >= REPACK_LIMIT {
-                return result;
-            }
-            result += self.repack_children(db, p, p.root, r);
-            if result >= REPACK_LIMIT {
-                return result;
-            }
-        }
-
-        let (x, y) = self.page_total(db, p, p.root, r);
-        let n = 1 + x;
-        if n < 2 {
-            return result;
-        }
-        let total = y + db.page_size(p.first_page);
-        let full = (n * PAGE_SIZE) as u64;
-        let space = full - total;
-        if space < full / 10 {
-            return result;
-        }
-
-        self.set_dirty(p, &pp);
-
-        // Iterate over the page child records. Append them into a list of new pages.
-        let mut plist = PageList::default();
-        plist.append_page(db, p.first_page, r, self);
-        self.move_child_records(db, p, p.root, r, &mut plist);
-
-        if TRACE_PACK {
-            println!(
-                "pnum={} level={} #children={} total={} full={} space={}",
-                pnum,
-                p.level,
-                n,
-                total,
-                full,
-                full - total
-            );
-            println!(
-                "new #children={} record count={}",
-                plist.list.len(),
-                plist.count
-            );
-        }
-        result += plist.store_to(db, p, self);
-        result
-    }
-
-    fn move_child_records(
-        &self,
-        db: &DB,
-        p: &Page,
-        x: usize,
-        r: &dyn Record,
-        plist: &mut PageList,
-    ) {
-        if x == 0 {
-            return;
-        }
-        self.move_child_records(db, p, p.left(x), r, plist);
-        let cp = p.child_page(x);
-        plist.append_page(db, cp, r, self);
-        p.drop_key(db, x, r);
-
-        self.move_child_records(db, p, p.right(x), r, plist);
-    }
-
-    fn repack_children(&self, db: &DB, p: &Page, x: usize, r: &dyn Record) -> i64 {
-        if x == 0 {
-            return 0;
-        }
-        let mut result = 0;
-        let cp = p.child_page(x);
-        result += self.repack_page(db, cp, r);
-        result += self.repack_children(db, p, p.left(x), r);
-        result += self.repack_children(db, p, p.right(x), r);
-        result
-    }
-
-    /// Count number of children and calculate total size of child pages.
-    fn page_total(&self, db: &DB, p: &Page, x: usize, r: &dyn Record) -> (usize, u64) {
-        if x == 0 {
-            return (0, 0);
-        }
-        let cp = p.child_page(x);
-        let cp_size = db.page_size(cp);
-        let (n1, t1) = self.page_total(db, p, p.left(x), r);
-        let (n2, t2) = self.page_total(db, p, p.right(x), r);
-        (1 + n1 + n2, cp_size + t1 + t2)
     }
 
     /// Free a page and any child pages if this is a parent page.
@@ -436,6 +327,111 @@ impl SortedFile {
             p.is_dirty = true;
             self.dirty_pages.borrow_mut().push(pp.clone());
         }
+    }
+
+    /// Attempt to free up logical pages by re-packing child pages.
+    pub fn repack(&self, db: &DB, r: &dyn Record) -> i64 {
+        self.repack_page(db, self.root_page, r)
+    }
+
+    /// Repack a page. Result is number of pages freed.
+    fn repack_page(&self, db: &DB, pnum: u64, r: &dyn Record) -> i64 {
+        let mut result = 0;
+
+        let pp = self.load_page(db, pnum);
+        let p = &mut pp.borrow_mut();
+
+        if p.level == 0 {
+            return 0;
+        }
+
+        if p.level > 1 {
+            result += self.repack_page(db, p.first_page, r);
+            if result >= REPACK_LIMIT {
+                return result;
+            }
+            result += self.repack_children(db, p, p.root, r);
+            if result >= REPACK_LIMIT {
+                return result;
+            }
+        }
+
+        let (x, y) = self.page_total(db, p, p.root, r);
+        let n = 1 + x;
+        if n < 2 {
+            return result;
+        }
+        let total = y + db.page_size(p.first_page);
+        let full = (n * PAGE_SIZE) as u64;
+        let space = full - total;
+        if space < full / 10 {
+            return result;
+        }
+
+        self.set_dirty(p, &pp);
+
+        // Iterate over the page child records. Append them into a list of new pages.
+        let mut plist = PageList::default();
+        plist.add(db, p.first_page, r, self);
+        self.move_children(db, p, p.root, r, &mut plist);
+
+        if TRACE_PACK {
+            println!(
+                "pnum={} level={} #children={} total={} full={} space={}",
+                pnum,
+                p.level,
+                n,
+                total,
+                full,
+                full - total
+            );
+            println!(
+                "new #children={} record count={}",
+                plist.list.len(),
+                plist.count
+            );
+        }
+        result += plist.store_to(db, p, self);
+        result
+    }
+
+    /// Count number child pages and their total size, to decide whether to repack a parent page.
+    fn page_total(&self, db: &DB, p: &Page, x: usize, r: &dyn Record) -> (usize, u64) {
+        if x == 0 {
+            return (0, 0);
+        }
+        let cp = p.child_page(x);
+        let cp_size = db.page_size(cp);
+        let (n1, t1) = self.page_total(db, p, p.left(x), r);
+        let (n2, t2) = self.page_total(db, p, p.right(x), r);
+        (1 + n1 + n2, cp_size + t1 + t2)
+    }
+
+    /// Move child records into PageList.
+    fn move_children(&self, db: &DB, p: &Page, x: usize, r: &dyn Record, plist: &mut PageList) {
+        if x != 0 {
+            self.move_children(db, p, p.left(x), r, plist);
+            let cp = p.child_page(x);
+            plist.add(db, cp, r, self);
+            p.drop_key(db, x, r);
+            self.move_children(db, p, p.right(x), r, plist);
+        }
+    }
+
+    fn repack_children(&self, db: &DB, p: &Page, x: usize, r: &dyn Record) -> i64 {
+        let mut result = 0;
+        if x != 0 {
+            result += self.repack_page(db, p.child_page(x), r);
+            if result >= REPACK_LIMIT {
+                return result;
+            }
+            result += self.repack_children(db, p, p.left(x), r);
+            if result >= REPACK_LIMIT {
+                return result;
+            }
+            result += self.repack_children(db, p, p.right(x), r);
+        }
+        result
     }
 } // end impl SortedFile
 
@@ -722,12 +718,13 @@ impl Stack {
     }
 } // end impl Stack
 
+/// PageList is used to implement repacking of child pages ( REPACKFILE builtin funcction ).
 #[derive(Default)]
-struct PageList {
-    cur: usize,
-    list: Vec<(Page, Option<Box<dyn Record>>)>,
-    pnums: Vec<u64>,
-    count: usize,
+pub struct PageList {
+    pub cur: usize,
+    pub list: Vec<(Page, Option<Box<dyn Record>>)>,
+    pub pnums: Vec<u64>,
+    pub count: usize,
 }
 
 const TRACE_PACK: bool = true;
@@ -764,7 +761,7 @@ impl PageList {
         result as i64
     }
 
-    fn append_page(&mut self, db: &DB, pnum: u64, r: &dyn Record, file: &SortedFile) {
+    fn add(&mut self, db: &DB, pnum: u64, r: &dyn Record, file: &SortedFile) {
         let pp = file.load_page(db, pnum);
         file.remove_page(pnum);
         let p = &mut pp.borrow_mut();
@@ -777,21 +774,19 @@ impl PageList {
     }
 
     fn append(&mut self, db: &DB, p: &Page, x: usize, r: &dyn Record) {
-        if x == 0 {
-            return;
+        if x != 0 {
+            self.append(db, p, p.left(x), r);
+            let mut ap = &mut self.list[self.cur].0;
+            if ap.full() {
+                // start a new page
+                let key = p.get_key(db, x, r);
+                self.list.push((p.new_page(), Some(key)));
+                self.cur += 1;
+                ap = &mut self.list[self.cur].0;
+            }
+            ap.append_from(p, x);
+            self.count += 1;
+            self.append(db, p, p.right(x), r);
         }
-        self.append(db, p, p.left(x), r);
-        let mut ap = &mut self.list[self.cur].0;
-        if ap.full() {
-            // start a new page
-            let key = p.get_key(db, x, r);
-            self.list.push((p.new_page(), Some(key)));
-            self.cur += 1;
-            ap = &mut self.list[self.cur].0;
-        }
-
-        ap.append_from(p, x);
-        self.count += 1;
-        self.append(db, p, p.right(x), r);
     }
 }
