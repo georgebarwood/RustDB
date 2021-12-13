@@ -1,6 +1,5 @@
 pub const INITSQL : &str = "
 
-
 CREATE FN [sys].[AddColumn]( t int, name string, typ int ) 
 AS 
 BEGIN 
@@ -1420,6 +1419,7 @@ SELECT '<h1>Manual</h1>
 <li>PARSEINT( s string ) : parses an integer from s.</li>
 <li>PARSEFLOAT( s string ) : parses a floating point number from s.</li>
 <li>EXCEPTION() returns a string with any error that occurred during an EXECUTE statement.</li>
+<li>REPACKFILE(k,schema,table) : A file is re-packed to free up pages. k=0 => main file, k=1.. => an index, k in -4..-1 => byte storage files. 
 <li>See the web schema for functions that can be used to access http requests.</li>
 </ul>
 <h3>Conversions</h3>
@@ -1598,7 +1598,7 @@ BEGIN
   DECLARE date int SET date = date.DaysToYearMonthDay(date.Today())
   DECLARE @I int 
   SET @I=0 
-  WHILE @I < 5000 -- Use 5000000 to stress system a bit!
+  WHILE @I < 20000 -- Use 5000000 to stress system a bit!
   BEGIN 
     INSERT INTO dbo.[Order](Cust,Total,Date) VALUES(1+@I%7, ( 501 * (@I%11+@I%7) ) / 100, date ) 
     SET @I=@I+1 

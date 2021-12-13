@@ -83,16 +83,6 @@
 //!# ToDo List
 //! Unify GenTransaction and WebTransaction. File upload doesn't work with WebTransaction currently.
 //!
-//! Combine SortedFile pages after deletes ( either at once or later ).
-//! Compress function ( called on SortedFile ):
-//!   Objective is to free 1 or more logical pages.
-//!   Start traversing the parent pages.
-//!   For each parent page, calculate the total size of all the child pages.
-//!   Calculate the number of child pages required.
-//!   If it is less, re-write the child pages, which should free up at least one child page.
-//!   Stop the process once the total number of pages written exceeds some limit.
-//!   ( after committing the changes, the process can continue )
-//!
 //! Implement email in example program. Replication of log files. Server status.
 //!
 //! Sort out error handling for PARSEINT etc.
