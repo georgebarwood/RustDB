@@ -105,7 +105,10 @@ impl SortedFile {
         }
     }
 
+    /// Repack a page. Result is number of pages freed.
     fn repack_page(&self, db: &DB, pnum: u64, r: &dyn Record) -> i64 {
+        let mut result = 0;
+
         let pp = self.load_page(db, pnum);
         let p = &mut pp.borrow_mut();
         self.set_dirty(p, &pp);
@@ -114,14 +117,22 @@ impl SortedFile {
         if p.level == 0 {
             return 0;
         }
-        let (x, y) = self.page_total(db, p, p.root, r);
-        let n = 1 + x;
-        let total = y + db.page_size(p.first_page);
-        let full = (n * PAGE_SIZE) as u64;
 
         if p.level > 1 {
-            self.repack_page(db, p.first_page, r);
-            self.repack_children(db, p, p.root, r);
+            result += self.repack_page(db, p.first_page, r);
+            result += self.repack_children(db, p, p.root, r);
+        }
+
+        let (x, y) = self.page_total(db, p, p.root, r);
+        let n = 1 + x;
+        if n < 2 {
+            return result;
+        }
+        let total = y + db.page_size(p.first_page);
+        let full = (n * PAGE_SIZE) as u64;
+        let space = full - total;
+        if space < full / 10 {
+            return result;
         }
 
         // Iterate over the page child records. Append them into a list of new pages.
@@ -145,10 +156,8 @@ impl SortedFile {
                 plist.count
             );
         }
-
-        plist.store_to(db, p, self);
-
-        (full - total) as i64
+        result += plist.store_to(db, p, self);
+        result
     }
 
     fn move_child_records(
@@ -170,14 +179,16 @@ impl SortedFile {
         self.move_child_records(db, p, p.right(x), r, plist);
     }
 
-    fn repack_children(&self, db: &DB, p: &Page, x: usize, r: &dyn Record) {
+    fn repack_children(&self, db: &DB, p: &Page, x: usize, r: &dyn Record) -> i64 {
         if x == 0 {
-            return;
+            return 0;
         }
+        let mut result = 0;
         let cp = p.child_page(x);
-        self.repack_page(db, cp, r);
-        self.repack_children(db, p, p.left(x), r);
-        self.repack_children(db, p, p.right(x), r);
+        result += self.repack_page(db, cp, r);
+        result += self.repack_children(db, p, p.left(x), r);
+        result += self.repack_children(db, p, p.right(x), r);
+        result
     }
 
     /// Count number of children and calculate total size of child pages.
@@ -212,7 +223,7 @@ impl SortedFile {
         if x != 0 {
             self.free_parent_node(db, p, p.left(x), r);
             self.free_parent_node(db, p, p.right(x), r);
-            p.drop_key(db, x, r );
+            p.drop_key(db, x, r);
             let cp = p.child_page(x);
             if p.level > 1 {
                 self.free_page(db, cp, r);
@@ -716,7 +727,7 @@ struct PageList {
 const TRACE_PACK: bool = true;
 
 impl PageList {
-    fn store_to(&mut self, db: &DB, p: &mut Page, file: &SortedFile) {
+    fn store_to(&mut self, db: &DB, p: &mut Page, file: &SortedFile) -> i64 {
         let mut pnums = std::mem::take(&mut self.pnums);
         let list = std::mem::take(&mut self.list);
         p.clear();
@@ -734,12 +745,14 @@ impl PageList {
             }
         }
 
+        if TRACE_PACK {
+            println!("Free pages from pack={:?}", pnums);
+        }
+        let result = pnums.len();
         while let Some(pnum) = pnums.pop() {
-            if TRACE_PACK {
-                println!("Free page={}", pnum);
-            }
             db.free_page(pnum);
         }
+        result as i64
     }
 
     fn append_page(&mut self, db: &DB, pnum: u64, r: &dyn Record, file: &SortedFile) {
