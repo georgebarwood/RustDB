@@ -1,6 +1,7 @@
 use crate::*;
 use page::PAGE_SIZE;
 use std::collections::hash_map::Entry;
+use std::cmp::min;
 
 /// Sorted Record storage.
 ///
@@ -331,47 +332,49 @@ impl SortedFile {
 
     /// Attempt to free up logical pages by re-packing child pages.
     pub fn repack(&self, db: &DB, r: &dyn Record) -> i64 {
-        self.repack_page(db, self.root_page, r)
+        let mut freed = 0;
+        self.repack_page(db, self.root_page, r, &mut freed);
+        freed
     }
 
     /* Notes on repacking.
        When repacking a page of level 2 or more, no keys are dropped or created.
-       Instead keys can move from the level 1 pages to the level 2 page or vice versa.
+       Instead keys move from the level 1 pages to the level 2 page or vice versa.
        When repacking a level 1 page, parent keys are dropped, and new keys may be created.
     */
 
     /// Repack a page. Result is number of pages freed.
-    fn repack_page(&self, db: &DB, pnum: u64, r: &dyn Record) -> i64 {
-        let mut result = 0;
-
-        let pp = self.load_page(db, pnum);
+    fn repack_page(&self, db: &DB, pnum: u64, r: &dyn Record, freed: &mut i64){
+         let pp = self.load_page(db, pnum);
         let p = &mut pp.borrow_mut();
 
         if p.level == 0 {
-            return 0;
+            return;
         }
 
         if p.level > 1 {
-            result += self.repack_page(db, p.first_page, r);
-            if result >= REPACK_LIMIT {
-                return result;
+            self.repack_page(db, p.first_page, r, freed);
+            if *freed >= REPACK_LIMIT {
+                return;
             }
-            result += self.repack_children(db, p, p.root, r);
-            if result >= REPACK_LIMIT {
-                return result;
+            self.repack_children(db, p, p.root, r, freed);
+            if *freed >= REPACK_LIMIT {
+                return;
             }
         }
 
         let (x, y) = self.page_total(db, p, p.root, r);
         let n = 1 + x;
         if n < 2 {
-            return result;
+            return;
         }
         let total = y + db.page_size(p.first_page);
         let full = (n * PAGE_SIZE) as u64;
         let space = full - total;
-        if space < full / 10 {
-            return result; // If space is less than 10%, don't repack.
+
+        let div = min(10,n as u64);
+        if space < full / div {
+            return;
         }
 
         // Iterate over the page child records, appnding them into a PageList of new pages.
@@ -397,8 +400,7 @@ impl SortedFile {
                 plist.count
             );
         }
-        result += plist.store_to(db, p, self);
-        result
+        *freed += plist.store_to(db, p, self);
     }
 
     /// Count number child pages and their total size, to decide whether to repack a parent page.
@@ -420,7 +422,6 @@ impl SortedFile {
             let cp = p.child_page(x);
             plist.add(db, cp, r, self, Some(p), x);
             if p.level == 1
-            // Not sure if this is the right condition.
             {
                 p.drop_key(db, x, r);
             }
@@ -428,20 +429,18 @@ impl SortedFile {
         }
     }
 
-    fn repack_children(&self, db: &DB, p: &Page, x: usize, r: &dyn Record) -> i64 {
-        let mut result = 0;
+    fn repack_children(&self, db: &DB, p: &Page, x: usize, r: &dyn Record, freed: &mut i64) {
         if x != 0 {
-            result += self.repack_page(db, p.child_page(x), r);
-            if result >= REPACK_LIMIT {
-                return result;
+            self.repack_page(db, p.child_page(x), r, freed);
+            if *freed >= REPACK_LIMIT {
+                return;
             }
-            result += self.repack_children(db, p, p.left(x), r);
-            if result >= REPACK_LIMIT {
-                return result;
+            self.repack_children(db, p, p.left(x), r, freed);
+            if *freed >= REPACK_LIMIT {
+                return;
             }
-            result += self.repack_children(db, p, p.right(x), r);
+            self.repack_children(db, p, p.right(x), r, freed);
         }
-        result
     }
 } // end impl SortedFile
 
@@ -746,7 +745,7 @@ struct PageList {
 const TRACE_PACK: bool = true;
 
 /// Limit on how many pages to free in one transaction.
-const REPACK_LIMIT: i64 = 50;
+const REPACK_LIMIT: i64 = 100;
 
 impl PageList {
     /// Build new parent page.
