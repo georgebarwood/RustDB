@@ -354,6 +354,7 @@ impl SortedFile {
             if result >= REPACK_LIMIT {
                 return result;
             }
+            // return result; // For now, don't attempt to pack higher level pages.
         }
 
         let (x, y) = self.page_total(db, p, p.root, r);
@@ -372,7 +373,7 @@ impl SortedFile {
 
         // Iterate over the page child records. Append them into a list of new pages.
         let mut plist = PageList::default();
-        plist.add(db, p.first_page, r, self);
+        plist.add(db, p.first_page, r, self, None, 0);
         self.move_children(db, p, p.root, r, &mut plist);
 
         if TRACE_PACK {
@@ -412,8 +413,12 @@ impl SortedFile {
         if x != 0 {
             self.move_children(db, p, p.left(x), r, plist);
             let cp = p.child_page(x);
-            plist.add(db, cp, r, self);
-            p.drop_key(db, x, r);
+            plist.add(db, cp, r, self, Some(p), x);
+            if p.level == 1
+            // Not sure if this is the right condition.
+            {
+                p.drop_key(db, x, r);
+            }
             self.move_children(db, p, p.right(x), r, plist);
         }
     }
@@ -718,13 +723,19 @@ impl Stack {
     }
 } // end impl Stack
 
-/// PageList is used to implement repacking of child pages ( REPACKFILE builtin funcction ).
+enum PKey {
+    None,
+    Dyn(Box<dyn Record>),
+    Parent(usize),
+}
+
+/// PageList is used to implement repacking of child pages ( REPACKFILE builtin function ).
 #[derive(Default)]
-pub struct PageList {
-    pub cur: usize,
-    pub list: Vec<(Page, Option<Box<dyn Record>>)>,
-    pub pnums: Vec<u64>,
-    pub count: usize,
+struct PageList {
+    cur: usize,
+    list: Vec<(Page, PKey)>,
+    pnums: Vec<u64>,
+    count: usize,
 }
 
 const TRACE_PACK: bool = true;
@@ -733,23 +744,30 @@ const TRACE_PACK: bool = true;
 const REPACK_LIMIT: i64 = 10;
 
 impl PageList {
+    /// Build new parent page.
     fn store_to(&mut self, db: &DB, p: &mut Page, file: &SortedFile) -> i64 {
         let mut pnums = std::mem::take(&mut self.pnums);
         let list = std::mem::take(&mut self.list);
-        p.clear();
+        let mut np = p.new_page();
 
         for (cp, key) in list {
             let cpnum = pnums.pop().unwrap();
             file.publish_page(cpnum, cp);
-            if let Some(key) = key {
-                p.append_page(&*key, cpnum);
-            } else {
-                p.first_page = cpnum;
-                if TRACE_PACK {
-                    println!("first page set to {}", cpnum);
+            match key {
+                PKey::Parent(x) => {
+                    p.set_child_page(x,cpnum);
+                    np.append_from(p, x);
                 }
+                PKey::Dyn(key) => np.append_page(&*key, cpnum),
+                PKey::None => np.first_page = cpnum,
             }
         }
+
+        let pnum = p.pnum;
+        p.pnum = u64::MAX;
+
+        file.remove_page(p.pnum);
+        file.publish_page(pnum, np);
 
         if TRACE_PACK {
             println!("Free pages from pack={:?}", pnums);
@@ -761,32 +779,68 @@ impl PageList {
         result as i64
     }
 
-    fn add(&mut self, db: &DB, pnum: u64, r: &dyn Record, file: &SortedFile) {
+    fn add(
+        &mut self,
+        db: &DB,
+        pnum: u64,
+        r: &dyn Record,
+        file: &SortedFile,
+        par: Option<&Page>,
+        px: usize,
+    ) {
         let pp = file.load_page(db, pnum);
-        file.remove_page(pnum);
         let p = &mut pp.borrow_mut();
+
         if self.list.is_empty() {
-            self.list.push((p.new_page(), None));
+            self.list.push((p.new_page(), PKey::None));
+        }
+        self.pnums.push(pnum);
+        file.remove_page(pnum);
+        p.pnum = u64::MAX;
+
+        if p.level > 0
+        // Need to save first_page somehow.
+        {
+            if let Some(pp) = par {
+                self.append_one(db, pp, px, r); // Use parent key ( even thouogh it will not have correct page ).
+                let ap = &mut self.list[self.cur].0;
+                let x = ap.count;
+                if x == 0 {
+                    ap.first_page = p.first_page;
+                } else {
+                    ap.set_child_page(x, p.first_page);
+                }
+            } else {
+                let ap = &mut self.list[self.cur].0;
+                ap.first_page = p.first_page;
+            }
         }
         self.append(db, p, p.root, r);
-        self.pnums.push(pnum);
-        p.pnum = u64::MAX;
     }
 
     fn append(&mut self, db: &DB, p: &Page, x: usize, r: &dyn Record) {
         if x != 0 {
             self.append(db, p, p.left(x), r);
-            let mut ap = &mut self.list[self.cur].0;
-            if ap.full() {
-                // start a new page
-                let key = p.get_key(db, x, r);
-                self.list.push((p.new_page(), Some(key)));
-                self.cur += 1;
-                ap = &mut self.list[self.cur].0;
-            }
-            ap.append_from(p, x);
-            self.count += 1;
+            self.append_one(db, p, x, r);
             self.append(db, p, p.right(x), r);
         }
+    }
+
+    fn append_one(&mut self, db: &DB, p: &Page, x: usize, r: &dyn Record) {
+        self.count += 1;
+        let mut ap = &mut self.list[self.cur].0;
+        if ap.full() {
+            // start a new page
+            let key = if ap.level == 0 {
+                let key = p.get_key(db, x, r);
+                PKey::Dyn(key)
+            } else {
+                PKey::Parent(x)
+            };
+            self.list.push((p.new_page(), key));
+            self.cur += 1;
+            ap = &mut self.list[self.cur].0;
+        }
+        ap.append_from(p, x);
     }
 }

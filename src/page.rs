@@ -244,11 +244,13 @@ impl Page {
 
     /// Offset of the 3 byte node overhead  for node x.
     fn over_off(&self, x: usize) -> usize {
+        debug_assert!(x != 0);
         (NODE_BASE - NODE_OVERHEAD) + x * self.node_size
     }
 
     /// Offset of the client data for node x.
     pub fn rec_offset(&self, x: usize) -> usize {
+        debug_assert!(x != 0);
         NODE_BASE + (x - 1) * self.node_size
     }
 
@@ -277,12 +279,14 @@ impl Page {
 
     /// Get the left child node for node x. Result is zero if there is no child.
     pub fn left(&self, x: usize) -> usize {
+        debug_assert!(x != 0);
         let off = self.over_off(x);
         self.data[off + 1] as usize | (getbits!(self.data[off] as usize, 2, NODE_ID_BITS - 8) << 8)
     }
 
     /// Get the right child node for node x. Result is zero if there is no child.
     pub fn right(&self, x: usize) -> usize {
+        debug_assert!(x != 0);
         let off = self.over_off(x);
         self.data[off + 2] as usize
             | (getbits!(
@@ -319,13 +323,15 @@ impl Page {
     /// Get the child page number for node x in a parent page.
     pub fn child_page(&self, x: usize) -> u64 {
         debug_assert!(self.level != 0);
+        debug_assert!(x != 0);
         let off = self.over_off(x) - PAGE_ID_SIZE;
         util::get(&self.data, off, PAGE_ID_SIZE)
     }
 
     /// Set the child page for node x.
-    fn set_child_page(&mut self, x: usize, pnum: u64) {
+    pub fn set_child_page(&mut self, x: usize, pnum: u64) {
         debug_assert!(self.level != 0);
+        debug_assert!(x != 0);
         let off = self.over_off(x) - PAGE_ID_SIZE;
         let data = Data::make_mut(&mut self.data);
         util::set(data, off, pnum as u64, PAGE_ID_SIZE);
@@ -341,6 +347,7 @@ impl Page {
 
     /// Compare record data for node x with record r.
     pub fn compare(&self, db: &DB, r: &dyn Record, x: usize) -> Ordering {
+        debug_assert!(x != 0);
         let off = self.rec_offset(x);
         let size = self.rec_size();
         r.compare(db, &self.data[off..off + size])
