@@ -230,6 +230,27 @@ impl Page {
         }
     }
 
+    // Make a copy of a parent key record.
+    pub fn copy(&self, x: usize) -> Vec<u8> {
+        let n = self.node_size - NODE_OVERHEAD - PAGE_ID_SIZE;
+        let off = self.rec_offset(x);
+        let mut b = vec![0; n];
+        b.copy_from_slice(&self.data[off..off + n]);
+        b
+    }
+
+    // Append a copied parent key.
+    pub fn append_page_copy(&mut self, b: &[u8], cp: u64) {
+        let inserted = self.next_alloc();
+        self.root = self.insert_into(self.root, None).0;
+        let off = self.rec_offset(inserted);
+        let data = Data::make_mut(&mut self.data);
+        let n = self.node_size - NODE_OVERHEAD - PAGE_ID_SIZE;
+        debug_assert!(n == b.len());
+        data[off..off + n].copy_from_slice(&b[0..n]);
+        self.set_child_page(inserted, cp);
+    }
+
     /// Remove record from this page.
     pub fn remove(&mut self, db: &DB, r: &dyn Record) {
         self.root = self.remove_from(db, self.root, r).0;
