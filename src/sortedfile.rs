@@ -370,8 +370,8 @@ impl SortedFile {
         let total = y + db.page_size(p.first_page);
         let full = (n * PAGE_SIZE) as u64;
         let space = full - total;
-        if space < full / 20 {
-            return result; // If space is less than 5%, don't repack.
+        if space < full / 10 {
+            return result; // If space is less than 10%, don't repack.
         }
 
         // Iterate over the page child records, appnding them into a PageList of new pages.
@@ -397,10 +397,7 @@ impl SortedFile {
                 plist.count
             );
         }
-        if n1 < n
-        {
-          result += plist.store_to(db, p, self);
-        }
+        result += plist.store_to(db, p, self);
         result
     }
 
@@ -749,7 +746,7 @@ struct PageList {
 const TRACE_PACK: bool = true;
 
 /// Limit on how many pages to free in one transaction.
-const REPACK_LIMIT: i64 = 10;
+const REPACK_LIMIT: i64 = 50;
 
 impl PageList {
     /// Build new parent page.
@@ -784,7 +781,7 @@ impl PageList {
         result as i64
     }
 
-    /// A page to the PageList.
+    /// Add a page to the PageList.
     fn add(
         &mut self,
         db: &DB,
