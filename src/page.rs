@@ -12,7 +12,7 @@ use crate::{nd, panic, util, Data, Ordering, Rc, Record, RefCell, DB};
 pub type PagePtr = Rc<RefCell<Page>>;
 
 /// The maximum size in bytes of each page.
-pub const PAGE_SIZE: usize = 4000; // 398 + (1024 - 16) * 16;
+pub const PAGE_SIZE: usize = 398 + (1024 - 16) * 16;
 
 /// = 3. Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
 pub const NODE_OVERHEAD: usize = 3;
