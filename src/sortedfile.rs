@@ -766,7 +766,7 @@ struct PageList {
     count: usize,
 }
 
-const TRACE_PACK: bool = true;
+const TRACE_PACK: bool = false;
 
 /// Limit on how many pages to free in one transaction.
 const REPACK_LIMIT: i64 = 100;

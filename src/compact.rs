@@ -68,20 +68,6 @@ impl CompactFile {
     // Special value used to validate free chain entries.
     const SPECIAL_VALUE: u64 = 0xf1e2d3c4b5a697;
 
-    /// Get the list of free logical pages ( also verifies free chain is ok ).
-    pub fn get_info(&self) -> (HashSet<u64>,u64) {
-        let mut free = HashSet::default();
-        let mut p = self.lp_first;
-        while p != u64::MAX {
-            assert!(free.insert(p));
-            let lpoff = Self::HSIZE + p * self.sp_size as u64;
-            assert!(self.read_u16(lpoff) == 0);
-            assert!(self.stg.read_u64(lpoff + 2) == Self::SPECIAL_VALUE);
-            p = self.stg.read_u64(lpoff + 10);
-        }
-        (free,self.lp_alloc)
-    }
-
     fn trace(&self, msg: &str) {
         if !Self::TRACE {
             return;
@@ -106,8 +92,8 @@ impl CompactFile {
             sp_size,
             ep_size,
             stg,
-            ep_resvd: 20,
-            ep_count: 20,
+            ep_resvd: 10,
+            ep_count: 10,
             ep_free: BTreeSet::new(),
             lp_alloc: 0,
             lp_first: u64::MAX,
@@ -234,6 +220,14 @@ impl CompactFile {
         Arc::new(data)
     }
 
+    /// Get the next page in the free chain.
+    fn next_free(&self, p: u64) -> u64 {
+        let lpoff = Self::HSIZE + p * self.sp_size as u64;
+        assert!(self.read_u16(lpoff) == 0);
+        assert!(self.stg.read_u64(lpoff + 2) == Self::SPECIAL_VALUE);
+        self.stg.read_u64(lpoff + 10)
+    }
+
     /// Allocate logical page number. Pages are numbered 0,1,2...
     pub fn alloc_page(&mut self) -> u64 {
         self.trace("alloc_page");
@@ -241,18 +235,14 @@ impl CompactFile {
             p
         } else {
             self.lp_alloc_dirty = true;
-            if self.lp_first != u64::MAX {
-                let p = self.lp_first;
-                let lpoff = Self::HSIZE + p * self.sp_size as u64;
-                assert!(self.read_u16(lpoff) == 0);
-                assert!(self.stg.read_u64(lpoff + 2) == Self::SPECIAL_VALUE);
-                self.lp_first = self.stg.read_u64(lpoff + 10);
-                p
+            let mut p = self.lp_first;
+            if p != u64::MAX {
+                self.lp_first = self.next_free(p);
             } else {
-                let p = self.lp_alloc;
+                p = self.lp_alloc;
                 self.lp_alloc += 1;
-                p
             }
+            p
         }
     }
 
@@ -370,10 +360,16 @@ impl CompactFile {
     fn extend_starter_pages(&mut self, lpnum: u64) {
         let mut save = false;
         while !self.lp_valid(lpnum) {
-            self.relocate(self.ep_resvd, self.ep_count);
+            if !self.ep_free.remove(&self.ep_resvd)
+            // Do not relocate a free extended page.
+            {
+                self.relocate(self.ep_resvd, self.ep_count);
+                self.ep_count += 1;
+            }
+
             self.ep_clear(self.ep_resvd);
             self.ep_resvd += 1;
-            self.ep_count += 1;
+
             save = true;
         }
         if save {
@@ -413,6 +409,17 @@ impl CompactFile {
     /// Check whether compressing a page is worthwhile.
     pub fn compress(sp_size: usize, ep_size: usize, size: usize, saving: usize) -> bool {
         Self::ext_pages(sp_size, ep_size, size - saving) < Self::ext_pages(sp_size, ep_size, size)
+    }
+
+    /// Get the set of free logical pages ( also verifies free chain is ok ).
+    pub fn get_info(&self) -> (HashSet<u64>, u64) {
+        let mut free = HashSet::default();
+        let mut p = self.lp_first;
+        while p != u64::MAX {
+            assert!(free.insert(p));
+            p = self.next_free(p);
+        }
+        (free, self.lp_alloc)
     }
 } // end impl CompactFile
 

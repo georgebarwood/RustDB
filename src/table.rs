@@ -69,12 +69,10 @@ impl Table {
         }
     }
 
-    pub fn get_used(&self, db: &DB, to: &mut HashSet<u64>)
-    {
+    pub fn get_used(&self, db: &DB, to: &mut HashSet<u64>) {
         self.file.get_used(db, to);
-        for (f, _cols) in &*self.ixlist.borrow() 
-        {
-          f.get_used(db, to);
+        for (f, _cols) in &*self.ixlist.borrow() {
+            f.get_used(db, to);
         }
     }
 

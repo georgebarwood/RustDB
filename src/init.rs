@@ -1289,15 +1289,20 @@ BEGIN
      | '<br>SELECT Cust, Total FROM dbo.Order'
      | '<br>EXEC date.Test( 2020, 1, 1, 60 )'
      | '<br>CREATE TABLE dbo.Cust( LastName string, Age int )'
-     | '<br>CREATE INDEX ByLastName ON dbo.Cust(LastName)'
      | '<br>CREATE FN handler.[/MyPage]() AS BEGIN END'
      | '<br>SELECT ''hash='' | ARGON( ''argon2i!'', ''delicious salt'' )'
      | '<br>EXEC web.SetCookie(''username'',''fred'',''Max-Age=1000000000'')'
      | '<br>EXEC rtest.OneTest()'
-     | '<br>DROP INDEX ByLastName ON dbo.Cust'  
+     | '<br>CREATE INDEX ByCust ON dbo.Order'
+     | '<br>DROP INDEX ByCust ON dbo.Order'  
      | '<br>ALTER TABLE dbo.Cust MODIFY FirstName string(20), ADD [City] string, PostCode string'
      | '<br>ALTER TABLE dbo.Cust DROP PostCode'
      | '<br>DROP TABLE dbo.Cust'
+     | '<br>SELECT VERIFYDB()'
+     | '<br>SELECT REPACKFILE(0,''dbo'',''Order'')'
+     | '<br>EXEC dbo.MakeOrders()'
+     | '<br>DELETE FROM dbo.Order WHERE true'
+
    EXEC web.Trailer()
 END
 GO
@@ -1432,7 +1437,8 @@ SELECT '<h1>Manual</h1>
 <li>PARSEINT( s string ) : parses an integer from s.</li>
 <li>PARSEFLOAT( s string ) : parses a floating point number from s.</li>
 <li>EXCEPTION() returns a string with any error that occurred during an EXECUTE statement.</li>
-<li>REPACKFILE(k,schema,table) : A file is re-packed to free up pages. k=0 => main file, k=1.. => an index, k in -4..-1 => byte storage files. 
+<li>REPACKFILE(k,schema,table) : A file is re-packed to free up pages. The result is an integer, the number of pages freed, or -1 if the table or index does not exist. k=0 => main file, k=1.. => an index, k in -4..-1 => byte storage files. 
+<li>VERIFYDB() : verifies the logical page structure of the database. , the result is a string. Note: this needs exclusive access to the database to give consistent results, as it can observe update activity in shared data structures. Calling it while another process is updating the database may result in an exception.
 <li>See the web schema for functions that can be used to access http requests.</li>
 </ul>
 <h3>Conversions</h3>
@@ -1484,7 +1490,6 @@ BEGIN
 <p><a href=/FileUpload>File Upload</a>
 <p><a target=_blank href=/ScriptAll>Script entire database</a>
 <p><a href=/CheckAll>Check all functions compile ok</a>
-<p><a href=/VerifyDb>Verify database</a>
 <h1>Schemas</h1>'
    SELECT '<p><a href=ShowSchema?s=' | Name | '>' | Name | '</a>' FROM sys.Schema ORDER BY Name
    EXEC web.Trailer()
@@ -1575,18 +1580,11 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
-CREATE FN [handler].[/VerifyDb]() AS
-BEGIN
-  EXEC web.Head('Verify Database')
-  SELECT VERIFYDB()
-  EXEC web.Trailer()
-END
-GO
 --############################################
 CREATE SCHEMA [dbo]
 CREATE TABLE [dbo].[Cust]([FirstName] string(10),[LastName] string,[Age] int,[Postcode] string(10),[City] string) 
 GO
-CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int,[info] string(200)) 
+CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int,[Info] string(200)) 
 GO
 CREATE INDEX [ByCust] ON [dbo].[Order]([Cust])
 GO
@@ -1637,7 +1635,8 @@ INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode],[City]) VALU
 (8,'Alex','Barwood',63,'GL2 4LZ','')
 GO
 
-INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date],[info]) VALUES 
+INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date],[Info]) VALUES 
+(1110001,8,5,1035151,'Hello there')
 GO
 
 --############################################
