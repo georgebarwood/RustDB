@@ -37,6 +37,8 @@ pub fn standard_builtins(map: &mut BuiltinMap) {
         ),
         ("LASTID", DataKind::Int, CompileFunc::Int(c_lastid)),
         ("REPACKFILE", DataKind::Int, CompileFunc::Int(c_repackfile)),
+        ("VERIFYDB", DataKind::String, CompileFunc::Value(c_verifydb)),
+
     ];
     for (name, typ, cf) in list {
         map.insert(name.to_string(), (typ, cf));
@@ -345,5 +347,26 @@ impl CExp<i64> for RepackFile {
         let s = self.s.eval(ee, d).str();
         let n = self.n.eval(ee, d).str();
         ee.db.repack_file(k, &s, &n)
+    }
+}
+
+/////////////////////////////
+/// Compile call to VERIFYDB.
+fn c_verifydb(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
+    check_types(
+        b,
+        args,
+        &[],
+    );
+    Box::new(VerifyDb{})
+}
+struct VerifyDb {
+}
+impl CExp<Value> for VerifyDb {
+    fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> Value {
+        let sql = "EXEC sys.LoadAllTables()";    
+        ee.db.run(&sql, ee.tr);
+        let s = ee.db.verify();
+        Value::String(Rc::new(s))
     }
 }

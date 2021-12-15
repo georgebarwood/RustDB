@@ -11,8 +11,19 @@ use crate::{nd, panic, util, Data, Ordering, Rc, Record, RefCell, DB};
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
 
+/* Note: the page size must be big enough that a good number of records fits into a page.
+   A record with 20 fields of 16 bytes is 320 bytes.
+   The page size should be at least 2kb, and the constants below should be chosen to make this the case.
+*/
+
+// =1024. Size of an extension page.
+pub const EP_SIZE: usize = 1024;
+/// =16. Maximum number of extension pages.
+pub const EP_MAX: usize = 16;
+/// =136. Starter page size.
+pub const SP_SIZE: usize = (EP_MAX + 1) * 8;
 /// The maximum size in bytes of each page.
-pub const PAGE_SIZE: usize = 398 + (1024 - 16) * 16;
+pub const PAGE_SIZE: usize = (SP_SIZE - 2) + (EP_SIZE - 16) * EP_MAX;
 
 /// = 3. Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
 pub const NODE_OVERHEAD: usize = 3;

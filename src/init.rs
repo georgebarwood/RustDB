@@ -1,6 +1,5 @@
 pub const INITSQL : &str = "
 
-
 CREATE FN [sys].[AddColumn]( t int, name string, typ int ) 
 AS 
 BEGIN 
@@ -118,6 +117,19 @@ GO
 CREATE FN [sys].[IndexName]( index int ) RETURNS string AS
 BEGIN
   SET result = sys.QuoteName(Name) FROM sys.Index WHERE Id = index
+END
+GO
+CREATE FN [sys].[LoadAllTables]() AS BEGIN 
+
+  DECLARE sid int, sname string, tname string
+  FOR sid = Id, sname = Name FROM sys.Schema
+  BEGIN
+    FOR tname = Name FROM sys.Table WHERE Schema = sid
+    BEGIN
+      EXECUTE( 'IF false SELECT Id FROM ' | sys.Dot( sname, tname ) )
+    END
+  END
+
 END
 GO
 CREATE FN [sys].[ModifyColumn]( t int, cname string, typ int ) AS 
@@ -1472,6 +1484,7 @@ BEGIN
 <p><a href=/FileUpload>File Upload</a>
 <p><a target=_blank href=/ScriptAll>Script entire database</a>
 <p><a href=/CheckAll>Check all functions compile ok</a>
+<p><a href=/VerifyDb>Verify database</a>
 <h1>Schemas</h1>'
    SELECT '<p><a href=ShowSchema?s=' | Name | '>' | Name | '</a>' FROM sys.Schema ORDER BY Name
    EXEC web.Trailer()
@@ -1562,11 +1575,20 @@ BEGIN
   EXEC web.Trailer()
 END
 GO
+CREATE FN [handler].[/VerifyDb]() AS
+BEGIN
+  EXEC web.Head('Verify Database')
+  SELECT VERIFYDB()
+  EXEC web.Trailer()
+END
+GO
 --############################################
 CREATE SCHEMA [dbo]
 CREATE TABLE [dbo].[Cust]([FirstName] string(10),[LastName] string,[Age] int,[Postcode] string(10),[City] string) 
 GO
 CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int,[info] string(200)) 
+GO
+CREATE INDEX [ByCust] ON [dbo].[Order]([Cust])
 GO
 CREATE FN [dbo].[CustName]( cust int ) RETURNS string AS
 BEGIN
@@ -1597,7 +1619,7 @@ BEGIN
   DECLARE date int SET date = date.DaysToYearMonthDay(date.Today())
   DECLARE @I int 
   SET @I=0 
-  WHILE @I < 20000 -- Use 5000000 to stress system a bit!
+  WHILE @I < 1000 -- Use 5000000 to stress system a bit!
   BEGIN 
     INSERT INTO dbo.[Order](Cust,Total,Date) VALUES(1+@I%7, ( 501 * (@I%11+@I%7) ) / 100, date ) 
     SET @I=@I+1 
@@ -1711,7 +1733,7 @@ BEGIN
 END
 GO
 INSERT INTO [rtest].[Gen](Id,[x]) VALUES 
-(1,250698715)
+(1,2061969400)
 GO
 
 DECLARE tid int, sid int, cid int

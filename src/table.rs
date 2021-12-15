@@ -69,6 +69,15 @@ impl Table {
         }
     }
 
+    pub fn get_used(&self, db: &DB, to: &mut HashSet<u64>)
+    {
+        self.file.get_used(db, to);
+        for (f, _cols) in &*self.ixlist.borrow() 
+        {
+          f.get_used(db, to);
+        }
+    }
+
     /// Insert specified row into the table.
     pub fn insert(&self, db: &DB, row: &mut Row) {
         row.encode(db); // Calculate codes for Binary and String values.

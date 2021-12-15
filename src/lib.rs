@@ -506,6 +506,28 @@ GO
         self.file.save(op)
     }
 
+    /// Verify the page structure of the database.
+    pub fn verify(self: &DB) -> String {
+        let (mut pages,total) = self.file.spd.file.read().unwrap().get_info();
+        let total = total as usize;
+
+        let free = pages.len();
+
+        for bs in &self.bs {
+            bs.file.get_used(self, &mut pages);
+        }
+
+        let tm = &*self.tables.borrow();
+        for t in tm.values() 
+        {
+          t.get_used(self, &mut pages);
+        }
+
+        assert!( pages.len() == total );
+
+        format!("All Ok. Logical page summary: free={} used={} total={}.", free, total-free, total)
+    }
+
     #[cfg(not(feature = "max"))]
     /// Get the named table.
     pub(crate) fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr> {

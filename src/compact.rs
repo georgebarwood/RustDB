@@ -1,5 +1,5 @@
 use crate::stg::Storage;
-use crate::{nd, util, Arc, Data};
+use crate::{nd, page, util, Arc, Data, HashSet};
 use std::cmp::min;
 use std::collections::BTreeSet;
 
@@ -21,7 +21,7 @@ use std::collections::BTreeSet;
 ///
 /// Layout of starter page: 2 byte logical page size | array of 8 byte page numbers | user data | unused data.
 ///
-/// Note: for a free logical page, the link to the next free page is stored after the page size ( 0 ).
+/// Note: for a free logical page, a special value is stored after the page size, then a link to the next free logical page.
 ///
 /// Layout of extension page: 8 byte logical page number | user data | unused data.
 
@@ -63,7 +63,24 @@ pub struct CompactFile {
 impl CompactFile {
     /// = 28. Size of file header.
     const HSIZE: u64 = 28;
+    /// Enable tracing.
     const TRACE: bool = false;
+    // Special value used to validate free chain entries.
+    const SPECIAL_VALUE: u64 = 0xf1e2d3c4b5a697;
+
+    /// Get the list of free logical pages ( also verifies free chain is ok ).
+    pub fn get_info(&self) -> (HashSet<u64>,u64) {
+        let mut free = HashSet::default();
+        let mut p = self.lp_first;
+        while p != u64::MAX {
+            assert!(free.insert(p));
+            let lpoff = Self::HSIZE + p * self.sp_size as u64;
+            assert!(self.read_u16(lpoff) == 0);
+            assert!(self.stg.read_u64(lpoff + 2) == Self::SPECIAL_VALUE);
+            p = self.stg.read_u64(lpoff + 10);
+        }
+        (free,self.lp_alloc)
+    }
 
     fn trace(&self, msg: &str) {
         if !Self::TRACE {
@@ -107,8 +124,8 @@ impl CompactFile {
             x.ep_resvd = x.stg.read_u64(0);
             x.lp_alloc = x.stg.read_u64(8);
             x.lp_first = x.stg.read_u64(16);
-            x.sp_size = x.readu16(24) as usize;
-            x.ep_size = x.readu16(26) as usize;
+            x.sp_size = x.read_u16(24) as usize;
+            x.ep_size = x.read_u16(26) as usize;
         }
         x.ep_count = (fsize + (x.ep_size as u64) - 1) / (x.ep_size as u64);
         if x.ep_count < x.ep_resvd {
@@ -122,6 +139,8 @@ impl CompactFile {
 
     /// Set the contents of the page.
     pub fn set_page(&mut self, lpnum: u64, data: Data) {
+        debug_assert!(!self.lp_free.contains(&lpnum));
+
         self.extend_starter_pages(lpnum);
         // Calculate number of extension pages needed.
         let size = data.len();
@@ -129,7 +148,8 @@ impl CompactFile {
 
         // Read the current starter info.
         let foff = Self::HSIZE + (self.sp_size as u64) * lpnum;
-        let old_size = self.readu16(foff);
+        let old_size = self.read_u16(foff);
+        assert!(old_size <= page::PAGE_SIZE);
         let mut old_ext = self.ext(old_size);
 
         let mut info = vec![0_u8; 2 + old_ext * 8];
@@ -177,7 +197,7 @@ impl CompactFile {
     /// Get the current size of the specified logical page.
     pub fn page_size(&self, lpnum: u64) -> usize {
         if self.lp_valid(lpnum) {
-            self.readu16(Self::HSIZE + (self.sp_size as u64) * lpnum)
+            self.read_u16(Self::HSIZE + (self.sp_size as u64) * lpnum)
         } else {
             0
         }
@@ -223,7 +243,10 @@ impl CompactFile {
             self.lp_alloc_dirty = true;
             if self.lp_first != u64::MAX {
                 let p = self.lp_first;
-                self.lp_first = self.stg.read_u64(Self::HSIZE + p * self.sp_size as u64 + 2);
+                let lpoff = Self::HSIZE + p * self.sp_size as u64;
+                assert!(self.read_u16(lpoff) == 0);
+                assert!(self.stg.read_u64(lpoff + 2) == Self::SPECIAL_VALUE);
+                self.lp_first = self.stg.read_u64(lpoff + 10);
                 p
             } else {
                 let p = self.lp_alloc;
@@ -265,8 +288,10 @@ impl CompactFile {
             // Set the page size to zero, frees any associated extension pages.
             self.set_page(p, nd());
             // Store link to old lp_first after size field.
-            self.stg
-                .write_u64(Self::HSIZE + p * self.sp_size as u64 + 2, self.lp_first);
+            let lpoff = Self::HSIZE + p * self.sp_size as u64;
+            self.stg.write_u64(lpoff + 2, Self::SPECIAL_VALUE); // Used to validate freee chain entries.
+            self.stg.write_u64(lpoff + 10, self.lp_first);
+
             self.lp_first = p;
             self.lp_alloc_dirty = true;
         }
@@ -292,7 +317,7 @@ impl CompactFile {
     }
 
     /// Read a u16 from the underlying file.
-    fn readu16(&self, offset: u64) -> usize {
+    fn read_u16(&self, offset: u64) -> usize {
         let mut bytes = [0; 2];
         self.stg.read(offset, &mut bytes);
         u16::from_le_bytes(bytes) as usize
@@ -314,7 +339,7 @@ impl CompactFile {
         let lpnum = util::getu64(&buffer, 0);
         // Compute location and length of the array of extension page numbers.
         let mut off = Self::HSIZE + lpnum * self.sp_size as u64;
-        let size = self.readu16(off);
+        let size = self.read_u16(off);
         let mut ext = self.ext(size);
         off += 2;
         // Update the matching extension page number.
@@ -381,6 +406,7 @@ impl CompactFile {
             n = ((size - (sp_size - 2)) + (ep_size - 16 - 1)) / (ep_size - 16);
         }
         debug_assert!(2 + 16 * n + size <= sp_size + n * ep_size);
+        assert!(2 + n * 8 <= sp_size);
         n
     }
 
@@ -389,3 +415,37 @@ impl CompactFile {
         Self::ext_pages(sp_size, ep_size, size - saving) < Self::ext_pages(sp_size, ep_size, size)
     }
 } // end impl CompactFile
+
+#[test]
+pub fn test() {
+    use crate::stg::MemFile;
+    use rand::Rng;
+    /* Idea of test is to check two CompactFiles with different parameters behave the same */
+
+    let mut rng = rand::thread_rng();
+
+    let s0 = Box::new(MemFile::default());
+    let s1 = Box::new(MemFile::default());
+
+    let mut cf0 = CompactFile::new(s0, 200, 1024);
+    let mut cf1 = CompactFile::new(s1, 136, 1024);
+
+    for _ in 0..1000000 {
+        let n: usize = rng.gen::<usize>() % 5000;
+        let p: u64 = rng.gen::<u64>() % 100;
+        let b: u8 = rng.gen::<u8>();
+
+        let d = vec![b; n];
+        let d = Arc::new(d);
+        cf0.set_page(p, d.clone());
+        cf1.set_page(p, d.clone());
+
+        let p: u64 = rng.gen::<u64>() % 100;
+        let x = cf0.get_page(p);
+        let y = cf1.get_page(p);
+        assert!(x == y);
+
+        cf0.save();
+        cf1.save();
+    }
+}
