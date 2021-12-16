@@ -75,32 +75,15 @@ impl GenTransaction {
 
 impl Transaction for GenTransaction {
     fn arg(&mut self, kind: i64, s: &str) -> Rc<String> {
-        let result: &str = match kind {
-            0 => &self.qy.path,
-            1 => {
-                if let Some(s) = self.qy.params.get(s) {
-                    s
-                } else {
-                    ""
-                }
-            }
-            2 => {
-                if let Some(s) = self.qy.form.get(s) {
-                    s
-                } else {
-                    ""
-                }
-            }
-            3 => {
-                if let Some(s) = self.qy.cookies.get(s) {
-                    s
-                } else {
-                    ""
-                }
-            }
-            _ => "",
+        let s = match kind {
+            0 => Some(&self.qy.path),
+            1 => self.qy.params.get(s),
+            2 => self.qy.form.get(s),
+            3 => self.qy.cookies.get(s),
+            _ => None,
         };
-        Rc::new(result.to_string())
+        let s = if let Some(s) = s { s } else { "" };
+        Rc::new(s.to_string())
     }
 
     fn status_code(&mut self, code: i64) {

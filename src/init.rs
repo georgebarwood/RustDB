@@ -1090,8 +1090,6 @@ BEGIN
   EXECUTE( browse.FormInsertSql( t, c ) )
   SELECT '<p><input name=\"$submit\" type=submit value=Save></form>'
   EXEC web.Trailer()
-    
-  EXEC web.Trailer()
 END
 GO
 CREATE FN [handler].[/AddRow]() AS 

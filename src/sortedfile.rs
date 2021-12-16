@@ -1,5 +1,4 @@
 use crate::*;
-use page::PAGE_SIZE;
 use std::cmp::min;
 use std::collections::hash_map::Entry;
 
@@ -196,7 +195,7 @@ impl SortedFile {
             let p = &mut *pp.borrow_mut();
             if p.level != 0 {
                 p.find_child(db, r)
-            } else if !p.full() {
+            } else if !p.full(db) {
                 self.set_dirty(p, &pp);
                 p.insert(db, r);
                 return true;
@@ -233,7 +232,7 @@ impl SortedFile {
         let pp = self.load_page(db, into.pnum);
         let p = &mut *pp.borrow_mut();
         // Need to check if page is full.
-        if !p.full() {
+        if !p.full(db) {
             self.set_dirty(p, &pp);
             p.insert_page(db, r, cpnum);
         } else {
@@ -393,8 +392,8 @@ impl SortedFile {
         if n < 2 {
             return;
         }
-        let total = y + db.page_size(p.first_page);
-        let full = (n * PAGE_SIZE) as u64;
+        let total = y + db.lp_size(p.first_page);
+        let full = (n * db.page_size_max) as u64;
         let space = full - total;
 
         let div = min(10, n as u64);
@@ -434,7 +433,7 @@ impl SortedFile {
             return (0, 0);
         }
         let cp = p.child_page(x);
-        let cp_size = db.page_size(cp);
+        let cp_size = db.lp_size(cp);
         let (n1, t1) = self.page_total(db, p, p.left(x), r);
         let (n2, t2) = self.page_total(db, p, p.right(x), r);
         (1 + n1 + n2, cp_size + t1 + t2)
@@ -855,7 +854,7 @@ impl PageList {
     fn append_one(&mut self, db: &DB, p: &Page, x: usize, r: &dyn Record) {
         self.count += 1;
         let mut ap = &mut self.list[self.cur].0;
-        if ap.full() {
+        if ap.full(db) {
             // Start a new page.
             let key = if ap.level == 0 {
                 PKey::Dyn(p.get_key(db, x, r))

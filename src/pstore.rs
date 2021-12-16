@@ -1,5 +1,5 @@
 use crate::{
-    nd, page, Arc, BTreeMap, CompactFile, Data, HashMap, HashSet, Mutex, RwLock, SaveOp, Storage,
+    nd, Arc, BTreeMap, CompactFile, Data, HashMap, HashSet, Mutex, RwLock, SaveOp, Storage,
 };
 use std::ops::Bound::Included;
 
@@ -153,10 +153,17 @@ pub struct SharedPagedData {
     pub ep_size: usize,
 }
 
+/// =1024. Size of an extension page.
+const EP_SIZE: usize = 1024;
+/// =16. Maximum number of extension pages.
+const EP_MAX: usize = 16;
+/// =136. Starter page size.
+const SP_SIZE: usize = (EP_MAX + 1) * 8;
+
 impl SharedPagedData {
     /// Construct SharedPageData based on specified underlying storage.
     pub fn new(file: Box<dyn Storage>) -> Self {
-        let file = CompactFile::new(file, page::SP_SIZE, page::EP_SIZE);
+        let file = CompactFile::new(file, SP_SIZE, EP_SIZE);
         // Note : if it's not a new file, sp_size and ep_size are read from file header.
         let sp_size = file.sp_size;
         let ep_size = file.ep_size;
@@ -166,6 +173,11 @@ impl SharedPagedData {
             sp_size,
             ep_size,
         }
+    }
+
+    pub fn page_size_max(&self) -> usize {
+        let ep_max = (self.sp_size - 2) / 8;
+        (self.ep_size - 16) * ep_max + (self.sp_size - 2)
     }
 }
 

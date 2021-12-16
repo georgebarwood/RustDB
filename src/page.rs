@@ -16,15 +16,6 @@ pub type PagePtr = Rc<RefCell<Page>>;
    The page size should be at least 2kb, and the constants below should be chosen to make this the case.
 */
 
-// =1024. Size of an extension page.
-pub const EP_SIZE: usize = 1024;
-/// =16. Maximum number of extension pages.
-pub const EP_MAX: usize = 16;
-/// =136. Starter page size.
-pub const SP_SIZE: usize = (EP_MAX + 1) * 8;
-/// The maximum size in bytes of each page.
-pub const PAGE_SIZE: usize = (SP_SIZE - 2) + (EP_SIZE - 16) * EP_MAX;
-
 /// = 3. Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
 pub const NODE_OVERHEAD: usize = 3;
 
@@ -143,13 +134,13 @@ impl Page {
     }
 
     /// Is the page full?
-    pub fn full(&self) -> bool {
+    pub fn full(&self, db: &DB) -> bool {
         self.free == 0
             && (self.alloc == MAX_NODE
                 || NODE_BASE
                     + (self.alloc + 1) * self.node_size
                     + if self.level != 0 { PAGE_ID_SIZE } else { 0 }
-                    >= PAGE_SIZE)
+                    >= db.page_size_max)
     }
 
     /// Construct a new empty page inheriting record size and level from self.

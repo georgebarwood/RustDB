@@ -81,6 +81,9 @@
 //! [AtomicFile] ensures that database updates are all or nothing.
 //!
 //!# ToDo List
+//!
+//! Calculate PAGE_SIZE at run-time.
+//!
 //! Unify GenTransaction and WebTransaction. File upload doesn't work with WebTransaction currently.
 //!
 //! Implement email in example program. Replication of log files. Server status.
@@ -174,7 +177,7 @@ pub mod stg;
 /// Page storage and sharing, [SharedPagedData] and [AccessPagedData].
 pub mod pstore;
 
-/// [AtomicFile]
+/// [AtomicFile].
 pub mod atomfile;
 
 // Conditional modules.
@@ -303,6 +306,8 @@ pub struct Database {
     pub lastid: Cell<i64>,
     /// Has there been an error since last save?
     pub err: Cell<bool>,
+    /// Maximum size of logical page.
+    pub page_size_max: usize,
 }
 
 const SYS_ROOT_LAST: u64 = 15;
@@ -344,6 +349,8 @@ impl Database {
             bs.push(ByteStorage::new(ft as u64, ft));
         }
 
+        let page_size_max = file.spd.page_size_max();
+
         let db = Rc::new(Database {
             file,
             sys_schema,
@@ -360,6 +367,7 @@ impl Database {
             function_reset: Cell::new(false),
             lastid: Cell::new(0),
             err: Cell::new(false),
+            page_size_max,
         });
 
         assert!(tb.alloc as u64 - 1 == SYS_ROOT_LAST);
@@ -466,8 +474,9 @@ GO
         -1
     }
 
-    pub(crate) fn page_size(&self, pnum: u64) -> u64 {
-        self.file.spd.file.read().unwrap().page_size(pnum) as u64
+    /// Get size of logical page.
+    pub(crate) fn lp_size(&self, pnum: u64) -> u64 {
+        self.file.spd.file.read().unwrap().lp_size(pnum) as u64
     }
 
     /// Save updated tables to underlying file ( or rollback if there was an error ).
