@@ -57,7 +57,7 @@
 //!
 //!# Features
 //!
-//! This crate supports two cargo features.
+//! This crate supports the following cargo features:
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
 //! - `max` : Exposes maximal interface, including all internal modules (default).
 //! - `verify` : Allows database structure to be verified using builtin function VERIFYDB.
@@ -84,7 +84,7 @@
 //!
 //!# ToDo List
 //!
-//! Unify GenTransaction and WebTransaction. File upload doesn't work with WebTransaction currently.
+//! Unify GenTransaction and WebTransaction. File upload only partially works with WebTransaction currently.
 //!
 //! Implement email in example program. Replication of log files. Server status.
 //!

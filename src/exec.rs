@@ -489,7 +489,7 @@ impl<'r> EvalEnv<'r> {
 
     fn drop_table(&mut self, name: &ObjRef) {
         if let Some(t) = sys::get_table(&self.db, name) {
-            let sql = format!("EXEC sys.DropTable({})", t.id);
+            let sql = format!("EXEC sys.DropTable){})", t.id);
             self.db.run(&sql, self.tr);
             self.db.tables.borrow_mut().remove(name);
             self.db.function_reset.set(true);
@@ -535,16 +535,14 @@ impl<'r> EvalEnv<'r> {
                     _ => {}
                 }
                 let sql = match act {
-                    AlterCol::Add(name, typ) => {
-                        format!("EXEC sys.AddColumn({},'{}',{})", t.id, name, typ)
-                    }
-                    AlterCol::Modify(name, typ) => {
-                        format!("EXEC sys.ModifyColumn({},'{}',{})", t.id, name, typ)
-                    }
-                    AlterCol::Drop(name) => {
+                    AlterCol::Add(name, typ) =>
+                        format!("INSERT INTO sys.Column( Table, Name, Type ) VALUES ({}, '{}', {})", t.id, name, typ), 
+                    AlterCol::Modify(name, typ) =>
+                        format!("UPDATE sys.Column SET Type = {} WHERE Table = {} AND Name = '{}'", typ, t.id, name),
+                    AlterCol::Drop(name) =>
                         format!("EXEC sys.DropColumn({},'{}')", t.id, name)
-                    }
                 };
+                println!("sql={}",sql);
                 db.run(&sql, self.tr);
             }
 

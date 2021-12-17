@@ -355,6 +355,18 @@ impl CExp<i64> for RepackFile {
 }
 
 #[cfg(feature = "verify")]
+/// SQL to load every table ( required for database::verify to work correctly ).
+const LOADALLTABLES : &str = "  
+  DECLARE sid int, sname string, tname string
+  FOR sid = Id, sname = Name FROM sys.Schema
+  BEGIN
+    FOR tname = Name FROM sys.Table WHERE Schema = sid
+    BEGIN
+      EXECUTE( 'IF false SELECT Id FROM ' | sys.Dot( sname, tname ) )
+    END
+  END";
+
+#[cfg(feature = "verify")]
 /////////////////////////////
 /// Compile call to VERIFYDB.
 fn c_verifydb(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
@@ -366,7 +378,7 @@ struct VerifyDb {}
 #[cfg(feature = "verify")]
 impl CExp<Value> for VerifyDb {
     fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> Value {
-        ee.db.run("EXEC sys.LoadAllTables()", ee.tr);
+        ee.db.run(LOADALLTABLES, ee.tr);
         let s = ee.db.verify();
         Value::String(Rc::new(s))
     }

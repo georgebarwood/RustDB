@@ -192,12 +192,11 @@ impl CompactFile {
         self.stg.write_vec(foff, info);
     }
 
-    /// Get logical page contents. Returns the page size.
+    /// Get logical page contents.
     pub fn get_page(&self, lpnum: u64) -> Data {
         if !self.lp_valid(lpnum) {
             return nd();
         }
-
         let mut starter = vec![0_u8; self.sp_size];
         let foff = Self::HSIZE + (self.sp_size as u64) * lpnum;
         self.stg.read(foff, &mut starter);

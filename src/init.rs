@@ -1,11 +1,6 @@
 pub const INITSQL : &str = "
 
-CREATE FN [sys].[AddColumn]( t int, name string, typ int ) 
-AS 
-BEGIN 
-  INSERT INTO sys.Column( Table, Name, Type ) VALUES (t, name, typ)
-END
-GO
+
 CREATE FN [sys].[ClearTable](t int) AS 
 BEGIN 
   EXECUTE( 'DELETE FROM ' | sys.TableName(t) | ' WHERE true' )
@@ -62,6 +57,8 @@ GO
 CREATE FN [sys].[DropColumn]( t int, cname string ) AS 
 BEGIN 
   DELETE FROM sys.Column WHERE Table = t AND Name = cname
+
+  /* Could delete browse column info as well (todo)*/
 END
 GO
 CREATE FN [sys].[DropIndex]( ix int ) AS
@@ -130,11 +127,6 @@ CREATE FN [sys].[LoadAllTables]() AS BEGIN
     END
   END
 
-END
-GO
-CREATE FN [sys].[ModifyColumn]( t int, cname string, typ int ) AS 
-BEGIN 
-   UPDATE sys.Column SET Type = typ WHERE Table = t AND Name = cname
 END
 GO
 CREATE FN [sys].[QuoteName]( s string ) RETURNS string AS
@@ -1294,7 +1286,7 @@ BEGIN
      | '<br>CREATE INDEX ByCust ON dbo.Order'
      | '<br>DROP INDEX ByCust ON dbo.Order'  
      | '<br>ALTER TABLE dbo.Cust MODIFY FirstName string(20), ADD [City] string, PostCode string'
-     | '<br>ALTER TABLE dbo.Cust DROP PostCode'
+     | '<br>ALTER TABLE dbo.Cust DROP Postcode'
      | '<br>DROP TABLE dbo.Cust'
      | '<br>SELECT VERIFYDB()'
      | '<br>SELECT REPACKFILE(0,''dbo'',''Order'')'
@@ -1580,7 +1572,7 @@ END
 GO
 --############################################
 CREATE SCHEMA [dbo]
-CREATE TABLE [dbo].[Cust]([FirstName] string(10),[LastName] string,[Age] int,[Postcode] string(10),[City] string) 
+CREATE TABLE [dbo].[Cust]([FirstName] string(10),[LastName] string,[Age] int,[City] string) 
 GO
 CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int,[Info] string(200)) 
 GO
@@ -1622,15 +1614,15 @@ BEGIN
   END
 END
 GO
-INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[Postcode],[City]) VALUES 
-(1,'Mary','Poppins',65,'EC4 2NX','')
-(2,'Clare','Smith',31,'GL3','')
-(3,'Ron','Jones',45,'','')
-(4,'Peter','Perfect',36,'','')
-(5,'George','Washington',31,'WC1','')
-(6,'Ron','Williams',49,'','')
-(7,'Ben','Johnson',0,'','')
-(8,'Alex','Barwood',63,'GL2 4LZ','')
+INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[City]) VALUES 
+(1,'Mary','Poppins',65,'')
+(2,'Clare','Smith',31,'')
+(3,'Ron','Jones',45,'')
+(4,'Peter','Perfect',36,'')
+(5,'George','Washington',31,'')
+(6,'Ron','Williams',49,'')
+(7,'Ben','Johnson',0,'')
+(8,'Alex','Barwood',63,'')
 GO
 
 INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date],[Info]) VALUES 
