@@ -124,7 +124,9 @@ pub fn to_hex(bytes: &[u8]) -> String {
 /// Set of usize, optimised for elements < 64. default() is empty set.
 #[derive(Default)]
 pub struct SmallSet {
+    /// Holds elements < 64 as a bitmap.
     pub bitset: u64,
+    /// Holds elements >= 64.
     pub overflow: BTreeSet<usize>,
 }
 

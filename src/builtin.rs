@@ -36,7 +36,9 @@ pub fn standard_builtins(map: &mut BuiltinMap) {
             CompileFunc::Value(c_exception),
         ),
         ("LASTID", DataKind::Int, CompileFunc::Int(c_lastid)),
+        #[cfg(feature = "pack")]
         ("REPACKFILE", DataKind::Int, CompileFunc::Int(c_repackfile)),
+        #[cfg(feature = "verify")]
         ("VERIFYDB", DataKind::String, CompileFunc::Value(c_verifydb)),
     ];
     for (name, typ, cf) in list {
@@ -324,6 +326,7 @@ impl CExp<Value> for FileContent {
 
 /////////////////////////////
 /// Compile call to REPACKFILE.
+#[cfg(feature = "pack")]
 fn c_repackfile(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(
         b,
@@ -335,11 +338,13 @@ fn c_repackfile(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     let n = c_value(b, &mut args[2]);
     Box::new(RepackFile { k, s, n })
 }
+#[cfg(feature = "pack")]
 struct RepackFile {
     k: CExpPtr<i64>,
     s: CExpPtr<Value>,
     n: CExpPtr<Value>,
 }
+#[cfg(feature = "pack")]
 impl CExp<i64> for RepackFile {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> i64 {
         let k = self.k.eval(ee, d);
@@ -349,13 +354,16 @@ impl CExp<i64> for RepackFile {
     }
 }
 
+#[cfg(feature = "verify")]
 /////////////////////////////
 /// Compile call to VERIFYDB.
 fn c_verifydb(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[]);
     Box::new(VerifyDb {})
 }
+#[cfg(feature = "verify")]
 struct VerifyDb {}
+#[cfg(feature = "verify")]
 impl CExp<Value> for VerifyDb {
     fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> Value {
         ee.db.run("EXEC sys.LoadAllTables()", ee.tr);

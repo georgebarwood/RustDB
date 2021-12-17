@@ -1,5 +1,4 @@
 use crate::*;
-use std::cmp::min;
 use std::collections::hash_map::Entry;
 
 /// Sorted Record storage.
@@ -303,6 +302,7 @@ impl SortedFile {
         self.pages.borrow_mut().insert(pnum, pp);
     }
 
+    #[cfg(feature = "pack")]
     fn remove_page(&self, pnum: u64) {
         self.pages.borrow_mut().remove(&pnum);
     }
@@ -354,6 +354,7 @@ impl SortedFile {
         }
     }
 
+    #[cfg(feature = "pack")]
     /// Attempt to free up logical pages by re-packing child pages.
     pub fn repack(&self, db: &DB, r: &dyn Record) -> i64 {
         let mut freed = 0;
@@ -367,6 +368,7 @@ impl SortedFile {
        When repacking a level 1 page, parent keys are dropped, and new keys may be created.
     */
 
+    #[cfg(feature = "pack")]
     /// Repack a page. Result is number of pages freed.
     fn repack_page(&self, db: &DB, pnum: u64, r: &dyn Record, freed: &mut i64) {
         let pp = self.load_page(db, pnum);
@@ -396,7 +398,7 @@ impl SortedFile {
         let full = (n * db.page_size_max) as u64;
         let space = full - total;
 
-        let div = min(10, n as u64);
+        let div = std::cmp::min(10, n as u64);
         if space < full / div {
             return;
         }
@@ -427,6 +429,7 @@ impl SortedFile {
         *freed += plist.store_to(db, p, self);
     }
 
+    #[cfg(feature = "pack")]
     /// Count number child pages and their total size, to decide whether to repack a parent page.
     fn page_total(&self, db: &DB, p: &Page, x: usize, r: &dyn Record) -> (usize, u64) {
         if x == 0 {
@@ -439,6 +442,7 @@ impl SortedFile {
         (1 + n1 + n2, cp_size + t1 + t2)
     }
 
+    #[cfg(feature = "pack")]
     /// Move child records into PageList.
     fn move_children(&self, db: &DB, p: &Page, x: usize, r: &dyn Record, plist: &mut PageList) {
         if x != 0 {
@@ -452,6 +456,7 @@ impl SortedFile {
         }
     }
 
+    #[cfg(feature = "pack")]
     fn repack_children(&self, db: &DB, p: &Page, x: usize, r: &dyn Record, freed: &mut i64) {
         if x != 0 {
             self.repack_page(db, p.child_page(x), r, freed);
@@ -750,12 +755,14 @@ impl Stack {
     }
 } // end impl Stack
 
+#[cfg(feature = "pack")]
 enum PKey {
     None,
     Dyn(Box<dyn Record>),
     Copy(Vec<u8>),
 }
 
+#[cfg(feature = "pack")]
 /// PageList is used to implement repacking of child pages ( REPACKFILE builtin function ).
 #[derive(Default)]
 struct PageList {
@@ -765,11 +772,14 @@ struct PageList {
     count: usize,
 }
 
+#[cfg(feature = "pack")]
 const TRACE_PACK: bool = false;
 
+#[cfg(feature = "pack")]
 /// Limit on how many pages to free in one transaction.
 const REPACK_LIMIT: i64 = 100;
 
+#[cfg(feature = "pack")]
 impl PageList {
     /// Build new parent page.
     fn store_to(&mut self, db: &DB, p: &mut Page, file: &SortedFile) -> i64 {

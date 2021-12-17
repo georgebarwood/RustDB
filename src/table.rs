@@ -97,6 +97,7 @@ impl Table {
         row.delcodes(db); // Deletes codes for Binary and String values.
     }
 
+    #[cfg(feature = "pack")]
     pub fn repack(&self, db: &DB, k: usize) -> i64 {
         let row = self.row();
         if k == 0 {

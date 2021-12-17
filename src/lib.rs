@@ -15,8 +15,8 @@
 //!
 //! The method [Database::run] (or alternatively [Database::run_timed]) is called to execute an SQL query.
 //! This takes a [Transaction] parameter which accumulates SELECT results and which also has methods
-//! for accessing input parameters and controlling output. Custom builtin functions implement [CExp]
-//! and have access to the transaction via an [EvalEnv] parameter, which can be downcast if necessary.
+//! for accessing input parameters and controlling output. Custom builtin functions implement CExp
+//! and have access to the transaction via an EvalEnv parameter, which can be downcast if necessary.
 //!
 //! It is also possible to access the table data directly, see email_loop in example (b).   
 //!
@@ -60,6 +60,8 @@
 //! This crate supports two cargo features.
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
 //! - `max` : Exposes maximal interface, including all internal modules (default).
+//! - `verify` : Allows database structure to be verified using builtin function VERIFYDB.
+//! - `pack` : Allows database pages to be packed using builtin function REPACKFILE.
 //!
 //!# General Design of Database
 //!
@@ -82,8 +84,6 @@
 //!
 //!# ToDo List
 //!
-//! Calculate PAGE_SIZE at run-time.
-//!
 //! Unify GenTransaction and WebTransaction. File upload doesn't work with WebTransaction currently.
 //!
 //! Implement email in example program. Replication of log files. Server status.
@@ -102,12 +102,12 @@ pub use crate::{
     pstore::{AccessPagedData, SharedPagedData},
     stg::{MemFile, SimpleFileStorage, Storage},
     webtrans::WebTransaction,
+    builtin::standard_builtins,
 };
 
 #[cfg(feature = "builtin")]
 pub use crate::{
     builtin::check_types,
-    builtin::standard_builtins,
     compile::{c_bool, c_float, c_int, c_value},
     exec::EvalEnv,
     expr::{Block, DataKind, Expr},
@@ -459,6 +459,7 @@ GO
         }
     }
 
+    #[cfg(feature = "pack")]
     pub(crate) fn repack_file(self: &DB, k: i64, schema: &str, tname: &str) -> i64 {
         if k >= 0 {
             let name = ObjRef::new(schema, tname);
@@ -474,6 +475,7 @@ GO
         -1
     }
 
+    #[cfg(feature = "pack")]
     /// Get size of logical page.
     pub(crate) fn lp_size(&self, pnum: u64) -> u64 {
         self.file.spd.file.read().unwrap().lp_size(pnum) as u64
@@ -515,6 +517,7 @@ GO
         self.file.save(op)
     }
 
+    #[cfg(feature = "verify")]
     /// Verify the page structure of the database.
     pub fn verify(self: &DB) -> String {
         let (mut pages, total) = self.file.spd.file.read().unwrap().get_info();

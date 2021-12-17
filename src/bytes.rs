@@ -47,11 +47,6 @@ impl ByteStorage {
         }
     }
 
-    pub fn repack_file(&self, db: &DB) -> i64 {
-        let r = Fragment::new(0, self.bpf);
-        self.file.repack(db, &r)
-    }
-
     pub fn get_id(&self, db: &DB) -> u64 {
         let mut result = self.id_gen.get();
         if result == u64::MAX {
@@ -135,6 +130,12 @@ impl ByteStorage {
             r.id = xid;
             self.file.remove(db, &r);
         }
+    }
+
+    #[cfg(feature = "pack")]
+    pub fn repack_file(&self, db: &DB) -> i64 {
+        let r = Fragment::new(0, self.bpf);
+        self.file.repack(db, &r)
     }
 }
 

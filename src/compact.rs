@@ -1,5 +1,5 @@
 use crate::stg::Storage;
-use crate::{nd, util, Arc, Data, HashSet};
+use crate::{nd, util, Arc, Data};
 use std::cmp::min;
 use std::collections::BTreeSet;
 
@@ -416,9 +416,10 @@ impl CompactFile {
         Self::ext_pages(sp_size, ep_size, size - saving) < Self::ext_pages(sp_size, ep_size, size)
     }
 
+    #[cfg(feature = "verify")]
     /// Get the set of free logical pages ( also verifies free chain is ok ).
-    pub fn get_info(&self) -> (HashSet<u64>, u64) {
-        let mut free = HashSet::default();
+    pub fn get_info(&self) -> (crate::HashSet<u64>, u64) {
+        let mut free = crate::HashSet::default();
         let mut p = self.lp_first;
         while p != u64::MAX {
             assert!(free.insert(p));
@@ -439,10 +440,10 @@ pub fn test() {
     let s0 = Box::new(MemFile::default());
     let s1 = Box::new(MemFile::default());
 
-    let mut cf0 = CompactFile::new(s0, 200, 1024);
+    let mut cf0 = CompactFile::new(s0, 200, 512);
     let mut cf1 = CompactFile::new(s1, 136, 1024);
 
-    for _ in 0..1000000 {
+    for _ in 0..100000 {
         let n: usize = rng.gen::<usize>() % 5000;
         let p: u64 = rng.gen::<u64>() % 100;
         let b: u8 = rng.gen::<u8>();

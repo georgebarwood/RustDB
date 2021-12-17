@@ -54,6 +54,7 @@ impl AtomicFile {
         self.upd.commit(0);
     }
 
+    /// Perform the specified phase ( 1 or 2 ) of a two-phase commit.
     pub fn commit_phase(&self, size: u64, phase: u8) {
         let mut map = self.map.lock().unwrap();
         if map.is_empty() {
@@ -218,7 +219,7 @@ pub fn test() {
 
     let mut rng = rand::thread_rng();
 
-    for _ in 0..1000 {
+    for _ in 0..100 {
         let s0 = Box::new(MemFile::default());
         let s1 = Box::new(MemFile::default());
         let s2 = AtomicFile::new(s0, s1);
