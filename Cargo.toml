@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["George Barwood"]
 edition = "2021"
 description = "SQL database (in development)"
@@ -11,13 +11,19 @@ categories = ["database-implementations"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["max"]
+default = ["max","pack","verify"]
 
-# ````builtin``` exposes an interface that allows extra SQL builtin functions to be defined.
+# ````builtin``` : Allows extra SQL builtin functions to be defined.
 builtin = []
 
-# ```max``` exposes a maximal interface, including internal modules.
+# ```max``` : Full access, including direct access to database tables and all other internal modules.
 max = ["builtin"]
+
+# ```pack``` : Allows database pages to be packed using builtin function REPACKFILE.
+pack = []
+
+# ```verify``` : Allows database structure to be verified using builtin function VERIFYDB.
+verify = []
 
 [dependencies]
 # stacker = "0.1"
