@@ -25,7 +25,6 @@ pub trait Storage: Send + Sync {
     }
 
     /// Finish write transaction, size is new size of underlying storage.
-    /// If prepare is set true, the updates are saved but not applied (for atomic storage).
     fn commit(&self, size: u64);
 
     /// Write u64 to storage.

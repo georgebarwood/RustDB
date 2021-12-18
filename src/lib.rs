@@ -82,7 +82,9 @@
 //!
 //! [AtomicFile] ensures that database updates are all or nothing.
 //!
-//!# ToDo List
+//! The hierarchy overall: Table -> SortedFile -> PagedData -> CompactFile -> AtomicFile -> Storage.
+//!
+//!# ToDo Lists
 //!
 //! Unify GenTransaction and WebTransaction. File upload only partially works with WebTransaction currently.
 //!
@@ -97,12 +99,12 @@
 
 pub use crate::{
     atomfile::AtomicFile,
+    builtin::standard_builtins,
     gentrans::{GenTransaction, Part},
     init::INITSQL,
     pstore::{AccessPagedData, SharedPagedData},
     stg::{MemFile, SimpleFileStorage, Storage},
     webtrans::WebTransaction,
-    builtin::standard_builtins,
 };
 
 #[cfg(feature = "builtin")]
@@ -459,28 +461,6 @@ GO
         }
     }
 
-    #[cfg(feature = "pack")]
-    pub(crate) fn repack_file(self: &DB, k: i64, schema: &str, tname: &str) -> i64 {
-        if k >= 0 {
-            let name = ObjRef::new(schema, tname);
-            if let Some(t) = self.get_table(&name) {
-                return t.repack(self, k as usize);
-            }
-        } else {
-            let k = (-k - 1) as usize;
-            if k < 4 {
-                return self.bs[k].repack_file(self);
-            }
-        }
-        -1
-    }
-
-    #[cfg(feature = "pack")]
-    /// Get size of logical page.
-    pub(crate) fn lp_size(&self, pnum: u64) -> u64 {
-        self.file.spd.file.read().unwrap().lp_size(pnum) as u64
-    }
-
     /// Save updated tables to underlying file ( or rollback if there was an error ).
     /// Returns the number of logical pages that were updated.
     pub fn save(self: &DB) -> usize {
@@ -515,33 +495,6 @@ GO
             self.function_reset.set(false);
         }
         self.file.save(op)
-    }
-
-    #[cfg(feature = "verify")]
-    /// Verify the page structure of the database.
-    pub fn verify(self: &DB) -> String {
-        let (mut pages, total) = self.file.spd.file.read().unwrap().get_info();
-        let total = total as usize;
-
-        let free = pages.len();
-
-        for bs in &self.bs {
-            bs.file.get_used(self, &mut pages);
-        }
-
-        let tm = &*self.tables.borrow();
-        for t in tm.values() {
-            t.get_used(self, &mut pages);
-        }
-
-        assert!(pages.len() == total);
-
-        format!(
-            "All Ok. Logical page summary: free={} used={} total={}.",
-            free,
-            total - free,
-            total
-        )
     }
 
     #[cfg(not(feature = "max"))]
@@ -621,6 +574,56 @@ GO
     /// Free a page of underyling file storage.
     pub(crate) fn free_page(self: &DB, lpnum: u64) {
         self.file.free_page(lpnum);
+    }
+
+    #[cfg(feature = "pack")]
+    /// Get size of logical page.
+    pub(crate) fn lp_size(&self, pnum: u64) -> u64 {
+        self.file.spd.file.read().unwrap().lp_size(pnum) as u64
+    }
+
+    #[cfg(feature = "pack")]
+    /// Repack the specified sortedfile.
+    pub(crate) fn repack_file(self: &DB, k: i64, schema: &str, tname: &str) -> i64 {
+        if k >= 0 {
+            let name = ObjRef::new(schema, tname);
+            if let Some(t) = self.get_table(&name) {
+                return t.repack(self, k as usize);
+            }
+        } else {
+            let k = (-k - 1) as usize;
+            if k < 4 {
+                return self.bs[k].repack_file(self);
+            }
+        }
+        -1
+    }
+
+    #[cfg(feature = "verify")]
+    /// Verify the page structure of the database.
+    pub fn verify(self: &DB) -> String {
+        let (mut pages, total) = self.file.spd.file.read().unwrap().get_info();
+        let total = total as usize;
+
+        let free = pages.len();
+
+        for bs in &self.bs {
+            bs.file.get_used(self, &mut pages);
+        }
+
+        let tm = &*self.tables.borrow();
+        for t in tm.values() {
+            t.get_used(self, &mut pages);
+        }
+
+        assert!(pages.len() == total);
+
+        format!(
+            "All Ok. Logical page summary: free={} used={} total={}.",
+            free,
+            total - free,
+            total
+        )
     }
 } // end impl Database
 

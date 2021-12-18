@@ -535,14 +535,17 @@ impl<'r> EvalEnv<'r> {
                     _ => {}
                 }
                 let sql = match act {
-                    AlterCol::Add(name, typ) =>
-                        format!("INSERT INTO sys.Column( Table, Name, Type ) VALUES ({}, '{}', {})", t.id, name, typ), 
-                    AlterCol::Modify(name, typ) =>
-                        format!("UPDATE sys.Column SET Type = {} WHERE Table = {} AND Name = '{}'", typ, t.id, name),
-                    AlterCol::Drop(name) =>
-                        format!("EXEC sys.DropColumn({},'{}')", t.id, name)
+                    AlterCol::Add(name, typ) => format!(
+                        "INSERT INTO sys.Column( Table, Name, Type ) VALUES ({}, '{}', {})",
+                        t.id, name, typ
+                    ),
+                    AlterCol::Modify(name, typ) => format!(
+                        "UPDATE sys.Column SET Type = {} WHERE Table = {} AND Name = '{}'",
+                        typ, t.id, name
+                    ),
+                    AlterCol::Drop(name) => format!("EXEC sys.DropColumn({},'{}')", t.id, name),
                 };
-                println!("sql={}",sql);
+                println!("sql={}", sql);
                 db.run(&sql, self.tr);
             }
 

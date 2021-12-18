@@ -356,7 +356,7 @@ impl CExp<i64> for RepackFile {
 
 #[cfg(feature = "verify")]
 /// SQL to load every table ( required for database::verify to work correctly ).
-const LOADALLTABLES : &str = "  
+const LOADALLTABLES: &str = "  
   DECLARE sid int, sname string, tname string
   FOR sid = Id, sname = Name FROM sys.Schema
   BEGIN

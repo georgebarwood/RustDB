@@ -175,7 +175,8 @@ impl SharedPagedData {
         }
     }
 
-    pub fn page_size_max(&self) -> usize {
+    /// Calculate the maxiumum size of a logical page. This value is stored in the Database struct.
+    pub(crate) fn page_size_max(&self) -> usize {
         let ep_max = (self.sp_size - 2) / 8;
         (self.ep_size - 16) * ep_max + (self.sp_size - 2)
     }

@@ -75,31 +75,6 @@ impl SortedFile {
         self.ok.set(false);
     }
 
-    /// Get the set of used logical pages.
-    pub fn get_used(&self, db: &DB, to: &mut HashSet<u64>) {
-        self.get_used_page(db, to, self.root_page);
-    }
-
-    fn get_used_page(&self, db: &DB, to: &mut HashSet<u64>, pnum: u64) {
-        assert!(to.insert(pnum));
-        let pp = self.load_page(db, pnum);
-        let p = &pp.borrow();
-        if p.level != 0 {
-            self.get_used_page(db, to, p.first_page);
-            self.get_used_pages(db, to, p, p.root);
-        }
-    }
-
-    fn get_used_pages(&self, db: &DB, to: &mut HashSet<u64>, p: &Page, x: usize) {
-        if x != 0 {
-            self.get_used_pages(db, to, p, p.left(x));
-            self.get_used_pages(db, to, p, p.right(x));
-            if p.level > 0 {
-                self.get_used_page(db, to, p.child_page(x));
-            }
-        }
-    }
-
     /// Insert a Record. If the key is a duplicate, the record is not saved.
     pub fn insert(&self, db: &DB, r: &dyn Record) {
         while !self.insert_leaf(db, self.root_page, r, None) {
@@ -468,6 +443,34 @@ impl SortedFile {
                 return;
             }
             self.repack_children(db, p, p.right(x), r, freed);
+        }
+    }
+
+    #[cfg(feature = "verify")]
+    /// Get the set of used logical pages.
+    pub fn get_used(&self, db: &DB, to: &mut HashSet<u64>) {
+        self.get_used_page(db, to, self.root_page);
+    }
+
+    #[cfg(feature = "verify")]
+    fn get_used_page(&self, db: &DB, to: &mut HashSet<u64>, pnum: u64) {
+        assert!(to.insert(pnum));
+        let pp = self.load_page(db, pnum);
+        let p = &pp.borrow();
+        if p.level != 0 {
+            self.get_used_page(db, to, p.first_page);
+            self.get_used_pages(db, to, p, p.root);
+        }
+    }
+
+    #[cfg(feature = "verify")]
+    fn get_used_pages(&self, db: &DB, to: &mut HashSet<u64>, p: &Page, x: usize) {
+        if x != 0 {
+            self.get_used_pages(db, to, p, p.left(x));
+            self.get_used_pages(db, to, p, p.right(x));
+            if p.level > 0 {
+                self.get_used_page(db, to, p.child_page(x));
+            }
         }
     }
 } // end impl SortedFile

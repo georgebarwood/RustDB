@@ -116,19 +116,6 @@ BEGIN
   SET result = sys.QuoteName(Name) FROM sys.Index WHERE Id = index
 END
 GO
-CREATE FN [sys].[LoadAllTables]() AS BEGIN 
-
-  DECLARE sid int, sname string, tname string
-  FOR sid = Id, sname = Name FROM sys.Schema
-  BEGIN
-    FOR tname = Name FROM sys.Table WHERE Schema = sid
-    BEGIN
-      EXECUTE( 'IF false SELECT Id FROM ' | sys.Dot( sname, tname ) )
-    END
-  END
-
-END
-GO
 CREATE FN [sys].[QuoteName]( s string ) RETURNS string AS
 BEGIN
   RETURN '[' | REPLACE( s, ']', ']]' ) | ']'

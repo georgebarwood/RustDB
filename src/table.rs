@@ -69,13 +69,6 @@ impl Table {
         }
     }
 
-    pub fn get_used(&self, db: &DB, to: &mut HashSet<u64>) {
-        self.file.get_used(db, to);
-        for (f, _cols) in &*self.ixlist.borrow() {
-            f.get_used(db, to);
-        }
-    }
-
     /// Insert specified row into the table.
     pub fn insert(&self, db: &DB, row: &mut Row) {
         row.encode(db); // Calculate codes for Binary and String values.
@@ -95,23 +88,6 @@ impl Table {
             f.remove(db, &ixr);
         }
         row.delcodes(db); // Deletes codes for Binary and String values.
-    }
-
-    #[cfg(feature = "pack")]
-    pub fn repack(&self, db: &DB, k: usize) -> i64 {
-        let row = self.row();
-        if k == 0 {
-            self.file.repack(db, &row)
-        } else {
-            let list = &*self.ixlist.borrow();
-            if k <= list.len() {
-                let (f, cols) = &list[k - 1];
-                let ixr = IndexRow::new(self, cols.clone(), &row);
-                f.repack(db, &ixr)
-            } else {
-                -1
-            }
-        }
     }
 
     /// Look for indexed table expression based on supplied WHERE expression (we).
@@ -169,7 +145,9 @@ impl Table {
                 }
             }
         }
-        println!("No index found for table {}", self.info.name.str());
+        if !kc.is_empty() {
+            println!("No index found for table {}", self.info.name.str());
+        }
         (Some(c_bool(b, we)), None)
     }
 
@@ -297,7 +275,34 @@ impl Table {
             self.id_gen_dirty.set(true);
         }
     }
-}
+
+    #[cfg(feature = "pack")]
+    /// Repack the file pages.
+    pub fn repack(&self, db: &DB, k: usize) -> i64 {
+        let row = self.row();
+        if k == 0 {
+            self.file.repack(db, &row)
+        } else {
+            let list = &*self.ixlist.borrow();
+            if k <= list.len() {
+                let (f, cols) = &list[k - 1];
+                let ixr = IndexRow::new(self, cols.clone(), &row);
+                f.repack(db, &ixr)
+            } else {
+                -1
+            }
+        }
+    }
+
+    #[cfg(feature = "verify")]
+    /// Add the all the pages used by the table to the specified set.
+    pub fn get_used(&self, db: &DB, to: &mut HashSet<u64>) {
+        self.file.get_used(db, to);
+        for (f, _cols) in &*self.ixlist.borrow() {
+            f.get_used(db, to);
+        }
+    }
+} // end impl Table.
 
 /// Dummy record for iterating over whole table.
 struct Zero {}

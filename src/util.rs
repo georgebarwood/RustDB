@@ -131,6 +131,11 @@ pub struct SmallSet {
 }
 
 impl SmallSet {
+    pub fn is_empty(&self) -> bool
+    {
+        self.bitset == 0 && self.overflow.len() == 0
+    }
+    
     /// Insert x into set.
     pub fn insert(&mut self, x: usize) {
         if x < 64 {
