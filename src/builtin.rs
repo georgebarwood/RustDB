@@ -22,6 +22,11 @@ pub fn standard_builtins(map: &mut BuiltinMap) {
             DataKind::String,
             CompileFunc::Value(c_substring),
         ),
+        (
+            "BINSUBSTRING",
+            DataKind::Binary,
+            CompileFunc::Value(c_binsubstring),
+        ),
         ("LEN", DataKind::Int, CompileFunc::Int(c_len)),
         ("BINLEN", DataKind::Int, CompileFunc::Int(c_bin_len)),
         ("PARSEINT", DataKind::Int, CompileFunc::Int(c_parse_int)),
@@ -48,7 +53,7 @@ pub fn standard_builtins(map: &mut BuiltinMap) {
 /// Check number and kinds of arguments.
 pub fn check_types(b: &Block, args: &mut [Expr], dk: &[DataKind]) {
     if args.len() != dk.len() {
-        panic!("Wrong number of args");
+        panic!("wrong number of args");
     }
     for (i, e) in args.iter_mut().enumerate() {
         let k = b.kind(e);
@@ -225,6 +230,35 @@ impl CExp<Value> for Substring {
         Value::String(Rc::new(result))
     }
 }
+
+/////////////////////////////
+/// Compile call to BINSUBSTRING.
+fn c_binsubstring(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
+    check_types(b, args, &[DataKind::Binary, DataKind::Int, DataKind::Int]);
+    let s = c_value(b, &mut args[0]);
+    let f = c_int(b, &mut args[1]);
+    let n = c_int(b, &mut args[2]);
+    Box::new(BinSubstring { s, f, n })
+}
+struct BinSubstring {
+    s: CExpPtr<Value>,
+    f: CExpPtr<i64>,
+    n: CExpPtr<i64>,
+}
+impl CExp<Value> for BinSubstring {
+    fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
+        let s = self.s.eval(ee, d).bin();
+        let f = self.f.eval(ee, d) as usize - 1;
+        let n = self.n.eval(ee, d) as usize;
+        let mut lim = s.len();
+        if lim > f + n {
+            lim = f + n;
+        }
+        let result = s[f..lim].to_vec();
+        Value::RcBinary(Rc::new(result))
+    }
+}
+
 /////////////////////////////
 /// Compile call to ARG.
 fn c_arg(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {

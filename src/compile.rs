@@ -19,7 +19,7 @@ pub fn c_check(b: &Block, e: &mut Expr) {
                     }
                 }
             } else {
-                panic!("Unknown function {}", name);
+                panic!("unknown function {}", name);
             }
         }
         ExprIs::Binary(op, b1, b2) => {
@@ -29,7 +29,7 @@ pub fn c_check(b: &Block, e: &mut Expr) {
             let t1 = b1.data_type;
             let t2 = b2.data_type;
             if data_kind(t1) != data_kind(t2) && *op != Token::VBar {
-                panic!("Binary op type mismatch")
+                panic!("binary op type mismatch")
             }
             e.data_type = match op {
                 Token::Less
@@ -40,12 +40,18 @@ pub fn c_check(b: &Block, e: &mut Expr) {
                 | Token::NotEqual => BOOL,
                 Token::And | Token::Or => {
                     if t1 != BOOL {
-                        panic!("And/Or need bool operands")
+                        panic!("AND/OR need bool operands")
                     }
                     BOOL
                 }
                 Token::Plus | Token::Times | Token::Minus | Token::Divide | Token::Percent => t1,
-                Token::VBar => STRING,
+                Token::VBar => {
+                    if data_kind(t1) == DataKind::Binary {
+                        BINARY
+                    } else {
+                        STRING
+                    }
+                }
                 _ => panic!(),
             }
         }
@@ -124,6 +130,7 @@ pub fn c_check(b: &Block, e: &mut Expr) {
     }
     e.checked = true;
 }
+
 /// Compile a call to a builtin function that returns a Value.
 fn c_builtin_value(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<Value> {
     if let Some((_dk, CompileFunc::Value(cf))) = b.db.builtins.get(name) {
@@ -131,6 +138,7 @@ fn c_builtin_value(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<Value> {
     }
     panic!()
 }
+
 /// Compile an expression.
 pub fn c_value(b: &Block, e: &mut Expr) -> CExpPtr<Value> {
     match b.kind(e) {
@@ -155,8 +163,14 @@ pub fn c_value(b: &Block, e: &mut Expr) -> CExpPtr<Value> {
                 let c1 = c_value(b, b1);
                 let c2 = c_value(b, b2);
                 match op {
-                    Token::VBar => Box::new(cexp::Concat { c1, c2 }),
-                    _ => panic!("Invalid operator {:?}", op),
+                    Token::VBar => {
+                        if data_kind(b1.data_type) == DataKind::Binary {
+                            Box::new(cexp::BinConcat { c1, c2 })
+                        } else {
+                            Box::new(cexp::Concat { c1, c2 })
+                        }
+                    }
+                    _ => panic!("invalid operator {:?}", op),
                 }
             }
             ExprIs::FuncCall(name, parms) => c_call(b, name, parms),
@@ -166,10 +180,11 @@ pub fn c_value(b: &Block, e: &mut Expr) -> CExpPtr<Value> {
         },
     }
 }
+
 /// Compile int expression.
 pub fn c_int(b: &Block, e: &mut Expr) -> CExpPtr<i64> {
     if b.kind(e) != DataKind::Int {
-        panic!("Integer type expected")
+        panic!("int type expected")
     }
     match &mut e.exp {
         ExprIs::ColName(x) => {
@@ -197,7 +212,7 @@ pub fn c_int(b: &Block, e: &mut Expr) -> CExpPtr<i64> {
 /// Compile float expression.
 pub fn c_float(b: &Block, e: &mut Expr) -> CExpPtr<f64> {
     if b.kind(e) != DataKind::Float {
-        panic!("Float type expected")
+        panic!("float type expected")
     }
     match &mut e.exp {
         ExprIs::ColName(x) => {
@@ -219,10 +234,11 @@ pub fn c_float(b: &Block, e: &mut Expr) -> CExpPtr<f64> {
         _ => panic!(),
     }
 }
+
 /// Compile bool expression.
 pub fn c_bool(b: &Block, e: &mut Expr) -> CExpPtr<bool> {
     if b.kind(e) != DataKind::Bool {
-        panic!("Bool type expected")
+        panic!("bool type expected")
     }
     match &mut e.exp {
         ExprIs::ColName(x) => {
@@ -257,6 +273,7 @@ pub fn c_bool(b: &Block, e: &mut Expr) -> CExpPtr<bool> {
         _ => panic!(),
     }
 }
+
 /// Compile arithmetic.
 fn c_arithmetic<T>(
     b: &Block,
@@ -284,6 +301,7 @@ where
         _ => panic!(),
     }
 }
+
 /// Compile comparison.
 fn c_compare<T>(
     b: &Block,
@@ -307,6 +325,7 @@ where
         _ => panic!(),
     }
 }
+
 /// Compile CASE Expression.
 fn c_case<T>(
     b: &Block,
@@ -326,6 +345,7 @@ where
     let els = cexp(b, els);
     Box::new(cexp::Case::<T> { whens, els })
 }
+
 /// Compile a call to a builtin function that returns an integer.
 fn c_builtin_int(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<i64> {
     if let Some((_dk, CompileFunc::Int(cf))) = b.db.builtins.get(name) {
@@ -333,6 +353,7 @@ fn c_builtin_int(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<i64> {
     }
     panic!()
 }
+
 /// Compile a call to a builtin function that returns a float.
 fn c_builtin_float(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<f64> {
     if let Some((_dk, CompileFunc::Float(cf))) = b.db.builtins.get(name) {
@@ -429,7 +450,7 @@ pub fn c_select(b: &mut Block, mut x: SelectExpression) -> CSelectExpression {
 /// Compile WHERE clause, using table index if possible.
 pub fn c_where(
     b: &Block,
-    table: Option<TablePtr>,
+    table: Option<Rc<Table>>,
     wher: &mut Option<Expr>,
 ) -> (Option<CExpPtr<bool>>, Option<CTableExpression>) {
     if let Some(we) = wher {
@@ -467,8 +488,9 @@ pub fn c_te(b: &Block, te: &mut TableExpression) -> CTableExpression {
         }
     }
 }
+
 /// Look for named table in database.
-pub fn c_table(b: &Block, name: &ObjRef) -> TablePtr {
+pub fn c_table(b: &Block, name: &ObjRef) -> Rc<Table> {
     if let Some(t) = b.db.get_table(name) {
         t
     } else {
@@ -477,7 +499,7 @@ pub fn c_table(b: &Block, name: &ObjRef) -> TablePtr {
 }
 
 /// Compile named function (if it is if not already compiled ).
-pub fn c_function(db: &DB, name: &ObjRef) -> FunctionPtr {
+pub fn c_function(db: &DB, name: &ObjRef) -> Rc<Function> {
     if let Some(r) = db.get_function(name) {
         let (compiled, src) = { (r.compiled.get(), r.source.clone()) };
         if !compiled {
@@ -506,6 +528,7 @@ pub fn c_function(db: &DB, name: &ObjRef) -> FunctionPtr {
         panic!("function {} not found", name.str())
     }
 }
+
 /// Lookup the column offset and DataType of a named column.
 pub fn name_to_col(b: &Block, name: &str) -> (usize, DataType) {
     if let Some(CTableExpression::Base(t)) = &b.from {
@@ -520,6 +543,7 @@ pub fn name_to_col(b: &Block, name: &str) -> (usize, DataType) {
     }
     panic!("Name '{}' not found", name)
 }
+
 /// Lookup the column number and DataType of a named column.
 pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
     if let Some(CTableExpression::Base(t)) = &b.from {
@@ -534,6 +558,7 @@ pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
     }
     panic!("Name '{}' not found", name)
 }
+
 /// Compile ExprCall to CExpPtr<Value>, checking parameter types.
 pub fn c_call(b: &Block, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value> {
     let fp = c_function(&b.db, name);
@@ -547,6 +572,7 @@ pub fn c_call(b: &Block, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value>
     b.check_types(&fp, &pk);
     Box::new(cexp::Call { fp, pv })
 }
+
 /// Generate code to evaluate expression and push the value onto the stack.
 pub fn push(b: &mut Block, e: &mut Expr) -> DataKind {
     if b.parse_only {

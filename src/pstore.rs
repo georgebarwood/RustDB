@@ -4,17 +4,17 @@ use crate::{
 use std::ops::Bound::Included;
 
 /// ```Arc<Mutex<PageInfo>>```
-pub type PageInfoPtr = Arc<Mutex<PageInfo>>;
+type PageInfoPtr = Arc<Mutex<PageInfo>>;
 
 /// Cached information about a logical page.
-pub struct PageInfo {
-    pub current: Option<Data>,
-    pub history: BTreeMap<u64, Data>,
+struct PageInfo {
+    current: Option<Data>,
+    history: BTreeMap<u64, Data>,
 }
 
 impl PageInfo {
     /// Construct a new PageInfo.
-    pub fn new() -> PageInfoPtr {
+    fn new() -> PageInfoPtr {
         Arc::new(Mutex::new(Self {
             current: None,
             history: BTreeMap::new(),
@@ -23,7 +23,7 @@ impl PageInfo {
 
     /// Get the Data for the page, checking history if not a writer.
     /// Reads Data from file if necessary.
-    pub fn get(&mut self, lpnum: u64, a: &AccessPagedData) -> Data {
+    fn get(&mut self, lpnum: u64, a: &AccessPagedData) -> Data {
         if !a.writer {
             if let Some((_k, v)) = self
                 .history
@@ -46,7 +46,7 @@ impl PageInfo {
     }
 
     /// Set the page data, updating the history using the specified time and current data.
-    pub fn set(&mut self, time: u64, data: Data) {
+    fn set(&mut self, time: u64, data: Data) {
         if let Some(old) = self.current.take() {
             self.history.insert(time, old);
         }
@@ -65,20 +65,20 @@ impl PageInfo {
 
 /// Central store of data.
 #[derive(Default)]
-pub struct Stash {
+struct Stash {
     /// Write time - number of writes.
-    pub time: u64,
+    time: u64,
     /// Page number -> page info.
-    pub pages: HashMap<u64, PageInfoPtr>,
+    pages: HashMap<u64, PageInfoPtr>,
     /// Time -> reader count.
-    pub readers: BTreeMap<u64, usize>,
+    readers: BTreeMap<u64, usize>,
     /// Time -> set of page numbers.
-    pub updates: BTreeMap<u64, HashSet<u64>>,
+    updates: BTreeMap<u64, HashSet<u64>>,
 }
 
 impl Stash {
     /// Set the value of the specified page for the current time.
-    pub fn set(&mut self, lpnum: u64, data: Data) {
+    fn set(&mut self, lpnum: u64, data: Data) {
         let time = self.time;
         let u = self.updates.entry(time).or_insert_with(HashSet::default);
         if u.insert(lpnum) {
@@ -88,13 +88,13 @@ impl Stash {
     }
 
     /// Get the PageInfoPtr for the specified page.  
-    pub fn get(&mut self, lpnum: u64) -> PageInfoPtr {
+    fn get(&mut self, lpnum: u64) -> PageInfoPtr {
         let p = self.pages.entry(lpnum).or_insert_with(PageInfo::new);
         p.clone()
     }
 
     /// Register that there is a client reading the database. The result is the current time.
-    pub fn begin_read(&mut self) -> u64 {
+    fn begin_read(&mut self) -> u64 {
         let time = self.time;
         // println!("Stash begin read time={}", time);
         let n = self.readers.entry(time).or_insert(0);
@@ -103,7 +103,7 @@ impl Stash {
     }
 
     /// Register that the read at the specified time has ended. Stashed pages may be freed.
-    pub fn end_read(&mut self, time: u64) {
+    fn end_read(&mut self, time: u64) {
         // println!("Stash end read time={}", time);
         let n = self.readers.get_mut(&time).unwrap();
         *n -= 1;
@@ -115,7 +115,7 @@ impl Stash {
 
     /// Register that an update operation has completed. Time is incremented.
     /// Stashed pages may be freed.
-    pub fn end_write(&mut self) -> usize {
+    fn end_write(&mut self) -> usize {
         // println!("Stash tick time={}", self.time);
         let result = if let Some(u) = self.updates.get(&self.time) {
             u.len()
@@ -147,10 +147,13 @@ impl Stash {
 
 /// Allows logical database pages to be shared to allow concurrent readers.
 pub struct SharedPagedData {
-    pub stash: RwLock<Stash>,
+    ///
     pub file: RwLock<CompactFile>,
+    ///
     pub sp_size: usize,
+    ///
     pub ep_size: usize,
+    stash: RwLock<Stash>,
 }
 
 /// =1024. Size of an extension page.
@@ -176,7 +179,7 @@ impl SharedPagedData {
     }
 
     /// Calculate the maxiumum size of a logical page. This value is stored in the Database struct.
-    pub(crate) fn page_size_max(&self) -> usize {
+    pub fn page_size_max(&self) -> usize {
         let ep_max = (self.sp_size - 2) / 8;
         (self.ep_size - 16) * ep_max + (self.sp_size - 2)
     }
@@ -184,8 +187,9 @@ impl SharedPagedData {
 
 /// Access to shared paged data.
 pub struct AccessPagedData {
-    pub writer: bool,
-    pub time: u64,
+    writer: bool,
+    time: u64,
+    ///
     pub spd: Arc<SharedPagedData>,
 }
 

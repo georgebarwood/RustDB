@@ -132,7 +132,7 @@ impl<'a> Parser<'a> {
                 break;
             }
             if self.token != Token::Comma {
-                panic!("Comma or closing bracket expected");
+                panic!("comma or closing bracket expected");
             }
             self.read_token();
         }
@@ -351,7 +351,7 @@ impl<'a> Parser<'a> {
             b"float" => FLOAT,
             b"double" => DOUBLE,
             b"bool" => BOOL,
-            _ => panic!("Datatype expected"),
+            _ => panic!("datatype expected"),
         };
         if self.test(Token::LBra) {
             let mut n = self.decimal_int as usize;
@@ -369,13 +369,13 @@ impl<'a> Parser<'a> {
                 }
                 INT => {
                     if n < 1 {
-                        panic!("Minimum int precision is 1");
+                        panic!("minimum int precision is 1");
                     }
                     if n > 8 {
-                        panic!("Maximum int precision is 8");
+                        panic!("maximum int precision is 8");
                     }
                 }
-                _ => panic!("Invalid data type specification"),
+                _ => panic!("invalid data type specification"),
             }
             t = (t % 8) + (8 * n);
         }
@@ -407,7 +407,7 @@ impl<'a> Parser<'a> {
 
     fn id_ref(&mut self) -> &'a [u8] {
         if self.token != Token::Id {
-            panic!("Name expected");
+            panic!("name expected");
         }
         let result = self.cs;
         self.read_token();
@@ -417,12 +417,12 @@ impl<'a> Parser<'a> {
     fn local(&mut self) -> usize {
         let result: usize;
         if self.token != Token::Id {
-            panic!("Name expected");
+            panic!("name expected");
         }
         if let Some(lnum) = self.b.get_local(self.cs) {
             result = *lnum;
         } else {
-            panic!("Undeclared local: {}", tos(self.cs))
+            panic!("undeclared local: {}", tos(self.cs))
         }
         self.read_token();
         result
@@ -431,7 +431,7 @@ impl<'a> Parser<'a> {
     /// Checks the token is as expected, and consumes it.
     fn read(&mut self, t: Token) {
         if self.token != t {
-            panic!("Expected '{:?}' got '{:?}'", t, self.token)
+            panic!("expected '{:?}' got '{:?}'", t, self.token)
         } else {
             self.read_token();
         }
@@ -440,7 +440,7 @@ impl<'a> Parser<'a> {
     /// Checks the token is the specified Id and consumes it.
     fn read_id(&mut self, s: &[u8]) {
         if self.token != Token::Id || self.cs != s {
-            panic!("Expected '{}' got '{}'", tos(s), tos(self.cs));
+            panic!("expected '{}' got '{}'", tos(s), tos(self.cs));
         } else {
             self.read_token();
         }
@@ -484,7 +484,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Construct SqlError based on current line/column/rname.
-    pub fn make_error(&self, msg: String) -> SqlError {
+    pub(crate) fn make_error(&self, msg: String) -> SqlError {
         SqlError {
             line: self.prev_source_line,
             column: self.prev_source_column,
@@ -583,7 +583,7 @@ impl<'a> Parser<'a> {
             self.read_token();
         } else if self.token == Token::Hex {
             if self.cs.len() % 2 == 1 {
-                panic!("Hex literal must have even number of characters");
+                panic!("hex literal must have even number of characters");
             }
             let hb = &self.source[self.token_start + 2..self.source_ix - 1];
             result = Expr::new(ExprIs::Const(Value::RcBinary(Rc::new(util::parse_hex(hb)))));
@@ -591,7 +591,7 @@ impl<'a> Parser<'a> {
         } else if self.test(Token::Minus) {
             result = Expr::new(ExprIs::Minus(Box::new(self.exp_p(30))));
         } else {
-            panic!("Expression expected")
+            panic!("expression expected")
         }
         result
     }
@@ -641,7 +641,7 @@ impl<'a> Parser<'a> {
             list.push((test, e));
         }
         if list.is_empty() {
-            panic!("Empty Case Expression");
+            panic!("empty CASE expression");
         }
         self.read_id(b"ELSE");
         let els = Box::new(self.exp());
@@ -677,12 +677,12 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 if self.token != Token::Comma {
-                    panic!("Comma or closing bracket expected");
+                    panic!("comma or closing bracket expected");
                 }
                 self.read_token();
             }
             if v.len() != expect {
-                panic!("Wrong number of values");
+                panic!("wrong number of values");
             }
             values.push(v);
             if !self.test(Token::Comma) && self.token != Token::LBra {
@@ -712,7 +712,7 @@ impl<'a> Parser<'a> {
             } else
         */
         if self.token != Token::Id {
-            panic!("Table expected");
+            panic!("table expected");
         }
         self.te_named_table()
     }
@@ -815,14 +815,14 @@ impl<'a> Parser<'a> {
         loop {
             let cname = self.id_ref();
             if cnames.contains(&cname) {
-                panic!("Duplicate column name");
+                panic!("duplicate column name");
             }
             cnames.push(cname);
             if self.test(Token::RBra) {
                 break;
             }
             if !self.test(Token::Comma) {
-                panic!("Comma or closing bracket expected");
+                panic!("comma or closing bracket expected");
             }
         }
         let mut src = self.insert_expression(cnames.len());
@@ -834,7 +834,7 @@ impl<'a> Parser<'a> {
                     if let Some(cnum) = t.info.get(tos(cname)) {
                         cnums.push(*cnum);
                     } else {
-                        panic!("Column name '{}' not found", tos(cname))
+                        panic!("column name '{}' not found", tos(cname))
                     }
                 }
             }
@@ -951,13 +951,13 @@ impl<'a> Parser<'a> {
             let cname = self.id();
             let typ = self.read_data_type();
             if ti.add(cname, typ) {
-                panic!("Duplicate column name");
+                panic!("duplicate column name");
             }
             if self.test(Token::RBra) {
                 break;
             }
             if self.token != Token::Comma {
-                panic!("Comma or closing bracket expected");
+                panic!("comma or closing bracket expected");
             }
             self.read_token();
         }
@@ -979,7 +979,7 @@ impl<'a> Parser<'a> {
                 break;
             }
             if self.token != Token::Comma {
-                panic!("Comma or closing bracket expected")
+                panic!("comma or closing bracket expected")
             };
             self.read_token();
         }
@@ -1023,7 +1023,7 @@ impl<'a> Parser<'a> {
                 self.b.dop(DO::CreateSchema(name));
             }
             b"INDEX" => self.create_index(),
-            _ => panic!("Unknown keyword"),
+            _ => panic!("unknown keyword"),
         }
     }
 
@@ -1142,7 +1142,7 @@ impl<'a> Parser<'a> {
     fn s_break(&mut self) {
         let break_id = self.b.break_id;
         if break_id == usize::MAX {
-            panic!("No enclosing loop for break");
+            panic!("no enclosing loop for break");
         }
         self.b.add(Jump(break_id));
     }
@@ -1154,7 +1154,7 @@ impl<'a> Parser<'a> {
                 let k = push(&mut self.b, &mut e);
                 let rk = data_kind(self.b.return_type);
                 if k != rk {
-                    panic!("Return type mismatch expected {:?} got {:?}", rk, k)
+                    panic!("return type mismatch expected {:?} got {:?}", rk, k)
                 }
                 self.b.add(PopToLocal(self.b.param_count));
             }

@@ -1,5 +1,5 @@
+///
 pub const INITSQL : &str = "
-
 
 CREATE FN [sys].[ClearTable](t int) AS 
 BEGIN 
@@ -1398,7 +1398,7 @@ SELECT '<h1>Manual</h1>
 <ul>
 <li>*  / % : multiplication, division and remainder (after division) of numbers. Remainder only applies to integers.</li>
 <li>+ - : addition, subtraction of numbers.</li>
-<li>| : concatenation of strings. The second expression is automatically converted to string if necessary.</li>
+<li>| : concatenation of string/binary values. The second expression is automatically converted to string/binary if necessary.</li>
 <li>= != > < >= <= : comparison of any data type.</li>
 <li>NOT : boolean negation ( result is true if arg is false, false if arg is true ).</li>
 <li>AND : boolean operator ( result is true if both args are true )</li>
@@ -1408,7 +1408,9 @@ SELECT '<h1>Manual</h1>
 <h3>Pre-defined functions</h3>
 <ul>
 <li>LEN( s string ) : returns the length of s, which must be a string expression.</li>
+<li>BINLEN( s binary ) : returns the length of s, which must be a binary expression.</li> 
 <li>SUBSTRING( s string, start int, len int ) : returns the substring of s from start (1-based) length len.</li>
+<li>BINSUBSTRING( s binary, start int, len int ) : binary version of SUBSTRING.</li>
 <li>REPLACE( s string, pat string, sub string ) : returns a copy of s where every occurrence of pat is replaced with sub.</li>
 <li>LASTID() : returns the last Id value allocated by an INSERT statement.</li>
 <li>PARSEINT( s string ) : parses an integer from s.</li>
@@ -1559,7 +1561,7 @@ END
 GO
 --############################################
 CREATE SCHEMA [dbo]
-CREATE TABLE [dbo].[Cust]([FirstName] string(10),[LastName] string,[Age] int,[City] string) 
+CREATE TABLE [dbo].[Cust]([FirstName] string(10),[LastName] string,[Age] int,[City] string,[x] int(2)) 
 GO
 CREATE TABLE [dbo].[Order]([Cust] int,[Total] int,[Date] int,[Info] string(200)) 
 GO
@@ -1601,19 +1603,18 @@ BEGIN
   END
 END
 GO
-INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[City]) VALUES 
-(1,'Mary','Poppins',65,'')
-(2,'Clare','Smith',31,'')
-(3,'Ron','Jones',45,'')
-(4,'Peter','Perfect',36,'')
-(5,'George','Washington',31,'')
-(6,'Ron','Williams',49,'')
-(7,'Ben','Johnson',0,'')
-(8,'Alex','Barwood',63,'')
+INSERT INTO [dbo].[Cust](Id,[FirstName],[LastName],[Age],[City],[x]) VALUES 
+(1,'Mary','Poppins',65,'',0)
+(2,'Clare','Smith',31,'',0)
+(3,'Ron','Jones',45,'',0)
+(4,'Peter','Perfect',36,'',0)
+(5,'George','Washington',31,'',0)
+(6,'Ron','Williams',49,'',0)
+(7,'Ben','Johnson',0,'',0)
+(8,'Alex','Barwood',63,'',-32768)
 GO
 
 INSERT INTO [dbo].[Order](Id,[Cust],[Total],[Date],[Info]) VALUES 
-(1110001,8,5,1035151,'Hello there')
 GO
 
 --############################################

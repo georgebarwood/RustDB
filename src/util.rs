@@ -57,6 +57,18 @@ pub fn iget(data: &[u8], off: usize, n: usize) -> i64 {
     x as i64
 }
 
+/// Store signed value of n bytes to data ( with overflow check ).
+pub fn iset(data: &mut [u8], off: usize, val: i64, n: usize) {
+    if n < 8 {
+        let chk = val + (1 << ((n * 8) - 1));
+        if chk < 0 || chk >= (1 << (n * 8)) {
+            panic!("overflow storing value {} in {} bytes", val, n);
+        }
+    }
+    let bytes = val.to_le_bytes();
+    data[off..off + n].copy_from_slice(&bytes[0..n]);
+}
+
 /// Store unsigned value of n bytes to data.
 pub fn set(data: &mut [u8], off: usize, val: u64, n: usize) {
     let bytes = val.to_le_bytes();
@@ -125,17 +137,17 @@ pub fn to_hex(bytes: &[u8]) -> String {
 #[derive(Default)]
 pub struct SmallSet {
     /// Holds elements < 64 as a bitmap.
-    pub bitset: u64,
+    bitset: u64,
     /// Holds elements >= 64.
-    pub overflow: BTreeSet<usize>,
+    overflow: BTreeSet<usize>,
 }
 
 impl SmallSet {
-    pub fn is_empty(&self) -> bool
-    {
+    /// The set is empty.
+    pub fn is_empty(&self) -> bool {
         self.bitset == 0 && self.overflow.len() == 0
     }
-    
+
     /// Insert x into set.
     pub fn insert(&mut self, x: usize) {
         if x < 64 {

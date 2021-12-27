@@ -1,25 +1,36 @@
 use crate::*;
-/// Simple value ( Binary, String, Int, Float, Bool ).
-///
-/// When stored in a database record, binary(n) and string(n) values are allocated (n+1) bytes (8<=n<=249).
-/// If the value is more than n bytes, the length and the first (n-8) bytes are stored inline, and the rest are coded.
 
 #[derive(Clone, Copy)]
 pub struct Code {
+    ///
     pub id: u64,
+    ///
     pub ft: usize,
 }
 
 #[derive(Clone)]
+/// Simple value ( Binary, String, Int, Float, Bool ).
+///
+/// When stored in a database record, binary(n) and string(n) values are allocated (n+1) bytes (8<=n<=249).
+/// If the value is more than n bytes, the length and the first (n-8) bytes are stored inline, and the rest are coded.
 pub enum Value {
+    ///
     None,
+    ///
     RcBinary(Rc<Vec<u8>>),
+    ///
     ArcBinary(Arc<Vec<u8>>),
+    ///
     String(Rc<String>),
+    ///
     Int(i64),
+    ///
     Float(f64),
+    ///
     Bool(bool),
+    ///
     For(Rc<RefCell<run::ForState>>),
+    ///
     ForSort(Rc<RefCell<run::ForSortState>>),
 }
 
@@ -75,7 +86,7 @@ impl Value {
             Value::Bool(x) => {
                 data[off] = if *x { 1 } else { 0 };
             }
-            Value::Int(x) => util::set(data, off, *x as u64, size),
+            Value::Int(x) => util::iset(data, off, *x, size),
             Value::Float(x) => {
                 if size == 8 {
                     let bytes = (*x).to_le_bytes();
@@ -127,6 +138,17 @@ impl Value {
             }
         } else {
             panic!()
+        }
+    }
+
+    /// Convert a Value to a Binary.
+    pub fn bin(&self) -> Rc<Vec<u8>> {
+        match self {
+            Value::RcBinary(x) => x.clone(),
+            Value::String(s) => Rc::new(s.as_bytes().to_vec()),
+            Value::Float(x) => Rc::new(x.to_le_bytes().to_vec()),
+            Value::Int(x) => Rc::new(x.to_le_bytes().to_vec()),
+            _ => panic!("bin not implemented"),
         }
     }
 }

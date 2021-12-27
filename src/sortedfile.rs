@@ -18,7 +18,7 @@ pub struct SortedFile {
     /// The root page.
     pub root_page: u64,
     /// Status
-    pub ok: Cell<bool>,
+    ok: Cell<bool>,
 }
 
 impl SortedFile {
@@ -540,6 +540,7 @@ pub trait Record {
 
 /// Id record.
 pub struct Id {
+    ///
     pub id: u64,
 }
 

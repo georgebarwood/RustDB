@@ -3,7 +3,7 @@ use crate::*;
 /// Create a schema in the database by writing to the system Schema table.
 pub fn create_schema(db: &DB, name: &str) {
     if let Some(_id) = get_schema(db, name) {
-        panic!("Schema '{}' already exists", name);
+        panic!("schema '{}' already exists", name);
     }
     let t = &db.sys_schema;
     let mut row = t.row();
@@ -15,7 +15,7 @@ pub fn create_schema(db: &DB, name: &str) {
 /// Create a new table in the database by writing to the system Table and Column tables.
 pub fn create_table(db: &DB, info: &ColInfo) {
     if let Some(_t) = get_table(db, &info.name) {
-        panic!("Table {} already exists", info.name.str());
+        panic!("table {} already exists", info.name.str());
     }
     let tid = {
         let schema = &info.name.schema;
@@ -32,7 +32,7 @@ pub fn create_table(db: &DB, info: &ColInfo) {
             t.insert(db, &mut row);
             row.id
         } else {
-            panic!("Schema not found [{}]", &schema);
+            panic!("schema not found [{}]", &schema);
         }
     };
     {
@@ -165,7 +165,8 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)> {
     None
 }
 
-pub fn get_index(db: &DB, tname: &ObjRef, iname: &str) -> (TablePtr, usize, u64) {
+/// Get information about an index from name.
+pub fn get_index(db: &DB, tname: &ObjRef, iname: &str) -> (Rc<Table>, usize, u64) {
     if let Some(t) = get_table(db, tname) {
         // Loop through indexes. Columns are Root, Table, Name.
         let ixt = &db.sys_index;
@@ -184,8 +185,8 @@ pub fn get_index(db: &DB, tname: &ObjRef, iname: &str) -> (TablePtr, usize, u64)
     }
 }
 
-/// Gets a table from the database.
-pub fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr> {
+/// Gets table from the database.
+pub fn get_table(db: &DB, name: &ObjRef) -> Option<Rc<Table>> {
     if let Some((table_id, root, id_gen)) = get_table0(db, name) {
         let mut info = ColInfo::empty(name.clone());
         // Get columns. Columns are Table, Name, Type
@@ -230,7 +231,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<TablePtr> {
 }
 
 /// Get then parse a function from the database.
-pub fn get_function(db: &DB, name: &ObjRef) -> Option<FunctionPtr> {
+pub fn get_function(db: &DB, name: &ObjRef) -> Option<Rc<Function>> {
     if let Some(schema_id) = get_schema(db, &name.schema) {
         let t = &db.sys_function;
         let keys = vec![
@@ -269,7 +270,7 @@ pub fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64> {
 }
 
 /// Parse a function definition.
-fn parse_function(db: &DB, source: Rc<String>) -> FunctionPtr {
+fn parse_function(db: &DB, source: Rc<String>) -> Rc<Function> {
     let mut p = Parser::new(&source, db);
     p.b.parse_only = true;
     p.parse_function();

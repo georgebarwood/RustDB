@@ -2,21 +2,21 @@ use crate::{Arc, BTreeMap, Data, Mutex, Storage};
 use std::cmp::min;
 
 /// Slice of Data to be written to storage.
-pub struct DataSlice {
-    pub off: usize,
-    pub len: usize,
-    pub data: Data,
+struct DataSlice {
+    off: usize,
+    len: usize,
+    data: Data,
 }
 
 /// AtomicFile makes sure that database updates are all-or-nothing.
 /// Keeps a map of outstanding writes which have not yet been written to the underlying file.
 pub struct AtomicFile {
-    /// Map of existing outstanding writes. Note the key is the file address of the last byte written.
-    pub map: Mutex<BTreeMap<u64, DataSlice>>,
     /// The main underlying storage.
     pub stg: Box<dyn Storage>,
     /// Temporary storage for updates during commit.
     pub upd: Box<dyn Storage>,
+    /// Map of existing outstanding writes. Note the key is the file address of the last byte written.
+    map: Mutex<BTreeMap<u64, DataSlice>>,
 }
 
 impl AtomicFile {

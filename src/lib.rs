@@ -58,21 +58,25 @@
 //!# Features
 //!
 //! This crate supports the following cargo features:
+//! - `gentrans` : enables gentrans module.
+//! - `webtrans` : enables webtrans module.
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
-//! - `max` : Exposes maximal interface, including all internal modules (default).
+//! - `max` : maximal interface, including internal modules.
 //! - `verify` : Allows database structure to be verified using builtin function VERIFYDB.
 //! - `pack` : Allows database pages to be packed using builtin function REPACKFILE.
+//!
+//! By default, all features are enabled.
 //!
 //!# General Design of Database
 //!
 //! SortedFile stores fixed size Records in a tree of Pages.
 //! SortedFile is used to implement:
 //!
-//! - Variable length values which are split into fragments - see bytes module - although up to 254 bytes can be stored inline.
+//! - Database Table storage. Each fixed size record has a 64-bit Id.
 //!
-//! - Database Table storage. Each record has a 64-bit Id.
+//! - Variable length values which are split into fragments, although up to 249 bytes can be stored in the fiexed size record.
 //!
-//! - Index storage ( an index record refers back to the main table ).
+//! - Index storage ( an index record refers back to the main table using the 64-bit Id ).
 //!
 //! When a page becomes too big, it is split into two pages.
 //!
@@ -86,6 +90,8 @@
 //!
 //!# ToDo Lists
 //!
+//! Consider compiling R-SQL functions to Rust, effectively "automatic builtin" functions.
+//!
 //! Unify GenTransaction and WebTransaction. File upload only partially works with WebTransaction currently.
 //!
 //! Implement email in example program. Replication of log files. Server status.
@@ -94,18 +100,20 @@
 //!
 //! Work on improving/testing SQL code, browse schema, float I/O. Login.
 //!
-//! If updating several databases atomically, want to be able to share the upd file.
-//! So have mechanism to put updates to several files in one upd file.
 
 pub use crate::{
     atomfile::AtomicFile,
     builtin::standard_builtins,
-    gentrans::{GenTransaction, Part},
     init::INITSQL,
     pstore::{AccessPagedData, SharedPagedData},
     stg::{MemFile, SimpleFileStorage, Storage},
-    webtrans::WebTransaction,
 };
+
+#[cfg(feature = "gentrans")]
+pub use crate::gentrans::{GenTransaction, Part};
+
+#[cfg(feature = "webtrans")]
+pub use crate::webtrans::WebTransaction;
 
 #[cfg(feature = "builtin")]
 pub use crate::{
@@ -133,7 +141,7 @@ use crate::{
     parse::Parser,
     run::*,
     sortedfile::{Asc, Id, Record, SortedFile},
-    table::{ColInfo, IndexInfo, Row, SaveOp, Table, TablePtr},
+    table::{ColInfo, IndexInfo, Row, SaveOp, Table},
     util::{nd, newmap, SmallSet},
     value::*,
 };
@@ -159,11 +167,11 @@ pub mod util;
 #[macro_use]
 mod util;
 
-// Modules that are always public.
-
+#[cfg(feature = "gentrans")]
 /// [GenTransaction] ( implementation of [Transaction] ).
 pub mod gentrans;
 
+#[cfg(feature = "webtrans")]
 /// [WebTransaction] ( alternative implementation of [Transaction] with http support ).
 pub mod webtrans;
 
@@ -194,18 +202,6 @@ pub mod atomfile;
 pub mod builtin;
 #[cfg(not(feature = "max"))]
 mod builtin;
-
-#[cfg(feature = "max")]
-/// Storage of variable length values : [ByteStorage].
-pub mod bytes;
-#[cfg(not(feature = "max"))]
-mod bytes;
-
-#[cfg(feature = "max")]
-/// Structs that implement [CExp] trait.
-pub mod cexp;
-#[cfg(not(feature = "max"))]
-mod cexp;
 
 #[cfg(feature = "max")]
 /// [CompactFile] : storage of logical pages in smaller regions of backing storage.
@@ -273,6 +269,18 @@ pub mod value;
 #[cfg(not(feature = "builtin"))]
 mod value;
 
+#[cfg(feature = "max")]
+/// Structs that implement [CExp] trait.
+pub mod cexp;
+#[cfg(not(feature = "max"))]
+mod cexp;
+
+#[cfg(feature = "max")]
+/// Storage of variable length values : [ByteStorage].
+pub mod bytes;
+#[cfg(not(feature = "max"))]
+mod bytes;
+
 // End of modules.
 
 /// ```Arc<Vec<u8>>```
@@ -288,28 +296,42 @@ pub type BuiltinMap = HashMap<String, (DataKind, CompileFunc)>;
 pub struct Database {
     /// Page storage.
     pub file: AccessPagedData,
-    // System tables.
-    pub sys_schema: TablePtr,
-    pub sys_table: TablePtr,
-    pub sys_column: TablePtr,
-    pub sys_index: TablePtr,
-    pub sys_index_col: TablePtr,
-    pub sys_function: TablePtr,
-    /// Storage of variable length data.
-    pub bs: Vec<ByteStorage>,
-    // Various maps for named database objects.
-    pub schemas: RefCell<HashMap<String, i64>>,
-    pub tables: RefCell<HashMap<ObjRef, TablePtr>>,
-    pub functions: RefCell<HashMap<ObjRef, FunctionPtr>>,
+
+    /// Defined builtin functions.
     pub builtins: Arc<BuiltinMap>,
-    /// Flag to reset the functions cache after save.
-    pub function_reset: Cell<bool>,
+
+    // System tables.
+    ///
+    pub sys_schema: Rc<Table>,
+    ///
+    pub sys_table: Rc<Table>,
+    ///
+    pub sys_column: Rc<Table>,
+    ///
+    pub sys_index: Rc<Table>,
+    ///
+    pub sys_index_col: Rc<Table>,
+    ///
+    pub sys_function: Rc<Table>,
+
+    /// Cache of loaded Schemas.
+    pub schemas: RefCell<HashMap<String, i64>>,
+    /// Cache of loaded Tables.
+    pub tables: RefCell<HashMap<ObjRef, Rc<Table>>>,
+    /// Cache of loaded Functions.
+    pub functions: RefCell<HashMap<ObjRef, Rc<Function>>>,
+
     /// Last id generated by INSERT.
     pub lastid: Cell<i64>,
     /// Has there been an error since last save?
     pub err: Cell<bool>,
+
+    /// Storage of variable length data.
+    bs: Vec<ByteStorage>,
+    /// Flag to reset the functions cache after save.
+    function_reset: Cell<bool>,
     /// Maximum size of logical page.
-    pub page_size_max: usize,
+    page_size_max: usize,
 }
 
 const SYS_ROOT_LAST: u64 = 15;
@@ -436,7 +458,7 @@ GO
     }
 
     /// Run a batch of SQL.
-    pub(crate) fn go(self: &DB, source: &str, tr: &mut dyn Transaction) -> Option<SqlError> {
+    fn go(self: &DB, source: &str, tr: &mut dyn Transaction) -> Option<SqlError> {
         let mut p = Parser::new(source, self);
         let result = std::panic::catch_unwind(panic::AssertUnwindSafe(|| {
             p.batch(tr);
@@ -499,7 +521,7 @@ GO
 
     #[cfg(not(feature = "max"))]
     /// Get the named table.
-    pub(crate) fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr> {
+    fn get_table(self: &DB, name: &ObjRef) -> Option<Rc<Table>> {
         if let Some(t) = self.tables.borrow().get(name) {
             return Some(t.clone());
         }
@@ -508,7 +530,7 @@ GO
 
     #[cfg(feature = "max")]
     /// Get the named table.
-    pub fn get_table(self: &DB, name: &ObjRef) -> Option<TablePtr> {
+    pub fn get_table(self: &DB, name: &ObjRef) -> Option<Rc<Table>> {
         if let Some(t) = self.tables.borrow().get(name) {
             return Some(t.clone());
         }
@@ -516,7 +538,7 @@ GO
     }
 
     /// Get the named function.
-    pub(crate) fn get_function(self: &DB, name: &ObjRef) -> Option<FunctionPtr> {
+    fn get_function(self: &DB, name: &ObjRef) -> Option<Rc<Function>> {
         if let Some(f) = self.functions.borrow().get(name) {
             return Some(f.clone());
         }
@@ -524,13 +546,13 @@ GO
     }
 
     /// Insert the table into the map of tables.
-    pub(crate) fn publish_table(&self, table: TablePtr) {
+    fn publish_table(&self, table: Rc<Table>) {
         let name = table.info.name.clone();
         self.tables.borrow_mut().insert(name, table);
     }
 
     /// Get code for value.
-    pub(crate) fn encode(self: &DB, val: &Value, size: usize) -> Code {
+    fn encode(self: &DB, val: &Value, size: usize) -> Code {
         let bytes = match val {
             Value::RcBinary(x) => &**x,
             Value::ArcBinary(x) => &**x,
@@ -555,36 +577,36 @@ GO
     }
 
     /// Decode u64 to bytes.
-    pub(crate) fn decode(self: &DB, code: Code, inline: usize) -> Vec<u8> {
+    fn decode(self: &DB, code: Code, inline: usize) -> Vec<u8> {
         self.bs[code.ft].decode(self, code.id, inline)
     }
 
     /// Delete encoding.
-    pub(crate) fn delcode(self: &DB, code: Code) {
+    fn delcode(self: &DB, code: Code) {
         if code.id != u64::MAX {
             self.bs[code.ft].delcode(self, code.id);
         }
     }
 
     /// Allocate a page of underlying file storage.
-    pub(crate) fn alloc_page(self: &DB) -> u64 {
+    fn alloc_page(self: &DB) -> u64 {
         self.file.alloc_page()
     }
 
-    /// Free a page of underyling file storage.
-    pub(crate) fn free_page(self: &DB, lpnum: u64) {
+    /// Free a page of underlying file storage.
+    fn free_page(self: &DB, lpnum: u64) {
         self.file.free_page(lpnum);
     }
 
     #[cfg(feature = "pack")]
     /// Get size of logical page.
-    pub(crate) fn lp_size(&self, pnum: u64) -> u64 {
+    fn lp_size(&self, pnum: u64) -> u64 {
         self.file.spd.file.read().unwrap().lp_size(pnum) as u64
     }
 
     #[cfg(feature = "pack")]
     /// Repack the specified sortedfile.
-    pub(crate) fn repack_file(self: &DB, k: i64, schema: &str, tname: &str) -> i64 {
+    fn repack_file(self: &DB, k: i64, schema: &str, tname: &str) -> i64 {
         if k >= 0 {
             let name = ObjRef::new(schema, tname);
             if let Some(t) = self.get_table(&name) {
@@ -639,7 +661,7 @@ impl Drop for Database {
 /// For creating system tables.
 struct TableBuilder {
     alloc: usize,
-    list: Vec<TablePtr>,
+    list: Vec<Rc<Table>>,
 }
 impl TableBuilder {
     fn new() -> Self {
@@ -649,7 +671,7 @@ impl TableBuilder {
         }
     }
 
-    fn nt(&mut self, name: &str, ct: &[(&str, DataType)]) -> TablePtr {
+    fn nt(&mut self, name: &str, ct: &[(&str, DataType)]) -> Rc<Table> {
         let root = self.rt();
         let id = 1 + (root - bytes::NFT as u64);
         // println!("Table builder name={} id={} root={}", name, id, root);
@@ -716,7 +738,7 @@ pub trait Transaction: Any {
     }
 }
 
-/// Query where output is printed to console (used for initialisation ).
+/// [Transaction] where output is printed to console (used for initialisation ).
 struct DummyTransaction {}
 impl Transaction for DummyTransaction {
     fn selected(&mut self, _values: &[Value]) {}

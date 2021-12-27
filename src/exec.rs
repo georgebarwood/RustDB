@@ -1,13 +1,18 @@
 use crate::*;
 use Instruction::*;
 
-/// Evaluation environment - stack of Values, references to DB and Query.
+/// Evaluation environment - stack of Values, references to DB and Transaction.
 pub struct EvalEnv<'r> {
+    /// Stack of values, holds function parameters and local variables.
     pub stack: Vec<Value>,
-    pub bp: usize, // "Base Pointer" - used to access local variables.
+    /// "Base Pointer" - stack index of current parameters and local variables.
+    pub bp: usize,
+    /// Pointer to Database.
     pub db: DB,
+    /// Pointer to Transaction.
     pub tr: &'r mut dyn Transaction,
-    pub call_depth: usize,
+    /// Function call depth, prevents stack overflow.
+    call_depth: usize,
 }
 
 impl<'r> EvalEnv<'r> {
@@ -96,12 +101,12 @@ impl<'r> EvalEnv<'r> {
         /*
             if let Some(n) = stacker::remaining_stack()
             {
-              if n < 64 * 1024 { panic!("Stack less than 64k call depth={}", self.call_depth) }
+              if n < 64 * 1024 { panic!("stack less than 64k call depth={}", self.call_depth) }
             }
             else
         */
         if self.call_depth > 500 {
-            panic!("Call depth limit of 500 reached");
+            panic!("call depth limit of 500 reached");
         }
         let save_bp = self.bp;
         self.bp = self.stack.len() - r.param_count;
@@ -177,7 +182,7 @@ impl<'r> EvalEnv<'r> {
             let next = if let Value::For(fs) = &self.stack[self.bp + info.for_id] {
                 fs.borrow_mut().data_source.next()
             } else {
-                panic!("Jump into FOR loop");
+                panic!("jump into FOR loop");
             };
             if let Some((pp, off)) = next {
                 let p = pp.borrow();
@@ -220,7 +225,7 @@ impl<'r> EvalEnv<'r> {
                 true
             }
         } else {
-            panic!("Jump into FOR loop");
+            panic!("jump into FOR loop");
         }
     }
 
@@ -266,7 +271,7 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Execute INSERT operation.
-    fn insert(&mut self, t: TablePtr, cols: &[usize], src: &CTableExpression) {
+    fn insert(&mut self, t: Rc<Table>, cols: &[usize], src: &CTableExpression) {
         if let CTableExpression::Values(x) = src {
             self.insert_values(t, cols, x);
         } else {
@@ -423,7 +428,7 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Insert evaluated values into a table.
-    fn insert_values(&mut self, table: TablePtr, ci: &[usize], vals: &[Vec<CExpPtr<Value>>]) {
+    fn insert_values(&mut self, table: Rc<Table>, ci: &[usize], vals: &[Vec<CExpPtr<Value>>]) {
         let mut row = Row::new(table.info.clone());
         for r in vals {
             row.id = 0;
@@ -592,7 +597,7 @@ impl<'r> EvalEnv<'r> {
             db.tables.borrow_mut().insert(name.clone(), nt);
             db.function_reset.set(true);
         } else {
-            panic!("Alter Table not found {}", name.str());
+            panic!("ALTER TABLE not found {}", name.str());
         }
     }
 } // impl EvalEnv

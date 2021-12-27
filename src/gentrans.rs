@@ -5,11 +5,17 @@ use serde::{Deserialize, Serialize};
 /// General Query.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenQuery {
+    /// The SQL query string.
     pub sql: Arc<String>,
+    /// The path argument for the query.
     pub path: String,
+    /// Query parameters.
     pub params: BTreeMap<String, String>,
+    /// Query form.
     pub form: BTreeMap<String, String>,
+    /// Query cookies.
     pub cookies: BTreeMap<String, String>,
+    /// Querey parts ( files ).
     pub parts: Vec<Part>,
     /// Micro-seconds since January 1, 1970 0:00:00 UTC
     pub now: i64,
@@ -17,30 +23,43 @@ pub struct GenQuery {
 
 /// General Response.
 pub struct GenResponse {
+    /// Error string.
     pub err: String,
+    /// Response status code.
     pub status_code: u16,
+    /// Response headers.
     pub headers: Vec<(String, String)>,
+    /// Reponse body.
     pub output: Vec<u8>,
 }
 
 /// Query + Response, implements Transaction.
 pub struct GenTransaction {
+    /// Transaction Query.
     pub qy: GenQuery,
+    /// Transaction Response.
     pub rp: GenResponse,
+    /// Transacation extension data.
     pub ext: Box<dyn Any + Send + Sync>,
 }
 
 /// Part of multipart data ( uploaded files ).
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Part {
+    /// Part name.
     pub name: String,
+    /// Part filename.
     pub file_name: String,
+    /// Part contenttype.
     pub content_type: String,
+    ///
     pub text: String,
+    ///
     pub data: Data,
 }
 
 impl GenTransaction {
+    ///
     pub fn new() -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
@@ -68,6 +87,7 @@ impl GenTransaction {
             ext: Box::new(()),
         }
     }
+
     /// Append string to output.
     fn push_str(&mut self, s: &str) {
         self.rp.output.extend_from_slice(s.as_bytes());

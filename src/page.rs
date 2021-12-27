@@ -17,10 +17,10 @@ pub type PagePtr = Rc<RefCell<Page>>;
 */
 
 /// = 3. Size of Balance,Left,Right in a Node ( 2 + 2 x 11 = 24 bits = 3 bytes ).
-pub const NODE_OVERHEAD: usize = 3;
+const NODE_OVERHEAD: usize = 3;
 
 /// = 8. 45 bits ( 1 + 4 x 11 ) needs 6 bytes, but use 8.
-pub const NODE_BASE: usize = 8;
+const NODE_BASE: usize = 8;
 
 /// = 6. Number of bytes used to store a page number.
 const PAGE_ID_SIZE: usize = 6;
@@ -197,7 +197,7 @@ impl Page {
         if inserted != self.next_alloc() {
             self.set_record(inserted, r);
         } else {
-            panic!("Duplicate key");
+            panic!("duplicate key");
         }
     }
 
@@ -232,7 +232,7 @@ impl Page {
         }
     }
 
-    // Make a copy of a parent key record.
+    /// Make a copy of a parent key record.
     pub fn copy(&self, x: usize) -> Vec<u8> {
         let n = self.node_size - NODE_OVERHEAD - PAGE_ID_SIZE;
         let off = self.rec_offset(x);
@@ -241,7 +241,7 @@ impl Page {
         b
     }
 
-    // Append a copied parent key.
+    /// Append a copied parent key.
     pub fn append_page_copy(&mut self, b: &[u8], cp: u64) {
         let inserted = self.next_alloc();
         self.root = self.insert_into(self.root, None).0;
@@ -394,6 +394,7 @@ impl Page {
         }
     }
 
+    ///
     pub fn clear(&mut self) {
         self.root = 0;
         self.count = 0;
@@ -401,6 +402,7 @@ impl Page {
         self.resize_data();
     }
 
+    ///
     pub fn drop_key(&self, db: &DB, x: usize, r: &dyn Record) {
         r.drop_key(db, &self.data[self.rec_offset(x)..]);
     }

@@ -1,15 +1,14 @@
 use crate::*;
 
-/// Table Pointer. ```Rc<Table>```
-pub type TablePtr = Rc<Table>;
-
 /// List of indexes. Each index has a file and a list of column numbers.
 pub type IxList = Vec<(Rc<SortedFile>, Rc<Vec<usize>>)>;
 
 /// Save or Rollback.
 #[derive(PartialEq, PartialOrd, Clone, Copy)]
 pub enum SaveOp {
+    ///
     Save,
+    ///
     RollBack,
 }
 
@@ -36,7 +35,7 @@ pub struct Table {
 
 impl Table {
     /// Construct a table with specified info.
-    pub fn new(id: i64, root_page: u64, id_gen: i64, info: Rc<ColInfo>) -> TablePtr {
+    pub fn new(id: i64, root_page: u64, id_gen: i64, info: Rc<ColInfo>) -> Rc<Table> {
         let rec_size = info.total;
         let key_size = 8;
         let file = Rc::new(SortedFile::new(rec_size, key_size, root_page));
@@ -92,7 +91,7 @@ impl Table {
 
     /// Look for indexed table expression based on supplied WHERE expression (we).
     pub fn index_from(
-        self: &TablePtr,
+        self: &Rc<Table>,
         b: &Block,
         we: &mut Expr,
     ) -> (Option<CExpPtr<bool>>, Option<CTableExpression>) {
@@ -176,7 +175,7 @@ impl Table {
     }
 
     /// Get a single record with specified id.
-    pub fn scan_id(self: &TablePtr, db: &DB, id: i64) -> IdScan {
+    pub fn scan_id(self: &Rc<Table>, db: &DB, id: i64) -> IdScan {
         IdScan {
             table: self.clone(),
             db: db.clone(),
@@ -186,13 +185,13 @@ impl Table {
     }
 
     /// Get records with matching key.
-    pub fn scan_key(self: &TablePtr, db: &DB, key: Value, index: usize) -> IndexScan {
+    pub fn scan_key(self: &Rc<Table>, db: &DB, key: Value, index: usize) -> IndexScan {
         let keys = vec![key];
         self.scan_keys(db, keys, index)
     }
 
     /// Get records with matching keys.
-    pub fn scan_keys(self: &TablePtr, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan {
+    pub fn scan_keys(self: &Rc<Table>, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan {
         let ixlist = &*self.ixlist.borrow();
         let (sf, cols) = &ixlist[index];
         let ikey = IndexKey::new(self, cols.clone(), keys.clone(), Ordering::Less);
@@ -214,7 +213,7 @@ impl Table {
         list.push((sf, Rc::new(cols)));
     }
 
-    // Delete the specified index.
+    /// Delete the specified index.
     pub fn delete_index(&self, db: &DB, ix: usize) {
         let ixlist = &*self.ixlist.borrow();
         let (f, cols) = &ixlist[ix];
@@ -316,8 +315,8 @@ impl Record for Zero {
 
 /// Helper class to read byte data using ColInfo.
 pub struct Access<'d, 'i> {
-    pub data: &'d [u8],
-    pub info: &'i ColInfo,
+    data: &'d [u8],
+    info: &'i ColInfo,
 }
 
 impl<'d, 'i> Access<'d, 'i> {
@@ -342,19 +341,14 @@ impl<'d, 'i> Access<'d, 'i> {
 
 /// Helper class to write byte data using ColInfo.
 pub struct WriteAccess<'d, 'i> {
-    pub data: &'d mut [u8],
-    pub info: &'i ColInfo,
+    data: &'d mut [u8],
+    info: &'i ColInfo,
 }
 
 impl<'d, 'i> WriteAccess<'d, 'i> {
     /// Save int to byte data.
     pub fn set_int(&mut self, colnum: usize, val: i64) {
-        util::set(
-            self.data,
-            self.info.off[colnum],
-            val as u64,
-            self.info.siz(colnum),
-        );
+        util::iset(self.data, self.info.off[colnum], val, self.info.siz(colnum));
     }
 
     /// Extract int from byte data for column number colnum.
@@ -421,7 +415,7 @@ impl ColInfo {
         false
     }
 
-    pub fn add_altered(&mut self, ci: &ColInfo, cnum: usize, actions: &[AlterCol]) -> bool {
+    pub(crate) fn add_altered(&mut self, ci: &ColInfo, cnum: usize, actions: &[AlterCol]) -> bool {
         let cname = &ci.colnames[cnum];
         let mut typ = ci.typ[cnum];
         for act in actions {
@@ -469,17 +463,24 @@ impl ColInfo {
 
 /// Index information for creating an index.
 pub struct IndexInfo {
+    ///
     pub tname: ObjRef,
+    ///
     pub iname: String,
+    ///
     pub cols: Vec<usize>,
 }
 
 /// Row of Values, with type information.
 #[derive(Clone)]
 pub struct Row {
+    ///
     pub id: i64,
+    ///
     pub values: Vec<Value>,
+    ///
     pub info: Rc<ColInfo>,
+    ///
     pub codes: Vec<Code>,
 }
 
@@ -551,10 +552,15 @@ impl Record for Row {
 
 /// Row for inserting into an index.
 pub struct IndexRow {
+    ///
     pub tinfo: Rc<ColInfo>,
+    ///
     pub cols: Rc<Vec<usize>>,
+    ///
     pub keys: Vec<Value>,
+    ///
     pub codes: Vec<Code>,
+    ///
     pub rowid: i64,
 }
 
@@ -652,11 +658,15 @@ impl Record for IndexRow {
 }
 
 /// Key for searching index.
-pub struct IndexKey {
-    pub tinfo: Rc<ColInfo>,
-    pub cols: Rc<Vec<usize>>,
-    pub key: Vec<Value>,
-    pub def: Ordering,
+struct IndexKey {
+    /// Information about the indexed table.
+    tinfo: Rc<ColInfo>,
+    /// List of indexed columns.
+    cols: Rc<Vec<usize>>,
+    /// Key values.
+    key: Vec<Value>,
+    /// Ordering used if keys compare equal.
+    def: Ordering,
 }
 
 impl IndexKey {
@@ -693,7 +703,7 @@ impl Record for IndexKey {
 /// State for fetching records using an index.
 pub struct IndexScan {
     ixa: Asc,
-    table: TablePtr,
+    table: Rc<Table>,
     db: DB,
     cols: Rc<Vec<usize>>,
     keys: Vec<Value>,
@@ -735,7 +745,7 @@ impl Iterator for IndexScan {
 /// State for fetching record with specified id.
 pub struct IdScan {
     id: i64,
-    table: TablePtr,
+    table: Rc<Table>,
     db: DB,
     done: bool,
 }
@@ -774,7 +784,7 @@ fn get_known_cols(we: &Expr, kc: &mut SmallSet) {
     }
 }
 
-/// Counts the number of index columns that are known.
+/// Count the number of index columns that are known.
 fn covered(clist: &[usize], kc: &SmallSet) -> usize {
     let mut result = 0;
     for &c in clist {

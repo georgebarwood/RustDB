@@ -3,17 +3,29 @@ use std::{io::Read, io::Write, net::TcpStream};
 
 /// Response content is accumulated in output.
 pub struct WebTransaction {
+    ///
     pub method: Rc<String>,
+    ///
     pub path: Rc<String>,
+    ///
     pub query: Map,
+    ///
     pub form: Map,
+    ///
     pub cookies: Map,
+    ///
     pub parts: Vec<Part>,
+    ///
     pub err: String,
+    ///
     pub output: Vec<u8>,
+    ///
     pub status_code: String,
+    ///
     pub headers: String,
+    ///
     pub now: i64, // Micro-seconds since January 1, 1970 0:00:00 UTC
+    ///
     pub ext: Box<dyn Any + Send + Sync>,
 }
 
@@ -26,11 +38,16 @@ pub type Target = (Rc<String>, Map);
 /// Method, Path, Query, Version.
 pub type Request = (Rc<String>, Rc<String>, Map, String);
 
+/// Error type for http parsing.
 #[derive(Debug)]
 pub enum WebErr {
+    ///
     Io(std::io::Error),
+    ///
     Utf8(std::string::FromUtf8Error),
+    ///
     Eof,
+    ///
     NewlineExpected,
 }
 
@@ -79,6 +96,8 @@ impl WebTransaction {
             ext: Box::new(()),
         })
     }
+
+    ///
     pub fn trace(&self) {
         println!(
             "method={} path={} query={:?} input cookies={:?}",
@@ -250,6 +269,7 @@ pub struct HttpRequestParser<'a> {
   Also cookies are todo and multipart may not work for multiple files ( or at all ).
 */
 impl<'a> HttpRequestParser<'a> {
+    /// Construct Http parser.
     pub fn new(stream: &'a TcpStream) -> Self {
         Self {
             stream,
@@ -401,6 +421,7 @@ impl<'a> HttpRequestParser<'a> {
         Ok((method, path, query, version))
     }
 
+    /// Read http headers.
     pub fn read_headers(&mut self) -> Result<Map, WebErr> {
         let mut cookies = HashMap::default();
         loop {
@@ -439,6 +460,7 @@ impl<'a> HttpRequestParser<'a> {
         }
     }
 
+    /// Read http content ( body ).
     pub fn read_content(&mut self) -> Result<String, WebErr> {
         let mut result = Vec::new();
         let mut n = self.content_length;
@@ -449,11 +471,13 @@ impl<'a> HttpRequestParser<'a> {
         from_utf8(result)
     }
 
+    /// Read http form.
     pub fn read_form(&mut self) -> Result<Map, WebErr> {
         self.end_content = self.base + self.index + self.content_length;
         self.read_map()
     }
 
+    /// Read http multipart form.
     pub fn read_multipart(&mut self) -> Result<Vec<Part>, WebErr> {
         /* Typical multipart body would be:
         ------WebKitFormBoundaryVXXOTFUWdfGpOcFK
@@ -523,10 +547,16 @@ fn ends_with(body: &[u8], sep: &[u8]) -> bool {
     false
 }
 
+/// http body part.
 pub struct Part {
+    ///
     pub name: Rc<String>,
+    ///
     pub text: Rc<String>,
+    ///
     pub file_name: Rc<String>,
+    ///
     pub content_type: String,
+    ///
     pub data: Data,
 }
