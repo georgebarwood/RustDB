@@ -288,13 +288,6 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
                 let title = a.str(&db, 2);
                 let body = a.str(&db, 3);
 
-                // Temporary test to see what happens with rogue async task...
-                // println!("Sleeping for 60 seconds");
-                // std::thread::sleep( std::time::Duration::from_secs(60) );
-                // println!("Doing big sum");
-                // let mut x = 0; for i in 0..1000000000000u64 { x += i % 10; }
-                // println!("Done big sum, x={}", x );
-
                 println!(
                     "Email from={} to={} title={} body={}",
                     from, to, title, body
@@ -353,13 +346,13 @@ async fn map_parts(mp: Option<Multipart>) -> Vec<Part> {
             } else if let Ok(bytes) = field.bytes().await {
                 data = bytes.to_vec()
             }
-            result.push(Part {
-                name,
-                file_name,
-                content_type,
-                data: Arc::new(data),
-                text,
-            });
+            let mut part = Part::default();
+            part.name = name;
+            part.file_name = file_name;
+            part.content_type = content_type;
+            part.data = Arc::new(data);
+            part.text = text;
+            result.push(part);
         }
     }
     result
