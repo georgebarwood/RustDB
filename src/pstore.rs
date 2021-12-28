@@ -96,7 +96,6 @@ impl Stash {
     /// Register that there is a client reading the database. The result is the current time.
     fn begin_read(&mut self) -> u64 {
         let time = self.time;
-        // println!("Stash begin read time={}", time);
         let n = self.readers.entry(time).or_insert(0);
         *n += 1;
         time
@@ -104,7 +103,6 @@ impl Stash {
 
     /// Register that the read at the specified time has ended. Stashed pages may be freed.
     fn end_read(&mut self, time: u64) {
-        // println!("Stash end read time={}", time);
         let n = self.readers.get_mut(&time).unwrap();
         *n -= 1;
         if *n == 0 {
@@ -116,7 +114,6 @@ impl Stash {
     /// Register that an update operation has completed. Time is incremented.
     /// Stashed pages may be freed.
     fn end_write(&mut self) -> usize {
-        // println!("Stash tick time={}", self.time);
         let result = if let Some(u) = self.updates.get(&self.time) {
             u.len()
         } else {
@@ -138,7 +135,6 @@ impl Stash {
             }
             for lpnum in self.updates.remove(&wt).unwrap() {
                 let p = self.pages.get(&lpnum).unwrap();
-                // println!("Stash trim page {}", lpnum);
                 p.lock().unwrap().trim(rt);
             }
         }

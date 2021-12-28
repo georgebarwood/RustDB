@@ -144,9 +144,6 @@ impl Table {
                 }
             }
         }
-        if !kc.is_empty() {
-            println!("No index found for table {}", self.info.name.str());
-        }
         (Some(c_bool(b, we)), None)
     }
 

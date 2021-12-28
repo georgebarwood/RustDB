@@ -289,7 +289,7 @@ impl Page {
             0 => LeftHigher,
             1 => Balanced,
             2 => RightHigher,
-            _ => panic!(),
+            _ => unreachable!(),
         }
     }
 

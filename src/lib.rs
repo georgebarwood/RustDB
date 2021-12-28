@@ -18,48 +18,17 @@
 //! for accessing input parameters and controlling output. Custom builtin functions implement CExp
 //! and have access to the transaction via an EvalEnv parameter, which can be downcast if necessary.
 //!
-//! It is also possible to access the table data directly, see email_loop in example (b).   
+//! It is also possible to access the table data directly, see email_loop in example program.   
 //!
-//!# Examples
-//! (a) Simple single-threaded web server using SimpleFileStorage as underlying storage.
-//! ```
-//! use rustdb::{standard_builtins, AccessPagedData, Database, SharedPagedData, SimpleFileStorage, WebTransaction, INITSQL, BuiltinMap};
-//! use std::net::TcpListener;
-//! use std::sync::Arc;
-//!
-//! let sfs = Box::new(SimpleFileStorage::new( "..\\test.rustdb" ));
-//! let spd = Arc::new(SharedPagedData::new(sfs));
-//! let apd = AccessPagedData::new_writer(spd);
-//! let mut bmap = BuiltinMap::default();
-//! standard_builtins( &mut bmap );
-//! let bmap = Arc::new(bmap);
-//! let db = Database::new(apd, INITSQL, bmap);
-//!
-//! let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
-//! for tcps in listener.incoming() {
-//!     if let Ok(mut tcps) = tcps {
-//!         if let Ok(mut tr) = WebTransaction::new(&tcps) {
-//!             // tr.trace();
-//!             let sql = "EXEC web.Main()";
-//!             // Execute SQL. http response, SQL output, (status,headers,content) is accumulated in wq.
-//!             db.run_timed(&sql, &mut tr);
-//!             // Write the http response to the TCP stream.
-//!             let _err = tr.write(&mut tcps);
-//!             // Save database changes to disk.
-//!             db.save();
-//!         }
-//!     }
-//! }
-//!```
-//!
-//! (b) [See here](https://github.com/georgebarwood/RustDB/blob/main/examples/axumtest.rs) for more advanced example -
-//! an Axum-based webserver using [AtomicFile], the ARGON hash function, read-only queries and query logging.
+//!# Example
+//! [See here](https://github.com/georgebarwood/RustDB/blob/main/examples/axumtest.rs) for an example program -
+//! an Axum-based webserver.
 //!
 //!# Features
 //!
 //! This crate supports the following cargo features:
-//! - `gentrans` : enables gentrans module.
-//! - `webtrans` : enables webtrans module.
+//! - `init` : enables init module ( sample database initialisation string ).
+//! - `gentrans` : enables gentrans module ( sample implementation of [Transaction] ).
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
 //! - `max` : maximal interface, including internal modules.
 //! - `verify` : Allows database structure to be verified using builtin function VERIFYDB.
@@ -74,9 +43,9 @@
 //!
 //! - Database Table storage. Each fixed size record has a 64-bit Id.
 //!
-//! - Variable length values which are split into fragments, although up to 249 bytes can be stored in the fiexed size record.
+//! - Variable length values which are split into fragments, although up to 249 bytes can be stored in the fixed size record.
 //!
-//! - Index storage ( an index record refers back to the main table using the 64-bit Id ).
+//! - Index storage - an index record refers back to the main table using the 64-bit Id.
 //!
 //! When a page becomes too big, it is split into two pages.
 //!
@@ -87,33 +56,19 @@
 //! [AtomicFile] ensures that database updates are all or nothing.
 //!
 //! The hierarchy overall: Table -> SortedFile -> PagedData -> CompactFile -> AtomicFile -> Storage.
-//!
-//!# ToDo Lists
-//!
-//! Consider compiling R-SQL functions to Rust, effectively "automatic builtin" functions.
-//!
-//! Unify GenTransaction and WebTransaction. File upload only partially works with WebTransaction currently.
-//!
-//! Implement email in example program. Replication of log files. Server status.
-//!
-//! Sort out error handling for PARSEINT etc.
-//!
-//! Work on improving/testing SQL code, browse schema, float I/O. Login.
-//!
 
 pub use crate::{
     atomfile::AtomicFile,
     builtin::standard_builtins,
-    init::INITSQL,
     pstore::{AccessPagedData, SharedPagedData},
     stg::{MemFile, SimpleFileStorage, Storage},
 };
 
+#[cfg(feature = "init")]
+pub use crate::init::INITSQL;
+
 #[cfg(feature = "gentrans")]
 pub use crate::gentrans::{GenTransaction, Part};
-
-#[cfg(feature = "webtrans")]
-pub use crate::webtrans::WebTransaction;
 
 #[cfg(feature = "builtin")]
 pub use crate::{
@@ -171,14 +126,12 @@ mod util;
 /// [GenTransaction] ( implementation of [Transaction] ).
 pub mod gentrans;
 
-#[cfg(feature = "webtrans")]
-/// [WebTransaction] ( alternative implementation of [Transaction] with http support ).
-pub mod webtrans;
-
+#[cfg(feature = "init")]
 /// Initial SQL.
 ///
-/// Note : the [init::INITSQL] string can be generated using the "Script entire database" link in the runtime main menu,
+/// Note : the [init::INITSQL] string can be generated using the "Script entire database" link in the example main menu,
 /// then using an editor to escape every `"` character as `\"`.
+/// Note also that some sys functions such as ClearTable, DropTable, DropIndex, DropSchema, DropColumn are required for functions such as ALTER TABLE, DROP TABLE etc.
 pub mod init;
 
 /// Backing [Storage] for database. See also [AtomicFile].
@@ -674,8 +627,6 @@ impl TableBuilder {
     fn nt(&mut self, name: &str, ct: &[(&str, DataType)]) -> Rc<Table> {
         let root = self.rt();
         let id = 1 + (root - bytes::NFT as u64);
-        // println!("Table builder name={} id={} root={}", name, id, root);
-
         let name = ObjRef::new("sys", name);
         let info = ColInfo::new(name, ct);
         let table = Table::new(id as i64, root, 1, Rc::new(info));

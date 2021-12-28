@@ -291,7 +291,7 @@ impl<'r> EvalEnv<'r> {
                 let data = &p.data[off..];
                 oldrow.load(&self.db, data);
             } else {
-                panic!()
+                unreachable!()
             }
             t.remove(&self.db, &oldrow);
         }
@@ -550,7 +550,6 @@ impl<'r> EvalEnv<'r> {
                     ),
                     AlterCol::Drop(name) => format!("EXEC sys.DropColumn({},'{}')", t.id, name),
                 };
-                println!("sql={}", sql);
                 db.run(&sql, self.tr);
             }
 
