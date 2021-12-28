@@ -19,6 +19,7 @@ pub enum TableExpression {
 }
 /// Assign or Append.
 #[derive(Clone, Copy)]
+#[non_exhaustive]
 pub enum AssignOp {
     ///
     Assign,
@@ -29,6 +30,7 @@ pub enum AssignOp {
 pub type Assigns = Vec<(usize, AssignOp)>;
 
 /// Select Expression ( not yet compiled ).
+#[non_exhaustive]
 pub struct SelectExpression {
     ///
     pub colnames: Vec<String>,
@@ -115,6 +117,7 @@ impl Token {
 }
 
 /// Scalar Expression (uncompiled).
+#[non_exhaustive]
 pub struct Expr {
     ///
     pub exp: ExprIs,
@@ -142,6 +145,7 @@ impl Expr {
 }
 
 /// Scalar Expression variants.
+#[non_exhaustive]
 pub enum ExprIs {
     ///
     Const(Value),
@@ -169,6 +173,7 @@ pub enum ExprIs {
 
 /// Object reference ( Schema.Name ).
 #[derive(PartialEq, PartialOrd, Eq, Hash, Clone)]
+#[non_exhaustive]
 pub struct ObjRef {
     ///
     pub schema: String,
@@ -192,6 +197,7 @@ impl ObjRef {
 
 /// Binary=1, String=2, Int=3, Float=4, Bool=5.
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
+#[non_exhaustive]
 pub enum DataKind {
     ///
     None = 0,

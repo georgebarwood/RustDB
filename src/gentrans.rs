@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// General Query.
 #[derive(Serialize, Deserialize, Debug)]
+#[non_exhaustive]
 pub struct GenQuery {
     /// The SQL query string.
     pub sql: Arc<String>,
@@ -22,6 +23,7 @@ pub struct GenQuery {
 }
 
 /// General Response.
+#[non_exhaustive]
 pub struct GenResponse {
     /// Error string.
     pub err: String,
@@ -34,6 +36,7 @@ pub struct GenResponse {
 }
 
 /// Query + Response, implements Transaction.
+#[non_exhaustive]
 pub struct GenTransaction {
     /// Transaction Query.
     pub qy: GenQuery,
@@ -44,7 +47,8 @@ pub struct GenTransaction {
 }
 
 /// Part of multipart data ( uploaded files ).
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[non_exhaustive]
 pub struct Part {
     /// Part name.
     pub name: String,

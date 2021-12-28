@@ -131,7 +131,7 @@ pub mod gentrans;
 ///
 /// Note : the [init::INITSQL] string can be generated using the "Script entire database" link in the example main menu,
 /// then using an editor to escape every `"` character as `\"`.
-/// Note also that some sys functions such as ClearTable, DropTable, DropIndex, DropSchema, DropColumn are required for functions such as ALTER TABLE, DROP TABLE etc.
+/// Note also that some sys functions such as ClearTable, DropTable, DropIndex, DropSchema, DropColumn are required for operations such as ALTER TABLE, DROP TABLE etc.
 pub mod init;
 
 /// Backing [Storage] for database. See also [AtomicFile].

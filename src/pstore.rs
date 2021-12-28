@@ -65,7 +65,7 @@ impl PageInfo {
 
 /// Central store of data.
 #[derive(Default)]
-struct Stash {
+pub struct Stash {
     /// Write time - number of writes.
     time: u64,
     /// Page number -> page info.
@@ -149,7 +149,8 @@ pub struct SharedPagedData {
     pub sp_size: usize,
     ///
     pub ep_size: usize,
-    stash: RwLock<Stash>,
+    ///
+    pub stash: RwLock<Stash>,
 }
 
 /// =1024. Size of an extension page.

@@ -1,6 +1,7 @@
 use crate::*;
 
 /// Instruction.
+#[non_exhaustive]
 pub enum Instruction {
     ///
     PushConst(Value),
@@ -46,6 +47,7 @@ pub enum Instruction {
 }
 
 /// Compiled Function.
+#[non_exhaustive]
 pub struct Function {
     /// Number of parameters.
     pub param_count: usize,
@@ -72,6 +74,7 @@ pub type CExpPtr<T> = Box<dyn CExp<T>>;
 
 /// Function that compiles a builtin function call ( see [Database]::new ).
 #[derive(Clone, Copy)]
+#[non_exhaustive]
 pub enum CompileFunc {
     ///
     Value(fn(&Block, &mut [Expr]) -> CExpPtr<Value>),
@@ -85,6 +88,7 @@ pub enum CompileFunc {
 pub type DataSource = Box<dyn Iterator<Item = (PagePtr, usize)>>;
 
 /// State for FOR loop (non-sorted case).
+#[non_exhaustive]
 pub struct ForState {
     ///
     pub data_source: DataSource,
@@ -96,6 +100,7 @@ impl std::fmt::Debug for ForState {
 }
 
 /// State for FOR loop (sorted case).
+#[non_exhaustive]
 pub struct ForSortState {
     ///
     pub ix: usize,
@@ -109,6 +114,7 @@ impl std::fmt::Debug for ForSortState {
 }
 
 /// Info for ForNext Inst.
+#[non_exhaustive]
 pub struct ForNextInfo {
     ///
     pub for_id: usize,
@@ -121,6 +127,7 @@ pub struct ForNextInfo {
 }
 
 /// Compiled Table Expression.
+#[non_exhaustive]
 pub enum CTableExpression {
     // Select( SelectExpression ),
     ///
@@ -146,6 +153,7 @@ impl CTableExpression {
 }
 
 /// Compiled Select Expression.
+#[non_exhaustive]
 pub struct CSelectExpression {
     ///
     pub colnames: Vec<String>,
@@ -164,6 +172,7 @@ pub struct CSelectExpression {
 }
 
 /// Database Operation
+#[non_exhaustive]
 pub enum DO {
     ///
     CreateTable(ColInfo),
@@ -196,6 +205,7 @@ pub enum DO {
 }
 
 /// Actions for altering columns of a table.
+#[non_exhaustive]
 pub enum AlterCol {
     ///
     Add(String, DataType),

@@ -2,6 +2,7 @@ use crate::*;
 use Instruction::*;
 
 /// Evaluation environment - stack of Values, references to DB and Transaction.
+#[non_exhaustive]
 pub struct EvalEnv<'r> {
     /// Stack of values, holds function parameters and local variables.
     pub stack: Vec<Value>,
@@ -12,7 +13,7 @@ pub struct EvalEnv<'r> {
     /// Pointer to Transaction.
     pub tr: &'r mut dyn Transaction,
     /// Function call depth, prevents stack overflow.
-    call_depth: usize,
+    pub call_depth: usize,
 }
 
 impl<'r> EvalEnv<'r> {

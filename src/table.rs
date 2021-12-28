@@ -360,6 +360,7 @@ impl<'d, 'i> WriteAccess<'d, 'i> {
 }
 
 /// Table name, column names/types and other calculated values for a table.
+#[non_exhaustive]
 pub struct ColInfo {
     /// Table name.
     pub name: ObjRef,
@@ -459,6 +460,7 @@ impl ColInfo {
 } // impl ColInfo
 
 /// Index information for creating an index.
+#[non_exhaustive]
 pub struct IndexInfo {
     ///
     pub tname: ObjRef,
@@ -470,6 +472,7 @@ pub struct IndexInfo {
 
 /// Row of Values, with type information.
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct Row {
     ///
     pub id: i64,
@@ -549,16 +552,11 @@ impl Record for Row {
 
 /// Row for inserting into an index.
 pub struct IndexRow {
-    ///
-    pub tinfo: Rc<ColInfo>,
-    ///
-    pub cols: Rc<Vec<usize>>,
-    ///
-    pub keys: Vec<Value>,
-    ///
-    pub codes: Vec<Code>,
-    ///
-    pub rowid: i64,
+    tinfo: Rc<ColInfo>,
+    cols: Rc<Vec<usize>>,
+    keys: Vec<Value>,
+    codes: Vec<Code>,
+    rowid: i64,
 }
 
 impl IndexRow {

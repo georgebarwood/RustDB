@@ -288,8 +288,7 @@ impl Page {
         match getbits!(self.data[off], 0, 2) {
             0 => LeftHigher,
             1 => Balanced,
-            2 => RightHigher,
-            _ => unreachable!(),
+            _ => RightHigher,
         }
     }
 
