@@ -1,9 +1,9 @@
 [package]
 name = "rustdb"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["George Barwood"]
 edition = "2021"
-description = "SQL database (in development)"
+description = "SQL database"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/georgebarwood/RustDB/"
 categories = ["database-implementations"]
