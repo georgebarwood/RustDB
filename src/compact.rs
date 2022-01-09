@@ -21,7 +21,7 @@ use std::collections::BTreeSet;
 ///
 /// Layout of starter page: 2 byte logical page size | array of 8 byte page numbers | user data | unused data.
 ///
-/// Note: for a free logical page, a special value is stored after the page size, then a link to the next free logical page.
+/// Note: for a free logical page a link to the next free logical page is stored after the page size, then a special value.
 ///
 /// Layout of extension page: 8 byte logical page number | user data | unused data.
 
