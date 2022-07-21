@@ -78,8 +78,8 @@ async fn main() {
     // console_subscriber::init();
 
     // Construct an AtomicFile. This ensures that updates to the database are "all or nothing".
-    let file = Box::new(SimpleFileStorage::new("..\\test.rustdb"));
-    let upd = Box::new(SimpleFileStorage::new("..\\test.upd"));
+    let file = Box::new(SimpleFileStorage::new("../test.rustdb"));
+    let upd = Box::new(SimpleFileStorage::new("../test.upd"));
     let stg = Box::new(AtomicFile::new(file, upd));
 
     // File for logging transactions.
