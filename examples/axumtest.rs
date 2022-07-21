@@ -7,7 +7,7 @@ static MEMALLOC: MiMalloc = MiMalloc;
 use axum::{
     extract::{Extension, Form, Multipart, Path, Query},
     routing::get,
-    AddExtensionLayer, Router,
+    Router,
 };
 use rustdb::{
     c_value, check_types, expr::ObjRef, standard_builtins, AccessPagedData, AtomicFile, Block,
@@ -153,7 +153,7 @@ async fn main() {
     let app = Router::new().route("/*key", get(h_get).post(h_post)).layer(
         ServiceBuilder::new()
             .layer(CookieManagerLayer::new())
-            .layer(AddExtensionLayer::new(ss)),
+            .layer(Extension(ss)),
     );
 
     // Run it with hyper on localhost:3000
