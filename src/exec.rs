@@ -495,7 +495,7 @@ impl<'r> EvalEnv<'r> {
 
     fn drop_table(&mut self, name: &ObjRef) {
         if let Some(t) = sys::get_table(&self.db, name) {
-            let sql = format!("EXEC sys.DropTable){})", t.id);
+            let sql = format!("EXEC sys.DropTable({})", t.id);
             self.db.run(&sql, self.tr);
             self.db.tables.borrow_mut().remove(name);
             self.db.function_reset.set(true);
