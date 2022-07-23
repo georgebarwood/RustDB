@@ -234,7 +234,7 @@ impl IntoResponse for ServerTrans {
         *res.status_mut() = StatusCode::from_u16(self.x.rp.status_code).unwrap();
 
         for (name, value) in &self.x.rp.headers {
-            res.headers_mut().insert(
+            res.headers_mut().append(
                 HeaderName::from_lowercase(name.as_bytes()).unwrap(),
                 HeaderValue::from_str(value).unwrap(),
             );
