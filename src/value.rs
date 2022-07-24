@@ -173,6 +173,11 @@ impl std::cmp::Ord for Value {
                     return x1.partial_cmp(x2).unwrap();
                 }
             }
+            Value::RcBinary(b1) => {
+                if let Value::RcBinary(b2) = other {
+                    return b1.cmp(b2);
+                }
+            }
             _ => {}
         }
         panic!()
