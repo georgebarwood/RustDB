@@ -77,6 +77,17 @@ impl SharedState {
 async fn main() {
     // console_subscriber::init();
 
+    let args: Vec<String> = std::env::args().collect();
+    let listen: String = if args.len() > 1 
+    { 
+      &args[1]
+    }
+    else
+    {
+      "0.0.0.0:80"
+    }.to_string();
+    println!("Listening on {}", listen);
+
     // Construct an AtomicFile. This ensures that updates to the database are "all or nothing".
     let file = Box::new(SimpleFileStorage::new("../test.rustdb"));
     let upd = Box::new(SimpleFileStorage::new("../test.upd"));
@@ -157,7 +168,7 @@ async fn main() {
     );
 
     // Run it with hyper on localhost:3000
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
+    axum::Server::bind(&listen.parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();
