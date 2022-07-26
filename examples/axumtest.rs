@@ -290,19 +290,30 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
                     msg,
                     (st - now) / 1000000
                 );
-                let mt = db.get_table(&ObjRef::new("email", "Msg")).unwrap();
-                let (pp, off) = mt.id_get(&db, msg).unwrap();
+                let t = db.get_table(&ObjRef::new("email", "Msg")).unwrap();
+                let (pp, off) = t.id_get(&db, msg).unwrap();
                 let p = &pp.borrow();
-                let a = mt.access(p, off);
+                let a = t.access(p, off);
                 let from = a.str(&db, 0);
                 let to = a.str(&db, 1);
                 let title = a.str(&db, 2);
                 let body = a.str(&db, 3);
+                let format = a.int(4);
+                let account = a.int(5) as u64;
+
+                let t = db.get_table(&ObjRef::new("email", "SmtpAccount")).unwrap();
+                let (pp, off) = t.id_get(&db, account).unwrap();
+                let p = &pp.borrow();
+                let a = t.access(p, off);
+                let server = a.str(&db, 0);
+                let username = a.str(&db, 1);
+                let password = a.str(&db, 2);
 
                 println!(
-                    "Email from={} to={} title={} body={}",
-                    from, to, title, body
+                    "Email from={} to={} title={} body={} format={} server={} username={} password={}",
+                    from, to, title, body, format, server, username, password
                 );
+                send_email( &from, &to, &title, &body, format, &server, &username, &password );
 
                 // Actual sending of email not yet implemented...
                 sent.push(msg);
@@ -313,6 +324,39 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
             email_sent(&state, msg).await;
         }
     }
+}
+
+fn send_email( from: &str, to: &str, title: &str, body: &str, _format: i64, server: &str, username: &str, password: &str )
+{
+use lettre::{
+    transport::smtp::{
+        authentication::{Credentials, Mechanism},
+        PoolConfig,
+    },
+    Message, SmtpTransport, Transport,
+};
+
+    let email = Message::builder()
+        .to(to.parse().unwrap())
+        .from(from.parse().unwrap())
+        .subject(title)
+        .body(String::from(body)).unwrap();
+
+    // Create TLS transport on port 587 with STARTTLS
+    let sender = SmtpTransport::starttls_relay(server).unwrap()
+        // Add credentials for authentication
+        .credentials(Credentials::new(
+            username.to_string(),
+            password.to_string(),
+        ))
+        // Configure expected authentication mechanism
+        .authentication(vec![Mechanism::Plain])
+        // Connection pool settings
+       .pool_config(PoolConfig::new().max_size(20))
+       .build();
+
+    let _result = sender.send(&email);
+    println!( "Email send result={:?}", _result );
 }
 
 async fn email_sent(state: &SharedState, msg: u64) {
