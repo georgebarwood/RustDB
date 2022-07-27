@@ -37,14 +37,14 @@ impl ServerTrans {
 /// Message to server thread, includes oneshot Sender for reply.
 struct ServerMessage {
     st: ServerTrans,
-    tx: oneshot::Sender<ServerTrans>,
+    reply: oneshot::Sender<ServerTrans>,
 }
 
 /// Extra transaction data.
 #[derive(Default)]
 struct TransExt {
     /// Signals there is new email to be sent.
-    email_tx: bool,
+    tx_email: bool,
 }
 
 impl TransExt {
@@ -66,8 +66,8 @@ struct SharedState {
 
 impl SharedState {
     async fn process(&self, st: ServerTrans) -> ServerTrans {
-        let (tx, rx) = oneshot::channel::<ServerTrans>();
-        let _err = self.tx.send(ServerMessage { st, tx }).await;
+        let (reply, rx) = oneshot::channel::<ServerTrans>();
+        let _err = self.tx.send(ServerMessage { st, reply }).await;
         rx.await.unwrap()
     }
 }
@@ -151,10 +151,9 @@ async fn main() {
             if updates > 0 {
                 println!("Pages updated={}", updates);
                 let ser = serde_json::to_string(&sm.st.x.qy).unwrap();
-                // println!("Serialised query={}", ser);
                 let _err = log_tx.send(ser);
             }
-            let _x = sm.tx.send(sm.st);
+            let _x = sm.reply.send(sm.st);
         }
     });
 
@@ -217,12 +216,13 @@ async fn h_post(
         st.x.qy.parts = map_parts(multipart).await;
     }
 
+    // Process the Server Transaction.
     let mut st = state.process(st).await;
 
     // Check if email needs sending.
     let ext = st.x.get_extension();
     if let Some(ext) = ext.downcast_ref::<TransExt>() {
-        if ext.email_tx {
+        if ext.tx_email {
             let _err = state.email_tx.send(()).await;
         }
     }
@@ -237,8 +237,8 @@ use axum::{
 
 impl IntoResponse for ServerTrans {
     fn into_response(self) -> Response<BoxBody> {
-        let mybody = boxed(Full::from(self.x.rp.output));
-        let mut res = Response::builder().body(mybody).unwrap();
+        let bf = boxed(Full::from(self.x.rp.output));
+        let mut res = Response::builder().body(bf).unwrap();
 
         *res.status_mut() = StatusCode::from_u16(self.x.rp.status_code).unwrap();
 
@@ -270,53 +270,34 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
             let apd = AccessPagedData::new_reader(state.spd.clone());
             let db = Database::new(apd, "", state.bmap.clone());
             let qt = db.get_table(&ObjRef::new("email", "Queue")).unwrap();
+            let mt = db.get_table(&ObjRef::new("email", "Msg")).unwrap();
+            let at = db.get_table(&ObjRef::new("email", "SmtpAccount")).unwrap();
 
-            let keys = Vec::new();
-            for (pp, off) in qt.scan_keys(&db, keys, 0) {
+            for (pp, off) in qt.scan(&db) {
                 let p = &pp.borrow();
                 let a = qt.access(p, off);
                 let msg = a.int(0) as u64;
-                let st = a.int(1);
 
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                    .unwrap();
-                let now = now.as_micros() as i64 + 62135596800000000; // Per date.Ticks
+                let (pp, off) = mt.id_get(&db, msg).unwrap();
+                let p = &pp.borrow();
+                let a = mt.access(p, off);
+                let from = a.str(&db, 0);
+                let to = a.str(&db, 1);
+                let title = a.str(&db, 2);
+                let body = a.str(&db, 3);
+                let format = a.int(4);
+                let account = a.int(5) as u64;
 
-                println!(
-                    "Queued email id ={} seconds till send={}",
-                    msg,
-                    (st - now) / 1000000
-                );
-                if st <= now {
-                    let t = db.get_table(&ObjRef::new("email", "Msg")).unwrap();
-                    let (pp, off) = t.id_get(&db, msg).unwrap();
-                    let p = &pp.borrow();
-                    let a = t.access(p, off);
-                    let from = a.str(&db, 0);
-                    let to = a.str(&db, 1);
-                    let title = a.str(&db, 2);
-                    let body = a.str(&db, 3);
-                    let format = a.int(4);
-                    let account = a.int(5) as u64;
+                let (pp, off) = at.id_get(&db, account).unwrap();
+                let p = &pp.borrow();
+                let a = at.access(p, off);
+                let server = a.str(&db, 0);
+                let username = a.str(&db, 1);
+                let password = a.str(&db, 2);
 
-                    let t = db.get_table(&ObjRef::new("email", "SmtpAccount")).unwrap();
-                    let (pp, off) = t.id_get(&db, account).unwrap();
-                    let p = &pp.borrow();
-                    let a = t.access(p, off);
-                    let server = a.str(&db, 0);
-                    let username = a.str(&db, 1);
-                    let password = a.str(&db, 2);
-
-                    println!(
-                      "Email from={} to={} title={} body={} format={} server={} username={} password={}",
-                      from, to, title, body, format, server, username, password
-                    );
-
-                    send_list.push((
-                        msg, from, to, title, body, format, server, username, password,
-                    ));
-                }
+                send_list.push((
+                    msg, from, to, title, body, format, server, username, password,
+                ));
             }
         }
         for (msg, from, to, title, body, format, server, username, password) in send_list {
@@ -324,7 +305,6 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
                 send_email(from, to, title, body, format, server, username, password)
             });
             let result = blocking_task.await.unwrap();
-            // println!( "send_email result={:?}", result );
             match result {
                 Ok(_) => email_sent(&state, msg).await,
                 Err(e) => {
@@ -344,6 +324,7 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
     }
 }
 
+/// Error enum for send_email
 #[derive(Debug)]
 enum EmailError {
     Address(lettre::address::AddressError),
@@ -399,7 +380,6 @@ fn send_email(
         .build();
 
     let _result = sender.send(&email)?;
-    // println!("Email send result={:?}", _result);
     Ok(())
 }
 
@@ -503,7 +483,7 @@ impl CExp<i64> for EmailTx {
     fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> i64 {
         let mut ext = ee.tr.get_extension();
         if let Some(mut ext) = ext.downcast_mut::<TransExt>() {
-            ext.email_tx = true;
+            ext.tx_email = true;
         }
         ee.tr.set_extension(ext);
         0
