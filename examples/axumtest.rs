@@ -164,7 +164,7 @@ async fn main() {
             .layer(Extension(ss)),
     );
 
-    // Run it with hyper on localhost:3000
+    // Run the axum app.
     axum::Server::bind(&listen.parse().unwrap())
         .serve(app.into_make_service())
         .await
@@ -313,6 +313,9 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
                         EmailError::Address(ae) => {
                             email_error(&state, msg, 0, ae.to_string()).await;
                         }
+                        EmailError::Lettre(le) => {
+                            email_error(&state, msg, 0, le.to_string()).await;
+                        }
                         EmailError::Send(se) => {
                             let retry = if se.is_transient() { 1 } else { 0 };
                             email_error(&state, msg, retry, se.to_string()).await;
@@ -328,12 +331,19 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
 #[derive(Debug)]
 enum EmailError {
     Address(lettre::address::AddressError),
+    Lettre(lettre::error::Error),
     Send(lettre::transport::smtp::Error),
 }
 
 impl From<lettre::address::AddressError> for EmailError {
     fn from(e: lettre::address::AddressError) -> Self {
         EmailError::Address(e)
+    }
+}
+
+impl From<lettre::error::Error> for EmailError {
+    fn from(e: lettre::error::Error) -> Self {
+        EmailError::Lettre(e)
     }
 }
 
@@ -365,12 +375,10 @@ fn send_email(
         .to(to.parse()?)
         .from(from.parse()?)
         .subject(title)
-        .body(String::from(body))
-        .unwrap();
+        .body(String::from(body))?;
 
     // Create TLS transport on port 587 with STARTTLS
-    let sender = SmtpTransport::starttls_relay(&server)
-        .unwrap()
+    let sender = SmtpTransport::starttls_relay(&server)?
         // Add credentials for authentication
         .credentials(Credentials::new(username.to_string(), password.to_string()))
         // Configure expected authentication mechanism
