@@ -78,14 +78,12 @@ async fn main() {
     // console_subscriber::init();
 
     let args: Vec<String> = std::env::args().collect();
-    let listen: String = if args.len() > 1 
-    { 
-      &args[1]
+    let listen: String = if args.len() > 1 {
+        &args[1]
+    } else {
+        "0.0.0.0:80"
     }
-    else
-    {
-      "0.0.0.0:80"
-    }.to_string();
+    .to_string();
     println!("Listening on {}", listen);
 
     // Construct an AtomicFile. This ensures that updates to the database are "all or nothing".
@@ -313,50 +311,60 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
                     "Email from={} to={} title={} body={} format={} server={} username={} password={}",
                     from, to, title, body, format, server, username, password
                 );
-                send_email( &from, &to, &title, &body, format, &server, &username, &password );
-
-                // Actual sending of email not yet implemented...
-                sent.push(msg);
+                sent.push((
+                    msg, from, to, title, body, format, server, username, password,
+                ));
             }
         }
-        for msg in sent {
+        for (msg, from, to, title, body, format, server, username, password) in sent {
+            let blocking_task = tokio::task::spawn_blocking(move || {
+              send_email(from, to, title, body, format, server, username, password);
+            });
+            blocking_task.await.unwrap();
             tokio::task::yield_now().await;
             email_sent(&state, msg).await;
         }
     }
 }
 
-fn send_email( from: &str, to: &str, title: &str, body: &str, _format: i64, server: &str, username: &str, password: &str )
-{
-use lettre::{
-    transport::smtp::{
-        authentication::{Credentials, Mechanism},
-        PoolConfig,
-    },
-    Message, SmtpTransport, Transport,
-};
+fn send_email(
+    from: String,
+    to: String,
+    title: String,
+    body: String,
+    _format: i64,
+    server: String,
+    username: String,
+    password: String,
+) {
+    use lettre::{
+        transport::smtp::{
+            authentication::{Credentials, Mechanism},
+            PoolConfig,
+        },
+        Message, SmtpTransport, Transport,
+    };
 
     let email = Message::builder()
         .to(to.parse().unwrap())
         .from(from.parse().unwrap())
         .subject(title)
-        .body(String::from(body)).unwrap();
+        .body(String::from(body))
+        .unwrap();
 
     // Create TLS transport on port 587 with STARTTLS
-    let sender = SmtpTransport::starttls_relay(server).unwrap()
+    let sender = SmtpTransport::starttls_relay(&server)
+        .unwrap()
         // Add credentials for authentication
-        .credentials(Credentials::new(
-            username.to_string(),
-            password.to_string(),
-        ))
+        .credentials(Credentials::new(username.to_string(), password.to_string()))
         // Configure expected authentication mechanism
         .authentication(vec![Mechanism::Plain])
         // Connection pool settings
-       .pool_config(PoolConfig::new().max_size(20))
-       .build();
+        .pool_config(PoolConfig::new().max_size(20))
+        .build();
 
     let _result = sender.send(&email);
-    println!( "Email send result={:?}", _result );
+    println!("Email send result={:?}", _result);
 }
 
 async fn email_sent(state: &SharedState, msg: u64) {
