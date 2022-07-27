@@ -358,7 +358,7 @@ fn send_email(
     to: String,
     title: String,
     body: String,
-    _format: i64,
+    format: i64,
     server: String,
     username: String,
     password: String,
@@ -368,14 +368,19 @@ fn send_email(
             authentication::{Credentials, Mechanism},
             PoolConfig,
         },
-        Message, SmtpTransport, Transport,
+        Message, SmtpTransport, Transport, message::SinglePart
     };
+
+    let body = match format {
+      1 => SinglePart::html(body),
+      _ => SinglePart::plain(body)
+    }; 
 
     let email = Message::builder()
         .to(to.parse()?)
         .from(from.parse()?)
         .subject(title)
-        .body(String::from(body))?;
+        .singlepart(body)?;
 
     // Create TLS transport on port 587 with STARTTLS
     let sender = SmtpTransport::starttls_relay(&server)?
