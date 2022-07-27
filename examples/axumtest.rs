@@ -264,7 +264,7 @@ fn log_loop(rx: std::sync::mpsc::Receiver<String>, mut logfile: fs::File) {
 // thread that sends emails
 async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
     loop {
-        let mut sent = Vec::new();
+        let mut send_list = Vec::new();
         {
             let _ = rx.recv().await;
             let apd = AccessPagedData::new_reader(state.spd.clone());
@@ -288,42 +288,77 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
                     msg,
                     (st - now) / 1000000
                 );
-                let t = db.get_table(&ObjRef::new("email", "Msg")).unwrap();
-                let (pp, off) = t.id_get(&db, msg).unwrap();
-                let p = &pp.borrow();
-                let a = t.access(p, off);
-                let from = a.str(&db, 0);
-                let to = a.str(&db, 1);
-                let title = a.str(&db, 2);
-                let body = a.str(&db, 3);
-                let format = a.int(4);
-                let account = a.int(5) as u64;
+                if st <= now {
+                    let t = db.get_table(&ObjRef::new("email", "Msg")).unwrap();
+                    let (pp, off) = t.id_get(&db, msg).unwrap();
+                    let p = &pp.borrow();
+                    let a = t.access(p, off);
+                    let from = a.str(&db, 0);
+                    let to = a.str(&db, 1);
+                    let title = a.str(&db, 2);
+                    let body = a.str(&db, 3);
+                    let format = a.int(4);
+                    let account = a.int(5) as u64;
 
-                let t = db.get_table(&ObjRef::new("email", "SmtpAccount")).unwrap();
-                let (pp, off) = t.id_get(&db, account).unwrap();
-                let p = &pp.borrow();
-                let a = t.access(p, off);
-                let server = a.str(&db, 0);
-                let username = a.str(&db, 1);
-                let password = a.str(&db, 2);
+                    let t = db.get_table(&ObjRef::new("email", "SmtpAccount")).unwrap();
+                    let (pp, off) = t.id_get(&db, account).unwrap();
+                    let p = &pp.borrow();
+                    let a = t.access(p, off);
+                    let server = a.str(&db, 0);
+                    let username = a.str(&db, 1);
+                    let password = a.str(&db, 2);
 
-                println!(
-                    "Email from={} to={} title={} body={} format={} server={} username={} password={}",
-                    from, to, title, body, format, server, username, password
-                );
-                sent.push((
-                    msg, from, to, title, body, format, server, username, password,
-                ));
+                    println!(
+                      "Email from={} to={} title={} body={} format={} server={} username={} password={}",
+                      from, to, title, body, format, server, username, password
+                    );
+
+                    send_list.push((
+                        msg, from, to, title, body, format, server, username, password,
+                    ));
+                }
             }
         }
-        for (msg, from, to, title, body, format, server, username, password) in sent {
+        for (msg, from, to, title, body, format, server, username, password) in send_list {
             let blocking_task = tokio::task::spawn_blocking(move || {
-              send_email(from, to, title, body, format, server, username, password);
+                send_email(from, to, title, body, format, server, username, password)
             });
-            blocking_task.await.unwrap();
-            tokio::task::yield_now().await;
-            email_sent(&state, msg).await;
+            let result = blocking_task.await.unwrap();
+            // println!( "send_email result={:?}", result );
+            match result {
+                Ok(_) => email_sent(&state, msg).await,
+                Err(e) => {
+                    /* Log the error : ToDo */
+                    match e {
+                        EmailError::Address(ae) => {
+                            email_error(&state, msg, 0, ae.to_string()).await;
+                        }
+                        EmailError::Send(se) => {
+                            let retry = if se.is_transient() { 1 } else { 0 };
+                            email_error(&state, msg, retry, se.to_string()).await;
+                        }
+                    }
+                }
+            }
         }
+    }
+}
+
+#[derive(Debug)]
+enum EmailError {
+    Address(lettre::address::AddressError),
+    Send(lettre::transport::smtp::Error),
+}
+
+impl From<lettre::address::AddressError> for EmailError {
+    fn from(e: lettre::address::AddressError) -> Self {
+        EmailError::Address(e)
+    }
+}
+
+impl From<lettre::transport::smtp::Error> for EmailError {
+    fn from(e: lettre::transport::smtp::Error) -> Self {
+        EmailError::Send(e)
     }
 }
 
@@ -336,7 +371,7 @@ fn send_email(
     server: String,
     username: String,
     password: String,
-) {
+) -> Result<(), EmailError> {
     use lettre::{
         transport::smtp::{
             authentication::{Credentials, Mechanism},
@@ -346,8 +381,8 @@ fn send_email(
     };
 
     let email = Message::builder()
-        .to(to.parse().unwrap())
-        .from(from.parse().unwrap())
+        .to(to.parse()?)
+        .from(from.parse()?)
         .subject(title)
         .body(String::from(body))
         .unwrap();
@@ -363,13 +398,21 @@ fn send_email(
         .pool_config(PoolConfig::new().max_size(20))
         .build();
 
-    let _result = sender.send(&email);
-    println!("Email send result={:?}", _result);
+    let _result = sender.send(&email)?;
+    // println!("Email send result={:?}", _result);
+    Ok(())
 }
 
 async fn email_sent(state: &SharedState, msg: u64) {
     let mut st = ServerTrans::new();
-    st.x.qy.sql = Arc::new("EXEC email.Sent(".to_string() + &msg.to_string() + ")");
+    st.x.qy.sql = Arc::new(format!("EXEC email.Sent({})", msg));
+    state.process(st).await;
+}
+
+async fn email_error(state: &SharedState, msg: u64, retry: i8, err: String) {
+    let mut st = ServerTrans::new();
+    let src = format!("EXEC email.LogSendError({},{},'{}')", msg, retry, err);
+    st.x.qy.sql = Arc::new(src);
     state.process(st).await;
 }
 
