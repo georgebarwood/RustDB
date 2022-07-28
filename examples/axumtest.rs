@@ -10,9 +10,9 @@ use axum::{
     Router,
 };
 use rustdb::{
-    c_value, check_types, expr::ObjRef, standard_builtins, AccessPagedData, AtomicFile, Block,
-    BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction,
-    Part, SharedPagedData, SimpleFileStorage, Transaction, Value, INITSQL,
+    c_int, c_value, check_types, expr::ObjRef, standard_builtins, AccessPagedData, AtomicFile,
+    Block, BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, Database, EvalEnv, Expr,
+    GenTransaction, Part, SharedPagedData, SimpleFileStorage, Transaction, Value, INITSQL,
 };
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
 use std::{fs, fs::OpenOptions, io::Write};
@@ -28,9 +28,11 @@ struct ServerTrans {
 
 impl ServerTrans {
     fn new() -> Self {
-        Self {
+        let mut result = Self {
             x: Box::new(GenTransaction::new()),
-        }
+        };
+        result.x.ext = TransExt::new();
+        result
     }
 }
 
@@ -45,6 +47,7 @@ struct ServerMessage {
 struct TransExt {
     /// Signals there is new email to be sent.
     tx_email: bool,
+    sleep: u64,
 }
 
 impl TransExt {
@@ -62,13 +65,27 @@ struct SharedState {
     /// Map of builtin SQL functions for Database.
     bmap: Arc<BuiltinMap>,
     email_tx: mpsc::Sender<()>,
+    sleep_tx: mpsc::Sender<u64>,
 }
 
 impl SharedState {
     async fn process(&self, st: ServerTrans) -> ServerTrans {
         let (reply, rx) = oneshot::channel::<ServerTrans>();
         let _err = self.tx.send(ServerMessage { st, reply }).await;
-        rx.await.unwrap()
+        let mut st = rx.await.unwrap();
+        // Check if email needs sending or sleep time has been specified.
+        let ext = st.x.get_extension();
+        if let Some(ext) = ext.downcast_ref::<TransExt>() 
+        {
+            if ext.sleep > 0 {
+                let _err = self.sleep_tx.send(ext.sleep).await;
+            }
+
+            if ext.tx_email {
+                let _err = self.email_tx.send(()).await;
+            }
+        }
+        st
     }
 }
 
@@ -109,6 +126,7 @@ async fn main() {
     let list = [
         ("ARGON", DataKind::Binary, CompileFunc::Value(c_argon)),
         ("EMAILTX", DataKind::Int, CompileFunc::Int(c_email_tx)),
+        ("SLEEP", DataKind::Int, CompileFunc::Int(c_sleep)),
     ];
     for (name, typ, cf) in list {
         bmap.insert(name.to_string(), (typ, cf));
@@ -122,6 +140,7 @@ async fn main() {
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
     let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
     let (email_tx, email_rx) = mpsc::channel::<()>(1);
+    let (sleep_tx, sleep_rx) = mpsc::channel::<u64>(1);
 
     // Construct shared state.
     let ss = Arc::new(SharedState {
@@ -129,16 +148,21 @@ async fn main() {
         spd,
         bmap: bmap.clone(),
         email_tx,
+        sleep_tx,
     });
 
-    // Start the logging thread (synchronous)
+    // Start the logging task (synchronous)
     thread::spawn(move || {
         log_loop(log_rx, logfile);
     });
 
-    // Start the email thread (asynchronous)
+    // Start the email task (asynchronous)
     let email_ss = ss.clone();
     tokio::spawn(async move { email_loop(email_rx, email_ss).await });
+
+    // Start the sleep task (asynchronous)
+    let sleep_ss = ss.clone();
+    tokio::spawn(async move { sleep_loop(sleep_rx, sleep_ss).await });
 
     // Start the server thread that updates the database (synchronous).
     thread::spawn(move || {
@@ -206,7 +230,6 @@ async fn h_post(
 ) -> ServerTrans {
     // Build the Server Transaction.
     let mut st = ServerTrans::new();
-    st.x.ext = TransExt::new();
     st.x.qy.path = path.0;
     st.x.qy.params = params.0;
     st.x.qy.cookies = map_cookies(cookies);
@@ -217,16 +240,7 @@ async fn h_post(
     }
 
     // Process the Server Transaction.
-    let mut st = state.process(st).await;
-
-    // Check if email needs sending.
-    let ext = st.x.get_extension();
-    if let Some(ext) = ext.downcast_ref::<TransExt>() {
-        if ext.tx_email {
-            let _err = state.email_tx.send(()).await;
-        }
-    }
-    st
+    state.process(st).await
 }
 
 use axum::{
@@ -261,7 +275,26 @@ fn log_loop(rx: std::sync::mpsc::Receiver<String>, mut logfile: fs::File) {
     }
 }
 
-// thread that sends emails
+// task for sleeping - calls timed.Run once sleep time has elapsed.
+async fn sleep_loop(mut rx: mpsc::Receiver<u64>, state: Arc<SharedState>) {
+    let mut sleep_ms = 5000;
+    loop {
+        let sleep = tokio::time::sleep(core::time::Duration::from_millis(sleep_ms));
+        tokio::pin!(sleep);
+
+        tokio::select! {
+            ms = rx.recv() => { sleep_ms = ms.unwrap(); }
+            _ = &mut sleep =>
+            {
+              let mut st = ServerTrans::new();
+              st.x.qy.sql = Arc::new("EXEC timed.Run()".to_string());
+              state.process(st).await;
+            }
+        }
+    }
+}
+
+// task that sends emails
 async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
     loop {
         let mut send_list = Vec::new();
@@ -364,17 +397,18 @@ fn send_email(
     password: String,
 ) -> Result<(), EmailError> {
     use lettre::{
+        message::SinglePart,
         transport::smtp::{
             authentication::{Credentials, Mechanism},
             PoolConfig,
         },
-        Message, SmtpTransport, Transport, message::SinglePart
+        Message, SmtpTransport, Transport,
     };
 
     let body = match format {
-      1 => SinglePart::html(body),
-      _ => SinglePart::plain(body)
-    }; 
+        1 => SinglePart::html(body),
+        _ => SinglePart::plain(body),
+    };
 
     let email = Message::builder()
         .to(to.parse()?)
@@ -481,6 +515,29 @@ impl CExp<Value> for Argon {
 
         let result = argon2i_simple(&pw, &salt).to_vec();
         Value::RcBinary(Rc::new(result))
+    }
+}
+
+/// Compile call to SLEEP.
+fn c_sleep(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[DataKind::Int]);
+    let to = c_int(b, &mut args[0]);
+    Box::new(Sleep { to })
+}
+
+/// Compiled call to SLEEP
+struct Sleep {
+    to: CExpPtr<i64>,
+}
+impl CExp<i64> for Sleep {
+    fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> i64 {
+        let to = self.to.eval(ee, d);
+        let mut ext = ee.tr.get_extension();
+        if let Some(mut ext) = ext.downcast_mut::<TransExt>() {
+            ext.sleep = if to < 0 { 0 } else { to as u64 };
+        }
+        ee.tr.set_extension(ext);
+        0
     }
 }
 
