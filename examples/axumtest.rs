@@ -21,7 +21,7 @@ use tokio::sync::{mpsc, oneshot};
 use tower::ServiceBuilder;
 use tower_cookies::{CookieManagerLayer, Cookies};
 
-/// Transaction to be sent to server thread, implements IntoResponse.
+/// Transaction to be sent to server task, implements IntoResponse.
 struct ServerTrans {
     x: Box<GenTransaction>,
 }
@@ -36,7 +36,7 @@ impl ServerTrans {
     }
 }
 
-/// Message to server thread, includes oneshot Sender for reply.
+/// Message to server task, includes oneshot Sender for reply.
 struct ServerMessage {
     st: ServerTrans,
     reply: oneshot::Sender<ServerTrans>,
@@ -47,6 +47,7 @@ struct ServerMessage {
 struct TransExt {
     /// Signals there is new email to be sent.
     tx_email: bool,
+    /// Signals time to sleep.
     sleep: u64,
 }
 
@@ -58,13 +59,15 @@ impl TransExt {
 
 /// State shared with handlers.
 struct SharedState {
-    /// Sender channel for sending queries to server thread.
+    /// Sender channel for sending queries to server task.
     tx: mpsc::Sender<ServerMessage>,
     /// Shared storage used for read-only queries.
     spd: Arc<SharedPagedData>,
     /// Map of builtin SQL functions for Database.
     bmap: Arc<BuiltinMap>,
+    /// Channel for notifying email loop that emails are in Quene ready to be sent.
     email_tx: mpsc::Sender<()>,
+    /// Channel for setting sleep time.
     sleep_tx: mpsc::Sender<u64>,
 }
 
@@ -75,8 +78,7 @@ impl SharedState {
         let mut st = rx.await.unwrap();
         // Check if email needs sending or sleep time has been specified.
         let ext = st.x.get_extension();
-        if let Some(ext) = ext.downcast_ref::<TransExt>() 
-        {
+        if let Some(ext) = ext.downcast_ref::<TransExt>() {
             if ext.sleep > 0 {
                 let _err = self.sleep_tx.send(ext.sleep).await;
             }
@@ -136,7 +138,7 @@ async fn main() {
     // Get write-access to database ( there will only be one of these ).
     let wapd = AccessPagedData::new_writer(spd.clone());
 
-    // Construct thread communication channels.
+    // Construct tasak communication channels.
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
     let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
     let (email_tx, email_rx) = mpsc::channel::<()>(1);
@@ -164,7 +166,7 @@ async fn main() {
     let sleep_ss = ss.clone();
     tokio::spawn(async move { sleep_loop(sleep_rx, sleep_ss).await });
 
-    // Start the server thread that updates the database (synchronous).
+    // Start the server task that updates the database (synchronous).
     thread::spawn(move || {
         let db = Database::new(wapd, INITSQL, bmap);
         loop {
@@ -238,7 +240,6 @@ async fn h_post(
     } else {
         st.x.qy.parts = map_parts(multipart).await;
     }
-
     // Process the Server Transaction.
     state.process(st).await
 }
@@ -266,7 +267,7 @@ impl IntoResponse for ServerTrans {
     }
 }
 
-/// thread that logs write transactions to a file.
+/// Task that logs write transactions to a file.
 fn log_loop(rx: std::sync::mpsc::Receiver<String>, mut logfile: fs::File) {
     loop {
         let logstr = rx.recv().unwrap();
@@ -275,16 +276,13 @@ fn log_loop(rx: std::sync::mpsc::Receiver<String>, mut logfile: fs::File) {
     }
 }
 
-// task for sleeping - calls timed.Run once sleep time has elapsed.
+/// task for sleeping - calls timed.Run once sleep time has elapsed.
 async fn sleep_loop(mut rx: mpsc::Receiver<u64>, state: Arc<SharedState>) {
     let mut sleep_ms = 5000;
     loop {
-        let sleep = tokio::time::sleep(core::time::Duration::from_millis(sleep_ms));
-        tokio::pin!(sleep);
-
         tokio::select! {
             ms = rx.recv() => { sleep_ms = ms.unwrap(); }
-            _ = &mut sleep =>
+            _ = tokio::time::sleep(core::time::Duration::from_millis(sleep_ms)) =>
             {
               let mut st = ServerTrans::new();
               st.x.qy.sql = Arc::new("EXEC timed.Run()".to_string());
@@ -294,7 +292,7 @@ async fn sleep_loop(mut rx: mpsc::Receiver<u64>, state: Arc<SharedState>) {
     }
 }
 
-// task that sends emails
+/// task that sends emails
 async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
     loop {
         let mut send_list = Vec::new();
@@ -386,6 +384,7 @@ impl From<lettre::transport::smtp::Error> for EmailError {
     }
 }
 
+/// Send an email using lettre.
 fn send_email(
     from: String,
     to: String,
@@ -534,7 +533,7 @@ impl CExp<i64> for Sleep {
         let to = self.to.eval(ee, d);
         let mut ext = ee.tr.get_extension();
         if let Some(mut ext) = ext.downcast_mut::<TransExt>() {
-            ext.sleep = if to < 0 { 0 } else { to as u64 };
+            ext.sleep = if to <= 0 { 1 } else { to as u64 };
         }
         ee.tr.set_extension(ext);
         0
