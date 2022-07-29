@@ -10,7 +10,7 @@ use axum::{
     Router,
 };
 use rustdb::{
-    c_int, c_value, check_types, expr::ObjRef, standard_builtins, AccessPagedData, AtomicFile,
+    c_int, c_value, check_types, standard_builtins, AccessPagedData, AtomicFile,
     Block, BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, Database, EvalEnv, Expr,
     GenTransaction, Part, SharedPagedData, SimpleFileStorage, Transaction, Value, INITSQL,
 };
@@ -59,16 +59,16 @@ impl TransExt {
 
 /// State shared with handlers.
 struct SharedState {
-    /// Sender channel for sending queries to server task.
-    tx: mpsc::Sender<ServerMessage>,
     /// Shared storage used for read-only queries.
     spd: Arc<SharedPagedData>,
     /// Map of builtin SQL functions for Database.
     bmap: Arc<BuiltinMap>,
-    /// Channel for notifying email loop that emails are in Quene ready to be sent.
-    email_tx: mpsc::Sender<()>,
-    /// Channel for setting sleep time.
-    sleep_tx: mpsc::Sender<u64>,
+    /// Sender channel for sending queries to server task.
+    tx: mpsc::Sender<ServerMessage>,
+    /// For notifying email loop that emails are in Queue ready to be sent.
+    email_tx: mpsc::UnboundedSender<()>,
+    /// For setting sleep time.
+    sleep_tx: mpsc::UnboundedSender<u64>,
 }
 
 impl SharedState {
@@ -80,11 +80,11 @@ impl SharedState {
         let ext = st.x.get_extension();
         if let Some(ext) = ext.downcast_ref::<TransExt>() {
             if ext.sleep > 0 {
-                let _err = self.sleep_tx.send(ext.sleep).await;
+                let _err = self.sleep_tx.send(ext.sleep);
             }
 
             if ext.tx_email {
-                let _err = self.email_tx.send(()).await;
+                let _err = self.email_tx.send(());
             }
         }
         st
@@ -138,17 +138,17 @@ async fn main() {
     // Get write-access to database ( there will only be one of these ).
     let wapd = AccessPagedData::new_writer(spd.clone());
 
-    // Construct tasak communication channels.
+    // Construct task communication channels.
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
     let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
-    let (email_tx, email_rx) = mpsc::channel::<()>(1);
-    let (sleep_tx, sleep_rx) = mpsc::channel::<u64>(1);
+    let (email_tx, email_rx) = mpsc::unbounded_channel::<()>();
+    let (sleep_tx, sleep_rx) = mpsc::unbounded_channel::<u64>();
 
     // Construct shared state.
     let ss = Arc::new(SharedState {
-        tx,
         spd,
         bmap: bmap.clone(),
+        tx,
         email_tx,
         sleep_tx,
     });
@@ -159,12 +159,12 @@ async fn main() {
     });
 
     // Start the email task (asynchronous)
-    let email_ss = ss.clone();
-    tokio::spawn(async move { email_loop(email_rx, email_ss).await });
+    let ssc = ss.clone();
+    tokio::spawn(async move { email_loop(email_rx, ssc).await });
 
     // Start the sleep task (asynchronous)
-    let sleep_ss = ss.clone();
-    tokio::spawn(async move { sleep_loop(sleep_rx, sleep_ss).await });
+    let ssc = ss.clone();
+    tokio::spawn(async move { sleep_loop(sleep_rx, ssc).await });
 
     // Start the server task that updates the database (synchronous).
     thread::spawn(move || {
@@ -277,7 +277,7 @@ fn log_loop(rx: std::sync::mpsc::Receiver<String>, mut logfile: fs::File) {
 }
 
 /// task for sleeping - calls timed.Run once sleep time has elapsed.
-async fn sleep_loop(mut rx: mpsc::Receiver<u64>, state: Arc<SharedState>) {
+async fn sleep_loop(mut rx: mpsc::UnboundedReceiver<u64>, state: Arc<SharedState>) {
     let mut sleep_ms = 5000;
     loop {
         tokio::select! {
@@ -293,16 +293,16 @@ async fn sleep_loop(mut rx: mpsc::Receiver<u64>, state: Arc<SharedState>) {
 }
 
 /// task that sends emails
-async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
+async fn email_loop(mut rx: mpsc::UnboundedReceiver<()>, state: Arc<SharedState>) {
     loop {
         let mut send_list = Vec::new();
         {
             let _ = rx.recv().await;
             let apd = AccessPagedData::new_reader(state.spd.clone());
             let db = Database::new(apd, "", state.bmap.clone());
-            let qt = db.get_table(&ObjRef::new("email", "Queue")).unwrap();
-            let mt = db.get_table(&ObjRef::new("email", "Msg")).unwrap();
-            let at = db.get_table(&ObjRef::new("email", "SmtpAccount")).unwrap();
+            let qt = db.table("email", "Queue");
+            let mt = db.table("email", "Msg");
+            let at = db.table("email", "SmtpAccount");
 
             for (pp, off) in qt.scan(&db) {
                 let p = &pp.borrow();
@@ -338,21 +338,18 @@ async fn email_loop(mut rx: mpsc::Receiver<()>, state: Arc<SharedState>) {
             let result = blocking_task.await.unwrap();
             match result {
                 Ok(_) => email_sent(&state, msg).await,
-                Err(e) => {
-                    /* Log the error : ToDo */
-                    match e {
-                        EmailError::Address(ae) => {
-                            email_error(&state, msg, 0, ae.to_string()).await;
-                        }
-                        EmailError::Lettre(le) => {
-                            email_error(&state, msg, 0, le.to_string()).await;
-                        }
-                        EmailError::Send(se) => {
-                            let retry = if se.is_transient() { 1 } else { 0 };
-                            email_error(&state, msg, retry, se.to_string()).await;
-                        }
+                Err(e) => match e {
+                    EmailError::Address(ae) => {
+                        email_error(&state, msg, 0, ae.to_string()).await;
                     }
-                }
+                    EmailError::Lettre(le) => {
+                        email_error(&state, msg, 0, le.to_string()).await;
+                    }
+                    EmailError::Send(se) => {
+                        let retry = if se.is_transient() { 1 } else { 0 };
+                        email_error(&state, msg, retry, se.to_string()).await;
+                    }
+                },
             }
         }
     }
