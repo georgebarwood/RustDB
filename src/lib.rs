@@ -490,6 +490,11 @@ GO
         sys::get_table(self, name)
     }
 
+    #[cfg(feature = "max")]
+    pub fn table(self: &DB, schema: &str, name: &str ) -> Rc<Table> {
+        self.get_table( &ObjRef::new(schema,name) ).unwrap()
+    }
+
     /// Get the named function.
     fn get_function(self: &DB, name: &ObjRef) -> Option<Rc<Function>> {
         if let Some(f) = self.functions.borrow().get(name) {
