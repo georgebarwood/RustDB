@@ -10,9 +10,9 @@ use axum::{
     Router,
 };
 use rustdb::{
-    c_int, c_value, check_types, standard_builtins, AccessPagedData, AtomicFile,
-    Block, BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, Database, EvalEnv, Expr,
-    GenTransaction, Part, SharedPagedData, SimpleFileStorage, Transaction, Value, INITSQL,
+    c_int, c_value, check_types, standard_builtins, AccessPagedData, AtomicFile, Block, BuiltinMap,
+    CExp, CExpPtr, CompileFunc, DataKind, Database, EvalEnv, Expr, GenTransaction, Part,
+    SharedPagedData, SimpleFileStorage, Transaction, Value, INITSQL,
 };
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
 use std::{fs, fs::OpenOptions, io::Write};
@@ -122,7 +122,7 @@ async fn main() {
     let spd = Arc::new(SharedPagedData::new(stg));
 
     // Construct map of "builtin" functions that can be called in SQL code.
-    // Include the Argon hash function as well as the standard functions.
+    // Include extra functions ARGON, EMAILTX and SLEEP as well as the standard functions.
     let mut bmap = BuiltinMap::default();
     standard_builtins(&mut bmap);
     let list = [
@@ -278,11 +278,11 @@ fn log_loop(rx: std::sync::mpsc::Receiver<String>, mut logfile: fs::File) {
 
 /// task for sleeping - calls timed.Run once sleep time has elapsed.
 async fn sleep_loop(mut rx: mpsc::UnboundedReceiver<u64>, state: Arc<SharedState>) {
-    let mut sleep_ms = 5000;
+    let mut sleep_micro = 5000000;
     loop {
         tokio::select! {
-            ms = rx.recv() => { sleep_ms = ms.unwrap(); }
-            _ = tokio::time::sleep(core::time::Duration::from_millis(sleep_ms)) =>
+            ns = rx.recv() => { sleep_micro = ns.unwrap(); }
+            _ = tokio::time::sleep(core::time::Duration::from_micros(sleep_micro)) =>
             {
               let mut st = ServerTrans::new();
               st.x.qy.sql = Arc::new("EXEC timed.Run()".to_string());
@@ -309,26 +309,28 @@ async fn email_loop(mut rx: mpsc::UnboundedReceiver<()>, state: Arc<SharedState>
                 let a = qt.access(p, off);
                 let msg = a.int(0) as u64;
 
-                let (pp, off) = mt.id_get(&db, msg).unwrap();
-                let p = &pp.borrow();
-                let a = mt.access(p, off);
-                let from = a.str(&db, 0);
-                let to = a.str(&db, 1);
-                let title = a.str(&db, 2);
-                let body = a.str(&db, 3);
-                let format = a.int(4);
-                let account = a.int(5) as u64;
+                if let Some((pp, off)) = mt.id_get(&db, msg) {
+                    let p = &pp.borrow();
+                    let a = mt.access(p, off);
+                    let from = a.str(&db, 0);
+                    let to = a.str(&db, 1);
+                    let title = a.str(&db, 2);
+                    let body = a.str(&db, 3);
+                    let format = a.int(4);
+                    let account = a.int(5) as u64;
 
-                let (pp, off) = at.id_get(&db, account).unwrap();
-                let p = &pp.borrow();
-                let a = at.access(p, off);
-                let server = a.str(&db, 0);
-                let username = a.str(&db, 1);
-                let password = a.str(&db, 2);
+                    if let Some((pp, off)) = at.id_get(&db, account) {
+                        let p = &pp.borrow();
+                        let a = at.access(p, off);
+                        let server = a.str(&db, 0);
+                        let username = a.str(&db, 1);
+                        let password = a.str(&db, 2);
 
-                send_list.push((
-                    msg, from, to, title, body, format, server, username, password,
-                ));
+                        send_list.push((
+                            msg, from, to, title, body, format, server, username, password,
+                        ));
+                    }
+                }
             }
         }
         for (msg, from, to, title, body, format, server, username, password) in send_list {
