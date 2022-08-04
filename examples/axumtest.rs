@@ -15,7 +15,6 @@ use rustdb::{
     SharedPagedData, SimpleFileStorage, Transaction, Value, INITSQL,
 };
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
-use std::{fs, fs::OpenOptions, io::Write};
 
 use tokio::sync::{mpsc, oneshot};
 use tower::ServiceBuilder;
@@ -110,13 +109,6 @@ async fn main() {
     let upd = Box::new(SimpleFileStorage::new("../test.upd"));
     let stg = Box::new(AtomicFile::new(file, upd));
 
-    // File for logging transactions.
-    let logfile = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open("../test.logfile")
-        .unwrap();
-
     // SharedPagedData allows for one writer and multiple readers.
     // Note that readers never have to wait, they get a "virtual" read-only copy of the database.
     let spd = Arc::new(SharedPagedData::new(stg));
@@ -140,7 +132,6 @@ async fn main() {
 
     // Construct task communication channels.
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
-    let (log_tx, log_rx) = std::sync::mpsc::channel::<String>();
     let (email_tx, email_rx) = mpsc::unbounded_channel::<()>();
     let (sleep_tx, sleep_rx) = mpsc::unbounded_channel::<u64>();
 
@@ -151,11 +142,6 @@ async fn main() {
         tx,
         email_tx,
         sleep_tx,
-    });
-
-    // Start the logging task (synchronous)
-    thread::spawn(move || {
-        log_loop(log_rx, logfile);
     });
 
     // Start the email task (asynchronous)
@@ -173,11 +159,10 @@ async fn main() {
             let mut sm = rx.blocking_recv().unwrap();
             let sql = sm.st.x.qy.sql.clone();
             db.run_timed(&sql, &mut *sm.st.x);
-            let updates = db.save();
+            let ser = serde_json::to_string(&sm.st.x.qy).unwrap();
+            let updates = db.save_and_log( ser );
             if updates > 0 {
                 println!("Pages updated={}", updates);
-                let ser = serde_json::to_string(&sm.st.x.qy).unwrap();
-                let _err = log_tx.send(ser);
             }
             let _x = sm.reply.send(sm.st);
         }
@@ -264,15 +249,6 @@ impl IntoResponse for ServerTrans {
             );
         }
         res
-    }
-}
-
-/// Task that logs write transactions to a file.
-fn log_loop(rx: std::sync::mpsc::Receiver<String>, mut logfile: fs::File) {
-    loop {
-        let logstr = rx.recv().unwrap();
-        let _err = logfile.write_all(logstr.as_bytes());
-        let _err = logfile.write_all(b"\r\n");
     }
 }
 
@@ -417,7 +393,7 @@ fn send_email(
     // Create TLS transport on port 587 with STARTTLS
     let sender = SmtpTransport::starttls_relay(&server)?
         // Add credentials for authentication
-        .credentials(Credentials::new(username.to_string(), password.to_string()))
+        .credentials(Credentials::new(username, password))
         // Configure expected authentication mechanism
         .authentication(vec![Mechanism::Plain])
         // Connection pool settings
