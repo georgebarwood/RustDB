@@ -34,6 +34,11 @@ impl SortedFile {
         }
     }
 
+    pub fn changed(&self) -> bool {
+        let dp = &*self.dirty_pages.borrow();
+        dp.is_empty()
+    }
+
     /// Save changes to underlying storage.
     pub fn save(&self, db: &DB, op: SaveOp) {
         if op == SaveOp::RollBack {

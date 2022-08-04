@@ -65,6 +65,11 @@ impl ByteStorage {
         result
     }
 
+    /// Check whether there are changes to underlying file.
+    pub fn changed(&self) -> bool {
+        self.file.changed()
+    }
+
     /// Save to underlying file.
     pub fn save(&self, db: &DB, op: SaveOp) {
         self.file.save(db, op);

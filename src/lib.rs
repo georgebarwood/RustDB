@@ -436,15 +436,51 @@ GO
         }
     }
 
+    pub fn changed(self: &DB) -> bool {
+        for bs in &self.bs {
+            if bs.changed() {
+                return true;
+            }
+        }
+        let tm = &*self.tables.borrow();
+        for t in tm.values() {
+            if t.id_gen_dirty.get() {
+                return true;
+            }
+            if t.file.changed() {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Save updated tables to underlying file ( or rollback if there was an error ).
     /// Returns the number of logical pages that were updated.
     pub fn save(self: &DB) -> usize {
+        self.save_and_log(String::new())
+    }
+
+    /// Save updated tables to underlying file ( or rollback if there was an error ).
+    /// Log json string if non-empty.
+    /// Returns the number of logical pages that were updated.
+    pub fn save_and_log(self: &DB, json: String) -> usize {
         let op = if self.err.get() {
             self.err.set(false);
             SaveOp::RollBack
         } else {
             SaveOp::Save
         };
+
+        if op == SaveOp::Save && self.changed() && !json.is_empty() {
+            // Append json to log.Transaction table
+            if let Some(t) = self.get_table(&ObjRef::new("log", "Transaction")) {
+                let mut row = t.row();
+                row.id = t.alloc_id() as i64;
+                row.values[0] = Value::String(Rc::new(json));
+                t.insert(self, &mut row);
+            }
+        }
+
         for bs in &self.bs {
             bs.save(self, op);
         }
@@ -491,8 +527,8 @@ GO
     }
 
     #[cfg(feature = "max")]
-    pub fn table(self: &DB, schema: &str, name: &str ) -> Rc<Table> {
-        self.get_table( &ObjRef::new(schema,name) ).unwrap()
+    pub fn table(self: &DB, schema: &str, name: &str) -> Rc<Table> {
+        self.get_table(&ObjRef::new(schema, name)).unwrap()
     }
 
     /// Get the named function.

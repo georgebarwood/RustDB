@@ -366,7 +366,7 @@ fn c_builtin_float(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<f64> {
 pub fn c_update(
     b: &mut Block,
     tname: &ObjRef,
-    assigns: &mut Vec<(String, Expr)>,
+    assigns: &mut [(String, Expr)],
     wher: &mut Option<Expr>,
 ) {
     let t = c_table(b, tname);
