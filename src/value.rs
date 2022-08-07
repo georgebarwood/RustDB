@@ -1,10 +1,11 @@
 use crate::*;
 
 #[derive(Clone, Copy)]
+/// Code for variable length values.
 pub struct Code {
-    ///
+    /// ByteStorage Id.
     pub id: u64,
-    ///
+    /// Fragment type.
     pub ft: usize,
 }
 

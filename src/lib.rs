@@ -57,6 +57,8 @@
 //!
 //! The hierarchy overall: Table -> SortedFile -> PagedData -> CompactFile -> AtomicFile -> Storage.
 
+#![deny(missing_docs)]
+
 pub use crate::{
     atomfile::AtomicFile,
     builtin::standard_builtins,
@@ -278,6 +280,8 @@ pub struct Database {
     pub lastid: Cell<i64>,
     /// Has there been an error since last save?
     pub err: Cell<bool>,
+    /// Is the database new?
+    pub is_new: bool,
 
     /// Storage of variable length data.
     bs: Vec<ByteStorage>,
@@ -291,10 +295,9 @@ const SYS_ROOT_LAST: u64 = 15;
 
 impl Database {
     /// Construct a new DB, based on the specified file.
-    /// initsql is used to initialised a new database.
+    /// initsql is used to initialise a new database.
     /// builtins specifies the functions callable in SQL code such as SUBSTR, REPLACE etc.
     pub fn new(file: AccessPagedData, initsql: &str, builtins: Arc<BuiltinMap>) -> DB {
-        let mut dq = DummyTransaction {};
         let is_new = file.is_new();
         let mut tb = TableBuilder::new();
         let sys_schema = tb.nt("Schema", &[("Name", STRING)]);
@@ -344,6 +347,7 @@ impl Database {
             function_reset: Cell::new(false),
             lastid: Cell::new(0),
             err: Cell::new(false),
+            is_new,
             page_size_max,
         });
 
@@ -360,6 +364,7 @@ impl Database {
             }
             db.publish_table(t.clone());
         }
+
         if is_new {
             // The creation order has to match the order above ( so root values are as predicted ).
             let sysinit = "
@@ -380,10 +385,12 @@ CREATE INDEX ByIndex ON sys.IndexColumn(Index)
 CREATE INDEX BySchemaName ON sys.Function(Schema,Name)
 GO
 ";
+            let mut dq = DummyTransaction {};
             db.run(sysinit, &mut dq);
             db.run(initsql, &mut dq);
             db.save();
         }
+
         db
     }
 
@@ -436,6 +443,7 @@ GO
         }
     }
 
+    /// Test whether there are unsaved changes.
     pub fn changed(self: &DB) -> bool {
         for bs in &self.bs {
             if bs.changed() {
@@ -457,13 +465,13 @@ GO
     /// Save updated tables to underlying file ( or rollback if there was an error ).
     /// Returns the number of logical pages that were updated.
     pub fn save(self: &DB) -> usize {
-        self.save_and_log(String::new())
+        self.save_and_log(None)
     }
 
     /// Save updated tables to underlying file ( or rollback if there was an error ).
-    /// Log json string if non-empty.
+    /// If there are updates, log json string if non-empty.
     /// Returns the number of logical pages that were updated.
-    pub fn save_and_log(self: &DB, json: String) -> usize {
+    pub fn save_and_log(self: &DB, data: Option<Value>) -> usize {
         let op = if self.err.get() {
             self.err.set(false);
             SaveOp::RollBack
@@ -471,13 +479,15 @@ GO
             SaveOp::Save
         };
 
-        if op == SaveOp::Save && self.changed() && !json.is_empty() {
-            // Append json to log.Transaction table
-            if let Some(t) = self.get_table(&ObjRef::new("log", "Transaction")) {
-                let mut row = t.row();
-                row.id = t.alloc_id() as i64;
-                row.values[0] = Value::String(Rc::new(json));
-                t.insert(self, &mut row);
+        if let Some(data) = data {
+            if op == SaveOp::Save && self.changed() {
+                // Append data to log.Transaction table
+                if let Some(t) = self.get_table(&ObjRef::new("log", "Transaction")) {
+                    let mut row = t.row();
+                    row.id = t.alloc_id() as i64;
+                    row.values[0] = data;
+                    t.insert(self, &mut row);
+                }
             }
         }
 
@@ -527,6 +537,7 @@ GO
     }
 
     #[cfg(feature = "max")]
+    /// Get the named table ( panics if it does not exist ).
     pub fn table(self: &DB, schema: &str, name: &str) -> Rc<Table> {
         self.get_table(&ObjRef::new(schema, name)).unwrap()
     }

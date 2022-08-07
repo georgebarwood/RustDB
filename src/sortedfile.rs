@@ -34,9 +34,10 @@ impl SortedFile {
         }
     }
 
+    /// Test whether file has unsaved changes.
     pub fn changed(&self) -> bool {
         let dp = &*self.dirty_pages.borrow();
-        dp.is_empty()
+        !dp.is_empty()
     }
 
     /// Save changes to underlying storage.
