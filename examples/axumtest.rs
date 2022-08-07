@@ -16,19 +16,21 @@ use rustdb::{
 };
 use std::{collections::BTreeMap, rc::Rc, sync::Arc, thread};
 
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tower::ServiceBuilder;
 use tower_cookies::{CookieManagerLayer, Cookies};
 
 /// Transaction to be sent to server task, implements IntoResponse.
 struct ServerTrans {
     x: Box<GenTransaction>,
+    log: bool,
 }
 
 impl ServerTrans {
     fn new() -> Self {
         let mut result = Self {
             x: Box::new(GenTransaction::new()),
+            log: true,
         };
         result.x.ext = TransExt::new();
         result
@@ -48,6 +50,8 @@ struct TransExt {
     tx_email: bool,
     /// Signals time to sleep.
     sleep: u64,
+    /// Signals wait for new transaction to be logged
+    trans_wait: bool,
 }
 
 impl TransExt {
@@ -68,6 +72,12 @@ struct SharedState {
     email_tx: mpsc::UnboundedSender<()>,
     /// For setting sleep time.
     sleep_tx: mpsc::UnboundedSender<u64>,
+    /// For notifying tasks waiting for transaction.
+    wait_tx: broadcast::Sender<()>,
+
+    server_type: String,
+    replicate_source: String,
+    replicate_credentials: String,
 }
 
 impl SharedState {
@@ -75,15 +85,14 @@ impl SharedState {
         let (reply, rx) = oneshot::channel::<ServerTrans>();
         let _err = self.tx.send(ServerMessage { st, reply }).await;
         let mut st = rx.await.unwrap();
-        // Check if email needs sending or sleep time has been specified.
+        // Check if email needs sending or sleep time has been specified, etc.
         let ext = st.x.get_extension();
         if let Some(ext) = ext.downcast_ref::<TransExt>() {
             if ext.sleep > 0 {
-                let _err = self.sleep_tx.send(ext.sleep);
+                let _ = self.sleep_tx.send(ext.sleep);
             }
-
             if ext.tx_email {
-                let _err = self.email_tx.send(());
+                let _ = self.email_tx.send(());
             }
         }
         st
@@ -104,6 +113,13 @@ async fn main() {
     .to_string();
     println!("Listening on {}", listen);
 
+    let server_type: String = if args.len() > 2 { &args[2] } else { "master" }.to_string();
+    let slave = server_type == "slave";
+
+    let replicate_source: String = if args.len() > 3 { &args[3] } else { "" }.to_string();
+
+    let replicate_credentials: String = if args.len() > 4 { &args[4] } else { "" }.to_string();
+
     // Construct an AtomicFile. This ensures that updates to the database are "all or nothing".
     let file = Box::new(SimpleFileStorage::new("../test.rustdb"));
     let upd = Box::new(SimpleFileStorage::new("../test.upd"));
@@ -121,6 +137,7 @@ async fn main() {
         ("ARGON", DataKind::Binary, CompileFunc::Value(c_argon)),
         ("EMAILTX", DataKind::Int, CompileFunc::Int(c_email_tx)),
         ("SLEEP", DataKind::Int, CompileFunc::Int(c_sleep)),
+        ("TRANSWAIT", DataKind::Int, CompileFunc::Int(c_trans_wait)),
     ];
     for (name, typ, cf) in list {
         bmap.insert(name.to_string(), (typ, cf));
@@ -134,6 +151,8 @@ async fn main() {
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(1);
     let (email_tx, email_rx) = mpsc::unbounded_channel::<()>();
     let (sleep_tx, sleep_rx) = mpsc::unbounded_channel::<u64>();
+    let (sync_tx, sync_rx) = oneshot::channel::<bool>();
+    let (wait_tx, _wait_rx) = broadcast::channel::<()>(16);
 
     // Construct shared state.
     let ss = Arc::new(SharedState {
@@ -142,26 +161,51 @@ async fn main() {
         tx,
         email_tx,
         sleep_tx,
+        wait_tx,
+        server_type,
+        replicate_source,
+        replicate_credentials,
     });
 
-    // Start the email task (asynchronous)
-    let ssc = ss.clone();
-    tokio::spawn(async move { email_loop(email_rx, ssc).await });
+    if slave {
+        // Start the sync task.
+        let ssc = ss.clone();
+        tokio::spawn(async move { sync_loop(sync_rx, ssc).await });
+    } else {
+        // Start the email task.
+        let ssc = ss.clone();
+        tokio::spawn(async move { email_loop(email_rx, ssc).await });
 
-    // Start the sleep task (asynchronous)
-    let ssc = ss.clone();
-    tokio::spawn(async move { sleep_loop(sleep_rx, ssc).await });
+        // Start the sleep task.
+        let ssc = ss.clone();
+        tokio::spawn(async move { sleep_loop(sleep_rx, ssc).await });
+    }
 
-    // Start the server task that updates the database (synchronous).
+    let ssc = ss.clone();
+    // Start the server task that updates the database.
     thread::spawn(move || {
-        let db = Database::new(wapd, INITSQL, bmap);
+        let ss = ssc;
+        let db = if slave {
+            Database::new(wapd, "", bmap)
+        } else {
+            Database::new(wapd, INITSQL, bmap)
+        };
+        if slave {
+            let _ = sync_tx.send(db.is_new);
+        }
         loop {
             let mut sm = rx.blocking_recv().unwrap();
             let sql = sm.st.x.qy.sql.clone();
             db.run_timed(&sql, &mut *sm.st.x);
-            let ser = serde_json::to_string(&sm.st.x.qy).unwrap();
-            let updates = db.save_and_log( ser );
+
+            let updates = if sm.st.log {
+                let ser = serde_json::to_string(&sm.st.x.qy).unwrap();
+                db.save_and_log(ser)
+            } else {
+                db.save()
+            };
             if updates > 0 {
+                let _ = ss.wait_tx.send(());
                 println!("Pages updated={}", updates);
             }
             let _x = sm.reply.send(sm.st);
@@ -195,15 +239,26 @@ async fn h_get(
     st.x.qy.params = params.0;
     st.x.qy.cookies = map_cookies(cookies);
 
-    let blocking_task = tokio::task::spawn_blocking(move || {
+    let mut wait_rx = state.wait_tx.subscribe();
+
+    let mut st = tokio::task::spawn_blocking(move || {
         // GET requests should be read-only.
         let apd = AccessPagedData::new_reader(state.spd.clone());
         let db = Database::new(apd, "", state.bmap.clone());
         let sql = st.x.qy.sql.clone();
         db.run_timed(&sql, &mut *st.x);
         st
-    });
-    blocking_task.await.unwrap()
+    })
+    .await
+    .unwrap();
+
+    let ext = st.x.get_extension();
+    if let Some(ext) = ext.downcast_ref::<TransExt>() {
+        if ext.trans_wait {
+            let _ = wait_rx.recv().await;
+        }
+    }
+    st
 }
 
 /// Handler for http POST requests.
@@ -252,6 +307,79 @@ impl IntoResponse for ServerTrans {
     }
 }
 
+/// task for syncing with master database
+async fn sync_loop(rx: oneshot::Receiver<bool>, state: Arc<SharedState>) {
+    let db_is_new = rx.await.unwrap();
+    println!(
+        "sync_loop got db_is_new={} source={} credentials={}",
+        db_is_new, state.replicate_source, state.replicate_credentials
+    );
+
+    if db_is_new {
+        // Note: using ScriptAll is problematic as table and field ids are not preserved.
+        // Also table allocators are not preserved ( problem if last record in table has beeen deleted ).
+        let sql = rget(state.clone(), "/ScriptAll").await;
+        let mut st = ServerTrans::new();
+        st.log = false;
+        st.x.qy.sql = Arc::new(sql);
+        state.process(st).await;
+        println!("New slave database initialised");
+    }
+    loop {
+        let url = {
+            let apd = AccessPagedData::new_reader(state.spd.clone());
+            let db = Database::new(apd, "", state.bmap.clone());
+            let lt = db.table("log", "Transaction");
+            let tid = lt.id_gen.get();
+            println!("sync_loop next transaction id={}", tid);
+            format!("/GetTransaction?k={}", tid)
+        };
+        let json = rget(state.clone(), &url).await;
+
+        if json != "" {
+            println!("json={}", json);
+            let mut st = ServerTrans::new();
+            st.x.qy = serde_json::from_str(&json).unwrap();
+            state.process(st).await;
+        }
+    }
+}
+
+async fn rget(state: Arc<SharedState>, query: &str) -> String {
+    loop {
+        use reqwest::header;
+        let headers = header::HeaderMap::new();
+
+        // get a client builder
+        let client = reqwest::Client::builder()
+            .default_headers(headers)
+            .build()
+            .unwrap();
+
+        match client
+            .get(state.replicate_source.clone() + query)
+            .header("Cookie", state.replicate_credentials.clone())
+            .send()
+            .await
+        {
+            Ok(response) => {
+                if response.status().is_success() {
+                    if let Ok(result) = response.text().await {
+                        return result;
+                    }
+                } else {
+                    println!("Failed Response status {}", response.status());
+                }
+            }
+            Err(e) => {
+                println!("Send error {}", e);
+            }
+        }
+        // Wait before retrying.
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+    }
+}
+
 /// task for sleeping - calls timed.Run once sleep time has elapsed.
 async fn sleep_loop(mut rx: mpsc::UnboundedReceiver<u64>, state: Arc<SharedState>) {
     let mut sleep_micro = 5000000;
@@ -260,9 +388,12 @@ async fn sleep_loop(mut rx: mpsc::UnboundedReceiver<u64>, state: Arc<SharedState
             ns = rx.recv() => { sleep_micro = ns.unwrap(); }
             _ = tokio::time::sleep(core::time::Duration::from_micros(sleep_micro)) =>
             {
-              let mut st = ServerTrans::new();
-              st.x.qy.sql = Arc::new("EXEC timed.Run()".to_string());
-              state.process(st).await;
+              if state.server_type == "master"
+              {
+                let mut st = ServerTrans::new();
+                st.x.qy.sql = Arc::new("EXEC timed.Run()".to_string());
+                state.process(st).await;
+              }
             }
         }
     }
@@ -528,6 +659,25 @@ impl CExp<i64> for EmailTx {
         let mut ext = ee.tr.get_extension();
         if let Some(mut ext) = ext.downcast_mut::<TransExt>() {
             ext.tx_email = true;
+        }
+        ee.tr.set_extension(ext);
+        0
+    }
+}
+
+/// Compile call to TRANSWAIT.
+fn c_trans_wait(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[]);
+    Box::new(TransWait {})
+}
+
+/// Compiled call to TRANSWAIT
+struct TransWait {}
+impl CExp<i64> for TransWait {
+    fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> i64 {
+        let mut ext = ee.tr.get_extension();
+        if let Some(mut ext) = ext.downcast_mut::<TransExt>() {
+            ext.trans_wait = true;
         }
         ee.tr.set_extension(ext);
         0
