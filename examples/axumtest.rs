@@ -199,8 +199,9 @@ async fn main() {
             db.run_timed(&sql, &mut *sm.st.x);
 
             let updates = if sm.st.log {
-                let ser = serde_json::to_string(&sm.st.x.qy).unwrap();
-                db.save_and_log(ser)
+                // let ser = serde_json::to_string(&sm.st.x.qy).unwrap();
+                let ser = rmp_serde::to_vec(&sm.st.x.qy).unwrap();
+                db.save_and_log(Some(Value::RcBinary(Rc::new(ser))))
             } else {
                 db.save()
             };
@@ -318,12 +319,15 @@ async fn sync_loop(rx: oneshot::Receiver<bool>, state: Arc<SharedState>) {
     if db_is_new {
         // Note: using ScriptAll is problematic as table and field ids are not preserved.
         // Also table allocators are not preserved ( problem if last record in table has beeen deleted ).
+        /*
         let sql = rget(state.clone(), "/ScriptAll").await;
         let mut st = ServerTrans::new();
         st.log = false;
         st.x.qy.sql = Arc::new(sql);
         state.process(st).await;
         println!("New slave database initialised");
+        */
+        panic!("Currently initial slave database must be copied from master by e.g. FTP.");
     }
     loop {
         let url = {
@@ -334,18 +338,19 @@ async fn sync_loop(rx: oneshot::Receiver<bool>, state: Arc<SharedState>) {
             println!("sync_loop next transaction id={}", tid);
             format!("/GetTransaction?k={}", tid)
         };
-        let json = rget(state.clone(), &url).await;
+        let ser = rget(state.clone(), &url).await;
 
-        if json != "" {
-            println!("json={}", json);
+        if !ser.is_empty() {
             let mut st = ServerTrans::new();
-            st.x.qy = serde_json::from_str(&json).unwrap();
+            // st.x.qy = serde_json::from_str(&json).unwrap();
+            st.x.qy = rmp_serde::from_slice(&ser).unwrap();
+            println!( "sync_loop qy={:?}", st.x.qy );
             state.process(st).await;
         }
     }
 }
 
-async fn rget(state: Arc<SharedState>, query: &str) -> String {
+async fn rget(state: Arc<SharedState>, query: &str) -> Vec<u8> {
     loop {
         use reqwest::header;
         let headers = header::HeaderMap::new();
@@ -364,8 +369,8 @@ async fn rget(state: Arc<SharedState>, query: &str) -> String {
         {
             Ok(response) => {
                 if response.status().is_success() {
-                    if let Ok(result) = response.text().await {
-                        return result;
+                    if let Ok(result) = response.bytes().await {
+                        return result.to_vec();
                     }
                 } else {
                     println!("Failed Response status {}", response.status());
