@@ -90,6 +90,8 @@ impl SharedState {
         if let Some(ext) = ext.downcast_ref::<TransExt>() {
             if ext.sleep > 0 {
                 let _ = self.sleep_tx.send(ext.sleep);
+                // To ensure tasks waiting on transaction proceed after some time.
+                let _ = self.wait_tx.send(());
             }
             if ext.tx_email {
                 let _ = self.email_tx.send(());
@@ -335,17 +337,20 @@ async fn sync_loop(rx: oneshot::Receiver<bool>, state: Arc<SharedState>) {
             let db = Database::new(apd, "", state.bmap.clone());
             let lt = db.table("log", "Transaction");
             let tid = lt.id_gen.get();
-            println!("sync_loop next transaction id={}", tid);
             format!("/GetTransaction?k={}", tid)
         };
+
+        println!("sync_loop calling rget url ={}", url);
         let ser = rget(state.clone(), &url).await;
+        println!("sync_loop returnd from rget");
 
         if !ser.is_empty() {
             let mut st = ServerTrans::new();
             // st.x.qy = serde_json::from_str(&json).unwrap();
             st.x.qy = rmp_serde::from_slice(&ser).unwrap();
-            println!( "sync_loop qy={:?}", st.x.qy );
+            println!("sync_loop qy={:?}", st.x.qy);
             state.process(st).await;
+            println!("sync_loop finished query");
         }
     }
 }
