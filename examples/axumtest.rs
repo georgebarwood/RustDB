@@ -90,8 +90,6 @@ impl SharedState {
         if let Some(ext) = ext.downcast_ref::<TransExt>() {
             if ext.sleep > 0 {
                 let _ = self.sleep_tx.send(ext.sleep);
-                // To ensure tasks waiting on transaction proceed after some time.
-                let _ = self.wait_tx.send(());
             }
             if ext.tx_email {
                 let _ = self.email_tx.send(());
@@ -201,7 +199,6 @@ async fn main() {
             db.run_timed(&sql, &mut *sm.st.x);
 
             let updates = if sm.st.log {
-                // let ser = serde_json::to_string(&sm.st.x.qy).unwrap();
                 let ser = rmp_serde::to_vec(&sm.st.x.qy).unwrap();
                 db.save_and_log(Some(Value::RcBinary(Rc::new(ser))))
             } else {
@@ -258,7 +255,10 @@ async fn h_get(
     let ext = st.x.get_extension();
     if let Some(ext) = ext.downcast_ref::<TransExt>() {
         if ext.trans_wait {
-            let _ = wait_rx.recv().await;
+            tokio::select! {
+               _ = wait_rx.recv() => {}
+               _ = tokio::time::sleep(core::time::Duration::from_millis(600000)) => {}
+            }
         }
     }
     st
@@ -346,7 +346,6 @@ async fn sync_loop(rx: oneshot::Receiver<bool>, state: Arc<SharedState>) {
 
         if !ser.is_empty() {
             let mut st = ServerTrans::new();
-            // st.x.qy = serde_json::from_str(&json).unwrap();
             st.x.qy = rmp_serde::from_slice(&ser).unwrap();
             println!("sync_loop qy={:?}", st.x.qy);
             state.process(st).await;
