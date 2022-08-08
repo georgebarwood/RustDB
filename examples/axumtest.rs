@@ -257,7 +257,7 @@ async fn h_get(
         if ext.trans_wait {
             tokio::select! {
                _ = wait_rx.recv() => {}
-               _ = tokio::time::sleep(core::time::Duration::from_millis(600000)) => {}
+               _ = tokio::time::sleep(core::time::Duration::from_secs(600)) => {}
             }
         }
     }
@@ -354,6 +354,25 @@ async fn sync_loop(rx: oneshot::Receiver<bool>, state: Arc<SharedState>) {
     }
 }
 
+async fn sleep_real(secs: u64) {
+    let start = std::time::SystemTime::now();
+    let mut n = 0;
+    while n < secs {
+        tokio::time::sleep(core::time::Duration::from_secs(10)).await;
+        match start.elapsed() {
+            Ok(e) => {
+                if e >= core::time::Duration::from_secs(secs) {
+                    return;
+                }
+            }
+            Err(_) => {
+                return;
+            }
+        }
+        n += 10;
+    }
+}
+
 async fn rget(state: Arc<SharedState>, query: &str) -> Vec<u8> {
     loop {
         use reqwest::header;
@@ -365,27 +384,38 @@ async fn rget(state: Arc<SharedState>, query: &str) -> Vec<u8> {
             .build()
             .unwrap();
 
-        match client
+        let req = client
             .get(state.replicate_source.clone() + query)
-            .header("Cookie", state.replicate_credentials.clone())
-            .send()
-            .await
-        {
-            Ok(response) => {
-                if response.status().is_success() {
-                    if let Ok(result) = response.bytes().await {
-                        return result.to_vec();
-                    }
-                } else {
-                    println!("Failed Response status {}", response.status());
-                }
+            .header("Cookie", state.replicate_credentials.clone());
+
+        tokio::select! {
+            _ = sleep_real(800) =>
+            {
+              println!( "rget timed out after 800 seconds" );
             }
-            Err(e) => {
-                println!("Send error {}", e);
+            response = req.send() =>
+            {
+                match response
+                {
+                  Ok(r) => {
+                     if r.status().is_success()
+                     {
+                         match r.bytes().await {
+                            Ok(b) => { return b.to_vec(); }
+                            Err(e) => { println!("reg failed to get bytes err={}", e ); }
+                         }
+                     } else {
+                         println!("rget bad response status = {}", r.status());
+                     }
+                  }
+                  Err(e) => {
+                    println!("rget send error {}", e);
+                  }
+               }
             }
         }
-        // Wait before retrying.
-        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        // Wait before retrying after error/timeout.
+        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
     }
 }
 
