@@ -74,8 +74,8 @@ struct SharedState {
     sleep_tx: mpsc::UnboundedSender<u64>,
     /// For notifying tasks waiting for transaction.
     wait_tx: broadcast::Sender<()>,
-
-    server_type: String,
+    /// Server is master ( not replicating another database ).
+    is_master: bool,
     replicate_source: String,
     replicate_credentials: String,
 }
@@ -85,14 +85,16 @@ impl SharedState {
         let (reply, rx) = oneshot::channel::<ServerTrans>();
         let _err = self.tx.send(ServerMessage { st, reply }).await;
         let mut st = rx.await.unwrap();
-        // Check if email needs sending or sleep time has been specified, etc.
-        let ext = st.x.get_extension();
-        if let Some(ext) = ext.downcast_ref::<TransExt>() {
-            if ext.sleep > 0 {
-                let _ = self.sleep_tx.send(ext.sleep);
-            }
-            if ext.tx_email {
-                let _ = self.email_tx.send(());
+        if self.is_master {
+            // Check if email needs sending or sleep time has been specified, etc.
+            let ext = st.x.get_extension();
+            if let Some(ext) = ext.downcast_ref::<TransExt>() {
+                if ext.sleep > 0 {
+                    let _ = self.sleep_tx.send(ext.sleep);
+                }
+                if ext.tx_email {
+                    let _ = self.email_tx.send(());
+                }
             }
         }
         st
@@ -113,8 +115,11 @@ async fn main() {
     .to_string();
     println!("Listening on {}", listen);
 
-    let server_type: String = if args.len() > 2 { &args[2] } else { "master" }.to_string();
-    let slave = server_type == "slave";
+    let is_master: bool = if args.len() > 2 {
+        args[2] == "master"
+    } else {
+        true
+    };
 
     let replicate_source: String = if args.len() > 3 { &args[3] } else { "" }.to_string();
 
@@ -162,16 +167,16 @@ async fn main() {
         email_tx,
         sleep_tx,
         wait_tx,
-        server_type,
+        is_master,
         replicate_source,
         replicate_credentials,
     });
 
-    if slave {
-        // Start the sync task.
-        let ssc = ss.clone();
-        tokio::spawn(async move { sync_loop(sync_rx, ssc).await });
-    } else {
+    // Start the sync task.
+    let ssc = ss.clone();
+    tokio::spawn(async move { sync_loop(sync_rx, ssc).await });
+
+    if is_master {
         // Start the email task.
         let ssc = ss.clone();
         tokio::spawn(async move { email_loop(email_rx, ssc).await });
@@ -185,12 +190,8 @@ async fn main() {
     // Start the server task that updates the database.
     thread::spawn(move || {
         let ss = ssc;
-        let db = if slave {
-            Database::new(wapd, "", bmap)
-        } else {
-            Database::new(wapd, INITSQL, bmap)
-        };
-        if slave {
+        let db = Database::new(wapd, if is_master { INITSQL } else { "" }, bmap);
+        if !is_master {
             let _ = sync_tx.send(db.is_new);
         }
         loop {
@@ -275,6 +276,10 @@ async fn h_post(
 ) -> ServerTrans {
     // Build the Server Transaction.
     let mut st = ServerTrans::new();
+    if !state.is_master {
+        st.x.rp.status_code = 421; // Misdirected Request
+        return st;
+    }
     st.x.qy.path = path.0;
     st.x.qy.params = params.0;
     st.x.qy.cookies = map_cookies(cookies);
@@ -356,8 +361,7 @@ async fn sync_loop(rx: oneshot::Receiver<bool>, state: Arc<SharedState>) {
 
 async fn sleep_real(secs: u64) {
     let start = std::time::SystemTime::now();
-    let mut n = 0;
-    while n < secs {
+    for _ in (0..secs).step_by(10) {
         tokio::time::sleep(core::time::Duration::from_secs(10)).await;
         match start.elapsed() {
             Ok(e) => {
@@ -369,30 +373,22 @@ async fn sleep_real(secs: u64) {
                 return;
             }
         }
-        n += 10;
     }
 }
 
 async fn rget(state: Arc<SharedState>, query: &str) -> Vec<u8> {
+    // get a client builder
+    let client = reqwest::Client::builder()
+        .default_headers(reqwest::header::HeaderMap::new())
+        .build()
+        .unwrap();
     loop {
-        use reqwest::header;
-        let headers = header::HeaderMap::new();
-
-        // get a client builder
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .build()
-            .unwrap();
-
+        let mut retry_delay = true;
         let req = client
             .get(state.replicate_source.clone() + query)
             .header("Cookie", state.replicate_credentials.clone());
 
         tokio::select! {
-            _ = sleep_real(800) =>
-            {
-              println!( "rget timed out after 800 seconds" );
-            }
             response = req.send() =>
             {
                 match response
@@ -402,7 +398,7 @@ async fn rget(state: Arc<SharedState>, query: &str) -> Vec<u8> {
                      {
                          match r.bytes().await {
                             Ok(b) => { return b.to_vec(); }
-                            Err(e) => { println!("reg failed to get bytes err={}", e ); }
+                            Err(e) => { println!("rget failed to get bytes err={}", e ); }
                          }
                      } else {
                          println!("rget bad response status = {}", r.status());
@@ -413,9 +409,16 @@ async fn rget(state: Arc<SharedState>, query: &str) -> Vec<u8> {
                   }
                }
             }
+            _ = sleep_real(800) =>
+            {
+              println!( "rget timed out after 800 seconds" );
+              retry_delay = false;
+            }
         }
-        // Wait before retrying after error/timeout.
-        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        if retry_delay {
+            // Wait before retrying after error/timeout.
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        }
     }
 }
 
@@ -427,7 +430,7 @@ async fn sleep_loop(mut rx: mpsc::UnboundedReceiver<u64>, state: Arc<SharedState
             ns = rx.recv() => { sleep_micro = ns.unwrap(); }
             _ = tokio::time::sleep(core::time::Duration::from_micros(sleep_micro)) =>
             {
-              if state.server_type == "master"
+              if state.is_master
               {
                 let mut st = ServerTrans::new();
                 st.x.qy.sql = Arc::new("EXEC timed.Run()".to_string());
