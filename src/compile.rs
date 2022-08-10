@@ -569,6 +569,10 @@ pub fn c_call(b: &Block, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value>
         let ce = c_value(b, e);
         pv.push(ce);
     }
+    if fp.return_type == NONE
+    {
+        panic!("function with no RETURN type cannot be used in expression");
+    }
     b.check_types(&fp, &pk);
     Box::new(cexp::Call { fp, pv })
 }
