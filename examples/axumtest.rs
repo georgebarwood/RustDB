@@ -330,17 +330,13 @@ async fn sync_loop(rx: oneshot::Receiver<bool>, state: Arc<SharedState>) {
     );
 
     if db_is_new {
-        // Note: using ScriptAll is problematic as table and field ids are not preserved.
-        // Also table allocators are not preserved ( problem if last record in table has beeen deleted ).
-        /*
-        let sql = rget(state.clone(), "/ScriptAll").await;
+        let sql = rget(state.clone(), "/ScriptExact").await;
+        let sql = std::str::from_utf8(&sql).unwrap().to_string();
         let mut st = ServerTrans::new();
         st.log = false;
         st.x.qy.sql = Arc::new(sql);
         state.process(st).await;
         println!("New slave database initialised");
-        */
-        panic!("Currently initial slave database must be copied from master by e.g. FTP.");
     }
     loop {
         let url = {
