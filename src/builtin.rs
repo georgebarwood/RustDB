@@ -41,6 +41,7 @@ pub fn standard_builtins(map: &mut BuiltinMap) {
             CompileFunc::Value(c_exception),
         ),
         ("LASTID", DataKind::Int, CompileFunc::Int(c_lastid)),
+        ("ALLOCPAGE", DataKind::Int, CompileFunc::Int(c_allocpage)),
         #[cfg(feature = "pack")]
         ("REPACKFILE", DataKind::Int, CompileFunc::Int(c_repackfile)),
         #[cfg(feature = "verify")]
@@ -126,6 +127,18 @@ struct LastId {}
 impl CExp<i64> for LastId {
     fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> i64 {
         ee.db.lastid.get()
+    }
+}
+/////////////////////////////
+/// Compile call to ALLOCPAGE.
+fn c_allocpage(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[]);
+    Box::new(AllocPage {})
+}
+struct AllocPage {}
+impl CExp<i64> for AllocPage {
+    fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> i64 {
+        ee.db.alloc_page() as i64
     }
 }
 /////////////////////////////
