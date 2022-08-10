@@ -143,6 +143,12 @@ async fn main() {
         ("EMAILTX", DataKind::Int, CompileFunc::Int(c_email_tx)),
         ("SLEEP", DataKind::Int, CompileFunc::Int(c_sleep)),
         ("TRANSWAIT", DataKind::Int, CompileFunc::Int(c_trans_wait)),
+        ("BINPACK", DataKind::Binary, CompileFunc::Value(c_binpack)),
+        (
+            "BINUNPACK",
+            DataKind::Binary,
+            CompileFunc::Value(c_binunpack),
+        ),
     ];
     for (name, typ, cf) in list {
         bmap.insert(name.to_string(), (typ, cf));
@@ -723,5 +729,50 @@ impl CExp<i64> for TransWait {
         }
         ee.tr.set_extension(ext);
         0
+    }
+}
+
+/// Compile call to BINPACK.
+fn c_binpack(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
+    check_types(b, args, &[DataKind::Binary]);
+    let bytes = c_value(b, &mut args[0]);
+    Box::new(Binpack { bytes })
+}
+
+/// Compiled call to BINPACK.
+struct Binpack {
+    bytes: CExpPtr<Value>,
+}
+impl CExp<Value> for Binpack {
+    fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
+        if let Value::RcBinary(data) = self.bytes.eval(ee, d) {
+            let mut comp = flate3::Compressor::new();
+            let cb: Vec<u8> = comp.deflate(&data);
+            Value::RcBinary(Rc::new(cb))
+        } else {
+            panic!();
+        }
+    }
+}
+
+/// Compile call to BINUNPACK.
+fn c_binunpack(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
+    check_types(b, args, &[DataKind::Binary]);
+    let bytes = c_value(b, &mut args[0]);
+    Box::new(Binunpack { bytes })
+}
+
+/// Compiled call to BINUNPACK.
+struct Binunpack {
+    bytes: CExpPtr<Value>,
+}
+impl CExp<Value> for Binunpack {
+    fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
+        if let Value::RcBinary(data) = self.bytes.eval(ee, d) {
+            let ucb: Vec<u8> = flate3::inflate(&data);
+            Value::RcBinary(Rc::new(ucb))
+        } else {
+            panic!();
+        }
     }
 }
