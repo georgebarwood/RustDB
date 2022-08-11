@@ -42,7 +42,7 @@ pub struct GenTransaction {
     pub qy: GenQuery,
     /// Transaction Response.
     pub rp: GenResponse,
-    /// Transacation extension data.
+    /// Transaction extension data.
     pub ext: Box<dyn Any + Send + Sync>,
 }
 
