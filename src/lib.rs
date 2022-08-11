@@ -4,12 +4,10 @@
 //! Instead it has high performance SET .. FROM ... and FOR .. FROM statements to access database tables,
 //! generally using an INDEX.
 //!
-//! The complete language manual is available at run-time via the pre-configured (but optional) [init::INITSQL]
-//! database initialisation string, which also includes many functions which illustrate how the language works,
-//! including generic table browsing/editing, date and other functions.
-//!
 //! Read-only transactions run immediately and concurrently on a virtual read-only copy of the database, and cannot be blocked.
 //! Write transactions run sequentially (and should typically execute in around 100 micro-seconds). The [Storage] trait allows a variety of underlying storage, including [SimpleFileStorage], [MemFile] and [AtomicFile].
+//! 
+//! Transactions that modify the database can be logged, which allows for database replication. 
 
 //!# Interface
 //!
@@ -21,13 +19,12 @@
 //! It is also possible to access the table data directly, see email_loop in example program.   
 //!
 //!# Example
-//! [See here](https://github.com/georgebarwood/RustDB/blob/main/examples/axumtest.rs) for an example program -
-//! an Axum-based webserver.
+//! [See here](https://github.com/georgebarwood/rustdb-axum-example/blob/main/src/main.rs) for an example program -
+//! an Axum-based webserver, with timed jobs, password hashing, data compression, email transmission and database replication.  
 //!
 //!# Features
 //!
 //! This crate supports the following cargo features:
-//! - `init` : enables init module ( sample database initialisation string ).
 //! - `gentrans` : enables gentrans module ( sample implementation of [Transaction] ).
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
 //! - `max` : maximal interface, including internal modules.
@@ -65,9 +62,6 @@ pub use crate::{
     pstore::{AccessPagedData, SharedPagedData},
     stg::{MemFile, SimpleFileStorage, Storage},
 };
-
-#[cfg(feature = "init")]
-pub use crate::init::INITSQL;
 
 #[cfg(feature = "gentrans")]
 pub use crate::gentrans::{GenTransaction, Part};
@@ -469,7 +463,7 @@ GO
     }
 
     /// Save updated tables to underlying file ( or rollback if there was an error ).
-    /// If there are updates, log json string if non-empty.
+    /// If there are updates, log data in Transaction table (for database replication).
     /// Returns the number of logical pages that were updated.
     pub fn save_and_log(self: &DB, data: Option<Value>) -> usize {
         let op = if self.err.get() {
