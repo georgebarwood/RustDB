@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "2.0.1"
+version = "2.0.2"
 authors = ["George Barwood"]
 edition = "2021"
 description = "SQL database"
@@ -34,4 +34,7 @@ serde = { version = "1.0.131", features = ["derive","rc"] }
 
 #console-subscriber = { path = "../console-main/console-subscriber" }
 #axum-debug = "0.2.0"
+
+[dev-dependencies]
+rand = "0.8.4"
 
