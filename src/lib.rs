@@ -20,7 +20,8 @@
 //!
 //!# Example
 //! [See here](https://github.com/georgebarwood/rustdb-axum-example/blob/main/src/main.rs) for an example program -
-//! an Axum-based webserver, with timed jobs, password hashing, data compression, email transmission and database replication.  
+//! an Axum-based webserver, with timed jobs, password hashing, data compression, email transmission and database replication.
+//! Also has a Manual for the SQL-like language, user interface for database browsing/editing etc. 
 //!
 //!# Features
 //!
@@ -73,7 +74,7 @@ pub use crate::{
     exec::EvalEnv,
     expr::{Block, DataKind, Expr},
     run::{CExp, CExpPtr, CompileFunc},
-    value::Value,
+    value::Value, expr::ObjRef,
 };
 #[cfg(not(feature = "builtin"))]
 use crate::{
@@ -439,6 +440,7 @@ GO
 
     /// Test whether there are unsaved changes.
     pub fn changed(self: &DB) -> bool {
+        if self.err.get() { return false; }
         for bs in &self.bs {
             if bs.changed() {
                 return true;
@@ -459,32 +461,12 @@ GO
     /// Save updated tables to underlying file ( or rollback if there was an error ).
     /// Returns the number of logical pages that were updated.
     pub fn save(self: &DB) -> usize {
-        self.save_and_log(None)
-    }
-
-    /// Save updated tables to underlying file ( or rollback if there was an error ).
-    /// If there are updates, log data in Transaction table (for database replication).
-    /// Returns the number of logical pages that were updated.
-    pub fn save_and_log(self: &DB, data: Option<Value>) -> usize {
         let op = if self.err.get() {
             self.err.set(false);
             SaveOp::RollBack
         } else {
             SaveOp::Save
         };
-
-        if let Some(data) = data {
-            if op == SaveOp::Save && self.changed() {
-                // Append data to log.Transaction table
-                if let Some(t) = self.get_table(&ObjRef::new("log", "Transaction")) {
-                    let mut row = t.row();
-                    row.id = t.alloc_id() as i64;
-                    row.values[0] = data;
-                    t.insert(self, &mut row);
-                }
-            }
-        }
-
         for bs in &self.bs {
             bs.save(self, op);
         }
