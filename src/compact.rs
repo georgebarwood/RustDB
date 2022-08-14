@@ -217,6 +217,7 @@ impl CompactFile {
     /// Allocate logical page number. Pages are numbered 0,1,2...
     pub fn alloc_page(&mut self) -> u64 {
         if let Some(&p) = self.lp_free.iter().next() {
+            self.lp_free.remove(&p);
             p
         } else {
             self.lp_alloc_dirty = true;
