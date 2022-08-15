@@ -75,35 +75,38 @@ pub struct Stash {
     /// Time -> set of page numbers.
     updates: BTreeMap<u64, HashSet<u64>>,
     /// Number of times cache has been used since it was cleared.
-    pub cache_used: usize ,
-    /// Cache is cleared when this limit is reached.
+    pub cache_used: usize,
+    /// Cache is cleared when this limit is reached (number of transactions).
     pub cache_limit: usize,
+    /// Cache is cleared when memory reaches this limit (unix only).
+    pub cache_mem_limit: usize,
 }
 
 impl Stash {
-
     /// Construct new Stash with specified clear limit.
-    fn new(limit: usize) -> Self
-    {
-       let mut result = Self::default();
-       result.cache_limit = limit;
-       result
+    fn new(limit: usize, mem_limit: usize) -> Self {
+        let mut s = Self::default();
+        s.cache_limit = limit;
+        s.cache_mem_limit = mem_limit;
+        s
     }
 
     /// Clear cached data ( to reduce memory usage ).
-    pub fn clear_cache(&mut self)
-    {
-       let mut total = 0;
-       for (_pnum,pinfo) in &self.pages
-       {
-          let mut pinfo = pinfo.lock().unwrap();
-          if let Some(d) = &pinfo.current
-          {
-            total += d.len() as u64;
-            pinfo.current = None;
-          }
-       } 
-       if total > 0 { println!("clear_cache total={total}"); }
+    pub fn clear_cache(&mut self, doit: bool) -> usize {
+        let mut total = 0;
+        for (_pnum, pinfo) in &self.pages {
+            let mut pinfo = pinfo.lock().unwrap();
+            if let Some(d) = &pinfo.current {
+                total += d.len();
+                if doit {
+                    pinfo.current = None;
+                }
+            }
+        }
+        if doit && total > 0 {
+            println!("clear_cache total={total}");
+        }
+        total
     }
 
     /// Set the value of the specified page for the current time.
@@ -168,14 +171,15 @@ impl Stash {
             }
         }
 
-        if self.readers.len() == 0 && self.updates.len() == 0 && self.cache_used >= self.cache_limit
+        if (self.readers.len() == 0 && self.updates.len() == 0
+            || self.cache_used >= 2 * self.cache_limit)
+            && self.cache_used >= self.cache_limit
+            && self.clear_cache(false) >= self.cache_mem_limit
         {
-           self.cache_used = 0;
-           self.clear_cache();
-        }
-        else
-        {
-           self.cache_used += 1;
+            self.cache_used = 0;
+            self.clear_cache(true);
+        } else {
+            self.cache_used += 1;
         }
     }
 }
@@ -207,7 +211,7 @@ impl SharedPagedData {
         let sp_size = file.sp_size;
         let ep_size = file.ep_size;
         Self {
-            stash: RwLock::new(Stash::new(10)),
+            stash: RwLock::new(Stash::new(10, 120000)),
             file: RwLock::new(file),
             sp_size,
             ep_size,
@@ -221,11 +225,9 @@ impl SharedPagedData {
     }
 
     /// Free cached pages.
-    pub fn clear_cache(&self)
-    {
-       self.stash.write().unwrap().clear_cache();
+    pub fn clear_cache(&self, doit: bool) -> usize {
+        self.stash.write().unwrap().clear_cache(doit)
     }
-
 }
 
 /// Access to shared paged data.

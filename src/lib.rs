@@ -6,8 +6,8 @@
 //!
 //! Read-only transactions run immediately and concurrently on a virtual read-only copy of the database, and cannot be blocked.
 //! Write transactions run sequentially (and should typically execute in around 100 micro-seconds). The [Storage] trait allows a variety of underlying storage, including [SimpleFileStorage], [MemFile] and [AtomicFile].
-//! 
-//! Transactions that modify the database can be logged, which allows for database replication. 
+//!
+//! Transactions that modify the database can be logged, which allows for database replication.
 
 //!# Interface
 //!
@@ -21,7 +21,7 @@
 //!# Example
 //! [See here](https://github.com/georgebarwood/rustdb-axum-example/blob/main/src/main.rs) for an example program -
 //! an Axum-based webserver, with timed jobs, password hashing, data compression, email transmission and database replication.
-//! Also has a Manual for the SQL-like language, user interface for database browsing/editing etc. 
+//! Also has a Manual for the SQL-like language, user interface for database browsing/editing etc.
 //!
 //!# Features
 //!
@@ -72,9 +72,10 @@ pub use crate::{
     builtin::check_types,
     compile::{c_bool, c_float, c_int, c_value},
     exec::EvalEnv,
+    expr::ObjRef,
     expr::{Block, DataKind, Expr},
     run::{CExp, CExpPtr, CompileFunc},
-    value::Value, expr::ObjRef,
+    value::Value,
 };
 #[cfg(not(feature = "builtin"))]
 use crate::{
@@ -122,14 +123,6 @@ mod util;
 #[cfg(feature = "gentrans")]
 /// [GenTransaction] ( implementation of [Transaction] ).
 pub mod gentrans;
-
-#[cfg(feature = "init")]
-/// Initial SQL.
-///
-/// Note : the [init::INITSQL] string can be generated using the "Script entire database" link in the example main menu,
-/// then using an editor to escape every `"` character as `\"`.
-/// Note also that some sys functions such as ClearTable, DropTable, DropIndex, DropSchema, DropColumn are required for operations such as ALTER TABLE, DROP TABLE etc.
-pub mod init;
 
 /// Backing [Storage] for database. See also [AtomicFile].
 pub mod stg;
@@ -440,7 +433,9 @@ GO
 
     /// Test whether there are unsaved changes.
     pub fn changed(self: &DB) -> bool {
-        if self.err.get() { return false; }
+        if self.err.get() {
+            return false;
+        }
         for bs in &self.bs {
             if bs.changed() {
                 return true;
