@@ -74,23 +74,9 @@ pub struct Stash {
     readers: BTreeMap<u64, usize>,
     /// Time -> set of page numbers.
     updates: BTreeMap<u64, HashSet<u64>>,
-    /// Number of times cache has been used since it was cleared.
-    pub cache_used: usize,
-    /// Cache is cleared when this limit is reached (number of transactions).
-    pub cache_limit: usize,
-    /// Cache is cleared when memory reaches this limit (unix only).
-    pub cache_mem_limit: usize,
 }
 
 impl Stash {
-    /// Construct new Stash with specified clear limit.
-    fn new(limit: usize, mem_limit: usize) -> Self {
-        let mut s = Self::default();
-        s.cache_limit = limit;
-        s.cache_mem_limit = mem_limit;
-        s
-    }
-
     /// Clear cached data ( to reduce memory usage ).
     pub fn clear_cache(&mut self, doit: bool) -> usize {
         let mut total = 0;
@@ -102,9 +88,6 @@ impl Stash {
                     pinfo.current = None;
                 }
             }
-        }
-        if doit && total > 0 {
-            println!("clear_cache total={total}");
         }
         total
     }
@@ -170,17 +153,6 @@ impl Stash {
                 p.lock().unwrap().trim(rt);
             }
         }
-
-        if (self.readers.len() == 0 && self.updates.len() == 0
-            || self.cache_used >= 2 * self.cache_limit)
-            && self.cache_used >= self.cache_limit
-            && self.clear_cache(false) >= self.cache_mem_limit
-        {
-            self.cache_used = 0;
-            self.clear_cache(true);
-        } else {
-            self.cache_used += 1;
-        }
     }
 }
 
@@ -211,7 +183,7 @@ impl SharedPagedData {
         let sp_size = file.sp_size;
         let ep_size = file.ep_size;
         Self {
-            stash: RwLock::new(Stash::new(10, 120000)),
+            stash: RwLock::new(Stash::default()),
             file: RwLock::new(file),
             sp_size,
             ep_size,
