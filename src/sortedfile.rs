@@ -66,6 +66,7 @@ impl SortedFile {
                 db.file.set_page(p.pnum, p.data.clone());
             }
         }
+        self.pages.borrow_mut().clear();
     }
 
     /// Clear the cache, changes are discarded instead of being saved.

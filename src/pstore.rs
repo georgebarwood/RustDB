@@ -74,9 +74,38 @@ pub struct Stash {
     readers: BTreeMap<u64, usize>,
     /// Time -> set of page numbers.
     updates: BTreeMap<u64, HashSet<u64>>,
+    /// Number of times cache has been used since it was cleared.
+    pub cache_used: usize ,
+    /// Cache is cleared when this limit is reached.
+    pub cache_limit: usize,
 }
 
 impl Stash {
+
+    /// Construct new Stash with specified clear limit.
+    fn new(limit: usize) -> Self
+    {
+       let mut result = Self::default();
+       result.cache_limit = limit;
+       result
+    }
+
+    /// Clear cached data ( to reduce memory usage ).
+    pub fn clear_cache(&mut self)
+    {
+       let mut total = 0;
+       for (_pnum,pinfo) in &self.pages
+       {
+          let mut pinfo = pinfo.lock().unwrap();
+          if let Some(d) = &pinfo.current
+          {
+            total += d.len() as u64;
+            pinfo.current = None;
+          }
+       } 
+       if total > 0 { println!("clear_cache total={total}"); }
+    }
+
     /// Set the value of the specified page for the current time.
     fn set(&mut self, lpnum: u64, data: Data) {
         let time = self.time;
@@ -138,6 +167,16 @@ impl Stash {
                 p.lock().unwrap().trim(rt);
             }
         }
+
+        if self.readers.len() == 0 && self.updates.len() == 0 && self.cache_used >= self.cache_limit
+        {
+           self.cache_used = 0;
+           self.clear_cache();
+        }
+        else
+        {
+           self.cache_used += 1;
+        }
     }
 }
 
@@ -168,7 +207,7 @@ impl SharedPagedData {
         let sp_size = file.sp_size;
         let ep_size = file.ep_size;
         Self {
-            stash: RwLock::new(Stash::default()),
+            stash: RwLock::new(Stash::new(10)),
             file: RwLock::new(file),
             sp_size,
             ep_size,
@@ -180,6 +219,13 @@ impl SharedPagedData {
         let ep_max = (self.sp_size - 2) / 8;
         (self.ep_size - 16) * ep_max + (self.sp_size - 2)
     }
+
+    /// Free cached pages.
+    pub fn clear_cache(&self)
+    {
+       self.stash.write().unwrap().clear_cache();
+    }
+
 }
 
 /// Access to shared paged data.
