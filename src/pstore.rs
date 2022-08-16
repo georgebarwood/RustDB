@@ -10,6 +10,9 @@ type PageInfoPtr = Arc<Mutex<PageInfo>>;
 struct PageInfo {
     current: Option<Data>,
     history: BTreeMap<u64, Data>,
+    next: Option<PageInfoPtr>,
+    prev: Option<PageInfoPtr>,
+    in_chain: bool,
 }
 
 impl PageInfo {
@@ -18,39 +21,47 @@ impl PageInfo {
         Arc::new(Mutex::new(Self {
             current: None,
             history: BTreeMap::new(),
+            next: None,
+            prev: None,
+            in_chain: false,
         }))
     }
 
     /// Get the Data for the page, checking history if not a writer.
     /// Reads Data from file if necessary.
-    fn get(&mut self, lpnum: u64, a: &AccessPagedData) -> Data {
+    /// Result is Data and flag indicating that data was read from file.
+    fn get(&mut self, lpnum: u64, a: &AccessPagedData) -> (Data, bool) {
         if !a.writer {
             if let Some((_k, v)) = self
                 .history
                 .range((Included(&a.time), Included(&u64::MAX)))
                 .next()
             {
-                return v.clone();
+                return (v.clone(), false);
             }
         }
 
         if let Some(p) = &self.current {
-            return p.clone();
+            return (p.clone(), false);
         }
 
         // Get data from file.
         let file = a.spd.file.read().unwrap();
         let data = file.get_page(lpnum);
         self.current = Some(data.clone());
-        data
+        (data, true)
     }
 
     /// Set the page data, updating the history using the specified time and current data.
-    fn set(&mut self, time: u64, data: Data) {
+    /// result is size of data, less size of old data (if any).
+    fn set(&mut self, time: u64, data: Data) -> usize {
+        let mut result = data.len();
         if let Some(old) = self.current.take() {
+            result -= old.len();
             self.history.insert(time, old);
         }
         self.current = Some(data);
+        result
     }
 
     fn trim(&mut self, to: u64) {
@@ -74,22 +85,81 @@ pub struct Stash {
     readers: BTreeMap<u64, usize>,
     /// Time -> set of page numbers.
     updates: BTreeMap<u64, HashSet<u64>>,
+
+    lru: Option<PageInfoPtr>, // Least recently used current page.
+    mru: Option<PageInfoPtr>, // Most recently used current page.
+    total: usize,             // Total size of current pages.
 }
 
 impl Stash {
-    /// Clear cached data ( to reduce memory usage ).
-    pub fn clear_cache(&mut self, doit: bool) -> usize {
-        let mut total = 0;
-        for (_pnum, pinfo) in &self.pages {
-            let mut pinfo = pinfo.lock().unwrap();
-            if let Some(d) = &pinfo.current {
-                total += d.len();
-                if doit {
-                    pinfo.current = None;
-                }
+    /// Insert p into mru/lru chain.
+    fn insert(&mut self, mut p: PageInfoPtr) -> PageInfoPtr {
+        if p.lock().unwrap().in_chain {
+            p = self.remove(p);
+        }
+        {
+            let mut lp = p.lock().unwrap();
+            lp.next = self.mru.clone();
+            lp.prev = None;
+            lp.in_chain = true;
+        }
+        if let Some(m) = &self.mru {
+            m.lock().unwrap().prev = Some(p.clone());
+        }
+        self.mru = Some(p.clone());
+        if self.lru.is_none() {
+            self.lru = Some(p.clone());
+        }
+        p
+    }
+
+    /// Remove p from mru/lru chain.
+    fn remove(&mut self, p: PageInfoPtr) -> PageInfoPtr {
+        let (next, prev) = {
+            let mut p = p.lock().unwrap();
+            p.in_chain = false;
+            let next = p.next.take();
+            let prev = p.prev.take();
+            (next, prev)
+        };
+
+        if let Some(prev) = &prev {
+            prev.lock().unwrap().next = next.clone();
+        } else {
+            self.mru = next.clone();
+        }
+
+        if let Some(next) = &next {
+            next.lock().unwrap().prev = prev;
+        } else {
+            self.lru = prev;
+        }
+        p
+    }
+
+    /// Trim cached data ( to reduce memory usage ).
+    pub fn trim_cache(&mut self, to: usize) {
+        let mut x = self.lru.clone();
+        while let Some(p) = x {
+            if self.total <= to {
+                break;
+            }
+            let mut lp = p.lock().unwrap();
+            if let Some(d) = &lp.current {
+                self.total -= d.len();
+                lp.current = None;
+            }
+            lp.next = None;
+            x = lp.prev.take();
+            lp.in_chain = false;
+            if let Some(p) = &x {
+                p.lock().unwrap().next = None;
+                self.lru = x.clone();
+            } else {
+                self.mru = None;
+                self.lru = None;
             }
         }
-        total
     }
 
     /// Set the value of the specified page for the current time.
@@ -98,14 +168,20 @@ impl Stash {
         let u = self.updates.entry(time).or_insert_with(HashSet::default);
         if u.insert(lpnum) {
             let p = self.pages.entry(lpnum).or_insert_with(PageInfo::new);
-            p.lock().unwrap().set(time, data);
+            self.total += p.lock().unwrap().set(time, data);
         }
     }
 
     /// Get the PageInfoPtr for the specified page.  
-    fn get(&mut self, lpnum: u64) -> PageInfoPtr {
+    fn get0(&mut self, lpnum: u64) -> PageInfoPtr {
         let p = self.pages.entry(lpnum).or_insert_with(PageInfo::new);
         p.clone()
+    }
+
+    /// Get the PageInfoPtr for the specified page and insert into lru chain.
+    fn get(&mut self, lpnum: u64) -> PageInfoPtr {
+        let p = self.get0(lpnum);
+        self.insert(p)
     }
 
     /// Register that there is a client reading the database. The result is the current time.
@@ -196,9 +272,9 @@ impl SharedPagedData {
         (self.ep_size - 16) * ep_max + (self.sp_size - 2)
     }
 
-    /// Free cached pages.
-    pub fn clear_cache(&self, doit: bool) -> usize {
-        self.stash.write().unwrap().clear_cache(doit)
+    /// Trim cache.
+    pub fn trim_cache(&self, to: usize) {
+        self.stash.write().unwrap().trim_cache(to);
     }
 }
 
@@ -232,14 +308,20 @@ impl AccessPagedData {
 
     /// Get the Data for the specified page.
     pub fn get_page(&self, lpnum: u64) -> Data {
+        let mut stash = self.spd.stash.write().unwrap();
+
         // Get PageInfoPtr for the specified page.
-        let pinfo = self.spd.stash.write().unwrap().get(lpnum);
+        let pinfo = stash.get(lpnum);
 
         // Lock the Mutex for the page.
         let mut pinfo = pinfo.lock().unwrap();
 
         // Read the page data.
-        pinfo.get(lpnum, self)
+        let (data, loaded) = pinfo.get(lpnum, self);
+        if loaded {
+            stash.total += data.len();
+        }
+        data
     }
 
     /// Set the data of the specified page.
