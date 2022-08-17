@@ -55,6 +55,7 @@
 //!
 //! The hierarchy overall: Table -> SortedFile -> PagedData -> CompactFile -> AtomicFile -> Storage.
 
+#![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
 pub use crate::{

@@ -53,17 +53,18 @@ impl PageInfo {
     }
 
     /// Set the page data, updating the history using the specified time and current data.
-    /// result is size of data, less size of old data (if any).
+    /// result is size of old data (if any).
     fn set(&mut self, time: u64, data: Data) -> usize {
-        let mut result = data.len();
+        let mut result = 0;
         if let Some(old) = self.current.take() {
-            result -= old.len();
+            result = old.len();
             self.history.insert(time, old);
         }
         self.current = Some(data);
         result
     }
 
+    /// Reduce the history to the specified cache time.
     fn trim(&mut self, to: u64) {
         while let Some(&f) = self.history.keys().next() {
             if f >= to {
@@ -85,10 +86,12 @@ pub struct Stash {
     readers: BTreeMap<u64, usize>,
     /// Time -> set of page numbers.
     updates: BTreeMap<u64, HashSet<u64>>,
-
-    lru: Option<PageInfoPtr>, // Least recently used current page.
-    mru: Option<PageInfoPtr>, // Most recently used current page.
-    total: usize,             // Total size of current pages.
+    /// Least recently used current page.
+    lru: Option<PageInfoPtr>,
+    /// Most recently used current page.
+    mru: Option<PageInfoPtr>,
+    /// Total size of current pages.
+    total: usize,
 }
 
 impl Stash {
@@ -138,7 +141,7 @@ impl Stash {
     }
 
     /// Trim cached data ( to reduce memory usage ).
-    pub fn trim_cache(&mut self, to: usize) {
+    fn trim_cache(&mut self, to: usize) {
         let mut x = self.lru.clone();
         while let Some(p) = x {
             if self.total <= to {
@@ -168,19 +171,17 @@ impl Stash {
         let u = self.updates.entry(time).or_insert_with(HashSet::default);
         if u.insert(lpnum) {
             let p = self.pages.entry(lpnum).or_insert_with(PageInfo::new);
-            self.total += p.lock().unwrap().set(time, data);
+            self.total += data.len();
+            self.total -= p.lock().unwrap().set(time, data);
         }
-    }
-
-    /// Get the PageInfoPtr for the specified page.  
-    fn get0(&mut self, lpnum: u64) -> PageInfoPtr {
-        let p = self.pages.entry(lpnum).or_insert_with(PageInfo::new);
-        p.clone()
     }
 
     /// Get the PageInfoPtr for the specified page and insert into lru chain.
     fn get(&mut self, lpnum: u64) -> PageInfoPtr {
-        let p = self.get0(lpnum);
+        let p = {
+            let p = self.pages.entry(lpnum).or_insert_with(PageInfo::new);
+            p.clone()
+        };
         self.insert(p)
     }
 
