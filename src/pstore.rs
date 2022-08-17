@@ -91,7 +91,9 @@ pub struct Stash {
     /// Most recently used current page.
     mru: Option<PageInfoPtr>,
     /// Total size of current pages.
-    total: usize,
+    pub total: usize,
+    /// trim reduces total to mem_limit (or below). 
+    pub mem_limit: usize,
 }
 
 impl Stash {
@@ -141,10 +143,10 @@ impl Stash {
     }
 
     /// Trim cached data ( to reduce memory usage ).
-    fn trim_cache(&mut self, to: usize) {
+    fn trim_cache(&mut self) {
         let mut x = self.lru.clone();
         while let Some(p) = x {
-            if self.total <= to {
+            if self.total <= self.mem_limit {
                 break;
             }
             let mut lp = p.lock().unwrap();
@@ -274,8 +276,8 @@ impl SharedPagedData {
     }
 
     /// Trim cache.
-    pub fn trim_cache(&self, to: usize) {
-        self.stash.write().unwrap().trim_cache(to);
+    pub fn trim_cache(&self) {
+        self.stash.write().unwrap().trim_cache();
     }
 }
 
