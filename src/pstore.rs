@@ -212,6 +212,8 @@ pub struct Stash {
     pub mem_limit: usize,
     /// Heap of pages, page with smallest counter in position 0.
     heap: Heap,
+    /// Trace cache trimming etc.
+    pub trace: bool,
 }
 
 impl Stash {
@@ -293,11 +295,11 @@ impl Stash {
 
     /// Trim cached data ( to reduce memory usage ).
     fn trim_cache(&mut self) {
-        // let (old_total, old_len) = (self.total, self.heap.v.len());
+        let (old_total, old_len) = (self.total, self.heap.v.len());
         while !self.heap.v.is_empty() && self.total >= self.mem_limit {
             self.total -= self.heap.pop();
         }
-        /*
+        if self.trace {
                 debug_assert!(self.heap._check() == self.total);
                 let (new_total, new_len) = (self.total, self.heap.v.len());
                 println!(
@@ -308,7 +310,7 @@ impl Stash {
                     new_len,
                     old_len - new_len
                 );
-        */
+        }
     }
 }
 
