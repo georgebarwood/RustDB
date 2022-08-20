@@ -14,7 +14,7 @@ Data is accessed either by a Transaction interface or directly ( as an offset in
 
 Transactions can be logged, allowing database replication.
 
-See https://github.com/georgebarwood/rustweb for example program : an Axum-based webserver, with timed jobs, password hashing, data compression, email transmission and database replication.
+See https://github.com/georgebarwood/rustweb for example program : an Axum-based webserver based on rustdb database, with database browsing, password hashing, database replication, email tranmission and timed jobs.
 
 crates.io : https://crates.io/crates/rustdb 
 
