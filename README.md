@@ -66,7 +66,7 @@ Permanent errors are logged in email.SendError
 Timed Jobs
 ==========
 
-A named SQL function (with no paramaters) can be called at a specified time by creating a record in timed.Job.
+A named SQL function (with no parameters) can be called at a specified time by creating a record in timed.Job.
 
 This is used by the email system to retry temporary email send errors.
 
