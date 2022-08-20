@@ -87,4 +87,9 @@ OPTIONS:\
         --tracetime        Trace query time\
     -V, --version          Print version information
 
+Links
+=====
+
 crates.io : https://crates.io/crates/rustweb
+
+repository: https://github.com/georgebarwood/RustDB
