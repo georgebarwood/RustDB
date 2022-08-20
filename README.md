@@ -1,21 +1,20 @@
-# rustdb
+Axum-based webserver based on rustdb database, with database browsing, 
+timed jobs, password hashing, data compression, email transmission and database replication.
 
-Database with SQL-like language implemented in Rust.
+USAGE:\
+    rustweb.exe [OPTIONS] <PORT>
 
-The SQL-like language is relatively minimal, and does not (currently) include features such as joins or views. Instead it has high performance SET .. FROM … and FOR .. FROM statements to access database tables, generally using an INDEX.
+ARGS:\
+    <PORT>    Port to listen on
 
-Read-only transactions run immediately and concurrently on a virtual read-only copy of the database, and cannot be blocked. 
+OPTIONS:\
+    -h, --help             Print help information\
+    -i, --ip <IP>          Ip Address to listen on [default: 0.0.0.0]\
+    -l, --login <LOGIN>    Login cookies for replication [default: ]\
+    -m, --mem <MEM>        Memory limit for page cache (in MB) [default: 10]\
+    -r, --rep <REP>        Server to replicate [default: ]\
+        --tracemem         Trace memory trimming\
+        --tracetime        Trace query time\
+    -V, --version          Print version information
 
-Write transactions run sequentially (and should typically execute in around 100 micro-seconds). 
-
-The Storage trait allows a variety of underlying storage, including SimpleFileStorage, MemFile and AtomicFile.
-
-Data is accessed either by a Transaction interface or directly ( as an offset into a page of byte data ).
-
-Transactions can be logged, allowing database replication.
-
-See https://github.com/georgebarwood/rustdb-axum-example for example program : an Axum-based webserver, with timed jobs, password hashing, data compression, email transmission and database replication.
-
-crates.io : https://crates.io/crates/rustdb 
-documentation: https://docs.rs/rustdb/latest/rustdb/
-
+crates.io : https://crates.io/crates/rustweb
