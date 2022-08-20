@@ -14,6 +14,8 @@ This should start rustweb server, listening on port 3000.
 
 You should then be able to browse to http://localhost:3000/Menu
 
+From there are links to a Manual, Execute SQL, a list of Schemas and other links.
+
 Security
 ========
 
