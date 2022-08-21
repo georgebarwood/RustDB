@@ -317,7 +317,7 @@ pub struct SharedPagedData {
     ///
     pub ep_size: usize,
     ///
-    pub stash: RwLock<Stash>,
+    pub stash: Mutex<Stash>,
 }
 
 /// =1024. Size of an extension page.
@@ -335,7 +335,7 @@ impl SharedPagedData {
         let sp_size = file.sp_size;
         let ep_size = file.ep_size;
         Self {
-            stash: RwLock::new(Stash::default()),
+            stash: Mutex::new(Stash::default()),
             file: RwLock::new(file),
             sp_size,
             ep_size,
@@ -350,7 +350,7 @@ impl SharedPagedData {
 
     /// Trim cache.
     pub fn trim_cache(&self) {
-        self.stash.write().unwrap().trim_cache();
+        self.stash.lock().unwrap().trim_cache();
     }
 }
 
@@ -365,7 +365,7 @@ pub struct AccessPagedData {
 impl AccessPagedData {
     /// Construct access to a virtual read-only copy of the database logical pages.
     pub fn new_reader(spd: Arc<SharedPagedData>) -> Self {
-        let time = spd.stash.write().unwrap().begin_read();
+        let time = spd.stash.lock().unwrap().begin_read();
         AccessPagedData {
             writer: false,
             time,
@@ -384,14 +384,14 @@ impl AccessPagedData {
 
     /// Get the Data for the specified page.
     pub fn get_page(&self, lpnum: u64) -> Data {
-        // Gete page info.
-        let pinfo = self.spd.stash.write().unwrap().get(lpnum);
+        // Get page info.
+        let pinfo = self.spd.stash.lock().unwrap().get(lpnum);
 
         // Read the page data.
         let (data, loaded) = pinfo.d.lock().unwrap().get(lpnum, self);
 
         if loaded {
-            self.spd.stash.write().unwrap().total += data.len();
+            self.spd.stash.lock().unwrap().total += data.len();
         }
         data
     }
@@ -401,7 +401,7 @@ impl AccessPagedData {
         debug_assert!(self.writer);
 
         // First update the stash ( ensures any readers will not attempt to read the file ).
-        self.spd.stash.write().unwrap().set(lpnum, data.clone());
+        self.spd.stash.lock().unwrap().set(lpnum, data.clone());
 
         // Write data to underlying file.
         self.spd.file.write().unwrap().set_page(lpnum, data);
@@ -427,7 +427,7 @@ impl AccessPagedData {
     /// Free a logical page.
     pub fn free_page(&self, lpnum: u64) {
         debug_assert!(self.writer);
-        self.spd.stash.write().unwrap().set(lpnum, nd());
+        self.spd.stash.lock().unwrap().set(lpnum, nd());
         self.spd.file.write().unwrap().free_page(lpnum);
     }
 
@@ -437,7 +437,7 @@ impl AccessPagedData {
         match op {
             SaveOp::Save => {
                 self.spd.file.write().unwrap().save();
-                self.spd.stash.write().unwrap().end_write()
+                self.spd.stash.lock().unwrap().end_write()
             }
             SaveOp::RollBack => {
                 // Note: rollback happens before any pages are updated.
@@ -452,7 +452,7 @@ impl AccessPagedData {
 impl Drop for AccessPagedData {
     fn drop(&mut self) {
         if !self.writer {
-            self.spd.stash.write().unwrap().end_read(self.time);
+            self.spd.stash.lock().unwrap().end_read(self.time);
         }
     }
 }
