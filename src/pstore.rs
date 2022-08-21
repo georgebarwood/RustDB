@@ -3,32 +3,46 @@ use crate::{
 };
 use std::ops::Bound::Included;
 
-/// ```Arc<Mutex<PageInfo>>```
-type PageInfoPtr = Arc<Mutex<PageInfo>>;
+/// ```Arc<PageInfo>```
+type PageInfoPtr = Arc<PageInfo>;
+
+struct PageInfo {
+    d: Mutex<PageData>,
+    u: Mutex<PageUsage>,
+}
+
+impl PageInfo {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            d: Mutex::new(PageData {
+                current: None,
+                history: BTreeMap::new(),
+            }),
+            u: Mutex::new(PageUsage {
+                counter: 0,
+                heap_pos: usize::MAX,
+            }),
+        })
+    }
+}
 
 /// Cached information about a logical page.
-struct PageInfo {
+struct PageData {
     /// Current data for the page.
     current: Option<Data>,
     /// Historic data for the page.
     history: BTreeMap<u64, Data>,
+}
+
+/// Information about page usage.
+struct PageUsage {
     /// Count of how manay times the page has been used.
     counter: usize,
     /// Position of the page in stash heap.
     heap_pos: usize,
 }
 
-impl PageInfo {
-    /// Construct a new PageInfo.
-    fn new() -> PageInfoPtr {
-        Arc::new(Mutex::new(Self {
-            current: None,
-            history: BTreeMap::new(),
-            heap_pos: usize::MAX,
-            counter: 0,
-        }))
-    }
-
+impl PageData {
     /// Get the Data for the page, checking history if not a writer.
     /// Reads Data from file if necessary.
     /// Result is Data and flag indicating that data was read from file.
@@ -87,7 +101,7 @@ impl Heap {
     /// Increases counter for p and adjusts the heap to match.
     fn used(&mut self, p: PageInfoPtr) -> PageInfoPtr {
         let (mut pos, counter) = {
-            let mut p = p.lock().unwrap();
+            let mut p = p.u.lock().unwrap();
             p.counter += 1;
             (p.heap_pos, p.counter)
         };
@@ -104,16 +118,19 @@ impl Heap {
     fn pop(&mut self) -> usize {
         let mut result = 0;
         {
-            let mut p = self.v[0].lock().unwrap();
-            if let Some(d) = &p.current {
-                result = d.len();
-                p.current = None;
-                p.heap_pos = usize::MAX;
+            let v = &self.v[0];
+            let mut d = v.d.lock().unwrap();
+            if let Some(data) = &d.current {
+                result = data.len();
+                d.current = None;
             }
+            let mut u = v.u.lock().unwrap();
+
+            u.heap_pos = usize::MAX;
         }
         // Pop the last element of the vector, save in position zero.
         let last = self.v.pop().unwrap();
-        let counter = last.lock().unwrap().counter;
+        let counter = last.u.lock().unwrap().counter;
         self.v[0] = last;
         // Restore heap invariant.
         self.move_down(0, counter);
@@ -128,7 +145,7 @@ impl Heap {
             }
             let ppos = (pos - 1) / 2;
             {
-                let mut pl = self.v[ppos].lock().unwrap();
+                let mut pl = self.v[ppos].u.lock().unwrap();
                 if pl.counter <= counter {
                     break;
                 }
@@ -137,7 +154,7 @@ impl Heap {
             self.v.swap(ppos, pos);
             pos = ppos;
         }
-        self.v[pos].lock().unwrap().heap_pos = pos;
+        self.v[pos].u.lock().unwrap().heap_pos = pos;
     }
 
     /// Called when page at pos may be too high in the heap.
@@ -148,9 +165,9 @@ impl Heap {
             if cpos >= n {
                 break;
             } else {
-                let mut c1 = self.v[cpos].lock().unwrap().counter;
+                let mut c1 = self.v[cpos].u.lock().unwrap().counter;
                 if cpos + 1 < n {
-                    let c2 = self.v[cpos + 1].lock().unwrap().counter;
+                    let c2 = self.v[cpos + 1].u.lock().unwrap().counter;
                     if c2 < c1 {
                         cpos += 1;
                         c1 = c2;
@@ -161,37 +178,10 @@ impl Heap {
                 }
             }
             self.v.swap(pos, cpos);
-            self.v[pos].lock().unwrap().heap_pos = pos;
+            self.v[pos].u.lock().unwrap().heap_pos = pos;
             pos = cpos;
         }
-        self.v[pos].lock().unwrap().heap_pos = pos;
-    }
-
-    /// For debugging.
-    fn _check(&self) -> usize {
-        let mut total = 0;
-        for x in 0..self.v.len() {
-            let p = &*self.v[x].lock().unwrap();
-            if let Some(d) = &p.current {
-                total += d.len();
-            }
-            debug_assert!(x == p.heap_pos);
-            if x * 2 + 1 < self.v.len() {
-                let cc = self.v[x * 2 + 1].lock().unwrap().counter;
-                if cc < p.counter {
-                    println!("cc1 check failed x={} cc={} p.counter={}", x, cc, p.counter);
-                    loop {}
-                }
-            }
-            if x * 2 + 2 < self.v.len() {
-                let cc = self.v[x * 2 + 2].lock().unwrap().counter;
-                if cc < p.counter {
-                    println!("cc2 check failed x={} cc={} p.counter={}", x, cc, p.counter);
-                    loop {}
-                }
-            }
-        }
-        total
+        self.v[pos].u.lock().unwrap().heap_pos = pos;
     }
 }
 
@@ -220,7 +210,6 @@ impl Stash {
     /// Adjust page info to reflect page has been used.
     fn used(&mut self, p: PageInfoPtr) -> PageInfoPtr {
         let p = self.heap.used(p);
-        debug_assert!(self.heap._check() == self.total);
         p
     }
 
@@ -236,13 +225,17 @@ impl Stash {
                 .clone();
             p = self.used(p);
             self.total += data.len();
-            self.total -= p.lock().unwrap().set(time, data);
+            self.total -= p.d.lock().unwrap().set(time, data);
         }
     }
 
-    /// Get the PageInfoPtr for the specified page and insert into lru chain.
+    /// Get the PageInfoPtr for the specified page and note as used.
     fn get(&mut self, lpnum: u64) -> PageInfoPtr {
-        let p = self.pages.entry(lpnum).or_insert_with(PageInfo::new).clone();
+        let p = self
+            .pages
+            .entry(lpnum)
+            .or_insert_with(PageInfo::new)
+            .clone();
         self.used(p)
     }
 
@@ -288,7 +281,7 @@ impl Stash {
             }
             for lpnum in self.updates.remove(&wt).unwrap() {
                 let p = self.pages.get(&lpnum).unwrap();
-                p.lock().unwrap().trim(rt);
+                p.d.lock().unwrap().trim(rt);
             }
         }
     }
@@ -300,8 +293,8 @@ impl Stash {
             self.total -= self.heap.pop();
         }
         if self.trace {
-                debug_assert!(self.heap._check() == self.total);
-                let (new_total, new_len) = (self.total, self.heap.v.len());
+            let (new_total, new_len) = (self.total, self.heap.v.len());
+            if new_len < old_len {
                 println!(
                     "trimmed cache mem_limit={} total={}(-{}) heap len={}(-{})",
                     self.mem_limit,
@@ -310,6 +303,7 @@ impl Stash {
                     new_len,
                     old_len - new_len
                 );
+            }
         }
     }
 }
@@ -390,18 +384,14 @@ impl AccessPagedData {
 
     /// Get the Data for the specified page.
     pub fn get_page(&self, lpnum: u64) -> Data {
-        let mut stash = self.spd.stash.write().unwrap();
-
-        // Get PageInfoPtr for the specified page.
-        let pinfo = stash.get(lpnum);
-
-        // Lock the Mutex for the page.
-        let mut pinfo = pinfo.lock().unwrap();
+        // Gete page info.
+        let pinfo = self.spd.stash.write().unwrap().get(lpnum);
 
         // Read the page data.
-        let (data, loaded) = pinfo.get(lpnum, self);
+        let (data, loaded) = pinfo.d.lock().unwrap().get(lpnum, self);
+
         if loaded {
-            stash.total += data.len();
+            self.spd.stash.write().unwrap().total += data.len();
         }
         data
     }

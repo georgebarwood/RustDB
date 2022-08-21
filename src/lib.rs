@@ -19,7 +19,7 @@
 //! It is also possible to access the table data directly, see email_loop in example program.   
 //!
 //!# Example
-//! [See here](https://github.com/georgebarwood/rustdb-axum-example/blob/main/src/main.rs) for an example program -
+//! [See here](https://github.com/georgebarwood/rustweb) for an example program -
 //! an Axum-based webserver, with timed jobs, password hashing, data compression, email transmission and database replication.
 //! Also has a Manual for the SQL-like language, user interface for database browsing/editing etc.
 //!
