@@ -115,17 +115,18 @@ impl Heap {
         p
     }
 
-    fn pop(&mut self) -> usize {
+    /// Free the least used page and remove it from the heap.
+    /// Returns the amount of memory freed.
+    fn free(&mut self) -> usize {
         let mut result = 0;
         {
-            let v = &self.v[0];
-            let mut d = v.d.lock().unwrap();
+            let p = &self.v[0];
+            let mut d = p.d.lock().unwrap();
             if let Some(data) = &d.current {
                 result = data.len();
                 d.current = None;
             }
-            let mut u = v.u.lock().unwrap();
-
+            let mut u = p.u.lock().unwrap();
             u.heap_pos = usize::MAX;
         }
         // Pop the last element of the vector, save in position zero.
@@ -284,7 +285,7 @@ impl Stash {
     fn trim_cache(&mut self) {
         let (old_total, old_len) = (self.total, self.heap.v.len());
         while !self.heap.v.is_empty() && self.total >= self.mem_limit {
-            self.total -= self.heap.pop();
+            self.total -= self.heap.free();
         }
         if self.trace {
             let (new_total, new_len) = (self.total, self.heap.v.len());
