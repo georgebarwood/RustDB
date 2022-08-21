@@ -305,13 +305,13 @@ impl Stash {
 
 /// Allows logical database pages to be shared to allow concurrent readers.
 pub struct SharedPagedData {
-    ///
+    /// Underlying file.
     pub file: RwLock<CompactFile>,
-    ///
+    /// Starter page size.
     pub sp_size: usize,
-    ///
+    /// Extension page size.
     pub ep_size: usize,
-    ///
+    /// Stash of pages.
     pub stash: Mutex<Stash>,
 }
 
