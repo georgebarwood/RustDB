@@ -207,12 +207,6 @@ pub struct Stash {
 }
 
 impl Stash {
-    /// Adjust page info to reflect page has been used.
-    fn used(&mut self, p: PageInfoPtr) -> PageInfoPtr {
-        let p = self.heap.used(p);
-        p
-    }
-
     /// Set the value of the specified page for the current time.
     fn set(&mut self, lpnum: u64, data: Data) {
         let time = self.time;
@@ -223,7 +217,7 @@ impl Stash {
                 .entry(lpnum)
                 .or_insert_with(PageInfo::new)
                 .clone();
-            p = self.used(p);
+            p = self.heap.used(p);
             self.total += data.len();
             self.total -= p.d.lock().unwrap().set(time, data);
         }
@@ -236,7 +230,7 @@ impl Stash {
             .entry(lpnum)
             .or_insert_with(PageInfo::new)
             .clone();
-        self.used(p)
+        self.heap.used(p)
     }
 
     /// Register that there is a client reading the database. The result is the current time.

@@ -47,7 +47,7 @@ pub struct SelectExpression {
 }
 
 /// Parsing token.
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
 pub enum Token {
     /* Note: order is significant */
     ///
@@ -196,7 +196,7 @@ impl ObjRef {
 }
 
 /// Binary=1, String=2, Int=3, Float=4, Bool=5.
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
 #[non_exhaustive]
 pub enum DataKind {
     ///

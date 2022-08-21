@@ -4,7 +4,7 @@ use crate::*;
 pub type IxList = Vec<(Rc<SortedFile>, Rc<Vec<usize>>)>;
 
 /// Save or Rollback.
-#[derive(PartialEq, PartialOrd, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Clone, Copy)]
 pub enum SaveOp {
     ///
     Save,
