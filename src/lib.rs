@@ -54,6 +54,36 @@
 //! [AtomicFile] ensures that database updates are all or nothing.
 //!
 //! The hierarchy overall: Table -> SortedFile -> PagedData -> CompactFile -> AtomicFile -> Storage.
+//!
+//!# Test example
+//!
+//! ```
+//!     use rustdb::*;
+//!     use std::sync::Arc;
+//!     let file = Box::new(MemFile::default());
+//!     let upd = Box::new(MemFile::default());
+//!     let stg = Box::new(AtomicFile::new(file, upd));
+//! 
+//!     let spd = Arc::new(SharedPagedData::new(stg));
+//!     let wapd = AccessPagedData::new_writer(spd);
+//! 
+//!     let mut bmap = BuiltinMap::default();
+//!     standard_builtins(&mut bmap);
+//!     let bmap = Arc::new(bmap);
+//! 
+//!     let db = Database::new(wapd, "", bmap);
+//!     let mut tr = GenTransaction::default();
+//!     let sql = "
+//! CREATE SCHEMA test GO 
+//! CREATE TABLE test.Cust(Name string) GO 
+//! INSERT INTO test.Cust(Name) VALUES ('freddy')
+//! SELECT Name FROM test.Cust
+//! ";
+//!     db.run(&sql, &mut tr);
+//!     assert!( db.changed() );
+//!     assert!( db.save() > 0 );
+//!     assert!( tr.rp.output == b"freddy" );
+//! ```
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
