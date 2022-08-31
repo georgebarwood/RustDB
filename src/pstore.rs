@@ -1,11 +1,12 @@
 use crate::{
     nd, Arc, BTreeMap, CompactFile, Data, HashMap, HashSet, Mutex, RwLock, SaveOp, Storage,
 };
-use std::ops::Bound::Included;
+use std::ops::Bound::{Excluded, Included};
 
 /// ```Arc<PageInfo>```
 type PageInfoPtr = Arc<PageInfo>;
 
+/// Page data and usage information.
 struct PageInfo {
     d: Mutex<PageData>,
     u: Mutex<PageUsage>,
@@ -26,7 +27,7 @@ impl PageInfo {
     }
 }
 
-/// Cached information about a logical page.
+/// Data for a logical page, including historic data.
 struct PageData {
     /// Current data for the page.
     current: Option<Data>,
@@ -34,7 +35,7 @@ struct PageData {
     history: BTreeMap<u64, Data>,
 }
 
-/// Information about page usage.
+/// Information about logical page usage.
 struct PageUsage {
     /// Count of how manay times the page has been used.
     counter: usize,
@@ -80,13 +81,26 @@ impl PageData {
         result
     }
 
-    /// Reduce the history to the specified cache time.
-    fn trim(&mut self, to: u64) {
-        while let Some(&f) = self.history.keys().next() {
-            if f >= to {
-                break;
-            }
-            self.history.remove(&f);
+    /// Trim history pages that no longer need tot be retained.
+    fn trim(&mut self, start: u64, retain: u64, time: u64) -> bool {
+        let x = self.history_next(start, time);
+        if x <= retain {
+            self.history.remove(&start);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn history_next(&self, start: u64, time: u64) -> u64 {
+        if let Some((k, _)) = self
+            .history
+            .range((Excluded(&start), Included(&u64::MAX)))
+            .next()
+        {
+            *k
+        } else {
+            time
         }
     }
 }
@@ -99,7 +113,7 @@ struct Heap {
 
 impl Heap {
     /// Increases counter for p and adjusts the heap to match.
-    fn used(&mut self, p: PageInfoPtr) -> PageInfoPtr {
+    fn used(&mut self, p: &PageInfoPtr) {
         let (mut pos, counter) = {
             let mut p = p.u.lock().unwrap();
             p.counter += 1;
@@ -112,7 +126,6 @@ impl Heap {
         } else {
             self.move_down(pos, counter);
         }
-        p
     }
 
     /// Free the least used page and remove it from the heap.
@@ -196,7 +209,7 @@ pub struct Stash {
     /// Time -> reader count.
     readers: BTreeMap<u64, usize>,
     /// Time -> set of page numbers.
-    updates: BTreeMap<u64, HashSet<u64>>,
+    versions: BTreeMap<u64, HashSet<u64>>,
     /// Total size of current pages.
     pub total: usize,
     /// trim_cache reduces total to mem_limit (or below).
@@ -211,14 +224,14 @@ impl Stash {
     /// Set the value of the specified page for the current time.
     fn set(&mut self, lpnum: u64, data: Data) {
         let time = self.time;
-        let u = self.updates.entry(time).or_insert_with(HashSet::default);
+        let u = self.versions.entry(time).or_insert_with(HashSet::default);
         if u.insert(lpnum) {
-            let mut p = self
+            let p = self
                 .pages
                 .entry(lpnum)
                 .or_insert_with(PageInfo::new)
                 .clone();
-            p = self.heap.used(p);
+            self.heap.used(&p);
             self.total += data.len();
             self.total -= p.d.lock().unwrap().set(time, data);
         }
@@ -231,7 +244,8 @@ impl Stash {
             .entry(lpnum)
             .or_insert_with(PageInfo::new)
             .clone();
-        self.heap.used(p)
+        self.heap.used(&p);
+        p
     }
 
     /// Register that there is a client reading the database. The result is the current time.
@@ -248,36 +262,72 @@ impl Stash {
         *n -= 1;
         if *n == 0 {
             self.readers.remove(&time);
-            self.trim();
+            self.trim(time);
         }
     }
 
     /// Register that an update operation has completed. Time is incremented.
     /// Stashed pages may be freed.
     fn end_write(&mut self) -> usize {
-        let result = if let Some(u) = self.updates.get(&self.time) {
+        let result = if let Some(u) = self.versions.get(&self.time) {
             u.len()
         } else {
             0
         };
         self.time += 1;
-        self.trim();
+        self.trim(self.time - 1);
         result
     }
 
-    /// Trim due to a read or write ending.
-    fn trim(&mut self) {
-        // rt is time of first remaining reader.
-        let rt = *self.readers.keys().next().unwrap_or(&self.time);
-        // wt is time of first remaining update.
-        while let Some(&wt) = self.updates.keys().next() {
-            if wt >= rt {
-                break;
+    /// Trim historic data that is no longer reequired.
+    fn trim(&mut self, time: u64) {
+        let (start, retain) = (self.start(time), self.retain(time));
+        if start != retain {
+            let mut done = Vec::new();
+            for (t, plist) in self.versions.range((Included(&start), Excluded(&retain))) {
+                for pnum in plist.iter() {
+                    let p = self.pages.get(&pnum).unwrap();
+                    let mut p = p.d.lock().unwrap();
+                    if p.trim(start, retain, self.time) {
+                        done.push((*t, *pnum));
+                    }
+                }
             }
-            for lpnum in self.updates.remove(&wt).unwrap() {
-                let p = self.pages.get(&lpnum).unwrap();
-                p.d.lock().unwrap().trim(rt);
+            for (t, pnum) in done {
+                if let Some(ref mut plist) = self.versions.get_mut(&t) {
+                    plist.remove(&pnum);
+                    if plist.is_empty() {
+                        self.versions.remove(&t);
+                    }
+                }
             }
+        }
+    }
+
+    /// Calculate the start of the range of times for which there are no readers.
+    fn start(&self, time: u64) -> u64 {
+        if let Some((t, _n)) = self
+            .readers
+            .range((Included(0), Excluded(time)))
+            .rev()
+            .next()
+        {
+            1 + *t
+        } else {
+            0
+        }
+    }
+
+    /// Calculate the end of the range of times for which there are no readeres.
+    fn retain(&self, time: u64) -> u64 {
+        if let Some((t, _n)) = self
+            .readers
+            .range((Included(time), Included(u64::MAX)))
+            .next()
+        {
+            *t
+        } else {
+            self.time
         }
     }
 
