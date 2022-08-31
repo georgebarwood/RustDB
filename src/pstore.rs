@@ -305,7 +305,7 @@ impl Stash {
         }
     }
 
-    /// Calculate the start of the range of times for which there are no rdrs.
+    /// Calculate the start of the range of times for which there are no readers.
     fn start(&self, time: u64) -> u64 {
         if let Some((t, _n)) = self.rdrs.range(0..time).rev().next() {
             1 + *t
@@ -314,7 +314,7 @@ impl Stash {
         }
     }
 
-    /// Calculate the end of the range of times for which there are no readeres.
+    /// Calculate the end of the range of times for which there are no readers.
     fn retain(&self, time: u64) -> u64 {
         if let Some((t, _n)) = self.rdrs.range(time..).next() {
             *t
