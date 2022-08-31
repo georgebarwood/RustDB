@@ -274,12 +274,6 @@ impl Stash {
     fn trim(&mut self, time: u64) {
         let (s, r) = (self.start(time), self.retain(time));
         if s != r {
-            println!(
-                "trim rdrs={:?} vers={:?} s..r={:?}",
-                self.rdrs,
-                self.vers,
-                s..r
-            );
             let mut empty = Vec::new();
             for (t, pl) in self.vers.range_mut(s..r) {
                 let mut done = Vec::new();
@@ -287,7 +281,6 @@ impl Stash {
                     let p = self.pages.get(pnum).unwrap();
                     let mut p = p.d.lock().unwrap();
                     if p.trim(*t, r, self.time) {
-                        println!("trimmed time {} pnum{}", t, pnum);
                         done.push(*pnum);
                     }
                 }
@@ -301,7 +294,6 @@ impl Stash {
             for t in empty {
                 self.vers.remove(&t);
             }
-            println!("trim after vers={:?}", self.vers);
         }
     }
 
