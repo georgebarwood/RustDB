@@ -199,7 +199,7 @@ pub struct Stash {
     pages: HashMap<u64, PageInfoPtr>,
     /// Time -> reader count. Number of readers for given time.
     rdrs: BTreeMap<u64, usize>,
-    /// Time -> set of page numbers. Pages modified at given time.
+    /// Time -> set of page numbers. Page copies held for given time.
     vers: BTreeMap<u64, HashSet<u64>>,
     /// Total size of current pages.
     pub total: usize,
@@ -345,7 +345,7 @@ impl Stash {
     }
 }
 
-/// Allows logical database pages to be shared to allow concurrent rdrs.
+/// Allows logical database pages to be shared to allow concurrent readers.
 pub struct SharedPagedData {
     /// Underlying file.
     pub file: RwLock<CompactFile>,
@@ -437,7 +437,7 @@ impl AccessPagedData {
     pub fn set_page(&self, lpnum: u64, data: Data) {
         debug_assert!(self.writer);
 
-        // First update the stash ( ensures any rdrs will not attempt to read the file ).
+        // First update the stash ( ensures any readers will not attempt to read the file ).
         self.spd.stash.lock().unwrap().set(lpnum, data.clone());
 
         // Write data to underlying file.
