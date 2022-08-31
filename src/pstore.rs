@@ -1,7 +1,6 @@
 use crate::{
     nd, Arc, BTreeMap, CompactFile, Data, HashMap, HashSet, Mutex, RwLock, SaveOp, Storage,
 };
-use std::ops::Bound::{Excluded, Included};
 
 /// ```Arc<PageInfo>```
 type PageInfoPtr = Arc<PageInfo>;
@@ -49,11 +48,7 @@ impl PageData {
     /// Result is Data and flag indicating that data was read from file.
     fn get(&mut self, lpnum: u64, a: &AccessPagedData) -> (Data, bool) {
         if !a.writer {
-            if let Some((_k, v)) = self
-                .history
-                .range((Included(&a.time), Included(&u64::MAX)))
-                .next()
-            {
+            if let Some((_k, v)) = self.history.range(a.time..).next() {
                 return (v.clone(), false);
             }
         }
@@ -93,11 +88,7 @@ impl PageData {
     }
 
     fn history_next(&self, start: u64, time: u64) -> u64 {
-        if let Some((k, _)) = self
-            .history
-            .range((Excluded(&start), Included(&u64::MAX)))
-            .next()
-        {
+        if let Some((k, _)) = self.history.range(start + 1..).next() {
             *k
         } else {
             time
@@ -206,10 +197,10 @@ pub struct Stash {
     time: u64,
     /// Page number -> page info.
     pages: HashMap<u64, PageInfoPtr>,
-    /// Time -> reader count.
-    readers: BTreeMap<u64, usize>,
-    /// Time -> set of page numbers.
-    versions: BTreeMap<u64, HashSet<u64>>,
+    /// Time -> reader count. Number of readers for given time.
+    rdrs: BTreeMap<u64, usize>,
+    /// Time -> set of page numbers. Pages modified at given time.
+    vers: BTreeMap<u64, HashSet<u64>>,
     /// Total size of current pages.
     pub total: usize,
     /// trim_cache reduces total to mem_limit (or below).
@@ -224,7 +215,7 @@ impl Stash {
     /// Set the value of the specified page for the current time.
     fn set(&mut self, lpnum: u64, data: Data) {
         let time = self.time;
-        let u = self.versions.entry(time).or_insert_with(HashSet::default);
+        let u = self.vers.entry(time).or_insert_with(HashSet::default);
         if u.insert(lpnum) {
             let p = self
                 .pages
@@ -251,17 +242,17 @@ impl Stash {
     /// Register that there is a client reading the database. The result is the current time.
     fn begin_read(&mut self) -> u64 {
         let time = self.time;
-        let n = self.readers.entry(time).or_insert(0);
+        let n = self.rdrs.entry(time).or_insert(0);
         *n += 1;
         time
     }
 
     /// Register that the read at the specified time has ended. Stashed pages may be freed.
     fn end_read(&mut self, time: u64) {
-        let n = self.readers.get_mut(&time).unwrap();
+        let n = self.rdrs.get_mut(&time).unwrap();
         *n -= 1;
         if *n == 0 {
-            self.readers.remove(&time);
+            self.rdrs.remove(&time);
             self.trim(time);
         }
     }
@@ -269,7 +260,7 @@ impl Stash {
     /// Register that an update operation has completed. Time is incremented.
     /// Stashed pages may be freed.
     fn end_write(&mut self) -> usize {
-        let result = if let Some(u) = self.versions.get(&self.time) {
+        let result = if let Some(u) = self.vers.get(&self.time) {
             u.len()
         } else {
             0
@@ -279,39 +270,44 @@ impl Stash {
         result
     }
 
-    /// Trim historic data that is no longer reequired.
+    /// Trim historic data that is no longer required.
     fn trim(&mut self, time: u64) {
-        let (start, retain) = (self.start(time), self.retain(time));
-        if start != retain {
-            let mut done = Vec::new();
-            for (t, plist) in self.versions.range((Included(&start), Excluded(&retain))) {
-                for pnum in plist.iter() {
-                    let p = self.pages.get(&pnum).unwrap();
+        let (s, r) = (self.start(time), self.retain(time));
+        if s != r {
+            println!(
+                "trim rdrs={:?} vers={:?} s..r={:?}",
+                self.rdrs,
+                self.vers,
+                s..r
+            );
+            let mut empty = Vec::new();
+            for (t, pl) in self.vers.range_mut(s..r) {
+                let mut done = Vec::new();
+                for pnum in pl.iter() {
+                    let p = self.pages.get(pnum).unwrap();
                     let mut p = p.d.lock().unwrap();
-                    if p.trim(start, retain, self.time) {
-                        done.push((*t, *pnum));
+                    if p.trim(*t, r, self.time) {
+                        println!("trimmed time {} pnum{}", t, pnum);
+                        done.push(*pnum);
                     }
                 }
-            }
-            for (t, pnum) in done {
-                if let Some(ref mut plist) = self.versions.get_mut(&t) {
-                    plist.remove(&pnum);
-                    if plist.is_empty() {
-                        self.versions.remove(&t);
-                    }
+                for pnum in done {
+                    pl.remove(&pnum);
+                }
+                if pl.is_empty() {
+                    empty.push(*t);
                 }
             }
+            for t in empty {
+                self.vers.remove(&t);
+            }
+            println!("trim after vers={:?}", self.vers);
         }
     }
 
-    /// Calculate the start of the range of times for which there are no readers.
+    /// Calculate the start of the range of times for which there are no rdrs.
     fn start(&self, time: u64) -> u64 {
-        if let Some((t, _n)) = self
-            .readers
-            .range((Included(0), Excluded(time)))
-            .rev()
-            .next()
-        {
+        if let Some((t, _n)) = self.rdrs.range(0..time).rev().next() {
             1 + *t
         } else {
             0
@@ -320,11 +316,7 @@ impl Stash {
 
     /// Calculate the end of the range of times for which there are no readeres.
     fn retain(&self, time: u64) -> u64 {
-        if let Some((t, _n)) = self
-            .readers
-            .range((Included(time), Included(u64::MAX)))
-            .next()
-        {
+        if let Some((t, _n)) = self.rdrs.range(time..).next() {
             *t
         } else {
             self.time
@@ -353,7 +345,7 @@ impl Stash {
     }
 }
 
-/// Allows logical database pages to be shared to allow concurrent readers.
+/// Allows logical database pages to be shared to allow concurrent rdrs.
 pub struct SharedPagedData {
     /// Underlying file.
     pub file: RwLock<CompactFile>,
@@ -445,7 +437,7 @@ impl AccessPagedData {
     pub fn set_page(&self, lpnum: u64, data: Data) {
         debug_assert!(self.writer);
 
-        // First update the stash ( ensures any readers will not attempt to read the file ).
+        // First update the stash ( ensures any rdrs will not attempt to read the file ).
         self.spd.stash.lock().unwrap().set(lpnum, data.clone());
 
         // Write data to underlying file.
