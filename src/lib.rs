@@ -765,12 +765,7 @@ pub fn concurrency() {
 
     let spd = Arc::new(SharedPagedData::new(stg));
     let wapd = AccessPagedData::new_writer(spd.clone());
-    let db = Database::new(wapd, "", bmap.clone());
-
-    let mut tr = GenTransaction::default();
-    let sql = "CREATE SCHEMA test";
-    db.run(&sql, &mut tr);
-    assert!(db.save() > 0);
+    let db = Database::new(wapd, "CREATE SCHEMA test", bmap.clone());
 
     let nt = 100;
 
