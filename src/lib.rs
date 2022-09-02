@@ -63,19 +63,19 @@
 //!     let file = Box::new(MemFile::default());
 //!     let upd = Box::new(MemFile::default());
 //!     let stg = Box::new(AtomicFile::new(file, upd));
-//! 
+//!
 //!     let spd = Arc::new(SharedPagedData::new(stg));
 //!     let wapd = AccessPagedData::new_writer(spd);
-//! 
+//!
 //!     let mut bmap = BuiltinMap::default();
 //!     standard_builtins(&mut bmap);
 //!     let bmap = Arc::new(bmap);
-//! 
+//!
 //!     let db = Database::new(wapd, "", bmap);
 //!     let mut tr = GenTransaction::default();
 //!     let sql = "
-//! CREATE SCHEMA test GO 
-//! CREATE TABLE test.Cust(Name string) GO 
+//! CREATE SCHEMA test GO
+//! CREATE TABLE test.Cust(Name string) GO
 //! INSERT INTO test.Cust(Name) VALUES ('freddy')
 //! SELECT Name FROM test.Cust
 //! ";
@@ -750,5 +750,64 @@ impl Transaction for DummyTransaction {
     /// Called if a panic ( error ) occurs.
     fn set_error(&mut self, err: String) {
         println!("Error: {}", err);
+    }
+}
+
+#[test]
+pub fn concurrency() {
+    let file = Box::new(MemFile::default());
+    let upd = Box::new(MemFile::default());
+    let stg = Box::new(AtomicFile::new(file, upd));
+
+    let mut bmap = BuiltinMap::default();
+    standard_builtins(&mut bmap);
+    let bmap = Arc::new(bmap);
+
+    let spd = Arc::new(SharedPagedData::new(stg));
+    let wapd = AccessPagedData::new_writer(spd.clone());
+    let db = Database::new(wapd, "", bmap.clone());
+
+    let mut tr = GenTransaction::default();
+    let sql = "CREATE SCHEMA test";
+    db.run(&sql, &mut tr);
+    assert!(db.save() > 0);
+
+    let nt = 100;
+
+    // Create nt tables.
+    for i in 0..nt {
+        let mut tr = GenTransaction::default();
+        let sql = format!(
+            "CREATE TABLE test.[T{}](N int) GO INSERT INTO test.[T{}](N) VALUES (0)",
+            i, i
+        );
+        db.run(&sql, &mut tr);
+        assert!(db.save() > 0);
+    }
+
+    // Create readers at different update times.
+    let mut rapd = Vec::new();
+    for i in 0..1000 {
+        rapd.push((i, AccessPagedData::new_reader(spd.clone())));
+        let mut tr = GenTransaction::default();
+        let table = i % nt;
+        let sql = format!("UPDATE test.[T{}] SET N = N + 1 WHERE 1=1", table);
+        db.run(&sql, &mut tr);
+        assert!(db.save() > 0);
+    }
+
+    // Run the readers in random order, checking content of random table.
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    while !rapd.is_empty() {
+        let r = rng.gen::<usize>() % rapd.len();
+        let (i, rapd) = rapd.remove(r);
+        let db = Database::new(rapd, "", bmap.clone());
+        let mut tr = GenTransaction::default();
+        let table = rng.gen::<usize>() % nt;
+        let sql = format!("SELECT N FROM test.[T{}]", table);
+        db.run(&sql, &mut tr);
+        let expect = i / nt + if i % nt > table { 1 } else { 0 };
+        assert!(tr.rp.output == format!("{}", expect).as_bytes());
     }
 }

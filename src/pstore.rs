@@ -76,22 +76,24 @@ impl PageData {
         result
     }
 
-    /// Trim history pages that no longer need tot be retained.
-    fn trim(&mut self, start: u64, retain: u64, time: u64) -> bool {
-        let x = self.history_next(start, time);
-        if x <= retain {
-            self.history.remove(&start);
-            true
-        } else {
+    /// Trim entry for time t that no longer need to be retained, returning whether entry was retained.
+    /// start is first relevant reader, for testing whether entry can be removed.
+    fn trim(&mut self, t: u64, start: u64) -> bool {
+        let first = self.history_start(t);
+        if first >= start {
+            let d = self.history.remove(&t);
+            debug_assert!(d.is_some());
             false
+        } else {
+            true
         }
     }
 
-    fn history_next(&self, start: u64, time: u64) -> u64 {
-        if let Some((k, _)) = self.history.range(start + 1..).next() {
-            *k
+    fn history_start(&self, t: u64) -> u64 {
+        if let Some((k, _)) = self.history.range(..t).rev().next() {
+            *k + 1
         } else {
-            time
+            0
         }
     }
 }
@@ -274,19 +276,13 @@ impl Stash {
     fn trim(&mut self, time: u64) {
         let (s, r) = (self.start(time), self.retain(time));
         if s != r {
-            let mut empty = Vec::new();
+            let mut empty = Vec::<u64>::new();
             for (t, pl) in self.vers.range_mut(s..r) {
-                let mut done = Vec::new();
-                for pnum in pl.iter() {
+                pl.retain(|pnum| {
                     let p = self.pages.get(pnum).unwrap();
                     let mut p = p.d.lock().unwrap();
-                    if p.trim(*t, r, self.time) {
-                        done.push(*pnum);
-                    }
-                }
-                for pnum in done {
-                    pl.remove(&pnum);
-                }
+                    p.trim(*t, s)
+                });
                 if pl.is_empty() {
                     empty.push(*t);
                 }
@@ -295,6 +291,7 @@ impl Stash {
                 self.vers.remove(&t);
             }
         }
+        // println!("trimmed time={} s={} r={} readers={:?} vers={:?}", time, s, r, self.rdrs, self.vers);
     }
 
     /// Calculate the start of the range of times for which there are no readers.
@@ -371,7 +368,7 @@ impl SharedPagedData {
         }
     }
 
-    /// Calculate the maxiumum size of a logical page. This value is stored in the Database struct.
+    /// Calculate the maximum size of a logical page. This value is stored in the Database struct.
     pub fn page_size_max(&self) -> usize {
         let ep_max = (self.sp_size - 2) / 8;
         (self.ep_size - 16) * ep_max + (self.sp_size - 2)
