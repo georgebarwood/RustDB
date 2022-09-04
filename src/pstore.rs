@@ -30,13 +30,14 @@ impl PageInfo {
 struct PageData {
     /// Current data for the page.
     current: Option<Data>,
-    /// Historic data for the page.
+    /// Historic data for the page. Has data for page at specified time.
+    /// A copy is made prior to an update, so get looks forward from access time.
     history: BTreeMap<u64, Data>,
 }
 
 /// Information about logical page usage.
 struct PageUsage {
-    /// Count of how manay times the page has been used.
+    /// Count of how many times the page has been used.
     counter: usize,
     /// Position of the page in stash heap.
     heap_pos: usize,
@@ -45,7 +46,7 @@ struct PageUsage {
 impl PageData {
     /// Get the Data for the page, checking history if not a writer.
     /// Reads Data from file if necessary.
-    /// Result is Data and flag indicating that data was read from file.
+    /// Result is Data and flag indicating whether data was read from file.
     fn get(&mut self, lpnum: u64, a: &AccessPagedData) -> (Data, bool) {
         if !a.writer {
             if let Some((_k, v)) = self.history.range(a.time..).next() {
@@ -77,18 +78,19 @@ impl PageData {
     }
 
     /// Trim entry for time t that no longer need to be retained, returning whether entry was retained.
-    /// start is first relevant reader, for testing whether entry can be removed.
+    /// start is start of range for which no readers exist.
     fn trim(&mut self, t: u64, start: u64) -> bool {
         let first = self.history_start(t);
         if first >= start {
-            let d = self.history.remove(&t);
-            debug_assert!(d.is_some());
+            // There is no reader that can read copy for time t, so copy can be removed.
+            self.history.remove(&t);
             false
         } else {
             true
         }
     }
 
+    /// Returns the earliest time that would return the page for the specified time.
     fn history_start(&self, t: u64) -> u64 {
         if let Some((k, _)) = self.history.range(..t).rev().next() {
             *k + 1
@@ -98,14 +100,14 @@ impl PageData {
     }
 }
 
-/// Heap keeps track of the page with the smallest counter.
+/// Heap keeps track of the page with the smallest usage counter.
 #[derive(Default)]
 struct Heap {
     v: Vec<PageInfoPtr>,
 }
 
 impl Heap {
-    /// Increases counter for p and adjusts the heap to match.
+    /// Increases usage counter for p and adjusts the heap to match.
     fn used(&mut self, p: &PageInfoPtr) {
         let (mut pos, counter) = {
             let mut p = p.u.lock().unwrap();
@@ -260,15 +262,16 @@ impl Stash {
     }
 
     /// Register that an update operation has completed. Time is incremented.
-    /// Stashed pages may be freed.
+    /// Stashed pages may be freed. Returns number of pages updated.
     fn end_write(&mut self) -> usize {
         let result = if let Some(u) = self.vers.get(&self.time) {
             u.len()
         } else {
             0
         };
-        self.time += 1;
-        self.trim(self.time - 1);
+        let t = self.time;
+        self.time = t + 1;
+        self.trim(t);
         result
     }
 
@@ -291,12 +294,11 @@ impl Stash {
                 self.vers.remove(&t);
             }
         }
-        // println!("trimmed time={} s={} r={} readers={:?} vers={:?}", time, s, r, self.rdrs, self.vers);
     }
 
     /// Calculate the start of the range of times for which there are no readers.
     fn start(&self, time: u64) -> u64 {
-        if let Some((t, _n)) = self.rdrs.range(0..time).rev().next() {
+        if let Some((t, _n)) = self.rdrs.range(..time).rev().next() {
             1 + *t
         } else {
             0
