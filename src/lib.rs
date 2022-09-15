@@ -11,7 +11,7 @@
 
 //!# Interface
 //!
-//! The method [Database::run] (or alternatively [Database::run_timed]) is called to execute an SQL query.
+//! The method [Database::run] is called to execute an SQL query.
 //! This takes a [Transaction] parameter which accumulates SELECT results and which also has methods
 //! for accessing input parameters and controlling output. Custom builtin functions implement CExp
 //! and have access to the transaction via an EvalEnv parameter, which can be downcast if necessary.
@@ -420,20 +420,9 @@ GO
                 "{} in {} at line {} column {}.",
                 e.msg, e.rname, e.line, e.column
             );
-            println!("Run error {}", &err);
             tr.set_error(err);
             self.err.set(true);
         }
-    }
-    /// Run a batch of SQL, printing the execution time.
-    pub fn run_timed(self: &DB, source: &str, tr: &mut dyn Transaction) {
-        let start = std::time::Instant::now();
-        self.run(source, tr);
-        println!(
-            "run_timed path={} run time={} micro sec.",
-            tr.arg(0, ""),
-            start.elapsed().as_micros()
-        );
     }
 
     /// Run a batch of SQL.

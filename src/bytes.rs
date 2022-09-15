@@ -2,14 +2,13 @@ use crate::{util, Cell, Ordering, Rc, Record, SaveOp, SortedFile, DB};
 
 /// =4. Number of fragment types.
 pub const NFT: usize = 4;
-/// =40. Min fragment size.
-pub const MINF: usize = 40;
-/// =29. Fragment increment.
-pub const FI: usize = 29;
+
+/// Bytes per fragment.
+pub static BPF: [usize; NFT] = [40, 127, 333, 1011];
 
 /// Total bytes used taking into account all overhead ( 3 + 1 + 8 = 12 bytes, per fragment ).
 fn total(len: usize, ft: usize) -> usize {
-    let bpf = FI * ft + MINF;
+    let bpf = BPF[ft];
     let nf = (len + bpf - 1) / bpf;
     nf * (bpf + 12)
 }
@@ -40,7 +39,7 @@ pub struct ByteStorage {
 impl ByteStorage {
     /// Construct new ByteStorage with specified root page and fragment type.
     pub fn new(root_page: u64, ft: usize) -> Self {
-        let bpf = FI * ft + MINF;
+        let bpf = BPF[ft];
         let file = Rc::new(SortedFile::new(9 + bpf, 8, root_page));
         ByteStorage {
             file,
@@ -86,11 +85,12 @@ impl ByteStorage {
             self.id_gen.set(r.id + 1);
             let mut len = n - done;
             if len > self.bpf {
-                r.len = (self.bpf << 1) as u8;
-                len = self.bpf
+                r.last = false;
+                len = self.bpf;
             } else {
-                r.len = 1 + ((len as u8) << 1);
+                r.last = true;
             }
+            r.len = len;
             r.bytes[..len].copy_from_slice(&bytes[done..(len + done)]);
             done += len;
             self.file.insert(db, &r);
@@ -110,10 +110,10 @@ impl ByteStorage {
             let xid = util::getu64(&p.data, off);
             debug_assert!(xid == id);
             id += 1;
-            let len = p.data[off + 8] as usize;
-            let off = off + 9;
-            result.extend_from_slice(&p.data[off..off + (len >> 1)]);
-            if len & 1 == 1 {
+            let off = off + 8;
+            let (len, last) = decode(&p.data[off..], self.bpf);
+            result.extend_from_slice(&p.data[off..off + len]);
+            if last {
                 break;
             }
         }
@@ -129,8 +129,9 @@ impl ByteStorage {
             let xid = util::getu64(&p.data, off);
             debug_assert!(xid == id + n);
             n += 1;
-            let len = &p.data[off + 8];
-            if len & 1 == 1 {
+            let off = off + 8;
+            let (_len, last) = decode(&p.data[off..], self.bpf);
+            if last {
                 break;
             }
         }
@@ -152,8 +153,8 @@ impl ByteStorage {
 /// Values are split into fragments.
 struct Fragment {
     id: u64,
-    /// Bit 0 encodes whether this is the last fragment.
-    len: u8,
+    len: usize,
+    last: bool,
     bytes: Vec<u8>,
 }
 
@@ -162,6 +163,7 @@ impl Fragment {
         Fragment {
             id,
             len: 0,
+            last: false,
             bytes: vec![0; bpf],
         }
     }
@@ -175,8 +177,29 @@ impl Record for Fragment {
 
     fn save(&self, data: &mut [u8]) {
         util::setu64(data, self.id);
-        data[8] = self.len;
         let bpf = self.bytes.len();
-        data[9..9 + bpf].copy_from_slice(&self.bytes[..bpf]);
+        data[8..8 + self.len].copy_from_slice(&self.bytes[..self.len]);
+
+        // Maybe should zero unused bytes.
+
+        let unused = bpf - self.len as usize;
+        data[8+bpf] = (unused % 64) as u8
+            + if self.last { 64 } else { 0 }
+            + if unused >= 64 { 128 } else { 0 };
+        if unused >= 64 {
+            data[8+bpf - 1] = (unused / 64) as u8;
+        }
     }
+}
+
+/// Result is data length and last flag.
+fn decode(data: &[u8], bpf: usize) -> (usize, bool) {
+    let b = data[bpf];
+    let unused = (b % 64) as usize
+        + if b >= 128 {
+            data[bpf - 1] as usize * 64
+        } else {
+            0
+        };
+    (bpf - unused, b & 64 != 0)
 }

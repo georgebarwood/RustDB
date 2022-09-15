@@ -462,11 +462,13 @@ impl SortedFile {
     #[cfg(feature = "verify")]
     fn get_used_page(&self, db: &DB, to: &mut HashSet<u64>, pnum: u64, level: u8) {
         assert!(to.insert(pnum));
-        if level == 0 { return; }
+        if level == 0 {
+            return;
+        }
         let pp = self.load_page(db, pnum);
         let p = &pp.borrow();
         if p.level != 0 {
-            self.get_used_page(db, to, p.first_page, p.level-1);
+            self.get_used_page(db, to, p.first_page, p.level - 1);
             self.get_used_pages(db, to, p, p.root);
         }
     }
@@ -477,7 +479,7 @@ impl SortedFile {
             self.get_used_pages(db, to, p, p.left(x));
             self.get_used_pages(db, to, p, p.right(x));
             if p.level > 0 {
-                self.get_used_page(db, to, p.child_page(x), p.level-1);
+                self.get_used_page(db, to, p.child_page(x), p.level - 1);
             }
         }
     }
