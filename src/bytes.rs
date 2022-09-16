@@ -32,7 +32,7 @@ pub struct ByteStorage {
     ///
     pub file: Rc<SortedFile>,
     id_gen: Cell<u64>,
-    /// Bytes per fragment. One of 40, 69, 98, 127.
+    /// Bytes per fragment.
     bpf: usize,
 }
 
