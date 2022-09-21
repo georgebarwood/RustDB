@@ -310,7 +310,7 @@ pub struct Database {
     page_size_max: usize,
 }
 
-const SYS_ROOT_LAST: u64 = 15;
+const SYS_ROOT_LAST: u64 = 16;
 
 impl Database {
     /// Construct a new DB, based on the specified file.
@@ -342,6 +342,7 @@ impl Database {
         sys_index.add_index(tb.rt(), vec![1]);
         sys_index_col.add_index(tb.rt(), vec![0]);
         sys_function.add_index(tb.rt(), vec![0, 1]);
+        sys_function.add_index(tb.rt(), vec![1]);
 
         let mut bs = Vec::new();
         for ft in 0..bytes::NFT {
@@ -402,6 +403,7 @@ CREATE INDEX ByTable ON sys.Column(Table)
 CREATE INDEX ByTable ON sys.Index(Table)
 CREATE INDEX ByIndex ON sys.IndexColumn(Index)
 CREATE INDEX BySchemaName ON sys.Function(Schema,Name)
+CREATE INDEX ByName ON sys.Function(Name)
 GO
 ";
             let mut dq = DummyTransaction {};
