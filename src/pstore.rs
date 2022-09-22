@@ -67,11 +67,11 @@ impl PageData {
 
     /// Set the page data, updating the history using the specified time and current data.
     /// result is size of old data (if any).
-    fn set(&mut self, time: u64, data: Data) -> usize {
+    fn set(&mut self, time: u64, data: Data, do_history: bool) -> usize {
         let mut result = 0;
         if let Some(old) = self.current.take() {
             result = old.len();
-            self.history.insert(time, old);
+            if do_history{ self.history.insert(time, old); }
         }
         self.current = Some(data);
         result
@@ -220,16 +220,15 @@ impl Stash {
     fn set(&mut self, lpnum: u64, data: Data) {
         let time = self.time;
         let u = self.vers.entry(time).or_insert_with(HashSet::default);
-        if u.insert(lpnum) {
-            let p = self
-                .pages
-                .entry(lpnum)
-                .or_insert_with(PageInfo::new)
-                .clone();
-            self.heap.used(&p);
-            self.total += data.len();
-            self.total -= p.d.lock().unwrap().set(time, data);
-        }
+        let do_history = u.insert(lpnum);
+        let p = self
+            .pages
+            .entry(lpnum)
+            .or_insert_with(PageInfo::new)
+            .clone();
+        self.heap.used(&p);
+        self.total += data.len();
+        self.total -= p.d.lock().unwrap().set(time, data, do_history);
     }
 
     /// Get the PageInfoPtr for the specified page and note as used.

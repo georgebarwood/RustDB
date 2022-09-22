@@ -267,7 +267,6 @@ impl CompactFile {
             self.lp_first = p;
             self.lp_alloc_dirty = true;
         }
-
         // Relocate pages to fill any free extension pages.
         while !self.ep_free.is_empty() {
             self.ep_count -= 1;
