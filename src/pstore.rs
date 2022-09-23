@@ -71,7 +71,9 @@ impl PageData {
         let mut result = 0;
         if let Some(old) = self.current.take() {
             result = old.len();
-            if do_history{ self.history.insert(time, old); }
+            if do_history {
+                self.history.insert(time, old);
+            }
         }
         self.current = Some(data);
         result

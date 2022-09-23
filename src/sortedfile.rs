@@ -405,7 +405,7 @@ impl SortedFile {
                 "new #children={} diff={} record count={}",
                 n1,
                 n - n1,
-                plist.count
+                plist.packed_record_count
             );
         }
         *freed += plist.store_to(db, p, self);
@@ -778,12 +778,17 @@ enum PKey {
 
 #[cfg(feature = "pack")]
 /// PageList is used to implement repacking of child pages ( REPACKFILE builtin function ).
+/// First add is called repeatedly to add records of the original child pages.
+/// Then store_to is called to build the new parent page.
+
 #[derive(Default)]
 struct PageList {
-    cur: usize,
+    /// List of child pages and their keys.
     list: Vec<(Page, PKey)>,
+    /// Child page numbers.
     pnums: Vec<u64>,
-    count: usize,
+    /// Nummber of child records (for tracing only).
+    packed_record_count: usize,
 }
 
 #[cfg(feature = "pack")]
@@ -795,38 +800,6 @@ const REPACK_LIMIT: i64 = 100;
 
 #[cfg(feature = "pack")]
 impl PageList {
-    /// Build new parent page.
-    fn store_to(&mut self, db: &DB, p: &mut Page, file: &SortedFile) -> i64 {
-        let mut pnums = std::mem::take(&mut self.pnums);
-        let list = std::mem::take(&mut self.list);
-        let mut np = p.new_page();
-
-        for (cp, key) in list {
-            let cpnum = pnums.pop().unwrap();
-            file.publish_page(cpnum, cp);
-            match key {
-                PKey::Copy(b) => np.append_page_copy(&b, cpnum),
-                PKey::Dyn(key) => np.append_page(&*key, cpnum),
-                PKey::None => np.first_page = cpnum,
-            }
-        }
-
-        let pnum = p.pnum;
-        p.pnum = u64::MAX;
-
-        file.remove_page(p.pnum);
-        file.publish_page(pnum, np);
-
-        if TRACE_PACK {
-            println!("Free pages from pack={:?}", pnums);
-        }
-        let result = pnums.len();
-        while let Some(pnum) = pnums.pop() {
-            db.free_page(pnum);
-        }
-        result as i64
-    }
-
     /// Add a page to the PageList.
     fn add(
         &mut self,
@@ -853,7 +826,8 @@ impl PageList {
             if let Some(pp) = par {
                 self.append_one(db, pp, px, r);
             }
-            let ap = &mut self.list[self.cur].0;
+            let cur = self.list.len() - 1;
+            let ap = &mut self.list[cur].0;
             let x = ap.count;
             if x == 0 {
                 ap.first_page = p.first_page;
@@ -876,8 +850,9 @@ impl PageList {
 
     /// Append a single page record.
     fn append_one(&mut self, db: &DB, p: &Page, x: usize, r: &dyn Record) {
-        self.count += 1;
-        let mut ap = &mut self.list[self.cur].0;
+        self.packed_record_count += 1;
+        let cur = self.list.len() - 1;
+        let mut ap = &mut self.list[cur].0;
         if ap.full(db) {
             // Start a new page.
             let key = if ap.level == 0 {
@@ -886,9 +861,38 @@ impl PageList {
                 PKey::Copy(p.copy(x))
             };
             self.list.push((p.new_page(), key));
-            self.cur += 1;
-            ap = &mut self.list[self.cur].0;
+            ap = &mut self.list[cur + 1].0;
         }
         ap.append_from(p, x);
+    }
+
+    /// Build new parent page.
+    fn store_to(&mut self, db: &DB, p: &mut Page, file: &SortedFile) -> i64 {
+        let mut pnums = std::mem::take(&mut self.pnums);
+        let list = std::mem::take(&mut self.list);
+        let mut np = p.new_page();
+
+        for (cp, key) in list {
+            let cpnum = pnums.pop().unwrap();
+            file.publish_page(cpnum, cp);
+            match key {
+                PKey::Copy(b) => np.append_page_copy(&b, cpnum),
+                PKey::Dyn(key) => np.append_page(&*key, cpnum),
+                PKey::None => np.first_page = cpnum,
+            }
+        }
+
+        let pnum = p.pnum;
+        p.pnum = u64::MAX;
+        file.publish_page(pnum, np);
+
+        if TRACE_PACK {
+            println!("Free pages from pack={:?}", pnums);
+        }
+        let result = pnums.len();
+        while let Some(pnum) = pnums.pop() {
+            db.free_page(pnum);
+        }
+        result as i64
     }
 }
