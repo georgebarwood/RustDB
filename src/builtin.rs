@@ -16,6 +16,7 @@ pub fn standard_builtins(map: &mut BuiltinMap) {
             CompileFunc::Value(c_filecontent),
         ),
         ("GLOBAL", DataKind::Int, CompileFunc::Int(c_global)),
+        ("CONTAINS", DataKind::Int, CompileFunc::Int(c_contains)),
         ("REPLACE", DataKind::String, CompileFunc::Value(c_replace)),
         (
             "SUBSTRING",
@@ -187,6 +188,33 @@ impl CExp<f64> for ParseFloat {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> f64 {
         let s = self.s.eval(e, d).str();
         s.parse().unwrap()
+    }
+}
+/////////////////////////////
+/// Compile call to CONTAINS.
+fn c_contains(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(
+        b,
+        args,
+        &[DataKind::String, DataKind::String],
+    );
+    let s = c_value(b, &mut args[0]);
+    let pat = c_value(b, &mut args[1]);
+    Box::new(Contains { s, pat })
+}
+struct Contains {
+    s: CExpPtr<Value>,
+    pat: CExpPtr<Value>,
+}
+impl CExp<i64> for Contains {
+    fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> i64 {
+        let s = self.s.eval(e, d).str().to_string();
+        let pat = self.pat.eval(e, d).str().to_string();
+        match s.find(&pat)
+        {
+          Some(u) => u as i64,
+          None => -1
+        }
     }
 }
 /////////////////////////////
