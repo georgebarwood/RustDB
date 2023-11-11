@@ -120,7 +120,7 @@ impl Storage for AtomicFile {
             let estart = k + 1 - v.len as u64;
             if estart > start + done as u64 {
                 let lim = (estart - (start + done as u64)) as usize;
-                let amount = min(todo, lim) as usize;
+                let amount = min(todo, lim);
                 self.stg
                     .read(start + done as u64, &mut data[done..done + amount]);
                 done += amount;

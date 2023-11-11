@@ -371,7 +371,7 @@ impl SortedFile {
             }
         }
 
-        let (x, y) = self.page_total(db, p, p.root, r);
+        let (x, y) = Self::page_total(db, p, p.root);
         let n = 1 + x;
         if n < 2 {
             return;
@@ -413,14 +413,14 @@ impl SortedFile {
 
     #[cfg(feature = "pack")]
     /// Count number child pages and their total size, to decide whether to repack a parent page.
-    fn page_total(&self, db: &DB, p: &Page, x: usize, r: &dyn Record) -> (usize, u64) {
+    fn page_total(db: &DB, p: &Page, x: usize) -> (usize, u64) {
         if x == 0 {
             return (0, 0);
         }
         let cp = p.child_page(x);
         let cp_size = db.lp_size(cp);
-        let (n1, t1) = self.page_total(db, p, p.left(x), r);
-        let (n2, t2) = self.page_total(db, p, p.right(x), r);
+        let (n1, t1) = Self::page_total(db, p, p.left(x));
+        let (n2, t2) = Self::page_total(db, p, p.right(x));
         (1 + n1 + n2, cp_size + t1 + t2)
     }
 

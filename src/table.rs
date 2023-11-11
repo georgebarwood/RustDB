@@ -319,7 +319,7 @@ pub struct Access<'d, 'i> {
 impl<'d, 'i> Access<'d, 'i> {
     /// Extract int from byte data for specified column.
     pub fn int(&self, colnum: usize) -> i64 {
-        util::iget(self.data, self.info.off[colnum], self.info.siz(colnum)) as i64
+        util::iget(self.data, self.info.off[colnum], self.info.siz(colnum))
     }
 
     /// Extract string from byte data for specified column.
@@ -832,7 +832,7 @@ fn get_keys(
         }
         _ => {}
     }
-    return Some(c_bool(b, we));
+    Some(c_bool(b, we))
 }
 
 /// Compare table rows.

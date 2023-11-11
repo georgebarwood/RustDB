@@ -356,7 +356,7 @@ impl Page {
         debug_assert!(x != 0);
         let off = self.over_off(x) - PAGE_ID_SIZE;
         let data = Data::make_mut(&mut self.data);
-        util::set(data, off, pnum as u64, PAGE_ID_SIZE);
+        util::set(data, off, pnum, PAGE_ID_SIZE);
     }
 
     /// Set the record data for node x.

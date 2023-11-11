@@ -12,7 +12,7 @@ impl CExp<Value> for Call {
             let v = exp.eval(e, d);
             e.stack.push(v);
         }
-        e.call(&*self.fp);
+        e.call(&self.fp);
         e.stack.pop().unwrap()
     }
 }
@@ -317,7 +317,7 @@ pub(crate) struct ColumnF64 {
 
 impl CExp<f64> for ColumnF64 {
     fn eval(&self, _e: &mut EvalEnv, data: &[u8]) -> f64 {
-        util::getf64(data, self.off) as f64
+        util::getf64(data, self.off)
     }
 }
 

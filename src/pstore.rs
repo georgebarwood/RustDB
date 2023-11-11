@@ -94,7 +94,7 @@ impl PageData {
 
     /// Returns the earliest time that would return the page for the specified time.
     fn history_start(&self, t: u64) -> u64 {
-        if let Some((k, _)) = self.history.range(..t).rev().next() {
+        if let Some((k, _)) = self.history.range(..t).next_back() {
             *k + 1
         } else {
             0
@@ -221,7 +221,7 @@ impl Stash {
     /// Set the value of the specified page for the current time.
     fn set(&mut self, lpnum: u64, data: Data) {
         let time = self.time;
-        let u = self.vers.entry(time).or_insert_with(HashSet::default);
+        let u = self.vers.entry(time).or_default();
         let do_history = u.insert(lpnum);
         let p = self
             .pages
@@ -299,7 +299,7 @@ impl Stash {
 
     /// Calculate the start of the range of times for which there are no readers.
     fn start(&self, time: u64) -> u64 {
-        if let Some((t, _n)) = self.rdrs.range(..time).rev().next() {
+        if let Some((t, _n)) = self.rdrs.range(..time).next_back() {
             1 + *t
         } else {
             0

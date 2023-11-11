@@ -182,7 +182,7 @@ impl Record for Fragment {
 
         // Maybe should zero unused bytes.
 
-        let unused = bpf - self.len as usize;
+        let unused = bpf - self.len;
         data[8+bpf] = (unused % 64) as u8
             + if self.last { 64 } else { 0 }
             + if unused >= 64 { 128 } else { 0 };

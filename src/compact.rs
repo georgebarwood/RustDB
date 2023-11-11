@@ -92,8 +92,8 @@ impl CompactFile {
             x.ep_resvd = x.stg.read_u64(0);
             x.lp_alloc = x.stg.read_u64(8);
             x.lp_first = x.stg.read_u64(16);
-            x.sp_size = x.read_u16(24) as usize;
-            x.ep_size = x.read_u16(26) as usize;
+            x.sp_size = x.read_u16(24);
+            x.ep_size = x.read_u16(26);
         }
         x.ep_count = (fsize + (x.ep_size as u64) - 1) / (x.ep_size as u64);
         if x.ep_count < x.ep_resvd {
@@ -154,7 +154,7 @@ impl CompactFile {
         let mut done = 0;
         for i in 0..ext {
             let amount = min(size - done, self.ep_size - 8);
-            let page = util::getu64(&info, 2 + i * 8) as u64;
+            let page = util::getu64(&info, 2 + i * 8);
             let foff = page * (self.ep_size as u64);
             self.stg.write_u64(foff, lpnum);
             self.stg.write_data(foff + 8, data.clone(), done, amount);
