@@ -190,7 +190,7 @@ impl Page {
         0
     }
 
-    /// Insert a record into the page ( if the key is a duplicate, nothing happens, and the record is not saved ).
+    /// Insert a record into the page ( panics if the key is a duplicate ).
     pub fn insert(&mut self, db: &DB, r: &dyn Record) {
         let inserted = self.next_alloc();
         self.root = self.insert_into(self.root, Some((db, r))).0;

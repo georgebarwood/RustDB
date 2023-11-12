@@ -193,7 +193,7 @@ impl<'a> Parser<'a> {
             match sc {
                 b'A'..=b'Z' | b'a'..=b'z' | b'@' => {
                     token = Token::Id;
-                    while cc.is_ascii_uppercase() || cc.is_ascii_lowercase() {
+                    while cc.is_ascii_alphabetic() {
                         cc = self.read_char();
                     }
                     self.cs = &self.source[self.token_start..self.source_ix - 1];
@@ -204,9 +204,7 @@ impl<'a> Parser<'a> {
                     if fc == b'0' && cc == b'x' {
                         cc = self.read_char();
                         token = Token::Hex;
-                        while cc.is_ascii_digit()
-                            || (b'A'..=b'F').contains(&cc)
-                            || (b'a'..=b'f').contains(&cc)
+                        while cc.is_ascii_hexdigit()
                         {
                             cc = self.read_char();
                         }
