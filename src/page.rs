@@ -1,7 +1,7 @@
 //!
-//! A page is up to PAGE_SIZE bytes, logically divided into up to 2047 fixed size nodes, which implement a balanced binary tree.
+//! A page has up to MAX_NODE (2047) fixed size nodes, which implement a balanced binary tree.
 //!
-//! Nodes are numbered from 1..2047, with 0 indicating a null ( non-existent ) node.
+//! Nodes are numbered from 1..MAX_NODE, with 0 indicating a null ( non-existent ) node.
 //!
 //! Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids.
 //!

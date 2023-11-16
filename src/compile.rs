@@ -559,7 +559,7 @@ pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
     panic!("Name '{}' not found", name)
 }
 
-/// Compile ExprCall to CExpPtr<Value>, checking parameter types.
+/// Compile ExprCall to `CExpPtr<Value>`, checking parameter types.
 pub fn c_call(b: &Block, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value> {
     let fp = c_function(&b.db, name);
     let mut pv = Vec::new();

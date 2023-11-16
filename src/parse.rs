@@ -699,16 +699,6 @@ impl<'a> Parser<'a> {
     }
 
     fn primary_table_exp(&mut self) -> TableExpression {
-        /*
-            if ( test( Token::LBra ) )
-            {
-              read( "SELECT" );
-              TableExpression te = Expressions( null );
-              read( Token::RBra );
-              if ( test("AS") ) te.Alias = Name();
-              return te;
-            } else
-        */
         if self.token != Token::Id {
             panic!("table expected");
         }
@@ -1021,7 +1011,7 @@ impl<'a> Parser<'a> {
                 self.b.dop(DO::CreateSchema(name));
             }
             b"INDEX" => self.create_index(),
-            _ => panic!("unknown keyword"),
+            _ => panic!("CREATE : TABLE<FN.. expected"),
         }
     }
 
