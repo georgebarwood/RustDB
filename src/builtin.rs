@@ -47,6 +47,7 @@ pub fn standard_builtins(map: &mut BuiltinMap) {
         ("REPACKFILE", DataKind::Int, CompileFunc::Int(c_repackfile)),
         #[cfg(feature = "verify")]
         ("VERIFYDB", DataKind::String, CompileFunc::Value(c_verifydb)),
+        ("BINTOSTR", DataKind::String, CompileFunc::Value(c_bintostr))
     ];
     for (name, typ, cf) in list {
         map.insert(name.to_string(), (typ, cf));
@@ -458,3 +459,26 @@ impl CExp<Value> for VerifyDb {
         Value::String(Rc::new(s))
     }
 }
+
+/// Compile call to BINTOSTR.
+fn c_bintostr(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
+    check_types(b, args, &[DataKind::Binary]);
+    let bytes = c_value(b, &mut args[0]);
+    Box::new(Bintostr { bytes })
+}
+/// Compiled call to BINTOSTR.
+struct Bintostr {
+    bytes: CExpPtr<Value>,
+}
+impl CExp<Value> for Bintostr {
+    fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
+        match self.bytes.eval(ee, d) {
+          Value::ArcBinary(x) =>
+            Value::String(Rc::new(String::from_utf8(x.to_vec()).unwrap())),
+          Value::RcBinary(x) =>
+            Value::String(Rc::new(String::from_utf8(x.to_vec()).unwrap())),        
+          _ => panic!()
+        }
+    }
+}
+
