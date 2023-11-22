@@ -66,8 +66,8 @@ impl PageData {
     }
 
     /// Set the page data, updating the history using the specified time and current data.
-    /// result is size of old data (if any).
-    fn set(&mut self, time: u64, data: Data, do_history: bool) -> usize {
+    /// result is size of previously loaded data.
+    fn set_page(&mut self, time: u64, data: Data, do_history: bool) -> usize {
         let mut result = 0;
         if let Some(old) = self.current.take() {
             result = old.len();
@@ -109,6 +109,17 @@ struct Heap {
 }
 
 impl Heap {
+    fn _calc_total(&self) -> usize {
+        let mut result = 0;
+        for pinfo in &self.v {
+            let d = pinfo.d.lock().unwrap();
+            if let Some(d) = &d.current {
+                result += d.len();
+            }
+        }
+        result
+    }
+
     /// Increases usage counter for p and adjusts the heap to match.
     fn used(&mut self, p: &PageInfoPtr) {
         let (mut pos, counter) = {
@@ -219,7 +230,7 @@ pub struct Stash {
 
 impl Stash {
     /// Set the value of the specified page for the current time.
-    fn set(&mut self, lpnum: u64, data: Data) {
+    fn set(&mut self, lpnum: u64, data: Data, apd: &AccessPagedData) {
         let time = self.time;
         let u = self.vers.entry(time).or_default();
         let do_history = u.insert(lpnum);
@@ -230,7 +241,13 @@ impl Stash {
             .clone();
         self.heap.used(&p);
         self.total += data.len();
-        self.total -= p.d.lock().unwrap().set(time, data, do_history);
+        let mut pd = p.d.lock().unwrap();
+        // Make sure page is in cache ( since trimming could mean it has been discarded ).
+        let (old, loaded) = pd.get(lpnum, apd);
+        if loaded {
+            self.total += old.len();
+        }
+        self.total -= pd.set_page(time, data, do_history);
     }
 
     /// Get the PageInfoPtr for the specified page and note as used.
@@ -315,10 +332,15 @@ impl Stash {
         }
     }
 
+    fn more(&mut self, amount: usize) {
+        self.total += amount;
+        self.trim_cache();
+    }
+
     /// Trim cached data ( to reduce memory usage ).
     fn trim_cache(&mut self) {
         let (old_total, old_len) = (self.total, self.heap.v.len());
-        while !self.heap.v.is_empty() && self.total >= self.mem_limit {
+        while self.heap.v.len() > 1 && self.total >= self.mem_limit {
             self.total -= self.heap.free();
         }
         if self.trace {
@@ -363,8 +385,10 @@ impl SharedPagedData {
         // Note : if it's not a new file, sp_size and ep_size are read from file header.
         let sp_size = file.sp_size;
         let ep_size = file.ep_size;
+        // Set a default stash memory limit of 10 MB.
+        let stash = Stash { mem_limit: 10 * 1024 * 1024, ..Default::default() };
         Self {
-            stash: Mutex::new(Stash::default()),
+            stash: Mutex::new(stash),
             file: RwLock::new(file),
             sp_size,
             ep_size,
@@ -420,7 +444,7 @@ impl AccessPagedData {
         let (data, loaded) = pinfo.d.lock().unwrap().get(lpnum, self);
 
         if loaded {
-            self.spd.stash.lock().unwrap().total += data.len();
+            self.spd.stash.lock().unwrap().more(data.len());
         }
         data
     }
@@ -430,7 +454,11 @@ impl AccessPagedData {
         debug_assert!(self.writer);
 
         // First update the stash ( ensures any readers will not attempt to read the file ).
-        self.spd.stash.lock().unwrap().set(lpnum, data.clone());
+        self.spd
+            .stash
+            .lock()
+            .unwrap()
+            .set(lpnum, data.clone(), self);
 
         // Write data to underlying file.
         self.spd.file.write().unwrap().set_page(lpnum, data);
@@ -456,7 +484,7 @@ impl AccessPagedData {
     /// Free a logical page.
     pub fn free_page(&self, lpnum: u64) {
         debug_assert!(self.writer);
-        self.spd.stash.lock().unwrap().set(lpnum, nd());
+        self.spd.stash.lock().unwrap().set(lpnum, nd(), self);
         self.spd.file.write().unwrap().free_page(lpnum);
     }
 

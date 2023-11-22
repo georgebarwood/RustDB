@@ -47,7 +47,7 @@ pub fn standard_builtins(map: &mut BuiltinMap) {
         ("REPACKFILE", DataKind::Int, CompileFunc::Int(c_repackfile)),
         #[cfg(feature = "verify")]
         ("VERIFYDB", DataKind::String, CompileFunc::Value(c_verifydb)),
-        ("BINTOSTR", DataKind::String, CompileFunc::Value(c_bintostr))
+        ("BINTOSTR", DataKind::String, CompileFunc::Value(c_bintostr)),
     ];
     for (name, typ, cf) in list {
         map.insert(name.to_string(), (typ, cf));
@@ -194,11 +194,7 @@ impl CExp<f64> for ParseFloat {
 /////////////////////////////
 /// Compile call to CONTAINS.
 fn c_contains(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
-    check_types(
-        b,
-        args,
-        &[DataKind::String, DataKind::String],
-    );
+    check_types(b, args, &[DataKind::String, DataKind::String]);
     let s = c_value(b, &mut args[0]);
     let pat = c_value(b, &mut args[1]);
     Box::new(Contains { s, pat })
@@ -211,10 +207,9 @@ impl CExp<i64> for Contains {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> i64 {
         let s = self.s.eval(e, d).str().to_string();
         let pat = self.pat.eval(e, d).str().to_string();
-        match s.find(&pat)
-        {
-          Some(u) => u as i64,
-          None => -1
+        match s.find(&pat) {
+            Some(u) => u as i64,
+            None => -1,
         }
     }
 }
@@ -473,12 +468,9 @@ struct Bintostr {
 impl CExp<Value> for Bintostr {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
         match self.bytes.eval(ee, d) {
-          Value::ArcBinary(x) =>
-            Value::String(Rc::new(String::from_utf8(x.to_vec()).unwrap())),
-          Value::RcBinary(x) =>
-            Value::String(Rc::new(String::from_utf8(x.to_vec()).unwrap())),        
-          _ => panic!()
+            Value::ArcBinary(x) => Value::String(Rc::new(String::from_utf8(x.to_vec()).unwrap())),
+            Value::RcBinary(x) => Value::String(Rc::new(String::from_utf8(x.to_vec()).unwrap())),
+            _ => panic!(),
         }
     }
 }
-

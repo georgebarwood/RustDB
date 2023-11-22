@@ -1,5 +1,4 @@
 use crate::*;
-use std::collections::hash_map::Entry;
 
 /// Sorted Record storage.
 ///
@@ -7,10 +6,8 @@ use std::collections::hash_map::Entry;
 ///
 /// Each page is either a parent page with links to child pages, or a leaf page.
 pub struct SortedFile {
-    /// Cached pages.
-    pub pages: RefCell<HashMap<u64, PagePtr>>,
-    /// List of pages that have changed.
-    pub dirty_pages: RefCell<Vec<PagePtr>>,
+    /// Map of pages that have not been saved..
+    pub dirty_pages: RefCell<HashMap<u64, PagePtr>>,
     /// Size of a record.
     pub rec_size: usize,
     /// Size of a key.
@@ -25,8 +22,7 @@ impl SortedFile {
     /// Create File with specified record size, key size, root page.
     pub fn new(rec_size: usize, key_size: usize, root_page: u64) -> Self {
         SortedFile {
-            pages: newmap(),
-            dirty_pages: RefCell::new(Vec::new()),
+            dirty_pages: newmap(),
             rec_size,
             key_size,
             root_page,
@@ -47,7 +43,7 @@ impl SortedFile {
             return;
         }
         let dp = &mut *self.dirty_pages.borrow_mut();
-        while let Some(pp) = dp.pop() {
+        for (_pnum, pp) in dp.drain() {
             let p = &mut *pp.borrow_mut();
             if p.pnum != u64::MAX {
                 p.compress(db);
@@ -66,12 +62,10 @@ impl SortedFile {
                 db.file.set_page(p.pnum, p.data.clone());
             }
         }
-        self.pages.borrow_mut().clear();
     }
 
     /// Clear the cache, changes are discarded instead of being saved.
     pub fn rollback(&self) {
-        self.pages.borrow_mut().clear();
         self.dirty_pages.borrow_mut().clear();
     }
 
@@ -281,12 +275,12 @@ impl SortedFile {
             p.pnum = pnum;
             self.set_dirty(p, &pp);
         }
-        self.pages.borrow_mut().insert(pnum, pp);
+        self.dirty_pages.borrow_mut().insert(pnum, pp);
     }
 
     #[cfg(feature = "pack")]
     fn remove_page(&self, pnum: u64) {
-        self.pages.borrow_mut().remove(&pnum);
+        self.dirty_pages.borrow_mut().remove(&pnum);
     }
 
     /// Get a page from the cache, or if it is not in the cache, load it from external storage.
@@ -294,46 +288,41 @@ impl SortedFile {
         if !self.ok.get() {
             panic!()
         }
-        match self.pages.borrow_mut().entry(pnum) {
-            Entry::Occupied(e) => e.get().clone(),
-            Entry::Vacant(e) => {
-                let data = db.file.get_page(pnum);
-                let level = if data.len() == 0 { 0 } else { data[0] };
-                let p = util::new(Page::new(
-                    if level != 0 {
-                        self.key_size
-                    } else {
-                        self.rec_size
-                    },
-                    level,
-                    data,
-                    pnum,
-                ));
-                e.insert(p.clone());
-
-                if false {
-                    let p = p.borrow();
-                    println!(
-                        "Loaded page {} root={} count={} node_size={} size={}",
-                        p.pnum,
-                        self.root_page,
-                        p.count,
-                        p.node_size,
-                        p.size()
-                    );
-                }
-
-                p
-            }
+        if let Some(p) = self.dirty_pages.borrow().get(&pnum) {
+            return p.clone();
         }
+        let data = db.file.get_page(pnum);
+        let level = if data.len() == 0 { 0 } else { data[0] };
+        let p = util::new(Page::new(
+            if level != 0 {
+                self.key_size
+            } else {
+                self.rec_size
+            },
+            level,
+            data,
+            pnum,
+        ));
+
+        if false {
+            let p = p.borrow();
+            println!(
+                "Loaded page {} root={} count={} node_size={} size={}",
+                p.pnum,
+                self.root_page,
+                p.count,
+                p.node_size,
+                p.size()
+            );
+        }
+
+        p
     }
 
     /// Mark a page as changed.
     pub fn set_dirty(&self, p: &mut Page, pp: &PagePtr) {
-        if !p.is_dirty {
-            p.is_dirty = true;
-            self.dirty_pages.borrow_mut().push(pp.clone());
-        }
+        p.is_dirty = true;
+        self.dirty_pages.borrow_mut().insert(p.pnum, pp.clone());
     }
 
     #[cfg(feature = "pack")]

@@ -204,8 +204,7 @@ impl<'a> Parser<'a> {
                     if fc == b'0' && cc == b'x' {
                         cc = self.read_char();
                         token = Token::Hex;
-                        while cc.is_ascii_hexdigit()
-                        {
+                        while cc.is_ascii_hexdigit() {
                             cc = self.read_char();
                         }
                     } else {
