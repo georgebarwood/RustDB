@@ -49,9 +49,6 @@ pub struct Page {
     /// Page number in file where page is saved.
     pub pnum: u64,
 
-    /// Does page need to be saved to backing storage?
-    pub is_dirty: bool,
-
     /// Number of records currently stored in the page.
     pub count: usize,
 
@@ -112,7 +109,6 @@ impl Page {
             alloc,
             first_page,
             level,
-            is_dirty: false,
             pnum,
         }
     }

@@ -58,7 +58,6 @@ impl SortedFile {
                     );
                 }
                 p.write_header();
-                p.is_dirty = false;
                 db.file.set_page(p.pnum, p.data.clone());
             }
         }
@@ -321,7 +320,6 @@ impl SortedFile {
 
     /// Mark a page as changed.
     pub fn set_dirty(&self, p: &mut Page, pp: &PagePtr) {
-        p.is_dirty = true;
         self.dirty_pages.borrow_mut().insert(p.pnum, pp.clone());
     }
 

@@ -16,7 +16,7 @@ pub struct GenQuery {
     pub form: BTreeMap<String, String>,
     /// Query cookies.
     pub cookies: BTreeMap<String, String>,
-    /// Querey parts ( files ).
+    /// Query parts ( files ).
     pub parts: Vec<Part>,
     /// Micro-seconds since January 1, 1970 0:00:00 UTC
     pub now: i64,
