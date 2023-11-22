@@ -1,37 +1,36 @@
 [package]
-name = "rustdb"
-version = "3.2.9"
+name = "rustweb2"
+version = "0.35.0"
 edition = "2021"
 authors = ["George Barwood"]
-description = "SQL database"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/georgebarwood/RustDB/"
-categories = ["database-implementations"]
+description = "Rust-based web server"
+repository = "https://github.com/georgebarwood/rustweb2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = ["gentrans","max","pack","verify"]
-
-# GenTransaction ( implementation of Transaction )
-gentrans = []
-
-# ````builtin``` : Allows extra SQL builtin functions to be defined.
-builtin = []
-
-# ```max``` : Full access, including direct access to database tables and all other internal modules.
-max = ["builtin"]
-
-# ```pack``` : Allows database pages to be packed using builtin function REPACKFILE.
-pack = []
-
-# ```verify``` : Allows database structure to be verified using builtin function VERIFYDB.
-verify = []
-
 [dependencies]
+#rustdb = { path = "../RustDB" } 
+rustdb = { version = "3.2.6" }
 rustc-hash = "1.1.0"
-serde = { version = "1.0.131", features = ["derive","rc"] }
 
-[dev-dependencies]
-rand = "0.8.4"
+tokio = { version = "1.13.0", features = ["macros","rt-multi-thread"] }
+mime = "0.3.16"
+serde_urlencoded = "0.7.1"
+#clap = { version = "3.2.17", features = ["derive"] }
+clap = { version = "4.0.0", features = ["derive"] }
+#mimalloc = { version = "0.1.26", default-features = false }
+
+serde = { version = "1.0.142", features = ["derive","rc"] }
+
+reqwest = "0.11.11"
+
+lettre = { version = "0.11.1" }
+flate3 = "1.0.0"
+argon2rs = "0.2.5"
+pdf-min = "0.1.2"
+
+bincode = "1.3.3"
+
+#console-subscriber = { path = "../console-main/console-subscriber" }
 
