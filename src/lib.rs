@@ -159,6 +159,7 @@ pub mod gentrans;
 pub mod stg;
 
 /// Page storage and sharing, [SharedPagedData] and [AccessPagedData].
+/// Note: several structs and their fields are pub to allow diagnostics but are subject to change.
 pub mod pstore;
 
 /// [AtomicFile].

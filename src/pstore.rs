@@ -6,7 +6,7 @@ use crate::{
 type PageInfoPtr = Arc<PageInfo>;
 
 /// Page data and usage information.
-struct PageInfo {
+pub struct PageInfo {
     d: Mutex<PageData>,
     u: Mutex<PageUsage>,
 }
@@ -27,20 +27,20 @@ impl PageInfo {
 }
 
 /// Data for a logical page, including historic data.
-struct PageData {
+pub struct PageData {
     /// Current data for the page.
-    current: Option<Data>,
+    pub current: Option<Data>,
     /// Historic data for the page. Has data for page at specified time.
     /// A copy is made prior to an update, so get looks forward from access time.
-    history: BTreeMap<u64, Data>,
+    pub history: BTreeMap<u64, Data>,
 }
 
 /// Information about logical page usage.
-struct PageUsage {
+pub struct PageUsage {
     /// Count of how many times the page has been used.
-    counter: usize,
+    pub counter: usize,
     /// Position of the page in stash heap.
-    heap_pos: usize,
+    pub heap_pos: usize,
 }
 
 impl PageData {
@@ -104,8 +104,9 @@ impl PageData {
 
 /// Heap keeps track of the page with the smallest usage counter.
 #[derive(Default)]
-struct Heap {
-    v: Vec<PageInfoPtr>,
+pub struct Heap {
+    /// Vector of pages from file which are currently cached.
+    pub v: Vec<PageInfoPtr>,
 }
 
 impl Heap {
@@ -200,21 +201,23 @@ impl Heap {
 #[derive(Default)]
 pub struct Stash {
     /// Write time - number of writes.
-    time: u64,
+    pub time: u64,
     /// Page number -> page info.
-    pages: HashMap<u64, PageInfoPtr>,
+    pub pages: HashMap<u64, PageInfoPtr>,
     /// Time -> reader count. Number of readers for given time.
-    rdrs: BTreeMap<u64, usize>,
+    pub rdrs: BTreeMap<u64, usize>,
     /// Time -> set of page numbers. Page copies held for given time.
-    vers: BTreeMap<u64, HashSet<u64>>,
+    pub vers: BTreeMap<u64, HashSet<u64>>,
     /// Total size of current pages.
     pub total: usize,
     /// trim_cache reduces total to mem_limit (or below).
     pub mem_limit: usize,
     /// Heap of pages, page with smallest counter in position 0.
-    heap: Heap,
-    /// Trace cache trimming etc.
-    pub trace: bool,
+    pub heap: Heap,
+    /// Total number of page accesses.
+    pub read: u64,
+    /// Total number of misses ( data was not already loaded ).
+    pub miss: u64,
 }
 
 impl Stash {
@@ -247,6 +250,7 @@ impl Stash {
             .or_insert_with(PageInfo::new)
             .clone();
         self.heap.used(&p);
+        self.read += 1;
         p
     }
 
@@ -321,29 +325,17 @@ impl Stash {
         }
     }
 
+    /// Increase total memory used by stash.
     fn more(&mut self, amount: usize) {
+        self.miss += 1;
         self.total += amount;
         self.trim_cache();
     }
 
     /// Trim cached data ( to reduce memory usage ).
     fn trim_cache(&mut self) {
-        let (old_total, old_len) = (self.total, self.heap.v.len());
         while self.heap.v.len() > 1 && self.total >= self.mem_limit {
             self.total -= self.heap.free();
-        }
-        if self.trace {
-            let (new_total, new_len) = (self.total, self.heap.v.len());
-            if new_len < old_len {
-                println!(
-                    "trimmed cache mem_limit={} total={}(-{}) heap len={}(-{})",
-                    self.mem_limit,
-                    new_total,
-                    old_total - new_total,
-                    new_len,
-                    old_len - new_len
-                );
-            }
         }
     }
 }
