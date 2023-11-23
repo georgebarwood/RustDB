@@ -386,7 +386,10 @@ impl SharedPagedData {
         let sp_size = file.sp_size;
         let ep_size = file.ep_size;
         // Set a default stash memory limit of 10 MB.
-        let stash = Stash { mem_limit: 10 * 1024 * 1024, ..Default::default() };
+        let stash = Stash {
+            mem_limit: 10 * 1024 * 1024,
+            ..Default::default()
+        };
         Self {
             stash: Mutex::new(stash),
             file: RwLock::new(file),

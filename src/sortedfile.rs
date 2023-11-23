@@ -47,16 +47,6 @@ impl SortedFile {
             let p = &mut *pp.borrow_mut();
             if p.pnum != u64::MAX {
                 p.compress(db);
-                if false {
-                    println!(
-                        "Saving page {} root={} count={} node_size={} size={}",
-                        p.pnum,
-                        self.root_page,
-                        p.count,
-                        p.node_size,
-                        p.size()
-                    );
-                }
                 p.write_header();
                 db.file.set_page(p.pnum, p.data.clone());
             }
@@ -292,7 +282,7 @@ impl SortedFile {
         }
         let data = db.file.get_page(pnum);
         let level = if data.len() == 0 { 0 } else { data[0] };
-        let p = util::new(Page::new(
+        util::new(Page::new(
             if level != 0 {
                 self.key_size
             } else {
@@ -301,26 +291,15 @@ impl SortedFile {
             level,
             data,
             pnum,
-        ));
-
-        if false {
-            let p = p.borrow();
-            println!(
-                "Loaded page {} root={} count={} node_size={} size={}",
-                p.pnum,
-                self.root_page,
-                p.count,
-                p.node_size,
-                p.size()
-            );
-        }
-
-        p
+        ))
     }
 
     /// Mark a page as changed.
     pub fn set_dirty(&self, p: &mut Page, pp: &PagePtr) {
-        self.dirty_pages.borrow_mut().insert(p.pnum, pp.clone());
+        if !p.is_dirty {
+            p.is_dirty = true;
+            self.dirty_pages.borrow_mut().insert(p.pnum, pp.clone());
+        }
     }
 
     #[cfg(feature = "pack")]

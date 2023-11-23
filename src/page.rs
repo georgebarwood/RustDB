@@ -55,26 +55,28 @@ pub struct Page {
     /// Page level. 0 means a child page, more than 0 a parent page.
     pub level: u8,
 
+    /// Has the page been modified?
+    pub is_dirty: bool,
+
     /// Number of bytes required for each node.
     pub node_size: usize,
 
     /// Root node for the page.
     pub root: usize,
 
+    /// First child page ( for a parent page ).    
+    pub first_page: u64,
+
     /// First Free node.
     free: usize,
 
     /// Number of Nodes currently allocated.     
     alloc: usize,
-
-    /// First child page ( for a parent page ).    
-    pub first_page: u64,
 }
 
 impl Page {
     /// The size of the page in bytes.
     pub fn size(&self) -> usize {
-        // data.len() ??
         NODE_BASE + self.alloc * self.node_size + if self.level != 0 { PAGE_ID_SIZE } else { 0 }
     }
 
@@ -110,6 +112,7 @@ impl Page {
             first_page,
             level,
             pnum,
+            is_dirty: false,
         }
     }
 
