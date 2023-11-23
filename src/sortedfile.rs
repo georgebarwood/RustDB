@@ -280,7 +280,7 @@ impl SortedFile {
         if let Some(p) = self.dirty_pages.borrow().get(&pnum) {
             return p.clone();
         }
-        let data = db.file.get_page(pnum);
+        let data = db.file.get_data(pnum);
         let level = if data.len() == 0 { 0 } else { data[0] };
         util::new(Page::new(
             if level != 0 {

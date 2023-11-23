@@ -47,7 +47,7 @@ impl PageData {
     /// Get the Data for the page, checking history if not a writer.
     /// Reads Data from file if necessary.
     /// Result is Data and flag indicating whether data was read from file.
-    fn get(&mut self, lpnum: u64, a: &AccessPagedData) -> (Data, bool) {
+    fn get_data(&mut self, lpnum: u64, a: &AccessPagedData) -> (Data, bool) {
         if !a.writer {
             if let Some((_k, v)) = self.history.range(a.time..).next() {
                 return (v.clone(), false);
@@ -67,7 +67,7 @@ impl PageData {
 
     /// Set the page data, updating the history using the specified time and current data.
     /// result is size of previously loaded data.
-    fn set_page(&mut self, time: u64, data: Data, do_history: bool) -> usize {
+    fn set_data(&mut self, time: u64, data: Data, do_history: bool) -> usize {
         let mut result = 0;
         if let Some(old) = self.current.take() {
             result = old.len();
@@ -109,17 +109,6 @@ struct Heap {
 }
 
 impl Heap {
-    fn _calc_total(&self) -> usize {
-        let mut result = 0;
-        for pinfo in &self.v {
-            let d = pinfo.d.lock().unwrap();
-            if let Some(d) = &d.current {
-                result += d.len();
-            }
-        }
-        result
-    }
-
     /// Increases usage counter for p and adjusts the heap to match.
     fn used(&mut self, p: &PageInfoPtr) {
         let (mut pos, counter) = {
@@ -243,15 +232,15 @@ impl Stash {
         self.total += data.len();
         let mut pd = p.d.lock().unwrap();
         // Make sure page is in cache ( since trimming could mean it has been discarded ).
-        let (old, loaded) = pd.get(lpnum, apd);
+        let (old, loaded) = pd.get_data(lpnum, apd);
         if loaded {
             self.total += old.len();
         }
-        self.total -= pd.set_page(time, data, do_history);
+        self.total -= pd.set_data(time, data, do_history);
     }
 
-    /// Get the PageInfoPtr for the specified page and note as used.
-    fn get(&mut self, lpnum: u64) -> PageInfoPtr {
+    /// Get the PageInfoPtr for the specified page and note the page as used.
+    fn get_pinfo(&mut self, lpnum: u64) -> PageInfoPtr {
         let p = self
             .pages
             .entry(lpnum)
@@ -439,13 +428,14 @@ impl AccessPagedData {
     }
 
     /// Get the Data for the specified page.
-    pub fn get_page(&self, lpnum: u64) -> Data {
+    pub fn get_data(&self, lpnum: u64) -> Data {
         // Get page info.
-        let pinfo = self.spd.stash.lock().unwrap().get(lpnum);
+        let pinfo = self.spd.stash.lock().unwrap().get_pinfo(lpnum);
 
         // Read the page data.
-        let (data, loaded) = pinfo.d.lock().unwrap().get(lpnum, self);
+        let (data, loaded) = pinfo.d.lock().unwrap().get_data(lpnum, self);
 
+        // If data was read from underlying file, adjust the total data stashed, and trim the stash if appropriate.
         if loaded {
             self.spd.stash.lock().unwrap().more(data.len());
         }
