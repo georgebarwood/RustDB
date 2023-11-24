@@ -3,12 +3,14 @@ use crate::{
 };
 
 /// ```Arc<PageInfo>```
-type PageInfoPtr = Arc<PageInfo>;
+pub type PageInfoPtr = Arc<PageInfo>;
 
 /// Page data and usage information.
 pub struct PageInfo {
-    d: Mutex<PageData>,
-    u: Mutex<PageUsage>,
+    /// Page Data
+    pub d: Mutex<PageData>,
+    /// Page Usage
+    pub u: Mutex<PageUsage>,
 }
 
 impl PageInfo {
