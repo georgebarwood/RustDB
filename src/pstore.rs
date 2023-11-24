@@ -237,18 +237,16 @@ impl Stash {
         self.trim_cache();
     }
 
-    /// Trim cached data ( to reduce memory usage ).
+    /// Trim cached data to configured limit.
     fn trim_cache(&mut self) {
-        while self.total >= self.mem_limit {
+        while self.total > self.mem_limit {
             if let Some(lpnum) = self.min.pop() {
                 let p = self.pages.get(&lpnum).unwrap();
                 let mut d = p.d.lock().unwrap();
-                let mut freed = 0;
                 if let Some(data) = &d.current {
-                    freed = data.len();
+                    self.total -= data.len();
                     d.current = None;
                 }
-                self.total -= freed;
             } else {
                 break;
             }
