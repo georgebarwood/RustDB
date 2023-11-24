@@ -255,7 +255,7 @@ impl Stash {
 
     /// Return the number of pages currently cached.
     pub fn cached(&self) -> usize {
-        self.min.m.len()
+        self.min.0.len()
     }
 }
 
@@ -419,27 +419,22 @@ impl Drop for AccessPagedData {
 }
 
 #[derive(PartialOrd, Ord, PartialEq, Eq)]
-struct Pair {
-    val: u64,
-    id: u64,
-}
+struct Pair(u64, u64);
 
 #[derive(Default)]
 /// Used to efficiently track least used cached page.
-struct Min {
-    pub m: BTreeSet<Pair>,
-}
+struct Min(BTreeSet<Pair>);
 
 impl Min {
     /// Sets the value associated with the specified id.
     fn set(&mut self, id: u64, oldval: u64, newval: u64) {
-        self.m.remove(&Pair { val: oldval, id });
-        self.m.insert(Pair { val: newval, id });
+        self.0.remove(&Pair(oldval, id));
+        self.0.insert(Pair(newval, id));
     }
 
     /// Removes id with smallest associated value.
     fn pop(&mut self) -> Option<u64> {
-        self.m.pop_first().map(|p| p.id)
+        self.0.pop_first().map(|p| p.1)
     }
 }
 
