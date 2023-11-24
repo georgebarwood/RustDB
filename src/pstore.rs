@@ -39,12 +39,6 @@ pub struct PageData {
     pub history: BTreeMap<u64, Data>,
 }
 
-/// Information about logical page usage.
-pub struct PageUsage {
-    /// Count of how many times the page has been used.
-    pub counter: usize,
-}
-
 impl PageData {
     /// Get the Data for the page, checking history if not a writer.
     /// Reads Data from file if necessary.
