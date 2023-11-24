@@ -1,5 +1,6 @@
 use crate::{
-    nd, Arc, BTreeMap, CompactFile, Data, HashMap, HashSet, Mutex, RwLock, SaveOp, Storage,
+    nd, Arc, BTreeMap, BTreeSet, CompactFile, Data, HashMap, HashSet, Mutex, RwLock, SaveOp,
+    Storage,
 };
 
 /// ```Arc<PageInfo>```
@@ -9,8 +10,6 @@ pub type PageInfoPtr = Arc<PageInfo>;
 pub struct PageInfo {
     /// Page Data
     pub d: Mutex<PageData>,
-    /// Page Usage
-    pub u: Mutex<u64>,
 }
 
 impl PageInfo {
@@ -19,14 +18,15 @@ impl PageInfo {
             d: Mutex::new(PageData {
                 current: None,
                 history: BTreeMap::new(),
+                usage: 0,
             }),
-            u: Mutex::new(0),
         })
     }
+    /// Increase usage, returns new value.
     fn inc_usage(self: &Arc<Self>) -> u64 {
-        let mut pu = self.u.lock().unwrap();
-        *pu += 1;
-        *pu
+        let mut pd = self.d.lock().unwrap();
+        pd.usage += 1;
+        pd.usage
     }
 }
 
@@ -37,6 +37,8 @@ pub struct PageData {
     /// Historic data for the page. Has data for page at specified time.
     /// A copy is made prior to an update, so get looks forward from access time.
     pub history: BTreeMap<u64, Data>,
+    /// How many times has the page been used.
+    pub usage: u64,
 }
 
 impl PageData {
@@ -114,7 +116,7 @@ pub struct Stash {
     /// trim_cache reduces total to mem_limit (or below).
     pub mem_limit: usize,
     /// Tracks loaded page with smallest usage.
-    pub min: Min,
+    min: Min,
     /// Total number of page accesses.
     pub read: u64,
     /// Total number of misses ( data was not already loaded ).
@@ -132,7 +134,8 @@ impl Stash {
             .entry(lpnum)
             .or_insert_with(PageInfo::new)
             .clone();
-        self.min.set(lpnum, p.inc_usage());
+        let u = p.inc_usage();
+        self.min.set(lpnum, u - 1, u);
         self.total += data.len();
         let mut pd = p.d.lock().unwrap();
         // Make sure page is in cache ( since trimming could mean it has been discarded ).
@@ -150,7 +153,8 @@ impl Stash {
             .entry(lpnum)
             .or_insert_with(PageInfo::new)
             .clone();
-        self.min.set(lpnum, p.inc_usage());
+        let u = p.inc_usage();
+        self.min.set(lpnum, u - 1, u);
         self.read += 1;
         p
     }
@@ -253,7 +257,7 @@ impl Stash {
 
     /// Return the number of pages currently cached.
     pub fn cached(&self) -> usize {
-        self.min.v.len()
+        self.min.m.len()
     }
 }
 
@@ -416,82 +420,40 @@ impl Drop for AccessPagedData {
     }
 }
 
-use std::collections::hash_map::Entry;
+#[derive(PartialOrd, Ord, PartialEq, Eq)]
+struct Pair {
+    val: u64,
+    id: u64,
+}
 
 #[derive(Default)]
 /// Used to efficiently track least used cached page.
-pub struct Min {
-    /// Vector of id,value pairs.
-    pub v: Vec<(u64, u64)>,
-    /// Position in v of given id. 
-    pub pos: HashMap<u64, usize>,
+struct Min {
+    pub m: BTreeSet<Pair>,
 }
 
 impl Min {
     /// Sets the value associated with the specified id.
-    pub fn set(&mut self, id: u64, val: u64) {
-        match self.pos.entry(id) {
-            Entry::Occupied(e) => {
-                let i: usize = *e.get();
-                self.v[i] = (id, val);
-                self.check(i);
-            }
-            Entry::Vacant(e) => {
-                let i = self.v.len();
-                e.insert(i);
-                self.v.push((id, val));
-                self.check(i);
-            }
-        };
-    }
-
-    /// Adjusts position of item at specified position.
-    fn check(&mut self, i: usize) {
-        self.check_up(i);
-        self.check_up(i * 2 + 1);
-        self.check_up(i * 2 + 2);
-    }
-
-    fn check_up(&mut self, i: usize) {
-        if i > 0 && i < self.v.len() {
-            let pi = (i - 1) / 2;
-            let pv = self.v[pi];
-            let v = self.v[i];
-            if v.1 < pv.1 {
-                self.v[pi] = v;
-                self.v[i] = pv;
-                self.pos.insert(v.0, pi);
-                self.pos.insert(pv.0, i);
-            }
-        }
+    fn set(&mut self, id: u64, oldval: u64, newval: u64) {
+        self.m.remove(&Pair { val: oldval, id });
+        self.m.insert(Pair { val: newval, id });
     }
 
     /// Removes id with smallest associated value.
-    pub fn pop(&mut self) -> Option<u64> {
-        if self.v.is_empty() {
-            return None;
-        }
-        let result = self.v[0].0;
-        self.pos.remove(&result);
-        let last = self.v.pop().unwrap();
-        if !self.v.is_empty() {
-            self.pos.insert(last.0, 0);
-            self.v[0] = last;
-            self.check(0);
-        }
-        Some(result)
+    fn pop(&mut self) -> Option<u64> {
+        self.m.pop_first().map(|p| p.id)
     }
 }
 
 #[test]
 pub fn test() {
     let mut h = Min::default();
-    h.set(5, 10);
-    h.set(8, 1);
-    h.set(13, 2);
-    h.set(8, 15);
-    assert!(h.get().unwrap() == 13);
-    assert!(h.get().unwrap() == 5);
-    assert!(h.get().unwrap() == 8);
-    assert!(h.get() == None);
+    h.set(5, 0, 10);
+    h.set(8, 0, 1);
+    h.set(13, 0, 2);
+    h.set(8, 1, 15);
+    assert!(h.pop().unwrap() == 13);
+    assert!(h.pop().unwrap() == 5);
+    assert!(h.pop().unwrap() == 8);
+    assert!(h.pop() == None);
 }
