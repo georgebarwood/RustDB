@@ -10,7 +10,7 @@ pub struct PageInfo {
     /// Page Data
     pub d: Mutex<PageData>,
     /// Page Usage
-    pub u: Mutex<PageUsage>,
+    pub u: Mutex<u64>,
 }
 
 impl PageInfo {
@@ -20,11 +20,13 @@ impl PageInfo {
                 current: None,
                 history: BTreeMap::new(),
             }),
-            u: Mutex::new(PageUsage {
-                counter: 0,
-                heap_pos: usize::MAX,
-            }),
+            u: Mutex::new(0),
         })
+    }
+    fn inc_usage(self: &Arc<Self>) -> u64 {
+        let mut pu = self.u.lock().unwrap();
+        *pu += 1;
+        *pu
     }
 }
 
@@ -41,8 +43,6 @@ pub struct PageData {
 pub struct PageUsage {
     /// Count of how many times the page has been used.
     pub counter: usize,
-    /// Position of the page in stash heap.
-    pub heap_pos: usize,
 }
 
 impl PageData {
@@ -104,101 +104,6 @@ impl PageData {
     }
 }
 
-/// Heap keeps track of the page with the smallest usage counter.
-#[derive(Default)]
-pub struct Heap {
-    /// Vector of pages from file which are currently cached.
-    pub v: Vec<PageInfoPtr>,
-}
-
-impl Heap {
-    /// Increases usage counter for p and adjusts the heap to match.
-    fn used(&mut self, p: &PageInfoPtr) {
-        let (mut pos, counter) = {
-            let mut p = p.u.lock().unwrap();
-            p.counter += 1;
-            (p.heap_pos, p.counter)
-        };
-        if pos == usize::MAX {
-            pos = self.v.len();
-            self.v.push(p.clone());
-            self.move_up(pos, counter);
-        } else {
-            self.move_down(pos, counter);
-        }
-    }
-
-    /// Free the least used page and remove it from the heap.
-    /// Returns the amount of memory freed.
-    fn free(&mut self) -> usize {
-        let mut result = 0;
-        {
-            let p = &self.v[0];
-            let mut d = p.d.lock().unwrap();
-            if let Some(data) = &d.current {
-                result = data.len();
-                d.current = None;
-            }
-            let mut u = p.u.lock().unwrap();
-            u.heap_pos = usize::MAX;
-        }
-        // Pop the last element of the vector, save in position zero.
-        let last = self.v.pop().unwrap();
-        let counter = last.u.lock().unwrap().counter;
-        self.v[0] = last;
-        // Restore heap invariant.
-        self.move_down(0, counter);
-        result
-    }
-
-    /// Called when page at pos may be too low in the heap.
-    fn move_up(&mut self, mut pos: usize, counter: usize) {
-        loop {
-            if pos == 0 {
-                break;
-            }
-            let ppos = (pos - 1) / 2;
-            {
-                let mut pl = self.v[ppos].u.lock().unwrap();
-                if pl.counter <= counter {
-                    break;
-                }
-                pl.heap_pos = pos;
-            }
-            self.v.swap(ppos, pos);
-            pos = ppos;
-        }
-        self.v[pos].u.lock().unwrap().heap_pos = pos;
-    }
-
-    /// Called when page at pos may be too high in the heap.
-    fn move_down(&mut self, mut pos: usize, counter: usize) {
-        let n = self.v.len();
-        loop {
-            let mut cpos = pos * 2 + 1;
-            if cpos >= n {
-                break;
-            } else {
-                let mut c1 = self.v[cpos].u.lock().unwrap().counter;
-                if cpos + 1 < n {
-                    let c2 = self.v[cpos + 1].u.lock().unwrap().counter;
-                    if c2 < c1 {
-                        cpos += 1;
-                        c1 = c2;
-                    }
-                }
-                if counter <= c1 {
-                    break;
-                }
-            }
-            self.v.swap(pos, cpos);
-            self.v[pos].u.lock().unwrap().heap_pos = pos;
-            pos = cpos;
-        }
-        self.v[pos].u.lock().unwrap().heap_pos = pos;
-    }
-}
-
 /// Central store of data.
 #[derive(Default)]
 pub struct Stash {
@@ -214,8 +119,8 @@ pub struct Stash {
     pub total: usize,
     /// trim_cache reduces total to mem_limit (or below).
     pub mem_limit: usize,
-    /// Heap of pages, page with smallest counter in position 0.
-    pub heap: Heap,
+    /// Tracks loaded page with smallest usage.
+    pub min: Min,
     /// Total number of page accesses.
     pub read: u64,
     /// Total number of misses ( data was not already loaded ).
@@ -233,7 +138,7 @@ impl Stash {
             .entry(lpnum)
             .or_insert_with(PageInfo::new)
             .clone();
-        self.heap.used(&p);
+        self.min.set(lpnum, p.inc_usage());
         self.total += data.len();
         let mut pd = p.d.lock().unwrap();
         // Make sure page is in cache ( since trimming could mean it has been discarded ).
@@ -251,7 +156,7 @@ impl Stash {
             .entry(lpnum)
             .or_insert_with(PageInfo::new)
             .clone();
-        self.heap.used(&p);
+        self.min.set(lpnum, p.inc_usage());
         self.read += 1;
         p
     }
@@ -336,9 +241,25 @@ impl Stash {
 
     /// Trim cached data ( to reduce memory usage ).
     fn trim_cache(&mut self) {
-        while self.heap.v.len() > 1 && self.total >= self.mem_limit {
-            self.total -= self.heap.free();
+        while self.total >= self.mem_limit {
+            if let Some(lpnum) = self.min.pop() {
+                let p = self.pages.get(&lpnum).unwrap();
+                let mut d = p.d.lock().unwrap();
+                let mut freed = 0;
+                if let Some(data) = &d.current {
+                    freed = data.len();
+                    d.current = None;
+                }
+                self.total -= freed;
+            } else {
+                break;
+            }
         }
+    }
+
+    /// Return the number of pages currently cached.
+    pub fn cached(&self) -> usize {
+        self.min.v.len()
     }
 }
 
@@ -499,4 +420,84 @@ impl Drop for AccessPagedData {
             self.spd.stash.lock().unwrap().end_read(self.time);
         }
     }
+}
+
+use std::collections::hash_map::Entry;
+
+#[derive(Default)]
+/// Used to efficiently track least used cached page.
+pub struct Min {
+    /// Vector of id,value pairs.
+    pub v: Vec<(u64, u64)>,
+    /// Position in v of given id. 
+    pub pos: HashMap<u64, usize>,
+}
+
+impl Min {
+    /// Sets the value associated with the specified id.
+    pub fn set(&mut self, id: u64, val: u64) {
+        match self.pos.entry(id) {
+            Entry::Occupied(e) => {
+                let i: usize = *e.get();
+                self.v[i] = (id, val);
+                self.check(i);
+            }
+            Entry::Vacant(e) => {
+                let i = self.v.len();
+                e.insert(i);
+                self.v.push((id, val));
+                self.check(i);
+            }
+        };
+    }
+
+    /// Adjusts position of item at specified position.
+    fn check(&mut self, i: usize) {
+        self.check_up(i);
+        self.check_up(i * 2 + 1);
+        self.check_up(i * 2 + 2);
+    }
+
+    fn check_up(&mut self, i: usize) {
+        if i > 0 && i < self.v.len() {
+            let pi = (i - 1) / 2;
+            let pv = self.v[pi];
+            let v = self.v[i];
+            if v.1 < pv.1 {
+                self.v[pi] = v;
+                self.v[i] = pv;
+                self.pos.insert(v.0, pi);
+                self.pos.insert(pv.0, i);
+            }
+        }
+    }
+
+    /// Removes id with smallest associated value.
+    pub fn pop(&mut self) -> Option<u64> {
+        if self.v.is_empty() {
+            return None;
+        }
+        let result = self.v[0].0;
+        self.pos.remove(&result);
+        let last = self.v.pop().unwrap();
+        if !self.v.is_empty() {
+            self.pos.insert(last.0, 0);
+            self.v[0] = last;
+            self.check(0);
+        }
+        Some(result)
+    }
+}
+
+#[test]
+pub fn test() {
+    let mut h = Min::default();
+    h.set(5, 10);
+    h.set(8, 1);
+    h.set(13, 2);
+    h.set(8, 15);
+    assert!(h.get().unwrap() == 13);
+    assert!(h.get().unwrap() == 5);
+    assert!(h.get().unwrap() == 8);
+    assert!(h.get() == None);
 }
