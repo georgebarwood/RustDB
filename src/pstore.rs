@@ -3,36 +3,12 @@ use crate::{
     Storage,
 };
 
-/// ```Arc<PageInfo>```
-pub type PageInfoPtr = Arc<PageInfo>;
+/// ```Arc<Mutex<PageInfo>>```
+pub type PageInfoPtr = Arc<Mutex<PageInfo>>;
 
-/// Page data and usage information.
+/// Information for a logical page, including historic data.
 pub struct PageInfo {
-    /// Page Data
-    pub d: Mutex<PageData>,
-}
-
-impl PageInfo {
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            d: Mutex::new(PageData {
-                current: None,
-                history: BTreeMap::new(),
-                usage: 0,
-            }),
-        })
-    }
-    /// Increase usage, returns new value.
-    fn inc_usage(self: &Arc<Self>) -> u64 {
-        let mut pd = self.d.lock().unwrap();
-        pd.usage += 1;
-        pd.usage
-    }
-}
-
-/// Data for a logical page, including historic data.
-pub struct PageData {
-    /// Current data for the page.
+    /// Current data for the page( None implies it is stored in underlying file ).
     pub current: Option<Data>,
     /// Historic data for the page. Has data for page at specified time.
     /// A copy is made prior to an update, so get looks forward from access time.
@@ -41,7 +17,21 @@ pub struct PageData {
     pub usage: u64,
 }
 
-impl PageData {
+impl PageInfo {
+    fn new() -> PageInfoPtr {
+        Arc::new(Mutex::new(PageInfo {
+            current: None,
+            history: BTreeMap::new(),
+            usage: 0,
+        }))
+    }
+
+    /// Increase usage, returns new value.
+    fn inc_usage(&mut self) -> u64 {
+        self.usage += 1;
+        self.usage
+    }
+
     /// Get the Data for the page, checking history if not a writer.
     /// Reads Data from file if necessary.
     /// Result is Data and flag indicating whether data was read from file.
@@ -134,16 +124,20 @@ impl Stash {
             .entry(lpnum)
             .or_insert_with(PageInfo::new)
             .clone();
-        let u = p.inc_usage();
-        self.min.set(lpnum, u - 1, u);
+
         self.total += data.len();
-        let mut pd = p.d.lock().unwrap();
-        // Make sure page is in cache ( since trimming could mean it has been discarded ).
-        let (old, loaded) = pd.get_data(lpnum, apd);
-        if loaded {
-            self.total += old.len();
-        }
-        self.total -= pd.set_data(time, data, do_history);
+        let u = {
+            let mut p = p.lock().unwrap();
+
+            // Make sure page is in cache ( since trimming could mean it has been discarded ).
+            let (old, loaded) = p.get_data(lpnum, apd);
+            if loaded {
+                self.total += old.len();
+            }
+            self.total -= p.set_data(time, data, do_history);
+            p.inc_usage()
+        };
+        self.min.set(lpnum, u - 1, u);
     }
 
     /// Get the PageInfoPtr for the specified page and note the page as used.
@@ -153,7 +147,7 @@ impl Stash {
             .entry(lpnum)
             .or_insert_with(PageInfo::new)
             .clone();
-        let u = p.inc_usage();
+        let u = p.lock().unwrap().inc_usage();
         self.min.set(lpnum, u - 1, u);
         self.read += 1;
         p
@@ -199,8 +193,7 @@ impl Stash {
             for (t, pl) in self.vers.range_mut(s..r) {
                 pl.retain(|pnum| {
                     let p = self.pages.get(pnum).unwrap();
-                    let mut p = p.d.lock().unwrap();
-                    p.trim(*t, s)
+                    p.lock().unwrap().trim(*t, s)
                 });
                 if pl.is_empty() {
                     empty.push(*t);
@@ -242,7 +235,7 @@ impl Stash {
         while self.total > self.mem_limit {
             if let Some(lpnum) = self.min.pop() {
                 let p = self.pages.get(&lpnum).unwrap();
-                let mut d = p.d.lock().unwrap();
+                let mut d = p.lock().unwrap();
                 if let Some(data) = &d.current {
                     self.total -= data.len();
                     d.current = None;
@@ -344,7 +337,7 @@ impl AccessPagedData {
         let pinfo = self.spd.stash.lock().unwrap().get_pinfo(lpnum);
 
         // Read the page data.
-        let (data, loaded) = pinfo.d.lock().unwrap().get_data(lpnum, self);
+        let (data, loaded) = pinfo.lock().unwrap().get_data(lpnum, self);
 
         // If data was read from underlying file, adjust the total data stashed, and trim the stash if appropriate.
         if loaded {
