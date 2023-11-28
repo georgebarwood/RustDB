@@ -1,5 +1,5 @@
 use crate::{
-    nd, Arc, BTreeMap, BTreeSet, CompactFile, Data, HashMap, HashSet, Mutex, RwLock, SaveOp,
+    nd, Arc, BTreeMap, CompactFile, Data, HashMap, HashSet, Mutex, Ordering, RwLock, SaveOp,
     Storage,
 };
 
@@ -15,6 +15,8 @@ pub struct PageInfo {
     pub history: BTreeMap<u64, Data>,
     /// How many times has the page been used.
     pub usage: u64,
+    /// Heap index.
+    pub hx: usize,
 }
 
 impl PageInfo {
@@ -23,13 +25,21 @@ impl PageInfo {
             current: None,
             history: BTreeMap::new(),
             usage: 0,
+            hx: usize::MAX,
         }))
     }
 
     /// Increase usage, returns new value.
-    fn inc_usage(&mut self) -> u64 {
+    fn inc_usage(&mut self,lpnum: u64, ah: &mut Heap ) {
         self.usage += 1;
-        self.usage
+        if self.hx == usize::MAX
+        {
+           self.hx = ah.insert( lpnum, self.usage );
+        }
+        else
+        {
+           ah.modify( self.hx, self.usage );
+        }
     }
 
     /// Get the Data for the page, checking history if not a writer.
@@ -106,7 +116,7 @@ pub struct Stash {
     /// trim_cache reduces total to mem_limit (or below).
     pub mem_limit: usize,
     /// Tracks loaded page with smallest usage.
-    min: Min,
+    min: Heap,
     /// Total number of page accesses.
     pub read: u64,
     /// Total number of misses ( data was not already loaded ).
@@ -126,18 +136,15 @@ impl Stash {
             .clone();
 
         self.total += data.len();
-        let u = {
-            let mut p = p.lock().unwrap();
 
-            // Make sure page is in cache ( since trimming could mean it has been discarded ).
-            let (old, loaded) = p.get_data(lpnum, apd);
-            if loaded {
-                self.total += old.len();
-            }
-            self.total -= p.set_data(time, data, do_history);
-            p.inc_usage()
-        };
-        self.min.set(lpnum, u - 1, u);
+        let mut p = p.lock().unwrap();
+
+        // Make sure page is in cache ( since trimming could mean it has been discarded ).
+        let (old, loaded) = p.get_data(lpnum, apd);
+        if loaded {
+            self.total += old.len();
+        }
+        self.total -= p.set_data(time, data, do_history);
     }
 
     /// Get the PageInfoPtr for the specified page and note the page as used.
@@ -147,8 +154,7 @@ impl Stash {
             .entry(lpnum)
             .or_insert_with(PageInfo::new)
             .clone();
-        let u = p.lock().unwrap().inc_usage();
-        self.min.set(lpnum, u - 1, u);
+        p.lock().unwrap().inc_usage(lpnum,&mut self.min);
         self.read += 1;
         p
     }
@@ -232,23 +238,21 @@ impl Stash {
 
     /// Trim cached data to configured limit.
     fn trim_cache(&mut self) {
-        while self.total > self.mem_limit {
-            if let Some(lpnum) = self.min.pop() {
-                let p = self.pages.get(&lpnum).unwrap();
-                let mut d = p.lock().unwrap();
-                if let Some(data) = &d.current {
-                    self.total -= data.len();
-                    d.current = None;
-                }
-            } else {
-                break;
+        while self.total > self.mem_limit && self.min.n > 0 {
+            let lpnum = self.min.pop();
+            let p = self.pages.get(&lpnum).unwrap();
+            let mut d = p.lock().unwrap();
+            d.hx = usize::MAX;
+            if let Some(data) = &d.current {
+                self.total -= data.len();
+                d.current = None;
             }
         }
     }
 
     /// Return the number of pages currently cached.
     pub fn cached(&self) -> usize {
-        self.min.0.len()
+        self.min.n
     }
 }
 
@@ -331,17 +335,22 @@ impl AccessPagedData {
         }
     }
 
+    /// Get locked guard of stash.
+    pub fn stash(&self) -> std::sync::MutexGuard<'_, Stash> {
+        self.spd.stash.lock().unwrap()
+    }
+
     /// Get the Data for the specified page.
     pub fn get_data(&self, lpnum: u64) -> Data {
         // Get page info.
-        let pinfo = self.spd.stash.lock().unwrap().get_pinfo(lpnum);
+        let pinfo = self.stash().get_pinfo(lpnum);
 
         // Read the page data.
         let (data, loaded) = pinfo.lock().unwrap().get_data(lpnum, self);
 
         // If data was read from underlying file, adjust the total data stashed, and trim the stash if appropriate.
         if loaded {
-            self.spd.stash.lock().unwrap().more(data.len());
+            self.stash().more(data.len());
         }
         data
     }
@@ -351,11 +360,7 @@ impl AccessPagedData {
         debug_assert!(self.writer);
 
         // First update the stash ( ensures any readers will not attempt to read the file ).
-        self.spd
-            .stash
-            .lock()
-            .unwrap()
-            .set(lpnum, data.clone(), self);
+        self.stash().set(lpnum, data.clone(), self);
 
         // Write data to underlying file.
         self.spd.file.write().unwrap().set_page(lpnum, data);
@@ -381,7 +386,7 @@ impl AccessPagedData {
     /// Free a logical page.
     pub fn free_page(&self, lpnum: u64) {
         debug_assert!(self.writer);
-        self.spd.stash.lock().unwrap().set(lpnum, nd(), self);
+        self.stash().set(lpnum, nd(), self);
         self.spd.file.write().unwrap().free_page(lpnum);
     }
 
@@ -391,7 +396,7 @@ impl AccessPagedData {
         match op {
             SaveOp::Save => {
                 self.spd.file.write().unwrap().save();
-                self.spd.stash.lock().unwrap().end_write()
+                self.stash().end_write()
             }
             SaveOp::RollBack => {
                 // Note: rollback happens before any pages are updated.
@@ -406,40 +411,158 @@ impl AccessPagedData {
 impl Drop for AccessPagedData {
     fn drop(&mut self) {
         if !self.writer {
-            self.spd.stash.lock().unwrap().end_read(self.time);
+            self.stash().end_read(self.time);
         }
     }
 }
 
-#[derive(PartialOrd, Ord, PartialEq, Eq)]
-struct Pair(u64, u64);
-
 #[derive(Default)]
-/// Used to efficiently track least used cached page.
-struct Min(BTreeSet<Pair>);
+/// Heap Node.
+struct HN {
+    /// Index of node from heap position.
+    x: usize,
+    /// Heap position for this node.
+    pos: usize,
+    /// Node key.
+    key: u64,
+    /// Node id.
+    id: u64,
+}
 
-impl Min {
-    /// Sets the value associated with the specified id.
-    fn set(&mut self, id: u64, oldval: u64, newval: u64) {
-        self.0.remove(&Pair(oldval, id));
-        self.0.insert(Pair(newval, id));
+/// Heap for tracking least used page.
+struct Heap {
+    /// Number of heap elements.
+    n: usize,
+    /// Index of start of free list.
+    free: usize,
+    /// Vector of Heap Nodes.
+    v: Vec<HN>,
+}
+
+impl Default for Heap {
+    fn default() -> Self {
+        Heap {
+            v: Vec::new(),
+            n: 0,
+            free: usize::MAX,
+        }
+    }
+}
+
+impl Heap {
+    /// Insert id into heap with specified key (usage). Result is index of heap element.
+    pub fn insert(&mut self, id: u64, key: u64) -> usize {
+        let p = self.n;
+        self.n += 1;
+        let x = self.alloc(p);
+        self.v[x].id = id;
+        self.v[x].key = key;
+        self.move_up(p);
+        x
     }
 
-    /// Removes id with smallest associated value.
-    fn pop(&mut self) -> Option<u64> {
-        self.0.pop_first().map(|p| p.1)
+    /// Modify key of specified heap element.
+    pub fn modify(&mut self, x: usize, newkey: u64) {
+        let pos = self.v[x].pos;
+        let oldkey = self.v[x].key;
+        self.v[x].key = newkey;
+
+        match newkey.cmp(&oldkey) {
+            Ordering::Greater => self.move_down(pos),
+            Ordering::Less => self.move_up(pos),
+            Ordering::Equal => (),
+        }
+    }
+
+    /// Remove heap element with smallest key, returning the assoicated id. 
+    /// Note: index of heap element is no longer valid.
+    pub fn pop(&mut self) -> u64 {
+        assert!(self.n > 0);
+        self.n -= 1;
+        let xmin = self.v[0].x; // Node with smallest key.
+        let xlast = self.v[self.n].x; // Last node in heap.
+        self.v[xlast].pos = 0; // Make last node first.
+        self.v[0].x = xlast;
+        self.move_down(0);
+
+        // de-allocate popped node
+        self.v[xmin].pos = self.free;
+        self.free = xmin;
+
+        self.v[xmin].id
+    }
+
+    fn move_up(&mut self, mut c: usize) {
+        while c != 0 {
+            let p = (c - 1) / 2;
+            let cx = self.v[c].x;
+            let px = self.v[p].x;
+            let ck = self.v[cx].key;
+            let pk = self.v[px].key;
+            if ck >= pk {
+                return;
+            }
+            self.v[p].x = cx;
+            self.v[c].x = px;
+            self.v[cx].pos = p;
+            self.v[px].pos = c;
+            c = p;
+        }
+    }
+
+    fn move_down(&mut self, mut p: usize) {
+        loop {
+            let px = self.v[p].x;
+            let mut c = p * 2 + 1;
+            if c >= self.n {
+                return;
+            }
+            let mut cx = self.v[c].x;
+            let c2 = c + 1;
+            if c2 < self.n {
+                let cx2 = self.v[c2].x;
+                if self.v[cx2].key < self.v[cx].key {
+                    c = c2;
+                    cx = cx2;
+                }
+            }
+            if self.v[cx].key >= self.v[px].key {
+                return;
+            }
+            self.v[p].x = cx;
+            self.v[c].x = px;
+            self.v[cx].pos = p;
+            self.v[px].pos = c;
+            p = c;
+        }
+    }
+
+    fn alloc(&mut self, p: usize) -> usize {
+        let x = if self.free == usize::MAX {
+            self.v.push(HN::default());
+            self.v.len() - 1
+        } else {
+            let x = self.free;
+            self.free = self.v[x].pos;
+            x
+        };
+        self.v[p].x = x;
+        self.v[x].pos = p;
+        x
     }
 }
 
 #[test]
 pub fn test() {
-    let mut h = Min::default();
-    h.set(5, 0, 10);
-    h.set(8, 0, 1);
-    h.set(13, 0, 2);
-    h.set(8, 1, 15);
-    assert!(h.pop().unwrap() == 13);
-    assert!(h.pop().unwrap() == 5);
-    assert!(h.pop().unwrap() == 8);
-    assert!(h.pop() == None);
+    let mut h = Heap::default();
+    let _h5 = h.insert(5, 10);
+    let _h8 = h.insert(8, 1);
+    let _h13 = h.insert(13, 2);
+    h.modify(_h8, 15);
+    assert!(h.pop() == 13);
+    let _h22 = h.insert(22, 9);
+    assert!(h.pop() == 22);
+    assert!(h.pop() == 5);
+    assert!(h.pop() == 8);
+    // assert!(false)
 }
