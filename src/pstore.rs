@@ -29,16 +29,13 @@ impl PageInfo {
         }))
     }
 
-    /// Increase usage, returns new value.
-    fn inc_usage(&mut self,lpnum: u64, ah: &mut Heap ) {
+    /// Increase usage.
+    fn inc_usage(&mut self, lpnum: u64, ah: &mut Heap) {
         self.usage += 1;
-        if self.hx == usize::MAX
-        {
-           self.hx = ah.insert( lpnum, self.usage );
-        }
-        else
-        {
-           ah.modify( self.hx, self.usage );
+        if self.hx == usize::MAX {
+            self.hx = ah.insert(lpnum, self.usage);
+        } else {
+            ah.modify(self.hx, self.usage);
         }
     }
 
@@ -154,7 +151,7 @@ impl Stash {
             .entry(lpnum)
             .or_insert_with(PageInfo::new)
             .clone();
-        p.lock().unwrap().inc_usage(lpnum,&mut self.min);
+        p.lock().unwrap().inc_usage(lpnum, &mut self.min);
         self.read += 1;
         p
     }
@@ -421,21 +418,21 @@ impl Drop for AccessPagedData {
 struct HN {
     /// Index of node from heap position.
     x: usize,
-    /// Heap position for this node.
+    /// Heap position of this node.
     pos: usize,
-    /// Node key.
-    key: u64,
     /// Node id.
     id: u64,
+    /// Node key.
+    key: u64,
 }
 
 /// Heap for tracking least used page.
-struct Heap {
-    /// Number of heap elements.
+pub struct Heap {
+    /// Number of heap nodes, not including free nodes.
     n: usize,
     /// Index of start of free list.
     free: usize,
-    /// Vector of Heap Nodes.
+    /// Vector of heap nodes.
     v: Vec<HN>,
 }
 
@@ -450,18 +447,18 @@ impl Default for Heap {
 }
 
 impl Heap {
-    /// Insert id into heap with specified key (usage). Result is index of heap element.
+    /// Insert id into heap with specified key (usage). Result is index of heap node.
     pub fn insert(&mut self, id: u64, key: u64) -> usize {
-        let p = self.n;
+        let pos = self.n;
         self.n += 1;
-        let x = self.alloc(p);
+        let x = self.alloc(pos);
         self.v[x].id = id;
         self.v[x].key = key;
-        self.move_up(p);
+        self.move_up(pos);
         x
     }
 
-    /// Modify key of specified heap element.
+    /// Modify key of specified heap node.
     pub fn modify(&mut self, x: usize, newkey: u64) {
         let pos = self.v[x].pos;
         let oldkey = self.v[x].key;
@@ -474,8 +471,8 @@ impl Heap {
         }
     }
 
-    /// Remove heap element with smallest key, returning the assoicated id. 
-    /// Note: index of heap element is no longer valid.
+    /// Remove heap node with smallest key, returning the associated id.
+    /// Note: index of heap node is no longer valid.
     pub fn pop(&mut self) -> u64 {
         assert!(self.n > 0);
         self.n -= 1;
@@ -485,7 +482,7 @@ impl Heap {
         self.v[0].x = xlast;
         self.move_down(0);
 
-        // de-allocate popped node
+        // De-allocate popped node
         self.v[xmin].pos = self.free;
         self.free = xmin;
 
@@ -497,11 +494,10 @@ impl Heap {
             let p = (c - 1) / 2;
             let cx = self.v[c].x;
             let px = self.v[p].x;
-            let ck = self.v[cx].key;
-            let pk = self.v[px].key;
-            if ck >= pk {
+            if self.v[cx].key >= self.v[px].key {
                 return;
             }
+            // Swap parent(p) and child(c).
             self.v[p].x = cx;
             self.v[c].x = px;
             self.v[cx].pos = p;
@@ -512,7 +508,6 @@ impl Heap {
 
     fn move_down(&mut self, mut p: usize) {
         loop {
-            let px = self.v[p].x;
             let mut c = p * 2 + 1;
             if c >= self.n {
                 return;
@@ -526,9 +521,11 @@ impl Heap {
                     cx = cx2;
                 }
             }
+            let px = self.v[p].x;
             if self.v[cx].key >= self.v[px].key {
                 return;
             }
+            // Swap parent(p) and child(c).
             self.v[p].x = cx;
             self.v[c].x = px;
             self.v[cx].pos = p;
@@ -537,7 +534,7 @@ impl Heap {
         }
     }
 
-    fn alloc(&mut self, p: usize) -> usize {
+    fn alloc(&mut self, pos: usize) -> usize {
         let x = if self.free == usize::MAX {
             self.v.push(HN::default());
             self.v.len() - 1
@@ -546,8 +543,8 @@ impl Heap {
             self.free = self.v[x].pos;
             x
         };
-        self.v[p].x = x;
-        self.v[x].pos = p;
+        self.v[pos].x = x;
+        self.v[x].pos = pos;
         x
     }
 }
