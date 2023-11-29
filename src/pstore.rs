@@ -113,7 +113,7 @@ pub struct Stash {
     /// trim_cache reduces total to mem_limit (or below).
     pub mem_limit: usize,
     /// Tracks loaded page with smallest usage.
-    min: Heap,
+    pub min: Heap,
     /// Total number of page accesses.
     pub read: u64,
     /// Total number of misses ( data was not already loaded ).
@@ -237,12 +237,11 @@ impl Stash {
     fn trim_cache(&mut self) {
         while self.total > self.mem_limit && self.min.n > 0 {
             let lpnum = self.min.pop();
-            let p = self.pages.get(&lpnum).unwrap();
-            let mut d = p.lock().unwrap();
-            d.hx = usize::MAX;
-            if let Some(data) = &d.current {
+            let mut p = self.pages.get(&lpnum).unwrap().lock().unwrap();
+            p.hx = usize::MAX;
+            if let Some(data) = &p.current {
                 self.total -= data.len();
-                d.current = None;
+                p.current = None;
             }
         }
     }
@@ -415,25 +414,25 @@ impl Drop for AccessPagedData {
 
 #[derive(Default)]
 /// Heap Node.
-struct HN {
+pub struct HN {
     /// Index of node from heap position.
-    x: usize,
+    pub x: usize,
     /// Heap position of this node.
-    pos: usize,
+    pub pos: usize,
     /// Node id.
-    id: u64,
+    pub id: u64,
     /// Node key.
-    key: u64,
+    pub key: u64,
 }
 
 /// Heap for tracking least used page.
 pub struct Heap {
     /// Number of heap nodes, not including free nodes.
-    n: usize,
+    pub n: usize,
     /// Index of start of free list.
-    free: usize,
+    pub free: usize,
     /// Vector of heap nodes.
-    v: Vec<HN>,
+    pub v: Vec<HN>,
 }
 
 impl Default for Heap {
@@ -454,7 +453,7 @@ impl Heap {
         let x = self.alloc(pos);
         self.v[x].id = id;
         self.v[x].key = key;
-        self.move_up(pos);
+        self.move_up(pos, x, key);
         x
     }
 
@@ -465,8 +464,8 @@ impl Heap {
         self.v[x].key = newkey;
 
         match newkey.cmp(&oldkey) {
-            Ordering::Greater => self.move_down(pos),
-            Ordering::Less => self.move_up(pos),
+            Ordering::Greater => self.move_down(pos, x, newkey),
+            Ordering::Less => self.move_up(pos, x, newkey),
             Ordering::Equal => (),
         }
     }
@@ -480,7 +479,7 @@ impl Heap {
         let xlast = self.v[self.n].x; // Last node in heap.
         self.v[xlast].pos = 0; // Make last node first.
         self.v[0].x = xlast;
-        self.move_down(0);
+        self.move_down(0, xlast, self.v[xlast].key);
 
         // De-allocate popped node
         self.v[xmin].pos = self.free;
@@ -489,47 +488,48 @@ impl Heap {
         self.v[xmin].id
     }
 
-    fn move_up(&mut self, mut c: usize) {
-        while c != 0 {
+    fn move_up(&mut self, mut c: usize, cx: usize, ck: u64) {
+        while c > 0 {
             let p = (c - 1) / 2;
-            let cx = self.v[c].x;
             let px = self.v[p].x;
-            if self.v[cx].key >= self.v[px].key {
+            if ck >= self.v[px].key {
                 return;
             }
             // Swap parent(p) and child(c).
             self.v[p].x = cx;
             self.v[c].x = px;
-            self.v[cx].pos = p;
             self.v[px].pos = c;
+            self.v[cx].pos = p;
             c = p;
         }
     }
 
-    fn move_down(&mut self, mut p: usize) {
+    fn move_down(&mut self, mut p: usize, px: usize, pk: u64) {
         loop {
             let mut c = p * 2 + 1;
             if c >= self.n {
                 return;
             }
             let mut cx = self.v[c].x;
+            let mut ck = self.v[cx].key;
             let c2 = c + 1;
             if c2 < self.n {
                 let cx2 = self.v[c2].x;
-                if self.v[cx2].key < self.v[cx].key {
+                let ck2 = self.v[cx2].key;
+                if ck2 < ck {
                     c = c2;
                     cx = cx2;
+                    ck = ck2;
                 }
             }
-            let px = self.v[p].x;
-            if self.v[cx].key >= self.v[px].key {
+            if ck >= pk {
                 return;
             }
             // Swap parent(p) and child(c).
             self.v[p].x = cx;
             self.v[c].x = px;
-            self.v[cx].pos = p;
             self.v[px].pos = c;
+            self.v[cx].pos = p;
             p = c;
         }
     }
@@ -561,5 +561,4 @@ pub fn test() {
     assert!(h.pop() == 22);
     assert!(h.pop() == 5);
     assert!(h.pop() == 8);
-    // assert!(false)
 }
