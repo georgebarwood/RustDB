@@ -222,7 +222,7 @@ impl Stash {
             self.total += amount - old;
             self.trim_cache();
         } else {
-            self.total -= amount - old;
+            self.total -= old - amount;
         }
     }
 
