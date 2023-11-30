@@ -213,11 +213,17 @@ impl Stash {
         }
     }
 
-    /// Increase total memory used by stash.
-    fn more(&mut self, amount: usize) {
-        self.miss += 1;
-        self.total += amount;
-        self.trim_cache();
+    /// Adjust total memory used by stash.
+    fn delta(&mut self, amount: usize, old: usize) {
+        if old == 0 {
+            self.miss += 1;
+        }
+        if amount > old {
+            self.total += amount - old;
+            self.trim_cache();
+        } else {
+            self.total -= amount - old;
+        }
     }
 
     /// Trim cached data to configured limit.
@@ -335,7 +341,7 @@ impl AccessPagedData {
 
         // If data was read from underlying file, adjust the total data stashed, and trim the stash if appropriate.
         if loaded {
-            self.stash().more(data.len());
+            self.stash().delta(data.len(), 0);
         }
         data
     }
@@ -344,7 +350,7 @@ impl AccessPagedData {
     pub fn set_page(&self, lpnum: u64, data: Data) {
         debug_assert!(self.writer);
 
-        let more = {
+        let old = {
             // Get page info.
             let pinfo = self.stash().get_pinfo(lpnum);
 
@@ -353,13 +359,14 @@ impl AccessPagedData {
             // Read the page data.
             let (old_data, loaded) = p.get_data(lpnum, self);
 
-            let more = if loaded { old_data.len() } else { 0 };
+            let old = if loaded { 0 } else { old_data.len() };
 
             // Update the stash ( ensures any readers will not attempt to read the file ).
             self.stash().set(lpnum, p, data.clone());
 
-            more
+            old
         };
+        let dlen = data.len();
 
         // Write data to underlying file.
         if data.len() > 0 {
@@ -369,9 +376,7 @@ impl AccessPagedData {
         }
 
         // Adjust the total data stashed, and trim the stash if appropriate.
-        if more > 0 {
-            self.stash().more(more);
-        }
+        self.stash().delta(dlen, old);
     }
 
     /// Free a logical page.
