@@ -158,6 +158,9 @@ pub mod gentrans;
 /// Backing [Storage] for database. See also [AtomicFile].
 pub mod stg;
 
+/// Test module.
+mod test;
+
 /// Page storage and sharing, [SharedPagedData] and [AccessPagedData].
 /// Note: several structs and their fields are pub to allow diagnostics but are subject to change.
 pub mod pstore;
@@ -637,7 +640,7 @@ GO
             t.get_used(self, &mut pages);
         }
 
-        assert!(pages.len() == total);
+        assert_eq!(pages.len(), total);
 
         format!(
             "All Ok. Logical page summary: free={} used={} total={}.",

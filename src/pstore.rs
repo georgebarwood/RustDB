@@ -122,25 +122,12 @@ pub struct Stash {
 
 impl Stash {
     /// Set the value of the specified page for the current time.
-    fn set(&mut self, lpnum: u64, data: Data, apd: &AccessPagedData) {
+    fn set(&mut self, lpnum: u64, p: &mut PageInfo, data: Data) {
         let time = self.time;
         let u = self.vers.entry(time).or_default();
         let do_history = u.insert(lpnum);
-        let p = self
-            .pages
-            .entry(lpnum)
-            .or_insert_with(PageInfo::new)
-            .clone();
 
         self.total += data.len();
-
-        let mut p = p.lock().unwrap();
-
-        // Make sure page is in cache ( since trimming could mean it has been discarded ).
-        let (old, loaded) = p.get_data(lpnum, apd);
-        if loaded {
-            self.total += old.len();
-        }
         self.total -= p.set_data(time, data, do_history);
     }
 
@@ -338,11 +325,13 @@ impl AccessPagedData {
 
     /// Get the Data for the specified page.
     pub fn get_data(&self, lpnum: u64) -> Data {
-        // Get page info.
-        let pinfo = self.stash().get_pinfo(lpnum);
-
         // Read the page data.
-        let (data, loaded) = pinfo.lock().unwrap().get_data(lpnum, self);
+        let (data, loaded) = self
+            .stash()
+            .get_pinfo(lpnum)
+            .lock()
+            .unwrap()
+            .get_data(lpnum, self);
 
         // If data was read from underlying file, adjust the total data stashed, and trim the stash if appropriate.
         if loaded {
@@ -355,11 +344,39 @@ impl AccessPagedData {
     pub fn set_page(&self, lpnum: u64, data: Data) {
         debug_assert!(self.writer);
 
-        // First update the stash ( ensures any readers will not attempt to read the file ).
-        self.stash().set(lpnum, data.clone(), self);
+        let more = {
+            // Get page info.
+            let pinfo = self.stash().get_pinfo(lpnum);
+
+            let p = &mut *pinfo.lock().unwrap();
+
+            // Read the page data.
+            let (old_data, loaded) = p.get_data(lpnum, self);
+
+            let more = if loaded { old_data.len() } else { 0 };
+
+            // Update the stash ( ensures any readers will not attempt to read the file ).
+            self.stash().set(lpnum, p, data.clone());
+
+            more
+        };
 
         // Write data to underlying file.
-        self.spd.file.write().unwrap().set_page(lpnum, data);
+        if data.len() > 0 {
+            self.spd.file.write().unwrap().set_page(lpnum, data);
+        } else {
+            self.spd.file.write().unwrap().free_page(lpnum);
+        }
+
+        // Adjust the total data stashed, and trim the stash if appropriate.
+        if more > 0 {
+            self.stash().more(more);
+        }
+    }
+
+    /// Free a logical page.
+    pub fn free_page(&self, lpnum: u64) {
+        self.set_page(lpnum, nd());
     }
 
     /// Is the underlying file new (so needs to be initialised ).
@@ -377,13 +394,6 @@ impl AccessPagedData {
     pub fn alloc_page(&self) -> u64 {
         debug_assert!(self.writer);
         self.spd.file.write().unwrap().alloc_page()
-    }
-
-    /// Free a logical page.
-    pub fn free_page(&self, lpnum: u64) {
-        debug_assert!(self.writer);
-        self.stash().set(lpnum, nd(), self);
-        self.spd.file.write().unwrap().free_page(lpnum);
     }
 
     /// Commit changes to underlying file ( or rollback logical page allocations ).

@@ -58,6 +58,9 @@ pub struct CompactFile {
 
     /// File is newly created.         
     is_new: bool,
+
+    /// Output tracing.
+    pub trace: bool,
 }
 
 impl CompactFile {
@@ -82,6 +85,7 @@ impl CompactFile {
             lp_alloc_dirty: false,
             lp_free: BTreeSet::new(),
             is_new,
+            trace: false,
         };
         if is_new {
             x.stg.write_u64(0, x.ep_resvd);
@@ -116,6 +120,10 @@ impl CompactFile {
 
     /// Set the contents of the page.
     pub fn set_page(&mut self, lpnum: u64, data: Data) {
+        if self.trace {
+            println!("cf set_page lpnum={} len={}", lpnum, data.len());
+        }
+
         debug_assert!(!self.lp_free.contains(&lpnum));
 
         self.extend_starter_pages(lpnum);
@@ -176,6 +184,10 @@ impl CompactFile {
 
     /// Get logical page contents.
     pub fn get_page(&self, lpnum: u64) -> Data {
+        if self.trace {
+            println!("cf get_page lpnum={}", lpnum);
+        }
+
         if !self.lp_valid(lpnum) {
             return nd();
         }
@@ -216,8 +228,10 @@ impl CompactFile {
 
     /// Allocate logical page number. Pages are numbered 0,1,2...
     pub fn alloc_page(&mut self) -> u64 {
-        if let Some(&p) = self.lp_free.iter().next() {
-            self.lp_free.remove(&p);
+        if let Some(p) = self.lp_free.pop_first() {
+            if self.trace {
+                println!("cf alloc_page lpnum={}", p);
+            }
             p
         } else {
             self.lp_alloc_dirty = true;
@@ -228,12 +242,18 @@ impl CompactFile {
                 p = self.lp_alloc;
                 self.lp_alloc += 1;
             }
+            if self.trace {
+                println!("cf alloc_page lpnum={}", p);
+            }
             p
         }
     }
 
     /// Free a logical page number.
     pub fn free_page(&mut self, pnum: u64) {
+        if self.trace {
+            println!("cf free_page lpnum={}", pnum);
+        }
         self.lp_free.insert(pnum);
     }
 
@@ -244,6 +264,9 @@ impl CompactFile {
 
     /// Resets logical page allocation to last save.
     pub fn rollback(&mut self) {
+        if self.trace {
+            println!("cf rollback");
+        }
         self.lp_free.clear();
         if self.lp_alloc_dirty {
             self.lp_alloc_dirty = false;
@@ -284,6 +307,9 @@ impl CompactFile {
             self.stg.write_u64(16, self.lp_first);
         }
         self.stg.commit(self.ep_count * self.ep_size as u64);
+        if self.trace {
+            println!("cf saved");
+        }
     }
 
     /// Read a u16 from the underlying file.
