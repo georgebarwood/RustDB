@@ -322,7 +322,6 @@ impl Page {
         let off = self.over_off(x);
         let data = Data::make_mut(&mut self.data);
         data[off + 1] = (y & 255) as u8;
-        let data = Data::make_mut(&mut self.data);
         setbits!(data[off], 2, NODE_ID_BITS - 8, (y >> 8) as u8);
         debug_assert!(self.left(x) == y);
     }

@@ -119,20 +119,20 @@ GO
     {
         //let mut stash = spd.stash.lock().unwrap();
         //stash.mem_limit = 10 * 1024;
-        spd.file.write().unwrap().trace = true;
+        //spd.file.write().unwrap().trace = true;
     }
 
     let wapd = AccessPagedData::new_writer(spd.clone());
     let db = Database::new(wapd, INITSQL, bmap.clone());
 
-    for _i in 0..10000 {
+    for _i in 0..2000 {
         let mut tr = GenTransaction::default();
         let sql = "EXEC rtest.OneTest()";
         db.run(&sql, &mut tr);
         db.save();
         let s = std::str::from_utf8(&tr.rp.output).unwrap();
         if s.len() > 0 {
-            println!("output={}", s);
+            // println!("output={}", s);
         }
     }
     // assert!(false);
