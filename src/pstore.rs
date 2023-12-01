@@ -60,16 +60,17 @@ impl PageInfo {
         (data, true)
     }
 
-    /// Set the page data, updating the history using the specified time and current data.
-    /// result is size of previously loaded data.
-    fn set_data(&mut self, time: u64, data: Data, do_history: bool) -> usize {
-        let mut result = 0;
-        if let Some(old) = self.current.take() {
-            result = old.len();
-            if do_history {
-                self.history.insert(time, old);
-            }
+    /// Set the page data, updating the history using the specified time and old data.
+    /// Result is size of current data.
+    fn set_data(&mut self, time: u64, old: Data, data: Data, do_history: bool) -> usize {
+        if do_history {
+            self.history.insert(time, old);
         }
+        let result = if let Some(x) = &self.current {
+            x.len()
+        } else {
+            0
+        };
         self.current = Some(data);
         result
     }
@@ -122,13 +123,13 @@ pub struct Stash {
 
 impl Stash {
     /// Set the value of the specified page for the current time.
-    fn set(&mut self, lpnum: u64, p: &mut PageInfo, data: Data) {
+    fn set(&mut self, lpnum: u64, old: Data, data: Data) -> usize {
         let time = self.time;
         let u = self.vers.entry(time).or_default();
         let do_history = u.insert(lpnum);
-
-        self.total += data.len();
-        self.total -= p.set_data(time, data, do_history);
+        let p = self.get_pinfo(lpnum);
+        let result = p.lock().unwrap().set_data(time, old, data, do_history);
+        result
     }
 
     /// Get the PageInfoPtr for the specified page and note the page as used.
@@ -331,13 +332,11 @@ impl AccessPagedData {
 
     /// Get the Data for the specified page.
     pub fn get_data(&self, lpnum: u64) -> Data {
+        // Get page info.
+        let pinfo = self.stash().get_pinfo(lpnum);
+
         // Read the page data.
-        let (data, loaded) = self
-            .stash()
-            .get_pinfo(lpnum)
-            .lock()
-            .unwrap()
-            .get_data(lpnum, self);
+        let (data, loaded) = pinfo.lock().unwrap().get_data(lpnum, self);
 
         // If data was read from underlying file, adjust the total data stashed, and trim the stash if appropriate.
         if loaded {
@@ -350,23 +349,12 @@ impl AccessPagedData {
     pub fn set_page(&self, lpnum: u64, data: Data) {
         debug_assert!(self.writer);
 
-        let old = {
-            // Get page info.
-            let pinfo = self.stash().get_pinfo(lpnum);
+        // Get copy of current data.
+        let old = self.get_data(lpnum);
+        let new_len = data.len();
 
-            let p = &mut *pinfo.lock().unwrap();
-
-            // Read the page data.
-            let (old_data, loaded) = p.get_data(lpnum, self);
-
-            let old = if loaded { 0 } else { old_data.len() };
-
-            // Update the stash ( ensures any readers will not attempt to read the file ).
-            self.stash().set(lpnum, p, data.clone());
-
-            old
-        };
-        let dlen = data.len();
+        // Update the stash ( ensures any readers will not attempt to read the file ).
+        let old_len = self.stash().set(lpnum, old, data.clone());
 
         // Write data to underlying file.
         if data.len() > 0 {
@@ -376,7 +364,7 @@ impl AccessPagedData {
         }
 
         // Adjust the total data stashed, and trim the stash if appropriate.
-        self.stash().delta(dlen, old);
+        self.stash().delta(new_len, old_len);
     }
 
     /// Free a logical page.
