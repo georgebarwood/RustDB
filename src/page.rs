@@ -93,7 +93,7 @@ impl Page {
             data.resize(NODE_BASE + if level != 0 { PAGE_ID_SIZE } else { 0 }, 0);
         }
 
-        let u = util::get(&data, 0, NODE_BASE);
+        let u = util::getu64(&data, 0); // Possible since NODE_BASE = 8.
         let root = getbits!(u, 8, NODE_ID_BITS) as usize;
         let count = getbits!(u, 8 + NODE_ID_BITS, NODE_ID_BITS) as usize;
         let free = getbits!(u, 8 + NODE_ID_BITS * 2, NODE_ID_BITS) as usize;
@@ -117,7 +117,7 @@ impl Page {
         }
     }
 
-    /// Sets header and trailer data (if parent). Called just before page is saved to file.
+    /// Sets header and trailer (if parent) data. Called just before page is saved to file.
     pub fn write_header(&mut self) {
         debug_assert!(self.size() == self.data.len());
         let u = self.level as u64
@@ -128,7 +128,7 @@ impl Page {
         let level = self.level;
         let first_page = self.first_page;
         let data = &mut self.data;
-        util::set(data, 0, u, NODE_BASE);
+        util::setu64(data, u); // Possible since NODE_BASE = 8.
         if level != 0 {
             let off = data.len() - PAGE_ID_SIZE;
             util::set(data, off, first_page, PAGE_ID_SIZE);
