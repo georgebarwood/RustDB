@@ -107,12 +107,12 @@ impl ByteStorage {
         let start = Fragment::new(id, self.bpf);
         for (pp, off) in self.file.asc(db, Box::new(start)) {
             let p = pp.borrow();
-            let xid = util::getu64(&p.data, off);
-            debug_assert!(xid == id);
+            let data = &p.data;
+            debug_assert!(util::getu64(data, off) == id);
             id += 1;
             let off = off + 8;
-            let (len, last) = decode(&p.data[off..], self.bpf);
-            result.extend_from_slice(&p.data[off..off + len]);
+            let (len, last) = decode(&data[off..], self.bpf);
+            result.extend_from_slice(&data[off..off + len]);
             if last {
                 break;
             }
@@ -126,8 +126,7 @@ impl ByteStorage {
         let mut n = 0;
         for (pp, off) in self.file.asc(db, Box::new(start)) {
             let p = pp.borrow();
-            let xid = util::getu64(&p.data, off);
-            debug_assert!(xid == id + n);
+            debug_assert!(util::getu64(&p.data, off) == id + n);
             n += 1;
             let off = off + 8;
             let (_len, last) = decode(&p.data[off..], self.bpf);

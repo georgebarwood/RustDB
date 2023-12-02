@@ -227,8 +227,7 @@ impl Table {
 
         for (pp, off) in self.scan(db) {
             let p = pp.borrow();
-            let data = &p.data[off..];
-            row.load(db, data);
+            row.load(db, &p.data[off..]);
             let ixr = IndexRow::new(self, cols.clone(), &row);
             f.insert(db, &ixr);
         }
@@ -244,9 +243,8 @@ impl Table {
 
     /// Utility for updating fields by number.
     pub fn write_access<'d, 't>(&'t self, p: &'d mut Page, off: usize) -> WriteAccess<'d, 't> {
-        let data = Data::make_mut(&mut p.data);
         WriteAccess::<'d, 't> {
-            data: &mut data[off..],
+            data: &mut p.data[off..],
             info: &self.info,
         }
     }

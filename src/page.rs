@@ -6,7 +6,8 @@
 //! Each record has a 3 byte overhead, 2 bits to store the balance, 2 x 11 bits to store left and right node ids.
 //!
 //! Note that the left node is greater than the parent node.
-use crate::{nd, panic, util, Data, Ordering, Rc, Record, RefCell, DB};
+
+use crate::{nd, panic, util, Data, MData, Ordering, Rc, Record, RefCell, DB};
 
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
@@ -28,6 +29,9 @@ const PAGE_ID_SIZE: usize = 6;
 /// = 11. Node ids are 11 bits.
 const NODE_ID_BITS: usize = 11;
 
+/// = 3. Fragment of Node Id that doesn't fit in byte.
+const NF: usize = NODE_ID_BITS - 8;
+
 /// = 2047. Largest Node id.
 const MAX_NODE: usize = bitmask!(0, NODE_ID_BITS);
 
@@ -44,7 +48,7 @@ use Balance::*;
 /// Note that left subtree has nodes that compare greater.
 pub struct Page {
     /// Data storage.
-    pub data: Data,
+    pub data: MData,
 
     /// Page number in file where page is saved.
     pub pnum: u64,
@@ -83,9 +87,6 @@ impl Page {
     /// Construct a new page.
     pub fn new(rec_size: usize, level: u8, mut data: Data, pnum: u64) -> Page {
         let node_size = rec_size + if level != 0 { PAGE_ID_SIZE } else { 0 } + NODE_OVERHEAD;
-        // Round up to multiple of 8 bytes.
-        // node_size = node_size + 7;
-        // node_size = node_size - node_size % 8;
 
         if data.len() == 0 {
             let data = Data::make_mut(&mut data);
@@ -103,7 +104,7 @@ impl Page {
             0
         };
         Page {
-            data,
+            data: MData::new(data),
             node_size,
             root,
             count,
@@ -124,11 +125,13 @@ impl Page {
             | ((self.count as u64) << (8 + NODE_ID_BITS))
             | ((self.free as u64) << (8 + 2 * NODE_ID_BITS))
             | ((self.alloc as u64) << (8 + 3 * NODE_ID_BITS));
-        let data = Data::make_mut(&mut self.data);
+        let level = self.level;
+        let first_page = self.first_page;
+        let data = &mut self.data;
         util::set(data, 0, u, NODE_BASE);
-        if self.level != 0 {
+        if level != 0 {
             let off = data.len() - PAGE_ID_SIZE;
-            util::set(data, off, self.first_page, PAGE_ID_SIZE);
+            util::set(data, off, first_page, PAGE_ID_SIZE);
         }
     }
 
@@ -226,8 +229,7 @@ impl Page {
             let dest_off = self.rec_offset(inserted);
             let src_off = from.rec_offset(x);
             let n = self.node_size - NODE_OVERHEAD;
-            let data = Data::make_mut(&mut self.data);
-            data[dest_off..dest_off + n].copy_from_slice(&from.data[src_off..src_off + n]);
+            self.data[dest_off..dest_off + n].copy_from_slice(&from.data[src_off..src_off + n]);
         }
     }
 
@@ -245,10 +247,9 @@ impl Page {
         let inserted = self.next_alloc();
         self.root = self.insert_into(self.root, None).0;
         let off = self.rec_offset(inserted);
-        let data = Data::make_mut(&mut self.data);
         let n = self.node_size - NODE_OVERHEAD - PAGE_ID_SIZE;
         debug_assert!(n == b.len());
-        data[off..off + n].copy_from_slice(&b[0..n]);
+        self.data[off..off + n].copy_from_slice(&b[0..n]);
         self.set_child_page(inserted, cp);
     }
 
@@ -294,49 +295,40 @@ impl Page {
     /// Set balance for node x.
     fn set_balance(&mut self, x: usize, balance: Balance) {
         let off = self.over_off(x);
-        let data = Data::make_mut(&mut self.data);
-        setbits!(data[off], 0, 2, balance as u8);
+        setbits!(self.data[off], 0, 2, balance as u8);
     }
 
     /// Get the left child node for node x. Result is zero if there is no child.
     pub fn left(&self, x: usize) -> usize {
         debug_assert!(x != 0);
         let off = self.over_off(x);
-        self.data[off + 1] as usize | (getbits!(self.data[off] as usize, 2, NODE_ID_BITS - 8) << 8)
+        let data = &self.data;
+        data[off + 1] as usize | (getbits!(data[off] as usize, 2, NF) << 8)
     }
 
     /// Get the right child node for node x. Result is zero if there is no child.
     pub fn right(&self, x: usize) -> usize {
         debug_assert!(x != 0);
         let off = self.over_off(x);
-        self.data[off + 2] as usize
-            | (getbits!(
-                self.data[off] as usize,
-                2 + NODE_ID_BITS - 8,
-                NODE_ID_BITS - 8
-            ) << 8)
+        let data = &self.data;
+        data[off + 2] as usize | (getbits!(data[off] as usize, 2 + NF, NF) << 8)
     }
 
     /// Set the left child node for node x.
     fn set_left(&mut self, x: usize, y: usize) {
         let off = self.over_off(x);
-        let data = Data::make_mut(&mut self.data);
+        let data = &mut self.data;
         data[off + 1] = (y & 255) as u8;
-        setbits!(data[off], 2, NODE_ID_BITS - 8, (y >> 8) as u8);
+        setbits!(data[off], 2, NF, (y >> 8) as u8);
         debug_assert!(self.left(x) == y);
     }
 
     /// Set the right child node for node x.
     fn set_right(&mut self, x: usize, y: usize) {
         let off = self.over_off(x);
-        let data = Data::make_mut(&mut self.data);
+        let data = &mut self.data;
         data[off + 2] = (y & 255) as u8;
-        setbits!(
-            data[off],
-            2 + NODE_ID_BITS - 8,
-            NODE_ID_BITS - 8,
-            (y >> 8) as u8
-        );
+        setbits!(data[off], 2 + NF, NF, (y >> 8) as u8);
         debug_assert!(self.right(x) == y);
     }
 
@@ -353,16 +345,14 @@ impl Page {
         debug_assert!(self.level != 0);
         debug_assert!(x != 0);
         let off = self.over_off(x) - PAGE_ID_SIZE;
-        let data = Data::make_mut(&mut self.data);
-        util::set(data, off, pnum, PAGE_ID_SIZE);
+        util::set(&mut self.data, off, pnum, PAGE_ID_SIZE);
     }
 
     /// Set the record data for node x.
     fn set_record(&mut self, x: usize, r: &dyn Record) {
         let off = self.rec_offset(x);
         let size = self.rec_size();
-        let data = Data::make_mut(&mut self.data);
-        r.save(&mut data[off..off + size]);
+        r.save(&mut self.data[off..off + size]);
     }
 
     /// Compare record data for node x with record r.
@@ -407,8 +397,7 @@ impl Page {
     /// Resize data.
     fn resize_data(&mut self) {
         let size = self.size();
-        let data = Data::make_mut(&mut self.data);
-        data.resize(size, 0);
+        self.data.resize(size, 0);
     }
 
     /// Allocate a node.
@@ -711,8 +700,7 @@ impl Page {
                 let n = self.node_size;
                 let src = self.rec_offset(x);
                 let dest = self.rec_offset(to);
-                let data = Data::make_mut(&mut self.data);
-                data.copy_within(src..src + n, dest);
+                self.data.copy_within(src..src + n, dest);
                 x = to;
             }
             let c = self.left(x);

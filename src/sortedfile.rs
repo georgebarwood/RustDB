@@ -48,7 +48,7 @@ impl SortedFile {
             if p.pnum != u64::MAX {
                 p.compress(db);
                 p.write_header();
-                db.file.set_page(p.pnum, p.data.clone());
+                db.file.set_page(p.pnum, p.data.to_data());
             }
         }
     }

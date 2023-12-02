@@ -264,6 +264,33 @@ mod bytes;
 /// ```Arc<Vec<u8>>```
 pub type Data = Arc<Vec<u8>>;
 
+/// Mutable Data, copied on write.
+pub struct MData(Data);
+
+impl MData {
+    ///
+    pub fn new(data: Data) -> MData {
+        MData(data)
+    }
+    ///
+    pub fn to_data(&mut self) -> Data {
+        self.0.clone()
+    }
+}
+
+impl std::ops::Deref for MData {
+    type Target = Vec<u8>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for MData {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.0)
+    }
+}
+
 /// ```Rc<Database>```
 pub type DB = Rc<Database>;
 

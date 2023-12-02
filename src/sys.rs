@@ -103,8 +103,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool) 
                     db.delcode(oldcode);
                     let val = Value::String(source);
                     let newcode = db.encode(&val, data_size(BIGSTR));
-                    let data = Data::make_mut(&mut p.data);
-                    val.save(BIGSTR, data, off, newcode);
+                    val.save(BIGSTR, &mut p.data, off, newcode);
                     t.file.set_dirty(p, &pp);
                     db.function_reset.set(true);
                 }
