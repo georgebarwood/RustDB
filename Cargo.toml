@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "4.0.11"
+version = "4.0.16"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -11,7 +11,7 @@ categories = ["database-implementations"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["gentrans","max","pack","verify"]
+default = ["gentrans","pack","verify","table","builtin","max"]
 
 # GenTransaction ( implementation of Transaction )
 gentrans = []
@@ -19,8 +19,11 @@ gentrans = []
 # ````builtin``` : Allows extra SQL builtin functions to be defined.
 builtin = []
 
-# ```max``` : Full access, including direct access to database tables and all other internal modules.
-max = ["builtin"]
+# ```table``` : Allows direct access to database tables.
+table = []
+
+# ```max``` : Full access, including access to possibly unstable interfaces.
+max = ["builtin","table"]
 
 # ```pack``` : Allows database pages to be packed using builtin function REPACKFILE.
 pack = []
