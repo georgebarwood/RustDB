@@ -1,5 +1,64 @@
-#[test]
+#[cfg(test)]
+pub fn test_amount() -> usize {
+    str::parse(&std::env::var("TA").unwrap_or("1".to_string())).unwrap()
+}
 
+#[test]
+pub fn concurrency() {
+    use crate::*;
+    let file = Box::new(MemFile::default());
+    let upd = Box::new(MemFile::default());
+    let stg = Box::new(AtomicFile::new(file, upd));
+
+    let mut bmap = BuiltinMap::default();
+    standard_builtins(&mut bmap);
+    let bmap = Arc::new(bmap);
+
+    let spd = Arc::new(SharedPagedData::new(stg));
+    let wapd = AccessPagedData::new_writer(spd.clone());
+    let db = Database::new(wapd, "CREATE SCHEMA test", bmap.clone());
+
+    let nt = 100;
+
+    // Create nt tables.
+    for i in 0..nt {
+        let mut tr = GenTransaction::default();
+        let sql = format!(
+            "CREATE TABLE test.[T{}](N int) GO INSERT INTO test.[T{}](N) VALUES (0)",
+            i, i
+        );
+        db.run(&sql, &mut tr);
+        assert!(db.save() > 0);
+    }
+
+    // Create readers at different update times.
+    let mut rapd = Vec::new();
+    for i in 0..100 * test_amount() {
+        rapd.push((i, AccessPagedData::new_reader(spd.clone())));
+        let mut tr = GenTransaction::default();
+        let table = i % nt;
+        let sql = format!("UPDATE test.[T{}] SET N = N + 1 WHERE 1=1", table);
+        db.run(&sql, &mut tr);
+        assert!(db.save() > 0);
+    }
+
+    // Run the readers in random order, checking content of random table.
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    while !rapd.is_empty() {
+        let r = rng.gen::<usize>() % rapd.len();
+        let (i, rapd) = rapd.remove(r);
+        let db = Database::new(rapd, "", bmap.clone());
+        let mut tr = GenTransaction::default();
+        let table = rng.gen::<usize>() % nt;
+        let sql = format!("SELECT N FROM test.[T{}]", table);
+        db.run(&sql, &mut tr);
+        let expect = i / nt + if i % nt > table { 1 } else { 0 };
+        assert!(tr.rp.output == format!("{}", expect).as_bytes());
+    }
+}
+
+#[test]
 pub fn rtest() {
     use crate::*;
 
@@ -116,16 +175,10 @@ GO
     let bmap = Arc::new(bmap);
 
     let spd = Arc::new(SharedPagedData::new(stg));
-    {
-        //let mut stash = spd.stash.lock().unwrap();
-        //stash.mem_limit = 10 * 1024;
-        //spd.file.write().unwrap().trace = true;
-    }
-
     let wapd = AccessPagedData::new_writer(spd.clone());
     let db = Database::new(wapd, INITSQL, bmap.clone());
 
-    for _i in 0..2000 {
+    for _i in 0..1000 * test_amount() {
         let mut tr = GenTransaction::default();
         let sql = "EXEC rtest.OneTest()";
         db.run(&sql, &mut tr);
@@ -139,8 +192,7 @@ GO
 }
 
 #[test]
-
-pub fn test_rollback() {
+pub fn rollback() {
     use crate::*;
 
     let file = Box::new(MemFile::default());
@@ -152,8 +204,6 @@ pub fn test_rollback() {
     let bmap = Arc::new(bmap);
 
     let spd = Arc::new(SharedPagedData::new(stg));
-    // let mut stash = spd.stash.lock().unwrap();
-    // stash.mem_limit = 1 << 20;
 
     let wapd = AccessPagedData::new_writer(spd.clone());
     let db = Database::new(wapd, "", bmap.clone());
@@ -165,4 +215,43 @@ pub fn test_rollback() {
       EXECUTE(sql)
     ";
     db.run(&sql, &mut tr);
+}
+
+#[test]
+pub fn insert_delete() {
+    use crate::*;
+
+    let file = Box::new(MemFile::default());
+    let upd = Box::new(MemFile::default());
+    let stg = Box::new(AtomicFile::new(file, upd));
+
+    let mut bmap = BuiltinMap::default();
+    standard_builtins(&mut bmap);
+    let bmap = Arc::new(bmap);
+
+    let spd = Arc::new(SharedPagedData::new(stg));
+    let wapd = AccessPagedData::new_writer(spd.clone());
+    let db = Database::new(wapd, "", bmap.clone());
+
+    let mut tr = GenTransaction::default();
+
+    let sql = format!(
+        "
+      CREATE TABLE sys.test(x int,name string) 
+      GO
+      DECLARE @i int
+      WHILE @i < {}
+      BEGIN
+        INSERT INTO sys.test(x,name) VALUES(@i,'Hello World')    
+        SET @i = @i + 1
+      END      
+      DELETE FROM sys.test WHERE Id % 3 = 1
+      DELETE FROM sys.test WHERE Id % 3 = 2
+      DELETE FROM sys.test WHERE true
+    ",
+        test_amount() * 100000
+    );
+    db.run(&sql, &mut tr);
+    db.save();
+    assert_eq!(tr.get_error(), "");
 }

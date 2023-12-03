@@ -28,9 +28,10 @@
 //! This crate supports the following cargo features:
 //! - `gentrans` : enables gentrans module ( sample implementation of [Transaction] ).
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
-//! - `max` : maximal interface, including internal modules.
+//! - `max` : maximal interface, including internal modules (which may not be stable).
 //! - `verify` : Allows database structure to be verified using builtin function VERIFYDB.
 //! - `pack` : Allows database pages to be packed using builtin function REPACKFILE.
+//! - `table` : Allow direct access to database tables.
 //!
 //! By default, all features are enabled.
 //!
@@ -175,10 +176,10 @@ pub mod atomfile;
 // This didn't work out - actually ran slower!
 // pub mod stgwin;
 
-#[cfg(feature = "max")]
+#[cfg(feature = "builtin")]
 /// Compilation of builtin functions, [standard_builtins].
 pub mod builtin;
-#[cfg(not(feature = "max"))]
+#[cfg(not(feature = "builtin"))]
 mod builtin;
 
 #[cfg(feature = "max")]
@@ -205,10 +206,10 @@ pub mod expr;
 #[cfg(not(feature = "builtin"))]
 mod expr;
 
-#[cfg(feature = "max")]
+#[cfg(feature = "table")]
 /// [Page] for [SortedFile].
 pub mod page;
-#[cfg(not(feature = "max"))]
+#[cfg(not(feature = "table"))]
 mod page;
 
 #[cfg(feature = "max")]
@@ -235,10 +236,10 @@ pub mod sys;
 #[cfg(not(feature = "max"))]
 mod sys;
 
-#[cfg(feature = "max")]
+#[cfg(feature = "table")]
 /// [Table], [ColInfo], [Row] and other Table types.
 pub mod table;
-#[cfg(not(feature = "max"))]
+#[cfg(not(feature = "table"))]
 mod table;
 
 #[cfg(feature = "builtin")]
@@ -542,7 +543,7 @@ GO
         self.file.save(op)
     }
 
-    #[cfg(not(feature = "max"))]
+    #[cfg(not(feature = "table"))]
     /// Get the named table.
     fn get_table(self: &DB, name: &ObjRef) -> Option<Rc<Table>> {
         if let Some(t) = self.tables.borrow().get(name) {
@@ -551,7 +552,7 @@ GO
         sys::get_table(self, name)
     }
 
-    #[cfg(feature = "max")]
+    #[cfg(feature = "table")]
     /// Get the named table.
     pub fn get_table(self: &DB, name: &ObjRef) -> Option<Rc<Table>> {
         if let Some(t) = self.tables.borrow().get(name) {
@@ -560,7 +561,7 @@ GO
         sys::get_table(self, name)
     }
 
-    #[cfg(feature = "max")]
+    #[cfg(feature = "table")]
     /// Get the named table ( panics if it does not exist ).
     pub fn table(self: &DB, schema: &str, name: &str) -> Rc<Table> {
         self.get_table(&ObjRef::new(schema, name)).unwrap()
@@ -772,59 +773,5 @@ impl Transaction for DummyTransaction {
     /// Called if a panic ( error ) occurs.
     fn set_error(&mut self, err: String) {
         println!("Error: {}", err);
-    }
-}
-
-#[test]
-pub fn concurrency() {
-    let file = Box::new(MemFile::default());
-    let upd = Box::new(MemFile::default());
-    let stg = Box::new(AtomicFile::new(file, upd));
-
-    let mut bmap = BuiltinMap::default();
-    standard_builtins(&mut bmap);
-    let bmap = Arc::new(bmap);
-
-    let spd = Arc::new(SharedPagedData::new(stg));
-    let wapd = AccessPagedData::new_writer(spd.clone());
-    let db = Database::new(wapd, "CREATE SCHEMA test", bmap.clone());
-
-    let nt = 100;
-
-    // Create nt tables.
-    for i in 0..nt {
-        let mut tr = GenTransaction::default();
-        let sql = format!(
-            "CREATE TABLE test.[T{}](N int) GO INSERT INTO test.[T{}](N) VALUES (0)",
-            i, i
-        );
-        db.run(&sql, &mut tr);
-        assert!(db.save() > 0);
-    }
-
-    // Create readers at different update times.
-    let mut rapd = Vec::new();
-    for i in 0..1000 {
-        rapd.push((i, AccessPagedData::new_reader(spd.clone())));
-        let mut tr = GenTransaction::default();
-        let table = i % nt;
-        let sql = format!("UPDATE test.[T{}] SET N = N + 1 WHERE 1=1", table);
-        db.run(&sql, &mut tr);
-        assert!(db.save() > 0);
-    }
-
-    // Run the readers in random order, checking content of random table.
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    while !rapd.is_empty() {
-        let r = rng.gen::<usize>() % rapd.len();
-        let (i, rapd) = rapd.remove(r);
-        let db = Database::new(rapd, "", bmap.clone());
-        let mut tr = GenTransaction::default();
-        let table = rng.gen::<usize>() % nt;
-        let sql = format!("SELECT N FROM test.[T{}]", table);
-        db.run(&sql, &mut tr);
-        let expect = i / nt + if i % nt > table { 1 } else { 0 };
-        assert!(tr.rp.output == format!("{}", expect).as_bytes());
     }
 }
