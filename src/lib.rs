@@ -28,12 +28,12 @@
 //! This crate supports the following cargo features:
 //! - `gentrans` : enables gentrans module ( sample implementation of [Transaction] ).
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
-//! - `max` : maximal interface, including internal modules (which may not be stable).
 //! - `verify` : Allows database structure to be verified using builtin function VERIFYDB.
 //! - `pack` : Allows database pages to be packed using builtin function REPACKFILE.
 //! - `table` : Allow direct access to database tables.
+//! - `max` : maximal interface, including internal modules (which may not be stable).
 //!
-//! By default, all features are enabled.
+//! By default, all features except table and max are enabled.
 //!
 //!# General Design of Database
 //!
@@ -61,11 +61,9 @@
 //! ```
 //!     use rustdb::*;
 //!     use std::sync::Arc;
-//!     let file = Box::new(MemFile::default());
-//!     let upd = Box::new(MemFile::default());
-//!     let stg = Box::new(AtomicFile::new(file, upd));
+//!     let stg = AtomicFile::new(MemFile::new(), MemFile::new());
 //!
-//!     let spd = Arc::new(SharedPagedData::new(stg));
+//!     let spd = SharedPagedData::new(stg);
 //!     let wapd = AccessPagedData::new_writer(spd);
 //!
 //!     let mut bmap = BuiltinMap::default();
@@ -182,23 +180,11 @@ pub mod builtin;
 #[cfg(not(feature = "builtin"))]
 mod builtin;
 
-#[cfg(feature = "max")]
-/// [CompactFile] : storage of logical pages in smaller regions of backing storage.
-pub mod compact;
-#[cfg(not(feature = "max"))]
-mod compact;
-
 #[cfg(feature = "builtin")]
 /// Functions to compile parsed expressions, checking types.
 pub mod compile;
 #[cfg(not(feature = "builtin"))]
 mod compile;
-
-#[cfg(feature = "max")]
-/// [EvalEnv] : [Instruction] execution.
-pub mod exec;
-#[cfg(not(feature = "max"))]
-mod exec;
 
 #[cfg(feature = "builtin")]
 /// Expression types, result of parsing. [Expr], [DataKind], [ObjRef].
@@ -207,10 +193,46 @@ pub mod expr;
 mod expr;
 
 #[cfg(feature = "table")]
-/// [Page] for [SortedFile].
+/// [SortedFile] : [Record] storage.
+pub mod sortedfile;
+#[cfg(not(feature = "table"))]
+mod sortedfile;
+
+#[cfg(feature = "table")]
+/// [Table], [ColInfo], [Row] and other Table types for direct table access.
+pub mod table;
+#[cfg(not(feature = "table"))]
+mod table;
+
+#[cfg(feature = "table")]
+/// [Page] of records for [SortedFile].
 pub mod page;
 #[cfg(not(feature = "table"))]
 mod page;
+
+#[cfg(feature = "builtin")]
+/// Run-time [Value].
+pub mod value;
+#[cfg(not(feature = "builtin"))]
+mod value;
+
+#[cfg(feature = "max")]
+/// [EvalEnv] : [Instruction] execution.
+pub mod exec;
+#[cfg(not(feature = "max"))]
+mod exec;
+
+#[cfg(feature = "max")]
+/// [CompactFile] : storage of logical pages in smaller regions of backing storage.
+pub mod compact;
+#[cfg(not(feature = "max"))]
+mod compact;
+
+#[cfg(feature = "max")]
+/// System table functions.
+pub mod sys;
+#[cfg(not(feature = "max"))]
+mod sys;
 
 #[cfg(feature = "max")]
 /// [Parser].
@@ -223,30 +245,6 @@ mod parse;
 pub mod run;
 #[cfg(not(feature = "max"))]
 mod run;
-
-#[cfg(feature = "max")]
-/// [SortedFile] : [Record] storage.
-pub mod sortedfile;
-#[cfg(not(feature = "max"))]
-mod sortedfile;
-
-#[cfg(feature = "max")]
-/// System table functions.
-pub mod sys;
-#[cfg(not(feature = "max"))]
-mod sys;
-
-#[cfg(feature = "table")]
-/// [Table], [ColInfo], [Row] and other Table types.
-pub mod table;
-#[cfg(not(feature = "table"))]
-mod table;
-
-#[cfg(feature = "builtin")]
-/// Run-time [Value].
-pub mod value;
-#[cfg(not(feature = "builtin"))]
-mod value;
 
 #[cfg(feature = "max")]
 /// Structs that implement [CExp] trait.

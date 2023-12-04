@@ -267,7 +267,7 @@ const SP_SIZE: usize = (EP_MAX + 1) * 8;
 
 impl SharedPagedData {
     /// Construct SharedPageData based on specified underlying storage.
-    pub fn new(file: Box<dyn Storage>) -> Self {
+    pub fn new(file: Box<dyn Storage>) -> Arc<Self> {
         let file = CompactFile::new(file, SP_SIZE, EP_SIZE);
         // Note : if it's not a new file, sp_size and ep_size are read from file header.
         let sp_size = file.sp_size;
@@ -277,12 +277,12 @@ impl SharedPagedData {
             mem_limit: 10 * 1024 * 1024,
             ..Default::default()
         };
-        Self {
+        Arc::new(Self {
             stash: Mutex::new(stash),
             file: RwLock::new(file),
             sp_size,
             ep_size,
-        }
+        })
     }
 
     /// Calculate the maximum size of a logical page. This value is stored in the Database struct.

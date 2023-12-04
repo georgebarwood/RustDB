@@ -6,15 +6,14 @@ pub fn test_amount() -> usize {
 #[test]
 pub fn concurrency() {
     use crate::*;
-    let file = Box::new(MemFile::default());
-    let upd = Box::new(MemFile::default());
-    let stg = Box::new(AtomicFile::new(file, upd));
+
+    let stg = AtomicFile::new(MemFile::new(), MemFile::new());
 
     let mut bmap = BuiltinMap::default();
     standard_builtins(&mut bmap);
     let bmap = Arc::new(bmap);
 
-    let spd = Arc::new(SharedPagedData::new(stg));
+    let spd = SharedPagedData::new(stg);
     let wapd = AccessPagedData::new_writer(spd.clone());
     let db = Database::new(wapd, "CREATE SCHEMA test", bmap.clone());
 
@@ -33,7 +32,7 @@ pub fn concurrency() {
 
     // Create readers at different update times.
     let mut rapd = Vec::new();
-    for i in 0..100 * test_amount() {
+    for i in 0..1000 * test_amount() {
         rapd.push((i, AccessPagedData::new_reader(spd.clone())));
         let mut tr = GenTransaction::default();
         let table = i % nt;
@@ -166,19 +165,17 @@ END
 GO
 ";
 
-    let file = Box::new(MemFile::default());
-    let upd = Box::new(MemFile::default());
-    let stg = Box::new(AtomicFile::new(file, upd));
+    let stg = AtomicFile::new(MemFile::new(), MemFile::new());
 
     let mut bmap = BuiltinMap::default();
     standard_builtins(&mut bmap);
     let bmap = Arc::new(bmap);
 
-    let spd = Arc::new(SharedPagedData::new(stg));
+    let spd = SharedPagedData::new(stg);
     let wapd = AccessPagedData::new_writer(spd.clone());
     let db = Database::new(wapd, INITSQL, bmap.clone());
 
-    for _i in 0..1000 * test_amount() {
+    for _i in 0..10000 * test_amount() {
         let mut tr = GenTransaction::default();
         let sql = "EXEC rtest.OneTest()";
         db.run(&sql, &mut tr);
@@ -195,15 +192,13 @@ GO
 pub fn rollback() {
     use crate::*;
 
-    let file = Box::new(MemFile::default());
-    let upd = Box::new(MemFile::default());
-    let stg = Box::new(AtomicFile::new(file, upd));
+    let stg = AtomicFile::new(MemFile::new(), MemFile::new());
 
     let mut bmap = BuiltinMap::default();
     standard_builtins(&mut bmap);
     let bmap = Arc::new(bmap);
 
-    let spd = Arc::new(SharedPagedData::new(stg));
+    let spd = SharedPagedData::new(stg);
 
     let wapd = AccessPagedData::new_writer(spd.clone());
     let db = Database::new(wapd, "", bmap.clone());
@@ -221,15 +216,13 @@ pub fn rollback() {
 pub fn insert_delete() {
     use crate::*;
 
-    let file = Box::new(MemFile::default());
-    let upd = Box::new(MemFile::default());
-    let stg = Box::new(AtomicFile::new(file, upd));
+    let stg = AtomicFile::new(MemFile::new(), MemFile::new());
 
     let mut bmap = BuiltinMap::default();
     standard_builtins(&mut bmap);
     let bmap = Arc::new(bmap);
 
-    let spd = Arc::new(SharedPagedData::new(stg));
+    let spd = SharedPagedData::new(stg);
     let wapd = AccessPagedData::new_writer(spd.clone());
     let db = Database::new(wapd, "", bmap.clone());
 

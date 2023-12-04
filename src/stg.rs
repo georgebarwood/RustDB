@@ -46,6 +46,12 @@ pub struct MemFile {
     v: Mutex<Vec<u8>>,
 }
 
+impl MemFile
+{
+    /// Get a new (boxed) MemFile.
+    pub fn new() -> Box<Self> { Box::new(Self::default()) }
+}
+
 impl Storage for MemFile {
     fn size(&self) -> u64 {
         let v = self.v.lock().unwrap();
@@ -88,8 +94,8 @@ pub struct SimpleFileStorage {
 
 impl SimpleFileStorage {
     /// Construct from filename.
-    pub fn new(filename: &str) -> Self {
-        Self {
+    pub fn new(filename: &str) -> Box<Self> {
+        Box::new(Self {
             file: Mutex::new(
                 OpenOptions::new()
                     .read(true)
@@ -98,7 +104,7 @@ impl SimpleFileStorage {
                     .open(filename)
                     .unwrap(),
             ),
-        }
+        })
     }
 }
 
