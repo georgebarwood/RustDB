@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "4.0.19"
+version = "4.0.20"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -37,4 +37,5 @@ serde = { version = "1.0.131", features = ["derive","rc"] }
 
 [dev-dependencies]
 rand = "0.8.4"
+sqlite = "0.32.0"
 
