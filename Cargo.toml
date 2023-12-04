@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "4.0.16"
+version = "4.0.19"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -11,7 +11,7 @@ categories = ["database-implementations"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["gentrans","pack","verify","table","builtin","max"]
+default = ["builtin","gentrans","pack","verify"]
 
 # GenTransaction ( implementation of Transaction )
 gentrans = []
