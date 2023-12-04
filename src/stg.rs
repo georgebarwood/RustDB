@@ -46,10 +46,11 @@ pub struct MemFile {
     v: Mutex<Vec<u8>>,
 }
 
-impl MemFile
-{
+impl MemFile {
     /// Get a new (boxed) MemFile.
-    pub fn new() -> Box<Self> { Box::new(Self::default()) }
+    pub fn new() -> Box<Self> {
+        Box::new(Self::default())
+    }
 }
 
 impl Storage for MemFile {

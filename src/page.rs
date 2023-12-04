@@ -433,15 +433,15 @@ enum Balance {
 use Balance::*;
 
 /// To reduce the number of calls to Arc::make_mut.
-pub struct MutPage<'a> {
+struct MutPage<'a> {
     ///
-    pub data: &'a mut Vec<u8>,
+    data: &'a mut Vec<u8>,
     ///
-    pub node_size: usize,
+    node_size: usize,
     ///
-    pub level: u8,
+    level: u8,
     ///
-    pub target: usize,
+    target: usize,
 }
 
 impl<'a> MutPage<'a> {
@@ -459,13 +459,13 @@ impl<'a> MutPage<'a> {
     }
 
     /// Offset of the client data for node x.
-    pub fn rec_offset(&self, x: usize) -> usize {
+    fn rec_offset(&self, x: usize) -> usize {
         debug_assert!(x != 0);
         NODE_BASE + (x - 1) * self.node_size
     }
 
     /// The client data size.
-    pub fn rec_size(&self) -> usize {
+    fn rec_size(&self) -> usize {
         self.node_size - NODE_OVERHEAD - if self.level != 0 { PAGE_ID_SIZE } else { 0 }
     }
 
@@ -486,7 +486,7 @@ impl<'a> MutPage<'a> {
     }
 
     /// Get the left child node for node x. Result is zero if there is no child.
-    pub fn left(&self, x: usize) -> usize {
+    fn left(&self, x: usize) -> usize {
         debug_assert!(x != 0);
         let off = self.over_off(x);
         let data = &self.data;
@@ -494,7 +494,7 @@ impl<'a> MutPage<'a> {
     }
 
     /// Get the right child node for node x. Result is zero if there is no child.
-    pub fn right(&self, x: usize) -> usize {
+    fn right(&self, x: usize) -> usize {
         debug_assert!(x != 0);
         let off = self.over_off(x);
         let data = &self.data;
@@ -520,7 +520,7 @@ impl<'a> MutPage<'a> {
     }
 
     /// Compare record data for node x with record r.
-    pub fn compare(&self, db: &DB, r: &dyn Record, x: usize) -> Ordering {
+    fn compare(&self, db: &DB, r: &dyn Record, x: usize) -> Ordering {
         debug_assert!(x != 0);
         let off = self.rec_offset(x);
         let size = self.rec_size();
@@ -528,7 +528,7 @@ impl<'a> MutPage<'a> {
     }
 
     /// Insert into node x. Result is node and whether tree height increased.
-    pub fn insert_into(&mut self, mut x: usize, r: Option<(&DB, &dyn Record)>) -> (usize, bool) {
+    fn insert_into(&mut self, mut x: usize, r: Option<(&DB, &dyn Record)>) -> (usize, bool) {
         let mut height_increased: bool;
         if x == 0 {
             x = self.target;

@@ -158,7 +158,10 @@ pub mod gentrans;
 pub mod stg;
 
 /// Test module.
-mod test;
+pub mod test;
+
+/// Benchmark - compare RustDb with competitors!
+pub mod bench;
 
 /// Page storage and sharing, [SharedPagedData] and [AccessPagedData].
 /// Note: several structs and their fields are pub to allow diagnostics but are subject to change.
