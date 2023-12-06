@@ -3,6 +3,11 @@ use crate::{
     Storage,
 };
 
+use std::convert::TryFrom;
+
+type HX = u32; // Typical 8M cache will have 1K x 8KB pages, so 10 bits is typical, 32 should be plenty.
+type Heap = GHeap<u64, u64, HX>;
+
 /// ```Arc<Mutex<PageInfo>>```
 pub type PageInfoPtr = Arc<Mutex<PageInfo>>;
 
@@ -16,7 +21,7 @@ pub struct PageInfo {
     /// How many times has the page been used.
     pub usage: u64,
     /// Heap index.
-    pub hx: usize,
+    pub hx: HX,
 }
 
 impl PageInfo {
@@ -25,14 +30,14 @@ impl PageInfo {
             current: None,
             history: BTreeMap::new(),
             usage: 0,
-            hx: usize::MAX,
+            hx: HX::MAX,
         }))
     }
 
     /// Increase usage.
     fn inc_usage(&mut self, lpnum: u64, ah: &mut Heap) {
         self.usage += 1;
-        if self.hx == usize::MAX {
+        if self.hx == HX::MAX {
             self.hx = ah.insert(lpnum, self.usage);
         } else {
             ah.modify(self.hx, self.usage);
@@ -232,7 +237,7 @@ impl Stash {
         while self.total > self.mem_limit && self.min.n > 0 {
             let lpnum = self.min.pop();
             let mut p = self.pages.get(&lpnum).unwrap().lock().unwrap();
-            p.hx = usize::MAX;
+            p.hx = HX::MAX;
             if let Some(data) = &p.current {
                 self.total -= data.len();
                 p.current = None;
@@ -417,87 +422,108 @@ impl Drop for AccessPagedData {
 
 #[derive(Default)]
 /// Heap Node.
-pub struct HN {
+pub struct HeapNode<K, T, U> {
     /// Index of node from heap position.
-    pub x: usize,
+    pub x: U,
     /// Heap position of this node.
-    pub pos: usize,
+    pub pos: U,
     /// Node id.
-    pub id: u64,
+    pub id: T,
     /// Node key.
-    pub key: u64,
+    pub key: K,
 }
 
-/// Heap for tracking least used page.
-pub struct Heap {
-    /// Number of heap nodes, not including free nodes.
-    pub n: usize,
-    /// Index of start of free list.
-    pub free: usize,
-    /// Vector of heap nodes.
-    pub v: Vec<HN>,
-}
+use std::ops::{Index, IndexMut};
 
-impl Default for Heap {
-    fn default() -> Self {
-        Heap {
-            v: Vec::new(),
-            n: 0,
-            free: usize::MAX,
-        }
+#[derive(Default)]
+/// Vector of HeapNodes indexed by U.
+pub struct HeapVec<K, T, U>(Vec<HeapNode<K, T, U>>);
+
+impl<K, T, U> Index<U> for HeapVec<K, T, U>
+where usize: TryFrom<U>,
+{
+    type Output = HeapNode<K, T, U>;
+    fn index(&self, x: U) -> &Self::Output {
+        &self.0[usize::try_from(x).ok().expect("HeapVec overflow")]
     }
 }
 
-impl Heap {
+impl<K, T, U> IndexMut<U> for HeapVec<K, T, U>
+where usize: TryFrom<U>,
+{
+    fn index_mut(&mut self, x: U) -> &mut Self::Output {
+        &mut self.0[usize::try_from(x).ok().expect("HeapVec overflow")]
+    }
+}
+
+#[derive(Default)]
+/// Heap for tracking least used page.
+pub struct GHeap<K, T, U> {
+    /// Number of heap nodes, not including free nodes.
+    pub n: usize,
+    /// 1 + Index of start of free list.
+    pub free: usize,
+    /// Vector of heap nodes.
+    pub v: HeapVec<K, T, U>,
+}
+
+impl<K, T, U> GHeap<K, T, U>
+where
+    K: Default + Ord,
+    T: Default,
+    U: Default + Copy + TryFrom<usize>,
+    usize: TryFrom<U>,
+{
     /// Insert id into heap with specified key (usage). Result is index of heap node.
-    pub fn insert(&mut self, id: u64, key: u64) -> usize {
-        let pos = self.n;
+    pub fn insert(&mut self, id: T, key: K) -> U {
+        let pos = Self::z(self.n);
         self.n += 1;
         let x = self.alloc(pos);
         self.v[x].id = id;
         self.v[x].key = key;
-        self.move_up(pos, x, key);
+        self.move_up(pos, x);
         x
     }
 
     /// Modify key of specified heap node.
-    pub fn modify(&mut self, x: usize, newkey: u64) {
+    pub fn modify(&mut self, x: U, newkey: K) {
         let pos = self.v[x].pos;
-        let oldkey = self.v[x].key;
+        let cf = newkey.cmp(&self.v[x].key);
         self.v[x].key = newkey;
 
-        match newkey.cmp(&oldkey) {
-            Ordering::Greater => self.move_down(pos, x, newkey),
-            Ordering::Less => self.move_up(pos, x, newkey),
+        match cf {
+            Ordering::Greater => self.move_down(pos, x),
+            Ordering::Less => self.move_up(pos, x),
             Ordering::Equal => (),
         }
     }
 
     /// Remove heap node with smallest key, returning the associated id.
     /// Note: index of heap node is no longer valid.
-    pub fn pop(&mut self) -> u64 {
+    pub fn pop(&mut self) -> T {
         assert!(self.n > 0);
         self.n -= 1;
-        let xmin = self.v[0].x; // Node with smallest key.
-        let xlast = self.v[self.n].x; // Last node in heap.
-        self.v[xlast].pos = 0; // Make last node first.
-        self.v[0].x = xlast;
-        self.move_down(0, xlast, self.v[xlast].key);
+        let xmin = self.v.0[0].x; // Node with smallest key.
+        let xlast = self.v.0[self.n].x; // Last node in heap.
+        self.v[xlast].pos = Self::z(0); // Make last node first.
+        self.v.0[0].x = xlast;
+        self.move_down(Self::z(0), xlast);
 
         // De-allocate popped node
-        self.v[xmin].pos = self.free;
-        self.free = xmin;
+        self.v[xmin].pos = Self::z(self.free);
+        self.free = Self::u(xmin) + 1;
 
-        self.v[xmin].id
+        std::mem::take(&mut self.v[xmin].id)
     }
 
-    fn move_up(&mut self, mut c: usize, cx: usize, ck: u64) {
-        while c > 0 {
-            let p = (c - 1) / 2;
+    fn move_up(&mut self, mut c: U, cx: U) {
+        while Self::u(c) > 0 {
+            let p = Self::z((Self::u(c) - 1) / 2);
             let px = self.v[p].x;
-            if ck >= self.v[px].key {
+            if self.v[cx].key >= self.v[px].key {
                 return;
             }
+            
             // Swap parent(p) and child(c).
             self.v[p].x = cx;
             self.v[c].x = px;
@@ -507,27 +533,28 @@ impl Heap {
         }
     }
 
-    fn move_down(&mut self, mut p: usize, px: usize, pk: u64) {
+    fn move_down(&mut self, mut p: U, px: U) {
         loop {
-            let mut c = p * 2 + 1;
+            let mut c = Self::u(p) * 2 + 1;
             if c >= self.n {
                 return;
             }
-            let mut cx = self.v[c].x;
-            let mut ck = self.v[cx].key;
+            let mut cx = self.v.0[c].x;
+            let mut ck = &self.v[cx].key;
             let c2 = c + 1;
             if c2 < self.n {
-                let cx2 = self.v[c2].x;
-                let ck2 = self.v[cx2].key;
+                let cx2 = self.v.0[c2].x;
+                let ck2 = &self.v[cx2].key;
                 if ck2 < ck {
                     c = c2;
                     cx = cx2;
                     ck = ck2;
                 }
             }
-            if ck >= pk {
+            if ck >= &self.v[px].key {
                 return;
             }
+            let c = Self::z(c);
             // Swap parent(p) and child(c).
             self.v[p].x = cx;
             self.v[c].x = px;
@@ -537,18 +564,26 @@ impl Heap {
         }
     }
 
-    fn alloc(&mut self, pos: usize) -> usize {
-        let x = if self.free == usize::MAX {
-            self.v.push(HN::default());
-            self.v.len() - 1
+    fn alloc(&mut self, pos: U) -> U {
+        let x = if self.free == 0 {
+            self.v.0.push(HeapNode::default());
+            Self::z(self.v.0.len() - 1)
         } else {
-            let x = self.free;
-            self.free = self.v[x].pos;
+            let x = Self::z(self.free - 1);
+            self.free = Self::u(self.v[x].pos);
             x
         };
-        self.v[pos].x = x;
-        self.v[x].pos = pos;
+        self.v[pos].x = pos;
+        self.v[x].pos = x;
         x
+    }
+
+    fn z(x: usize) -> U {
+        U::try_from(x).ok().expect("GHeap overflow")
+    }
+
+    fn u(x: U) -> usize {
+        usize::try_from(x).ok().expect("GHeap overflow")
     }
 }
 

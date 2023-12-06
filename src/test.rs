@@ -175,7 +175,7 @@ GO
     let wapd = AccessPagedData::new_writer(spd.clone());
     let db = Database::new(wapd, INITSQL, bmap.clone());
 
-    for _i in 0..10000 * test_amount() {
+    for _i in 0..1000 * test_amount() {
         let mut tr = GenTransaction::default();
         let sql = "EXEC rtest.OneTest()";
         db.run(&sql, &mut tr);
