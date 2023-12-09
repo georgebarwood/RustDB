@@ -3,7 +3,7 @@ use crate::{
     Storage,
 };
 
-type HX = u16; // Typical 8M cache will have 1K x 8KB pages, so 10 bits is typical, 32 should be plenty.
+type HX = u32; // Typical 8M cache will have 1K x 8KB pages, so 10 bits is typical, 32 should be plenty.
 type Heap = GHeap<u64, u64, HX>;
 
 /// ```Arc<Mutex<PageInfo>>```
@@ -418,6 +418,28 @@ impl Drop for AccessPagedData {
     }
 }
 
+/// Vector indexed by U.
+pub struct VecU<T>(Vec<T>);
+
+impl<T, U> std::ops::Index<U> for VecU<T>
+where
+    usize: TryFrom<U>,
+{
+    type Output = T;
+    fn index(&self, x: U) -> &Self::Output {
+        &self.0[usize::try_from(x).ok().expect("HeapVec overflow")]
+    }
+}
+
+impl<T, U> std::ops::IndexMut<U> for VecU<T>
+where
+    usize: TryFrom<U>,
+{
+    fn index_mut(&mut self, x: U) -> &mut Self::Output {
+        &mut self.0[usize::try_from(x).ok().expect("HeapVec overflow")]
+    }
+}
+
 /// Heap Node.
 pub struct HeapNode<K, T, U> {
     /// Index of node from heap position.
@@ -430,30 +452,6 @@ pub struct HeapNode<K, T, U> {
     pub key: K,
 }
 
-#[derive(Default)]
-/// Vector of HeapNodes indexed by U.
-pub struct HeapVec<K, T, U>(Vec<HeapNode<K, T, U>>);
-
-impl<K, T, U> std::ops::Index<U> for HeapVec<K, T, U>
-where
-    usize: TryFrom<U>,
-{
-    type Output = HeapNode<K, T, U>;
-    fn index(&self, x: U) -> &Self::Output {
-        &self.0[usize::try_from(x).ok().expect("HeapVec overflow")]
-    }
-}
-
-impl<K, T, U> std::ops::IndexMut<U> for HeapVec<K, T, U>
-where
-    usize: std::convert::TryFrom<U>,
-{
-    fn index_mut(&mut self, x: U) -> &mut Self::Output {
-        &mut self.0[usize::try_from(x).ok().expect("HeapVec overflow")]
-    }
-}
-
-#[derive(Default)]
 /// Heap for tracking least used page.
 pub struct GHeap<K, T, U> {
     /// Number of heap nodes, not including free nodes.
@@ -461,7 +459,20 @@ pub struct GHeap<K, T, U> {
     /// 1 + Index of start of free list.
     pub free: U,
     /// Vector of heap nodes.
-    pub v: HeapVec<K, T, U>,
+    pub v: VecU<HeapNode<K, T, U>>,
+}
+
+impl<K, T, U> Default for GHeap<K, T, U>
+where
+    U: From<u8>,
+{
+    fn default() -> Self {
+        Self {
+            n: 0.into(),
+            free: 0.into(),
+            v: VecU(Vec::default()),
+        }
+    }
 }
 
 impl<K, T, U> GHeap<K, T, U>
