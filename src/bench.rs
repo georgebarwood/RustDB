@@ -56,9 +56,10 @@ fn rustdb_test() {
     db.run(&sql, &mut tr);
 
     let start = std::time::SystemTime::now();
-    let sql = "DECLARE @total int FOR @total = @total + age FROM test.users BEGIN END SELECT ''|@total";
+    let sql =
+        "DECLARE @total int FOR @total = @total + age FROM test.users BEGIN END SELECT ''|@total";
     db.run(&sql, &mut tr);
-    assert_eq!( tr.rp.output, b"8192000" );
+    assert_eq!(tr.rp.output, b"8192000");
 
     println!(
         "rustdb test took {} micro-seconds",

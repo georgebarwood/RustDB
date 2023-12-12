@@ -49,7 +49,7 @@ pub struct MemFile {
 impl MemFile {
     /// Get a new (boxed) MemFile.
     pub fn new() -> Box<Self> {
-        Box::new(Self::default())
+        Box::<Self>::default()
     }
 }
 

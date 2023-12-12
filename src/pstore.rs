@@ -504,8 +504,8 @@ where
         } else {
             let x = self.free - 1.into();
             self.free = self.v[x].pos;
-            self.v[x].pos = x;
-            self.v[pos].x = pos;
+            self.v[x].pos = pos;
+            self.v[pos].x = x;
             self.v[x].id = id;
             self.v[x].key = key;
             x
@@ -608,4 +608,29 @@ pub fn test() {
     assert!(h.pop() == 22);
     assert!(h.pop() == 5);
     assert!(h.pop() == 8);
+}
+
+#[test]
+pub fn test2() {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+
+    let mut h = Heap::default();
+    let mut pages = HashMap::<u64, u32>::default();
+    for _i in 0..1000 {
+        let pnum = rng.gen::<u64>() % 100;
+        let usage = rng.gen::<u64>() % 100;
+        let action = rng.gen::<usize>() % 3;
+        if action == 0 {
+            let handle = h.insert(pnum, usage);
+            pages.insert(pnum, handle);
+        } else if action == 1 {
+            if let Some(handle) = pages.get(&pnum) {
+                h.modify(*handle, usage);
+            }
+        } else if action == 2 && h.n > 0 {
+            let pnum = h.pop();
+            pages.remove(&pnum);
+        }
+    }
 }
