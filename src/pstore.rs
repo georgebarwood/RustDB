@@ -504,8 +504,8 @@ where
         } else {
             let x = self.free - 1.into();
             self.free = self.v[x].pos;
-            self.v[x].pos = pos;
             self.v[pos].x = x;
+            self.v[x].pos = pos;
             self.v[x].id = id;
             self.v[x].key = key;
             x
@@ -554,12 +554,11 @@ where
             if self.v[cx].key >= self.v[px].key {
                 return;
             }
-
             // Swap parent(p) and child(c).
             self.v[p].x = cx;
+            self.v[cx].pos = p;
             self.v[c].x = px;
             self.v[px].pos = c;
-            self.v[cx].pos = p;
             c = p;
         }
     }
@@ -585,12 +584,11 @@ where
             if ck >= &self.v[px].key {
                 return;
             }
-
             // Swap parent(p) and child(c).
             self.v[p].x = cx;
+            self.v[cx].pos = p;
             self.v[c].x = px;
             self.v[px].pos = c;
-            self.v[cx].pos = p;
             p = c;
         }
     }
@@ -617,7 +615,7 @@ pub fn test2() {
 
     let mut h = Heap::default();
     let mut pages = HashMap::<u64, u32>::default();
-    for _i in 0..1000 {
+    for _i in 0..1000000 {
         let pnum = rng.gen::<u64>() % 100;
         let usage = rng.gen::<u64>() % 100;
         let action = rng.gen::<usize>() % 3;

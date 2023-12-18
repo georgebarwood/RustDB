@@ -495,7 +495,7 @@ impl<'a> Parser<'a> {
     // ****************** Expression parsing
 
     /// Parses an expression that starts with an id.
-    fn exp_id(&mut self, _agg_allowed: bool) -> Expr {
+    fn exp_id(&mut self) -> Expr {
         let name = self.id_ref();
         if self.test(Token::Dot) {
             let fname = self.id_ref();
@@ -539,7 +539,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parses a primary expression ( basic expression with no operators ).
-    fn exp_primary(&mut self, agg_allowed: bool) -> Expr {
+    fn exp_primary(&mut self) -> Expr {
         let result;
         if self.token == Token::Id {
             result = if self.test_id(b"CASE") {
@@ -548,7 +548,7 @@ impl<'a> Parser<'a> {
                 let e = self.exp_p(10); // Not sure about precedence here.
                 Expr::new(ExprIs::Not(Box::new(e)))
             } else {
-                self.exp_id(agg_allowed)
+                self.exp_id()
             };
         } else if self.test(Token::LBra) {
             if self.test_id(b"SELECT") {
@@ -594,7 +594,7 @@ impl<'a> Parser<'a> {
     }
 
     fn exp_or_agg(&mut self) -> Expr {
-        let pri = self.exp_primary(true);
+        let pri = self.exp_primary();
         self.exp_lp(pri, 0)
     }
 
@@ -605,7 +605,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an expression, with specified operator precedence.
     fn exp_p(&mut self, precedence: i8) -> Expr {
-        let pr = self.exp_primary(false);
+        let pr = self.exp_primary();
         self.exp_lp(pr, precedence)
     }
 
@@ -615,7 +615,7 @@ impl<'a> Parser<'a> {
         while t.1 >= precedence {
             let op = t;
             self.read_token();
-            let mut rhs = self.exp_primary(false);
+            let mut rhs = self.exp_primary();
             t = self.operator();
             while t.1 > op.1
             /* or t is right-associative and t.1 == op.1 */
@@ -657,14 +657,7 @@ impl<'a> Parser<'a> {
     // ****************** Table expression parsing
 
     fn insert_expression(&mut self, expect: usize) -> TableExpression {
-        if !self.test_id(b"VALUES") {
-            panic!("VALUES or SELECT expected");
-        }
-        // else if self.test_id( b"SELECT" ) { self.expressions() } ...
-        self.values(expect)
-    }
-
-    fn values(&mut self, expect: usize) -> TableExpression {
+        self.read_id(b"VALUES");
         let mut values = Vec::new();
         while self.test(Token::LBra) {
             let mut v = Vec::new();
