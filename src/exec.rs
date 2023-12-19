@@ -49,8 +49,8 @@ impl<'r> EvalEnv<'r> {
                     let v = e.eval(self, &[]);
                     self.stack.push(v);
                 }
-                PushLocal(x) => self.push_local(*x),
-                PopToLocal(x) => self.pop_to_local(*x),
+                PushLocal(x) => self.stack.push(self.stack[self.bp + *x].clone()),
+                PopToLocal(x) => self.stack[self.bp + *x] = self.stack.pop().unwrap(),
                 Jump(x) => ip = *x,
                 JumpIfFalse(x, e) => {
                     if !e.eval(self, &[]) {
@@ -92,6 +92,7 @@ impl<'r> EvalEnv<'r> {
                     let v = e.eval(self, &[]);
                     self.stack.push(Value::Bool(v));
                 }
+                // Assign instructions ( optimisations )
                 AssignLocal(x, e) => {
                     let v = e.eval(self, &[]);
                     self.stack[self.bp + x] = v;
@@ -157,11 +158,6 @@ impl<'r> EvalEnv<'r> {
         }
     }
 
-    /// Pop a value from the stack and assign it to a local varaiable.
-    fn pop_to_local(&mut self, local: usize) {
-        self.stack[self.bp + local] = self.stack.pop().unwrap();
-    }
-
     /// Pop string from the stack.
     fn pop_string(&mut self) -> String {
         if let Value::String(s) = self.stack.pop().unwrap() {
@@ -169,11 +165,6 @@ impl<'r> EvalEnv<'r> {
         } else {
             panic!()
         }
-    }
-
-    /// Push clone of local variable onto the stack.
-    fn push_local(&mut self, local: usize) {
-        self.stack.push(self.stack[self.bp + local].clone());
     }
 
     /// Execute a ForInit instruction. Constructs For state and assigns it to local variable.
