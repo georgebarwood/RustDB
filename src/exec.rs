@@ -92,6 +92,22 @@ impl<'r> EvalEnv<'r> {
                     let v = e.eval(self, &[]);
                     self.stack.push(Value::Bool(v));
                 }
+                AssignLocal(x, e) => {
+                    let v = e.eval(self, &[]);
+                    self.stack[self.bp + x] = v;
+                }
+                AppendLocal(x, e) => {
+                    let v = e.eval(self, &[]);
+                    self.stack[self.bp + x].append(&v);
+                }
+                IncLocal(x, e) => {
+                    let v = e.eval(self, &[]);
+                    self.stack[self.bp + x].inc(&v);
+                }
+                DecLocal(x, e) => {
+                    let v = e.eval(self, &[]);
+                    self.stack[self.bp + x].dec(&v);
+                }
             }
         }
     } // end fn go
@@ -419,12 +435,10 @@ impl<'r> EvalEnv<'r> {
     fn assign_local(&mut self, a: &(usize, AssignOp), val: Value) {
         let var = &mut self.stack[self.bp + a.0];
         match a.1 {
-            AssignOp::Assign => {
-                *var = val;
-            }
-            AssignOp::Append => {
-                var.append(&val);
-            }
+            AssignOp::Assign => *var = val,
+            AssignOp::Append => var.append(&val),
+            AssignOp::Inc => var.inc(&val),
+            AssignOp::Dec => var.dec(&val),
         }
     }
 

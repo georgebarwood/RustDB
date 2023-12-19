@@ -126,6 +126,22 @@ impl Value {
         }
     }
 
+    /// Get integer value.
+    pub fn int(&self) -> i64 {
+        match self {
+            Value::Int(x) => *x,
+            _ => panic!(),
+        }
+    }
+
+    /// Get float value.
+    pub fn float(&self) -> f64 {
+        match self {
+            Value::Float(x) => *x,
+            _ => panic!(),
+        }
+    }
+
     /// Append to a String.
     pub fn append(&mut self, val: &Value) {
         if let Value::String(s) = self {
@@ -140,6 +156,24 @@ impl Value {
             }
         } else {
             panic!()
+        }
+    }
+
+    /// Inc an integer or float.
+    pub fn inc(&mut self, val: &Value) {
+        match self {
+            Value::Int(x) => *x += val.int(),
+            Value::Float(x) => *x += val.float(),
+            _ => panic!(),
+        }
+    }
+
+    /// Dec an integer or float.
+    pub fn dec(&mut self, val: &Value) {
+        match self {
+            Value::Int(x) => *x -= val.int(),
+            Value::Float(x) => *x -= val.float(),
+            _ => panic!(),
         }
     }
 

@@ -44,6 +44,15 @@ pub enum Instruction {
     PushFloat(CExpPtr<f64>),
     ///
     PushBool(CExpPtr<bool>),
+    // More optimisations.
+    /// Assign a local variable.
+    AssignLocal(usize, CExpPtr<Value>),
+    /// Append to a local variable.
+    AppendLocal(usize, CExpPtr<Value>),
+    /// Increment (+=) a local variable.
+    IncLocal(usize, CExpPtr<Value>),
+    /// Decrement (-=) a local variable.
+    DecLocal(usize, CExpPtr<Value>),
 }
 
 /// Compiled Function.

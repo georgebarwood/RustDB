@@ -255,19 +255,6 @@ impl<'a> Parser<'a> {
                         .push_str(str::from_utf8(&self.source[start..self.source_ix - 2]).unwrap());
                     break;
                 }
-
-                b'-' => {
-                    token = Token::Minus;
-                    if cc == b'-'
-                    // Skip single line comment.
-                    {
-                        while cc != b'\n' && cc != 0 {
-                            cc = self.read_char();
-                        }
-                        continue 'skip_space;
-                    }
-                }
-
                 b'/' => {
                     token = Token::Divide;
                     if cc == b'*'
@@ -316,10 +303,30 @@ impl<'a> Parser<'a> {
                         self.read_char();
                     }
                 }
+                b'+' => {
+                    token = Token::Plus;
+                    if cc == b'=' {
+                        token = Token::PlusEqual;
+                        self.read_char();
+                    }
+                }
+                b'-' => {
+                    token = Token::Minus;
+                    if cc == b'-'
+                    // Skip single line comment.
+                    {
+                        while cc != b'\n' && cc != 0 {
+                            cc = self.read_char();
+                        }
+                        continue 'skip_space;
+                    } else if cc == b'=' {
+                        token = Token::MinusEqual;
+                        self.read_char();
+                    }
+                }
                 b',' => token = Token::Comma,
                 b'.' => token = Token::Dot,
                 b'=' => token = Token::Equal,
-                b'+' => token = Token::Plus,
                 b':' => token = Token::Colon,
                 b'*' => token = Token::Times,
                 b'%' => token = Token::Percent,
@@ -716,7 +723,9 @@ impl<'a> Parser<'a> {
                 let op = match self.token {
                     Token::Equal => AssignOp::Assign,
                     Token::VBarEqual => AssignOp::Append,
-                    _ => panic!("= or |= expected"),
+                    Token::PlusEqual => AssignOp::Inc,
+                    Token::MinusEqual => AssignOp::Dec,
+                    _ => panic!("assign operator expected"),
                 };
                 self.read_token();
                 assigns.push((local, op));
@@ -782,8 +791,7 @@ impl<'a> Parser<'a> {
     fn s_set(&mut self) {
         let se = self.select_expression(true);
         if !self.b.parse_only {
-            let cte = c_select(&mut self.b, se);
-            self.b.add(Set(Box::new(cte)));
+            c_set(&mut self.b, se);
         }
     }
 

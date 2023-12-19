@@ -25,6 +25,10 @@ pub enum AssignOp {
     Assign,
     ///
     Append,
+    ///
+    Inc,
+    ///
+    Dec,
 }
 /// Vector of local variable numbers and AssignOp( assign or append ).
 pub type Assigns = Vec<(usize, AssignOp)>;
@@ -82,6 +86,10 @@ pub enum Token {
     Or,
     ///
     VBarEqual,
+    ///
+    PlusEqual,
+    ///
+    MinusEqual,
     ///
     Id,
     ///

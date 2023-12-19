@@ -402,6 +402,32 @@ pub fn c_delete(b: &mut Block, tname: &ObjRef, wher: &mut Option<Expr>) {
     b.dop(DO::Delete(from.unwrap(), w));
 }
 
+/// Compile SelectExpression in Set context.
+pub fn c_set(b: &mut Block, mut se: SelectExpression) {
+    if se.from.is_none() {
+        // Optimise assigns by generating specific instructions.
+        for (i, e) in se.exps.iter_mut().enumerate() {
+            // Check data kind of assigned local matches data kind of expression.
+            let (lnum, op) = se.assigns[i];
+            let ek = data_kind(b.local_typ[lnum]);
+            let ce = c_value(b, e);
+            let ak = b.kind(e);
+            if ek != ak {
+                panic!("cannot assign {:?} to {:?}", ak, ek);
+            }
+            match op {
+                AssignOp::Assign => b.add(AssignLocal(lnum, ce)),
+                AssignOp::Append => b.add(AppendLocal(lnum, ce)),
+                AssignOp::Inc => b.add(IncLocal(lnum, ce)),
+                AssignOp::Dec => b.add(DecLocal(lnum, ce)),
+            }
+        }
+    } else {
+        let cte = c_select(b, se);
+        b.add(Set(Box::new(cte)));
+    }
+}
+
 /// Compile SelectExpression to CSelectExpression.
 pub fn c_select(b: &mut Block, mut x: SelectExpression) -> CSelectExpression {
     let mut from = x.from.map(|mut te| c_te(b, &mut te));
