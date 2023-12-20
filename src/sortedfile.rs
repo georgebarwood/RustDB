@@ -614,16 +614,21 @@ impl Stack {
             if x == 0 {
                 self.add_page_asc(file, pp);
             } else {
-                let p = &pp.borrow();
-                self.add_asc(p, &pp, p.left(x));
-                if p.level != 0 {
-                    let cpnum = p.child_page(x);
-                    let cpp = file.load_page(&self.db, cpnum);
-                    self.add_page_asc(file, cpp);
-                } else {
-                    self.seeking = false;
-                    return Some((pp.clone(), p.rec_offset(x)));
-                }
+                // Do it this way to avoid clone of pp.
+                let off = {
+                    let p = &pp.borrow();
+                    self.add_asc(p, &pp, p.left(x));
+                    if p.level != 0 {
+                        let cpnum = p.child_page(x);
+                        let cpp = file.load_page(&self.db, cpnum);
+                        self.add_page_asc(file, cpp);
+                        continue
+                    } else {
+                        p.rec_offset(x)
+                    }
+                };
+                self.seeking = false;
+                return Some((pp, off));
             }
         }
         None
@@ -632,15 +637,19 @@ impl Stack {
     /// Fetch the previous record.
     fn prev(&mut self, file: &SortedFile) -> Option<(PagePtr, usize)> {
         while let Some((pp, x)) = self.v.pop() {
-            let p = &pp.borrow();
-            self.add_dsc(p, &pp, p.right(x));
-            if p.level != 0 {
-                let cpnum = p.child_page(x);
-                self.add_page_dsc(file, cpnum);
-            } else {
-                self.seeking = false;
-                return Some((pp.clone(), p.rec_offset(x)));
-            }
+            let off = {
+                let p = &pp.borrow();
+                self.add_dsc(p, &pp, p.right(x));
+                if p.level != 0 {
+                    let cpnum = p.child_page(x);
+                    self.add_page_dsc(file, cpnum);
+                    continue;
+                } else {
+                    p.rec_offset(x)
+                }
+            };
+            self.seeking = false;
+            return Some((pp, off));
         }
         None
     }
