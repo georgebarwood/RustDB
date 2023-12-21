@@ -622,7 +622,7 @@ impl Stack {
                         let cpnum = p.child_page(x);
                         let cpp = file.load_page(&self.db, cpnum);
                         self.add_page_asc(file, cpp);
-                        continue
+                        continue;
                     } else {
                         p.rec_offset(x)
                     }
@@ -762,7 +762,7 @@ struct PageList {
     list: Vec<(Page, PKey)>,
     /// Child page numbers.
     pnums: Vec<u64>,
-    /// Nummber of child records (for tracing only).
+    /// Number of child records (for tracing only).
     packed_record_count: usize,
 }
 
