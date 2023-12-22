@@ -429,17 +429,6 @@ impl CompactFile {
         }
         (free, self.lp_alloc)
     }
-
-    /// Number of allocated, free pages.
-    pub fn get_counts(&self) -> (usize, usize) {
-        let mut result = self.lp_free.len();
-        let mut p = self.lp_first;
-        while p != u64::MAX {
-            result += 1;
-            p = self.next_free(p);
-        }
-        (self.lp_alloc as usize, result)
-    }
 } // end impl CompactFile
 
 #[test]
