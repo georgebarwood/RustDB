@@ -15,11 +15,9 @@ fn sqlite_test() {
     }
 
     let start = std::time::SystemTime::now();
-    for _i in 0..10000
-    {
-
-      let sql = "SELECT SUM(age) FROM users";
-      connection.execute(sql).unwrap();
+    for _i in 0..100 {
+        let sql = "SELECT SUM(age) FROM users";
+        connection.execute(sql).unwrap();
     }
     println!(
         "sqllite test took {} milli-seconds",
@@ -60,8 +58,7 @@ fn rustdb_test() {
 
     let start = std::time::SystemTime::now();
 
-    for _i in 0..10000
-    {
+    for _i in 0..100 {
         let sql = "DECLARE @total int FOR @total += age FROM test.users BEGIN END SELECT ''|@total";
         let mut tr = GenTransaction::default();
         db.run(&sql, &mut tr);
@@ -73,4 +70,3 @@ fn rustdb_test() {
         start.elapsed().unwrap().as_millis()
     );
 }
-

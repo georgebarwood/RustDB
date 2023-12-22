@@ -767,7 +767,7 @@ pub trait Transaction: Any {
     }
 }
 
-/// [Transaction] where output is printed to console (used for initialisation ).
+/// [Transaction] where output is discarded (used for initialisation ).
 struct DummyTransaction {}
 impl Transaction for DummyTransaction {
     fn selected(&mut self, _values: &[Value]) {}

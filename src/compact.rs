@@ -278,13 +278,14 @@ impl CompactFile {
     /// Process the temporary sets of free pages and write the file header.
     pub fn save(&mut self) {
         // Free the temporary set of free logical pages.
-        for p in &std::mem::take(&mut self.lp_free) {
+        let flist = std::mem::take(&mut self.lp_free);
+        for p in flist.iter().rev() {
             let p = *p;
             // Set the page size to zero, frees any associated extension pages.
             self.set_page(p, nd());
             // Store link to old lp_first after size field.
             let lpoff = Self::HSIZE + p * self.sp_size as u64;
-            self.stg.write_u64(lpoff + 10, Self::SPECIAL_VALUE); // Used to validate freee chain entries.
+            self.stg.write_u64(lpoff + 10, Self::SPECIAL_VALUE); // Used to validate free chain entries.
             self.stg.write_u64(lpoff + 2, self.lp_first);
 
             self.lp_first = p;
@@ -427,6 +428,17 @@ impl CompactFile {
             p = self.next_free(p);
         }
         (free, self.lp_alloc)
+    }
+
+    /// Number of allocated, free pages.
+    pub fn get_counts(&self) -> (usize, usize) {
+        let mut result = self.lp_free.len();
+        let mut p = self.lp_first;
+        while p != u64::MAX {
+            result += 1;
+            p = self.next_free(p);
+        }
+        (self.lp_alloc as usize, result)
     }
 } // end impl CompactFile
 
