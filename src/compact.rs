@@ -439,8 +439,8 @@ pub fn test() {
 
     let mut rng = rand::thread_rng();
 
-    let s0 = Box::new(MemFile::default());
-    let s1 = Box::new(MemFile::default());
+    let s0 = MemFile::new();
+    let s1 = MemFile::new();
 
     let mut cf0 = CompactFile::new(s0, 200, 512);
     let mut cf1 = CompactFile::new(s1, 136, 1024);
