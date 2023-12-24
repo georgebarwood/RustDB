@@ -485,11 +485,12 @@ pub struct Row {
 impl Row {
     /// Construct a new row, values are initialised to defaults.
     pub fn new(info: Rc<ColInfo>) -> Self {
+        let n = info.typ.len();
         let mut result = Row {
             id: 0,
-            values: Vec::new(),
+            values: Vec::with_capacity(n),
             info,
-            codes: Vec::new(),
+            codes: Vec::with_capacity(n),
         };
         for t in &result.info.typ {
             result.values.push(Value::default(*t));
@@ -560,8 +561,9 @@ pub struct IndexRow {
 impl IndexRow {
     // Construct IndexRow from Row.
     fn new(table: &Table, cols: Rc<Vec<usize>>, row: &Row) -> Self {
-        let mut keys = Vec::new();
-        let mut codes = Vec::new();
+        let n = cols.len();
+        let mut keys = Vec::with_capacity(n);
+        let mut codes = Vec::with_capacity(n);
         if !row.codes.is_empty() {
             for c in &*cols {
                 keys.push(row.values[*c].clone());
@@ -626,12 +628,13 @@ impl Record for IndexRow {
     }
 
     fn key(&self, db: &DB, data: &[u8]) -> Box<dyn Record> {
+        let n = self.cols.len();
         let mut result = Box::new(IndexRow {
             cols: self.cols.clone(),
             tinfo: self.tinfo.clone(),
             rowid: 0,
-            keys: Vec::new(),
-            codes: Vec::new(),
+            keys: Vec::with_capacity(n),
+            codes: Vec::with_capacity(n),
         });
         result.load(db, data);
         result

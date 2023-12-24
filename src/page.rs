@@ -7,7 +7,7 @@
 //!
 //! Note that the left node is greater than the parent node.
 
-use crate::{nd, util, Data, MData, Ordering, Rc, Record, RefCell, DB};
+use crate::{util, Arc, Data, MData, Ordering, Rc, Record, RefCell, DB};
 
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
@@ -138,8 +138,13 @@ impl Page {
 
     /// Construct a new empty page inheriting record size and level from self.
     /// Used when splitting a page that is full.
-    pub fn new_page(&self) -> Page {
-        Page::new(self.rec_size(), self.level, nd(), u64::MAX)
+    pub fn new_page(&self, capacity: usize) -> Page {
+        Page::new(
+            self.rec_size(),
+            self.level,
+            Arc::new(Vec::with_capacity(capacity)),
+            u64::MAX,
+        )
     }
 
     /// Find child page number.

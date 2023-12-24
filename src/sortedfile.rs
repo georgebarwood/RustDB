@@ -470,12 +470,13 @@ impl Split {
     /// Split the records of p into two new pages.
     fn new(p: &mut Page) -> Self {
         p.pnum = u64::MAX; // Invalidate old pnum to prevent old page being saved.
+        let half = p.count / 2;
         let mut result = Split {
             count: 0,
-            half: p.count / 2,
+            half,
             split_node: 0,
-            left: p.new_page(),
-            right: p.new_page(),
+            left: p.new_page(half),
+            right: p.new_page(half),
         };
         result.left.first_page = p.first_page;
         result.split(p, p.root);
@@ -596,7 +597,7 @@ impl Stack {
     /// Create a new Stack with specified start key.
     fn new(db: &DB, start: Box<dyn Record>) -> Self {
         Stack {
-            v: Vec::new(),
+            v: Vec::with_capacity(16),
             start,
             seeking: true,
             db: db.clone(),
@@ -789,7 +790,7 @@ impl PageList {
         let p = &mut pp.borrow_mut();
 
         if self.list.is_empty() {
-            self.list.push((p.new_page(), PKey::None));
+            self.list.push((p.new_page(8192), PKey::None));
         }
         self.pnums.push(pnum);
         file.remove_page(pnum);
@@ -835,7 +836,7 @@ impl PageList {
             } else {
                 PKey::Copy(p.copy(x))
             };
-            self.list.push((p.new_page(), key));
+            self.list.push((p.new_page(8192), key));
             ap = &mut self.list[cur + 1].0;
         }
         ap.append_from(p, x);
@@ -845,7 +846,7 @@ impl PageList {
     fn store_to(&mut self, db: &DB, p: &mut Page, file: &SortedFile) -> i64 {
         let mut pnums = std::mem::take(&mut self.pnums);
         let list = std::mem::take(&mut self.list);
-        let mut np = p.new_page();
+        let mut np = p.new_page(8192);
 
         for (cp, key) in list {
             let cpnum = pnums.pop().unwrap();

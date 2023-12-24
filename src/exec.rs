@@ -20,7 +20,7 @@ impl<'r> EvalEnv<'r> {
     /// Construct a new EvalEnv.
     pub fn new(db: DB, tr: &'r mut dyn Transaction) -> Self {
         EvalEnv {
-            stack: Vec::new(),
+            stack: Vec::with_capacity(64),
             bp: 0,
             db,
             tr,

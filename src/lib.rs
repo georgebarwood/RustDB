@@ -28,12 +28,12 @@
 //! This crate supports the following cargo features:
 //! - `gentrans` : enables gentrans module ( sample implementation of [Transaction] ).
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
-//! - `verify` : Allows database structure to be verified using builtin function VERIFYDB.
-//! - `pack` : Allows database pages to be packed using builtin function REPACKFILE.
 //! - `table` : Allow direct access to database tables.
 //! - `max` : maximal interface, including internal modules (which may not be stable).
+//! - `verify` : Allows database structure to be verified using builtin function VERIFYDB.
+//! - `pack` : Allows database pages to be packed using builtin function REPACKFILE.
 //!
-//! By default, all features except table and max are enabled.
+//! By default, all features are enabled.
 //!
 //!# General Design of Database
 //!
@@ -190,7 +190,7 @@ pub mod compile;
 mod compile;
 
 #[cfg(feature = "builtin")]
-/// Expression types, result of parsing. [Expr], [DataKind], [ObjRef].
+/// Expression types, result of parsing. [Expr], [DataKind], [ObjRef], [Block].
 pub mod expr;
 #[cfg(not(feature = "builtin"))]
 mod expr;
