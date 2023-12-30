@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "4.0.31"
+version = "4.0.36"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -11,7 +11,7 @@ categories = ["database-implementations"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["builtin","gentrans","pack","verify"]
+default = ["builtin","gentrans","pack","verify","table","max","renumber"]
 
 # GenTransaction ( implementation of Transaction )
 gentrans = []
@@ -27,6 +27,9 @@ max = ["builtin","table"]
 
 # ```pack``` : Allows database pages to be packed using builtin function REPACKFILE.
 pack = []
+
+# ```renumber``` : Allows database pages to be renumbered usinging builtin function RENUMBER.
+renumber = []
 
 # ```verify``` : Allows database structure to be verified using builtin function VERIFYDB.
 verify = []
