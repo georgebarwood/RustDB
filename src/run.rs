@@ -28,15 +28,15 @@ pub enum Instruction {
     ///
     ForNext(usize, Box<ForNextInfo>),
     ///
-    ForSortInit(usize, Box<CSelectExpression>),
+    ForSortInit(usize, Box<CFromExpression>),
     ///
     ForSortNext(usize, Box<(usize, usize, Assigns)>),
     ///
     DataOp(Box<DO>),
     ///
-    Select(Box<CSelectExpression>),
+    Select(Box<CFromExpression>),
     ///
-    Set(Box<CSelectExpression>),
+    Set(Box<CFromExpression>),
     // Special push instructions ( optimisations )
     ///
     PushInt(CExpPtr<i64>),
@@ -138,7 +138,7 @@ pub struct ForNextInfo {
 /// Compiled Table Expression.
 #[non_exhaustive]
 pub enum CTableExpression {
-    // Select( SelectExpression ),
+    // Select( FromExpression ),
     ///
     Base(Rc<Table>),
     ///
@@ -161,9 +161,9 @@ impl CTableExpression {
     }
 }
 
-/// Compiled Select Expression.
+/// Compiled From Expression.
 #[non_exhaustive]
-pub struct CSelectExpression {
+pub struct CFromExpression {
     ///
     pub colnames: Vec<String>,
     ///

@@ -47,6 +47,8 @@ pub fn standard_builtins(map: &mut BuiltinMap) {
         ("REPACKFILE", DataKind::Int, CompileFunc::Int(c_repackfile)),
         #[cfg(feature = "verify")]
         ("VERIFYDB", DataKind::String, CompileFunc::Value(c_verifydb)),
+        #[cfg(feature = "renumber")]
+        ("RENUMBER", DataKind::Int, CompileFunc::Int(c_renumber)),
         ("BINTOSTR", DataKind::String, CompileFunc::Value(c_bintostr)),
     ];
     for (name, typ, cf) in list {
@@ -444,14 +446,36 @@ fn c_verifydb(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[]);
     Box::new(VerifyDb {})
 }
+
 #[cfg(feature = "verify")]
 struct VerifyDb {}
+
 #[cfg(feature = "verify")]
 impl CExp<Value> for VerifyDb {
     fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> Value {
         ee.db.run(LOADALLTABLES, ee.tr);
         let s = ee.db.verify();
         Value::String(Rc::new(s))
+    }
+}
+
+#[cfg(feature = "renumber")]
+/////////////////////////////
+/// Compile call to RENUMBER.
+fn c_renumber(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
+    check_types(b, args, &[]);
+    Box::new(Renumber {})
+}
+
+#[cfg(feature = "renumber")]
+struct Renumber {}
+
+#[cfg(feature = "renumber")]
+impl CExp<i64> for Renumber {
+    fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> i64 {
+        ee.db.run(LOADALLTABLES, ee.tr);
+        ee.db.renumber();
+        0
     }
 }
 

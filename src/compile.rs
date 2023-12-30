@@ -402,8 +402,8 @@ pub fn c_delete(b: &mut Block, tname: &ObjRef, wher: &mut Option<Expr>) {
     b.dop(DO::Delete(from.unwrap(), w));
 }
 
-/// Compile SelectExpression in Set context.
-pub fn c_set(b: &mut Block, mut se: SelectExpression) {
+/// Compile FromExpression in Set context.
+pub fn c_set(b: &mut Block, mut se: FromExpression) {
     if se.from.is_none() {
         // Optimise assigns by generating specific instructions.
         for (i, e) in se.exps.iter_mut().enumerate() {
@@ -428,8 +428,8 @@ pub fn c_set(b: &mut Block, mut se: SelectExpression) {
     }
 }
 
-/// Compile SelectExpression to CSelectExpression.
-pub fn c_select(b: &mut Block, mut x: SelectExpression) -> CSelectExpression {
+/// Compile FromExpression to CFromExpression.
+pub fn c_select(b: &mut Block, mut x: FromExpression) -> CFromExpression {
     let mut from = x.from.map(|mut te| c_te(b, &mut te));
     let table = match &from {
         Some(CTableExpression::Base(t)) => Some(t.clone()),
@@ -462,7 +462,7 @@ pub fn c_select(b: &mut Block, mut x: SelectExpression) -> CSelectExpression {
     if index_from.is_some() {
         from = index_from;
     }
-    CSelectExpression {
+    CFromExpression {
         colnames: x.colnames,
         assigns: x.assigns,
         exps,
@@ -651,7 +651,7 @@ pub fn push(b: &mut Block, e: &mut Expr) -> DataKind {
 }
 
 /// Compile FOR statement.
-pub fn c_for(b: &mut Block, se: SelectExpression, start_id: usize, break_id: usize, for_id: usize) {
+pub fn c_for(b: &mut Block, se: FromExpression, start_id: usize, break_id: usize, for_id: usize) {
     let mut cse = c_select(b, se);
     let orderbylen = cse.orderby.len();
     if orderbylen == 0 {

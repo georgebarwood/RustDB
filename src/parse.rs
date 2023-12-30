@@ -713,7 +713,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a SELECT / SET / FOR expression.
-    fn select_expression(&mut self, set_or_for: bool) -> SelectExpression {
+    fn select_expression(&mut self, set_or_for: bool) -> FromExpression {
         let mut exps = Vec::new();
         let mut colnames = Vec::new();
         let mut assigns = Vec::new();
@@ -768,7 +768,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        SelectExpression {
+        FromExpression {
             colnames,
             assigns,
             exps,
@@ -912,7 +912,7 @@ impl<'a> Parser<'a> {
     }
 
     fn s_for(&mut self) {
-        let se: SelectExpression = self.select_expression(true);
+        let se: FromExpression = self.select_expression(true);
         let for_id = self.b.local_typ.len();
         self.b.local_typ.push(NONE);
         let start_id = self.b.get_jump_id();

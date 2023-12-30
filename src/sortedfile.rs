@@ -13,7 +13,7 @@ pub struct SortedFile {
     /// Size of a key.
     pub key_size: usize,
     /// The root page.
-    pub root_page: u64,
+    pub root_page: Cell<u64>,
     /// Status
     ok: Cell<bool>,
 }
@@ -25,7 +25,7 @@ impl SortedFile {
             dirty_pages: newmap(),
             rec_size,
             key_size,
-            root_page,
+            root_page: Cell::new(root_page),
             ok: Cell::new(true),
         }
     }
@@ -60,21 +60,21 @@ impl SortedFile {
 
     /// Free the underlying storage. File is not useable after this.
     pub fn free_pages(&self, db: &DB, r: &dyn Record) {
-        self.free_page(db, self.root_page, r);
+        self.free_page(db, self.root_page.get(), r);
         self.rollback();
         self.ok.set(false);
     }
 
     /// Insert a Record. If the key is a duplicate, the record is not saved.
     pub fn insert(&self, db: &DB, r: &dyn Record) {
-        while !self.insert_leaf(db, self.root_page, r, None) {
+        while !self.insert_leaf(db, self.root_page.get(), r, None) {
             // We get here if a child page needed to be split.
         }
     }
 
     /// Remove a Record.
     pub fn remove(&self, db: &DB, r: &dyn Record) {
-        let mut pp = self.load_page(db, self.root_page);
+        let mut pp = self.load_page(db, self.root_page.get());
         loop {
             let cpnum = {
                 let p = &mut *pp.borrow_mut();
@@ -121,7 +121,7 @@ impl SortedFile {
 
     /// Locate a record with matching key. Result is PagePtr and offset of data.
     pub fn get(&self, db: &DB, r: &dyn Record) -> Option<(PagePtr, usize)> {
-        let mut pp = self.load_page(db, self.root_page);
+        let mut pp = self.load_page(db, self.root_page.get());
         let off;
         loop {
             let cpnum = {
@@ -177,8 +177,8 @@ impl SortedFile {
                         let mut new_root = self.new_page(p.level + 1);
                         // sp.left is allocated a new page number, which is first page of new root.
                         new_root.first_page = self.alloc_page(db, sp.left);
-                        self.publish_page(self.root_page, new_root);
-                        self.append_page(db, self.root_page, sk, pnum2);
+                        self.publish_page(self.root_page.get(), new_root);
+                        self.append_page(db, self.root_page.get(), sk, pnum2);
                     }
                     Some(pi) => {
                         self.publish_page(pnum, sp.left);
@@ -216,8 +216,8 @@ impl SortedFile {
                     // New root page needed.
                     let mut new_root = self.new_page(p.level + 1);
                     new_root.first_page = self.alloc_page(db, sp.left);
-                    self.publish_page(self.root_page, new_root);
-                    self.append_page(db, self.root_page, sk, pnum2);
+                    self.publish_page(self.root_page.get(), new_root);
+                    self.append_page(db, self.root_page.get(), sk, pnum2);
                 }
                 Some(pi) => {
                     self.publish_page(into.pnum, sp.left);
@@ -306,7 +306,7 @@ impl SortedFile {
     /// Attempt to free up logical pages by re-packing child pages.
     pub fn repack(&self, db: &DB, r: &dyn Record) -> i64 {
         let mut freed = 0;
-        self.repack_page(db, self.root_page, r, &mut freed);
+        self.repack_page(db, self.root_page.get(), r, &mut freed);
         freed
     }
 
@@ -422,7 +422,7 @@ impl SortedFile {
     #[cfg(feature = "verify")]
     /// Get the set of used logical pages.
     pub fn get_used(&self, db: &DB, to: &mut HashSet<u64>) {
-        self.get_used_page(db, to, self.root_page, 255);
+        self.get_used_page(db, to, self.root_page.get(), 255);
     }
 
     #[cfg(feature = "verify")]
@@ -448,6 +448,52 @@ impl SortedFile {
                 self.get_used_page(db, to, p.child_page(x), p.level - 1);
             }
         }
+    }
+
+    #[cfg(feature = "renumber")]
+    /// Renumber pages >= target.
+    pub fn renumber(&self, db: &DB, target: u64, pnum: u64) {
+        let pp = self.load_page(db, pnum);
+        let p = &mut pp.borrow_mut();
+        if p.level != 0 {
+            if p.first_page >= target {
+                p.first_page = db.renumber_page(p.first_page);
+                assert!(p.first_page < target);
+                self.set_dirty(p, &pp);
+            }
+            if p.level > 1 {
+                self.renumber(db, target, p.first_page);
+            }
+            let root = p.root;
+            if self.renumber_node(db, target, p, root) {
+                self.set_dirty(p, &pp);
+            }
+        }
+    }
+
+    #[cfg(feature = "renumber")]
+    fn renumber_node(&self, db: &DB, target: u64, p: &mut Page, x: usize) -> bool {
+        if x == 0 {
+            return false;
+        }
+        let mut result = false;
+        let mut cp = p.child_page(x);
+        if cp >= target {
+            cp = db.renumber_page(cp);
+            assert!(cp < target);
+            p.set_child_page(x, cp);
+            result = true;
+        }
+        if p.level > 1 {
+            self.renumber(db, target, cp);
+        }
+        if self.renumber_node(db, target, p, p.left(x)) {
+            result = true;
+        }
+        if self.renumber_node(db, target, p, p.right(x)) {
+            result = true;
+        }
+        result
     }
 } // end impl SortedFile
 
@@ -540,7 +586,7 @@ pub struct Asc {
 
 impl Asc {
     fn new(db: &DB, start: Box<dyn Record>, file: &Rc<SortedFile>) -> Self {
-        let root_page = file.root_page;
+        let root_page = file.root_page.get();
         let mut result = Asc {
             stk: Stack::new(db, start),
             file: file.clone(),
@@ -567,7 +613,7 @@ pub struct Dsc {
 
 impl Dsc {
     fn new(db: &DB, start: Box<dyn Record>, file: &Rc<SortedFile>) -> Self {
-        let root_page = file.root_page;
+        let root_page = file.root_page.get();
         let mut result = Dsc {
             stk: Stack::new(db, start),
             file: file.clone(),

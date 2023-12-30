@@ -77,7 +77,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
             }
         }
         if root > SYS_ROOT_LAST {
-            table.add_index(root, info.cols.clone());
+            table.add_index(root, info.cols.clone(), index_id);
             table.init_index(db);
         }
     } else {
@@ -220,7 +220,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<Rc<Table>> {
                 let cnum = a.int(1) as usize;
                 cols.push(cnum);
             }
-            table.add_index(root, cols);
+            table.add_index(root, cols, index_id);
         }
         db.publish_table(table.clone());
         Some(table)
@@ -308,6 +308,19 @@ pub fn save_id_gen(db: &DB, id: u64, val: i64) {
 pub fn set_root(db: &DB, id: i64, new_root: u64) {
     let id = id as u64;
     let t = &db.sys_table;
+    let (pp, off) = t.id_get(db, id).unwrap();
+    let p = &mut pp.borrow_mut();
+    let mut wa = t.write_access(p, off);
+    debug_assert!(wa.id() == id);
+    wa.set_int(0, new_root as i64);
+    t.file.set_dirty(p, &pp);
+}
+
+/// Update root page for index.
+#[cfg(feature = "renumber")]
+pub fn set_ix_root(db: &DB, id: i64, new_root: u64) {
+    let id = id as u64;
+    let t = &db.sys_index;
     let (pp, off) = t.id_get(db, id).unwrap();
     let p = &mut pp.borrow_mut();
     let mut wa = t.write_access(p, off);

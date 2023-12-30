@@ -370,6 +370,25 @@ impl AccessPagedData {
         self.stash().delta(new_len, old_len);
     }
 
+    ///
+    #[cfg(feature = "renumber")]
+    pub fn cache_page(&self, lpnum: u64) -> Data {
+        debug_assert!(self.writer);
+
+        // Get copy of current data.
+        let old = self.get_data(lpnum);
+
+        // Update the stash ( ensures any readers will not attempt to read the file ).
+        let old_len = self.stash().set(lpnum, old.clone(), nd());
+
+        // Adjust the total data stashed.
+        self.stash().delta(0, old_len);
+
+        // ToDo:clear usage?
+
+        old
+    }
+
     /// Free a logical page.
     pub fn free_page(&self, lpnum: u64) {
         self.set_page(lpnum, nd());

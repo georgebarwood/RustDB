@@ -210,7 +210,7 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Execute ForSortInit instruction. Constructs sorted vector of rows.
-    fn for_sort_init(&mut self, for_id: usize, cse: &CSelectExpression) {
+    fn for_sort_init(&mut self, for_id: usize, cse: &CFromExpression) {
         let rows = self.get_temp(cse);
         self.stack[self.bp + for_id] = Value::ForSort(util::new(ForSortState { ix: 0, rows }));
     }
@@ -354,7 +354,7 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Execute a SELECT operation.
-    fn select(&mut self, cse: &CSelectExpression) {
+    fn select(&mut self, cse: &CFromExpression) {
         if let Some(te) = &cse.from {
             let obl = cse.orderby.len();
             let mut temp = Vec::new(); // For sorting.
@@ -401,7 +401,7 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Execute a SET operation.
-    fn set(&mut self, cse: &CSelectExpression) {
+    fn set(&mut self, cse: &CFromExpression) {
         if let Some(te) = &cse.from {
             for (pp, off) in self.data_source(te) {
                 let p = pp.borrow();
@@ -460,7 +460,7 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Get sorted temporary table.
-    fn get_temp(&mut self, cse: &CSelectExpression) -> Vec<Vec<Value>> {
+    fn get_temp(&mut self, cse: &CFromExpression) -> Vec<Vec<Value>> {
         if let Some(te) = &cse.from {
             let mut temp = Vec::new(); // For sorting.
             for (pp, off) in self.data_source(te) {

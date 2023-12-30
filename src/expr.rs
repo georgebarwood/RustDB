@@ -11,13 +11,13 @@ pub(crate) struct SqlError {
 }
 /// Table Expression ( not yet type-checked or compiled against database ).
 pub enum TableExpression {
-    // Select( SelectExpression ),
+    // Select( FromExpression ),
     ///
     Base(ObjRef),
     ///
     Values(Vec<Vec<Expr>>),
 }
-/// Assign or Append.
+/// Assign operation.
 #[derive(Clone, Copy)]
 #[non_exhaustive]
 pub enum AssignOp {
@@ -30,12 +30,12 @@ pub enum AssignOp {
     ///
     Dec,
 }
-/// Vector of local variable numbers and AssignOp( assign or append ).
+/// Vector of local variable numbers and AssignOp.
 pub type Assigns = Vec<(usize, AssignOp)>;
 
-/// Select Expression ( not yet compiled ).
+/// From Expression ( not yet compiled ).
 #[non_exhaustive]
-pub struct SelectExpression {
+pub struct FromExpression {
     ///
     pub colnames: Vec<String>,
     ///
@@ -174,7 +174,7 @@ pub enum ExprIs {
     ///
     BuiltinCall(String, Vec<Expr>),
     ///
-    ScalarSelect(Box<SelectExpression>),
+    ScalarSelect(Box<FromExpression>),
     ///
     List(Vec<Expr>),
 }

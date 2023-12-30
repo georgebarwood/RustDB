@@ -1,7 +1,17 @@
 use crate::*;
 
+/// Table Index.
+pub struct Index {
+    ///
+    pub file: Rc<SortedFile>,
+    ///
+    pub cols: Rc<Vec<usize>>,
+    ///
+    pub id: i64,
+}
+
 /// List of indexes. Each index has a file and a list of column numbers.
-pub type IxList = Vec<(Rc<SortedFile>, Rc<Vec<usize>>)>;
+pub type IxList = Vec<Index>;
 
 /// Save or Rollback.
 #[derive(PartialEq, Eq, PartialOrd, Clone, Copy)]
@@ -53,8 +63,8 @@ impl Table {
     /// Save or Rollback underlying files.
     pub fn save(&self, db: &DB, op: SaveOp) {
         self.file.save(db, op);
-        for (f, _) in &*self.ixlist.borrow() {
-            f.save(db, op);
+        for ix in &*self.ixlist.borrow() {
+            ix.file.save(db, op);
         }
     }
 
@@ -62,9 +72,9 @@ impl Table {
     pub fn free_pages(&self, db: &DB) {
         let row = self.row();
         self.file.free_pages(db, &row);
-        for (f, cols) in &*self.ixlist.borrow() {
-            let ixr = IndexRow::new(self, cols.clone(), &row);
-            f.free_pages(db, &ixr);
+        for ix in &*self.ixlist.borrow() {
+            let ixr = IndexRow::new(self, ix.cols.clone(), &row);
+            ix.file.free_pages(db, &ixr);
         }
     }
 
@@ -73,18 +83,18 @@ impl Table {
         row.encode(db); // Calculate codes for Binary and String values.
         self.file.insert(db, row);
         // Update any indexes.
-        for (f, cols) in &*self.ixlist.borrow() {
-            let ixr = IndexRow::new(self, cols.clone(), row);
-            f.insert(db, &ixr);
+        for ix in &*self.ixlist.borrow() {
+            let ixr = IndexRow::new(self, ix.cols.clone(), row);
+            ix.file.insert(db, &ixr);
         }
     }
 
     /// Remove specified loaded row from the table.
     pub fn remove(&self, db: &DB, row: &Row) {
         self.file.remove(db, row);
-        for (f, cols) in &*self.ixlist.borrow() {
-            let ixr = IndexRow::new(self, cols.clone(), row);
-            f.remove(db, &ixr);
+        for ix in &*self.ixlist.borrow() {
+            let ixr = IndexRow::new(self, ix.cols.clone(), row);
+            ix.file.remove(db, &ixr);
         }
         row.delcodes(db); // Deletes codes for Binary and String values.
     }
@@ -102,8 +112,8 @@ impl Table {
 
         let mut best_match = 0;
         let mut best_index = 0;
-        for (index, (_f, clist)) in list.iter().enumerate() {
-            let m = covered(clist, &kc);
+        for (index, ix) in list.iter().enumerate() {
+            let m = covered(&ix.cols, &kc);
             if m > best_match {
                 best_match = m;
                 best_index = index;
@@ -111,7 +121,7 @@ impl Table {
         }
         if best_match > 0 {
             // Get the key values for the chosen index.
-            let clist = &list[best_index].1;
+            let clist = &list[best_index].cols;
             let mut cols = SmallSet::default();
             for col in clist.iter().take(best_match) {
                 cols.insert(*col);
@@ -155,9 +165,9 @@ impl Table {
     /// Get record with matching key, using specified index.
     pub fn ix_get(&self, db: &DB, key: Vec<Value>, index: usize) -> Option<(PagePtr, usize)> {
         let list = &*self.ixlist.borrow();
-        let (sf, cols) = &list[index];
-        let key = IndexKey::new(self, cols.clone(), key, Ordering::Equal);
-        if let Some((pp, off)) = sf.get(db, &key) {
+        let ix = &list[index];
+        let key = IndexKey::new(self, ix.cols.clone(), key, Ordering::Equal);
+        if let Some((pp, off)) = ix.file.get(db, &key) {
             let p = pp.borrow();
             let id = util::getu64(&p.data, off);
             let row = Id { id };
@@ -190,46 +200,50 @@ impl Table {
     /// Get records with matching keys.
     pub fn scan_keys(self: &Rc<Table>, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan {
         let ixlist = &*self.ixlist.borrow();
-        let (sf, cols) = &ixlist[index];
-        let ikey = IndexKey::new(self, cols.clone(), keys.clone(), Ordering::Less);
-        let ixa = sf.asc(db, Box::new(ikey));
+        let ix = &ixlist[index];
+        let ikey = IndexKey::new(self, ix.cols.clone(), keys.clone(), Ordering::Less);
+        let ixa = ix.file.asc(db, Box::new(ikey));
         IndexScan {
             ixa,
             keys,
-            cols: cols.clone(),
+            cols: ix.cols.clone(),
             table: self.clone(),
             db: db.clone(),
         }
     }
 
     /// Add the specified index to the table.
-    pub fn add_index(&self, root: u64, cols: Vec<usize>) {
+    pub fn add_index(&self, root: u64, cols: Vec<usize>, id: i64) {
         let key_size = self.info.index_key_size(&cols) + 8;
-        let sf = Rc::new(SortedFile::new(key_size, key_size, root));
+        let file = Rc::new(SortedFile::new(key_size, key_size, root));
         let list = &mut self.ixlist.borrow_mut();
-        list.push((sf, Rc::new(cols)));
+        list.push(Index {
+            file,
+            cols: Rc::new(cols),
+            id,
+        });
     }
 
     /// Delete the specified index.
     pub fn delete_index(&self, db: &DB, ix: usize) {
         let ixlist = &*self.ixlist.borrow();
-        let (f, cols) = &ixlist[ix];
+        let ix = &ixlist[ix];
         let row = self.row();
-        let ixr = IndexRow::new(self, cols.clone(), &row);
-        f.free_pages(db, &ixr);
+        let ixr = IndexRow::new(self, ix.cols.clone(), &row);
+        ix.file.free_pages(db, &ixr);
     }
 
     /// Initialises last index ( called just after add_index ).
     pub fn init_index(&self, db: &DB) {
         let mut row = self.row();
         let ixlist = self.ixlist.borrow();
-        let (f, cols) = ixlist.last().unwrap();
+        let ix = ixlist.last().unwrap();
 
         for (pp, off) in self.scan(db) {
             let p = pp.borrow();
             row.load(db, &p.data[off..]);
-            let ixr = IndexRow::new(self, cols.clone(), &row);
-            f.insert(db, &ixr);
+            let ixr = IndexRow::new(self, ix.cols.clone(), &row);
+            ix.file.insert(db, &ixr);
         }
     }
 
@@ -279,9 +293,9 @@ impl Table {
         } else {
             let list = &*self.ixlist.borrow();
             if k <= list.len() {
-                let (f, cols) = &list[k - 1];
-                let ixr = IndexRow::new(self, cols.clone(), &row);
-                f.repack(db, &ixr)
+                let ix = &list[k - 1];
+                let ixr = IndexRow::new(self, ix.cols.clone(), &row);
+                ix.file.repack(db, &ixr)
             } else {
                 -1
             }
@@ -292,8 +306,8 @@ impl Table {
     /// Add the all the pages used by the table to the specified set.
     pub fn get_used(&self, db: &DB, to: &mut HashSet<u64>) {
         self.file.get_used(db, to);
-        for (f, _cols) in &*self.ixlist.borrow() {
-            f.get_used(db, to);
+        for ix in &*self.ixlist.borrow() {
+            ix.file.get_used(db, to);
         }
     }
 } // end impl Table.
