@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 ///
 /// A logical page that does not fit in the "starter page" has 1 or more "extension pages".
 ///
-/// Each extension page starts with it's containing logical page number ( to allow extension pages to be relocated as required ).
+/// Each extension page starts with its logical page number, to allow extension pages to be relocated as required.
 ///
 /// When a new extension page is needed, it is allocated from the end of the file.
 ///
@@ -21,9 +21,10 @@ use std::collections::BTreeSet;
 ///
 /// Layout of starter page: 2 byte logical page size | array of 8 byte page numbers | user data | unused data.
 ///
-/// Note: for a free logical page a link to the next free logical page is stored after the page size, then a special value.
-///
 /// Layout of extension page: 8 byte logical page number | user data | unused data.
+///
+/// Note: for a free logical page a link to the next free logical page is stored after the page size, then a special value.
+
 
 pub struct CompactFile {
     /// Underlying storage.
