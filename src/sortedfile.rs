@@ -452,17 +452,21 @@ impl SortedFile {
 
     #[cfg(feature = "renumber")]
     /// Renumber pages >= target.
-    pub fn renumber(&self, db: &DB, target: u64, pnum: u64) {
+    pub fn renumber(&self, db: &DB, target: u64) {
+        self.renumber_page(db, target, self.root_page.get());
+    }
+
+    #[cfg(feature = "renumber")]
+    fn renumber_page(&self, db: &DB, target: u64, pnum: u64) {
         let pp = self.load_page(db, pnum);
         let p = &mut pp.borrow_mut();
         if p.level != 0 {
             if p.first_page >= target {
                 p.first_page = db.renumber_page(p.first_page);
-                assert!(p.first_page < target);
                 self.set_dirty(p, &pp);
             }
             if p.level > 1 {
-                self.renumber(db, target, p.first_page);
+                self.renumber_page(db, target, p.first_page);
             }
             let root = p.root;
             if self.renumber_node(db, target, p, root) {
@@ -476,24 +480,18 @@ impl SortedFile {
         if x == 0 {
             return false;
         }
-        let mut result = false;
         let mut cp = p.child_page(x);
-        if cp >= target {
+        let cp_ren = cp >= target;
+        if cp_ren {
             cp = db.renumber_page(cp);
-            assert!(cp < target);
             p.set_child_page(x, cp);
-            result = true;
         }
         if p.level > 1 {
-            self.renumber(db, target, cp);
+            self.renumber_page(db, target, cp);
         }
-        if self.renumber_node(db, target, p, p.left(x)) {
-            result = true;
-        }
-        if self.renumber_node(db, target, p, p.right(x)) {
-            result = true;
-        }
-        result
+        cp_ren
+            | self.renumber_node(db, target, p, p.left(x))
+            | self.renumber_node(db, target, p, p.right(x))
     }
 } // end impl SortedFile
 

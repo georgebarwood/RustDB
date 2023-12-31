@@ -32,7 +32,7 @@
 //! - `max` : maximal interface, including internal modules (which may not be stable).
 //! - `verify` : Allows database structure to be verified using builtin function VERIFYDB.
 //! - `pack` : Allows database pages to be packed using builtin function REPACKFILE.
-//! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER.
+//! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
 //!
 //! By default, all features are enabled.
 //!
@@ -497,8 +497,7 @@ GO
                 return true;
             }
         }
-        let tm = &*self.tables.borrow();
-        for t in tm.values() {
+        for t in self.tables.borrow().values() {
             if t.id_gen_dirty.get() {
                 return true;
             }
@@ -665,8 +664,7 @@ GO
             bs.file.get_used(self, &mut pages);
         }
 
-        let tm = &*self.tables.borrow();
-        for t in tm.values() {
+        for t in self.tables.borrow().values() {
             t.get_used(self, &mut pages);
         }
 
@@ -684,11 +682,7 @@ GO
     /// Renumber a page.
     #[cfg(feature = "renumber")]
     fn renumber_page(self: &DB, pnum: u64) -> u64 {
-        // Make sure historic data is setup.
-        let data = self.file.cache_page(pnum);
-        let pnum = self.file.spd.file.write().unwrap().renumber(pnum);
-        self.file.set_page(pnum, data);
-        pnum
+        self.file.renumber_page(pnum)
     }
 
     /// Renumber pages.
@@ -696,35 +690,30 @@ GO
     pub fn renumber(self: &DB) {
         let target = self.file.spd.file.write().unwrap().load_free_pages();
 
-        // Renumber all pages of all files ( byte storage, tables, indexes ).
         for bs in &self.bs {
-            bs.file.renumber(self, target, bs.file.root_page.get());
+            bs.file.renumber(self, target);
         }
 
-        let tm = &*self.tables.borrow();
-        for t in tm.values() {
-            let f = &t.file;
-            let mut root_page = f.root_page.get();
+        for t in self.tables.borrow().values() {
+            let tf = &t.file;
+            let mut root_page = tf.root_page.get();
             if root_page >= target {
                 root_page = self.renumber_page(root_page);
-                assert!(root_page < target);
-                f.root_page.set(root_page);
+                tf.root_page.set(root_page);
                 sys::set_root(self, t.id, root_page);
             }
-            f.renumber(self, target, root_page);
+            tf.renumber(self, target);
             for ix in &mut *t.ixlist.borrow_mut() {
                 let mut root_page = ix.file.root_page.get();
                 if root_page >= target {
                     root_page = self.renumber_page(root_page);
-                    assert!(root_page < target);
                     ix.file.root_page.set(root_page);
                     sys::set_ix_root(self, ix.id, root_page);
                 }
-                ix.file.renumber(self, target, root_page);
+                ix.file.renumber(self, target);
             }
         }
         self.file.spd.file.write().unwrap().set_lpalloc(target);
-        self.function_reset.set(true);
     }
 } // end impl Database
 

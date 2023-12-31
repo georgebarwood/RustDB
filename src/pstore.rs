@@ -370,23 +370,19 @@ impl AccessPagedData {
         self.stash().delta(new_len, old_len);
     }
 
-    ///
+    /// Renumber a page.
     #[cfg(feature = "renumber")]
-    pub fn cache_page(&self, lpnum: u64) -> Data {
-        debug_assert!(self.writer);
+    pub fn renumber_page(&self, lpnum: u64) -> u64 {
+        assert!(self.writer);
 
-        // Get copy of current data.
-        let old = self.get_data(lpnum);
+        let data = self.get_data(lpnum);
+        self.stash().set(lpnum, data.clone(), nd());
 
-        // Update the stash ( ensures any readers will not attempt to read the file ).
-        let old_len = self.stash().set(lpnum, old.clone(), nd());
+        let lpnum2 = self.spd.file.write().unwrap().renumber(lpnum);
+        let old2 = self.get_data(lpnum2);
 
-        // Adjust the total data stashed.
-        self.stash().delta(0, old_len);
-
-        // ToDo:clear usage?
-
-        old
+        self.stash().set(lpnum2, old2, data);
+        lpnum2
     }
 
     /// Free a logical page.
