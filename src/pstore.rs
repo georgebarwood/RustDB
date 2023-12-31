@@ -349,7 +349,7 @@ impl AccessPagedData {
     }
 
     /// Set the data of the specified page.
-    pub fn set_page(&self, lpnum: u64, data: Data) {
+    pub fn set_data(&self, lpnum: u64, data: Data) {
         debug_assert!(self.writer);
 
         // Get copy of current data.
@@ -370,24 +370,15 @@ impl AccessPagedData {
         self.stash().delta(new_len, old_len);
     }
 
-    /// Renumber a page.
-    #[cfg(feature = "renumber")]
-    pub fn renumber_page(&self, lpnum: u64) -> u64 {
-        assert!(self.writer);
-
-        let data = self.get_data(lpnum);
-        self.stash().set(lpnum, data.clone(), nd());
-
-        let lpnum2 = self.spd.file.write().unwrap().renumber(lpnum);
-        let old2 = self.get_data(lpnum2);
-
-        self.stash().set(lpnum2, old2, data);
-        lpnum2
+    /// Allocate a logical page.
+    pub fn alloc_page(&self) -> u64 {
+        debug_assert!(self.writer);
+        self.spd.file.write().unwrap().alloc_page()
     }
 
     /// Free a logical page.
     pub fn free_page(&self, lpnum: u64) {
-        self.set_page(lpnum, nd());
+        self.set_data(lpnum, nd());
     }
 
     /// Is the underlying file new (so needs to be initialised ).
@@ -399,12 +390,6 @@ impl AccessPagedData {
     pub fn compress(&self, size: usize, saving: usize) -> bool {
         debug_assert!(self.writer);
         CompactFile::compress(self.spd.sp_size, self.spd.ep_size, size, saving)
-    }
-
-    /// Allocate a logical page.
-    pub fn alloc_page(&self) -> u64 {
-        debug_assert!(self.writer);
-        self.spd.file.write().unwrap().alloc_page()
     }
 
     /// Commit changes to underlying file ( or rollback logical page allocations ).
@@ -423,6 +408,22 @@ impl AccessPagedData {
             }
         }
     }
+
+    /// Renumber a page.
+    #[cfg(feature = "renumber")]
+    pub fn renumber_page(&self, lpnum: u64) -> u64 {
+        assert!(self.writer);
+
+        let data = self.get_data(lpnum);
+        self.stash().set(lpnum, data.clone(), nd());
+
+        let lpnum2 = self.spd.file.write().unwrap().renumber(lpnum);
+        let old2 = self.get_data(lpnum2);
+
+        self.stash().set(lpnum2, old2, data);
+        lpnum2
+    }
+
 }
 
 impl Drop for AccessPagedData {
