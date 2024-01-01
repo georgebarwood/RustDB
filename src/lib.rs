@@ -414,7 +414,7 @@ impl Database {
         }
         for t in &tb.list {
             if !is_new {
-                t.id_gen.set(sys::get_id_gen(&db, t.id as u64));
+                t.id_gen.set(None);
             }
             db.publish_table(t.clone());
         }
@@ -524,9 +524,9 @@ GO
         for t in tm.values() {
             if t.id_gen_dirty.get() {
                 if op == SaveOp::Save {
-                    sys::save_id_gen(self, t.id as u64, t.id_gen.get());
+                    sys::save_id_gen(self, t.id as u64, t.id_gen.get().unwrap());
                 } else {
-                    t.id_gen.set(sys::get_id_gen(self, t.id as u64));
+                    t.id_gen.set(None);
                 }
                 t.id_gen_dirty.set(false);
             }

@@ -37,7 +37,7 @@ pub struct Table {
     pub id: i64,
 
     /// Row id allocator.
-    pub id_gen: Cell<i64>,
+    pub id_gen: Cell<Option<i64>>,
 
     /// Row id allocator has changed.
     pub id_gen_dirty: Cell<bool>,
@@ -55,7 +55,7 @@ impl Table {
             file,
             info,
             ixlist,
-            id_gen: Cell::new(id_gen),
+            id_gen: Cell::new(Some(id_gen)),
             id_gen_dirty: Cell::new(false),
         })
     }
@@ -268,18 +268,29 @@ impl Table {
         Row::new(self.info.clone())
     }
 
+    /// Get id generator.
+    pub fn get_id_gen(&self, db: &DB) -> i64 {
+        if let Some(result) = self.id_gen.get() {
+            result
+        } else {
+            let result = sys::get_id_gen(db, self.id as u64);
+            self.id_gen.set(Some(result));
+            result
+        }
+    }
+
     /// Allocate row id.
-    pub fn alloc_id(&self) -> i64 {
-        let result = self.id_gen.get();
-        self.id_gen.set(result + 1);
+    pub fn alloc_id(&self, db: &DB) -> i64 {
+        let result = self.get_id_gen(db);
+        self.id_gen.set(Some(result + 1));
         self.id_gen_dirty.set(true);
         result
     }
 
     /// Update id allocator if supplied row id exceeds current value.
-    pub fn id_allocated(&self, id: i64) {
-        if id >= self.id_gen.get() {
-            self.id_gen.set(id + 1);
+    pub fn id_allocated(&self, db: &DB, id: i64) {
+        if id >= self.get_id_gen(db) {
+            self.id_gen.set(Some(id + 1));
             self.id_gen_dirty.set(true);
         }
     }

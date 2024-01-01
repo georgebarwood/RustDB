@@ -450,9 +450,9 @@ impl<'r> EvalEnv<'r> {
                 }
             }
             if row.id == 0 {
-                row.id = table.alloc_id();
+                row.id = table.alloc_id(&self.db);
             } else {
-                table.id_allocated(row.id);
+                table.id_allocated(&self.db, row.id);
             }
             self.db.lastid.set(row.id);
             table.insert(&self.db, &mut row);
@@ -579,7 +579,7 @@ impl<'r> EvalEnv<'r> {
             let nci = Rc::new(nci);
 
             let root = db.alloc_page();
-            let nt = Table::new(t.id, root, t.id_gen.get(), nci);
+            let nt = Table::new(t.id, root, t.get_id_gen(db), nci);
 
             let mut oldrow = t.row();
             let mut newrow = nt.row();

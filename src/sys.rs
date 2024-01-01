@@ -7,7 +7,7 @@ pub fn create_schema(db: &DB, name: &str) {
     }
     let t = &db.sys_schema;
     let mut row = t.row();
-    row.id = t.alloc_id();
+    row.id = t.alloc_id(db);
     row.values[0] = Value::String(Rc::new(name.to_string()));
     t.insert(db, &mut row);
 }
@@ -24,7 +24,7 @@ pub fn create_table(db: &DB, info: &ColInfo) {
             let t = &db.sys_table;
             let mut row = t.row();
             // Columns are root, schema, name, id_gen
-            row.id = t.alloc_id();
+            row.id = t.alloc_id(db);
             row.values[0] = Value::Int(root as i64);
             row.values[1] = Value::Int(schema_id);
             row.values[2] = Value::String(Rc::new(info.name.name.clone()));
@@ -42,7 +42,7 @@ pub fn create_table(db: &DB, info: &ColInfo) {
         row.values[0] = Value::Int(tid);
         for (num, typ) in info.typ.iter().enumerate() {
             // Columns are Table, Name, Type
-            row.id = t.alloc_id();
+            row.id = t.alloc_id(db);
             row.values[1] = Value::String(Rc::new(cnames[num].to_string()));
             row.values[2] = Value::Int(*typ as i64);
             t.insert(db, &mut row);
@@ -58,7 +58,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
             let t = &db.sys_index;
             let mut row = t.row();
             // Columns are Root, Table, Name
-            row.id = t.alloc_id();
+            row.id = t.alloc_id(db);
             row.values[0] = Value::Int(root as i64);
             row.values[1] = Value::Int(table.id);
             row.values[2] = Value::String(Rc::new(info.iname.clone()));
@@ -70,7 +70,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
             let mut row = t.row();
             for cnum in &info.cols {
                 // Columns are Index, ColIndex
-                row.id = t.alloc_id();
+                row.id = t.alloc_id(db);
                 row.values[0] = Value::Int(index_id);
                 row.values[1] = Value::Int(*cnum as i64);
                 t.insert(db, &mut row);
@@ -117,7 +117,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool) 
             // Create new function.
             let mut row = t.row();
             // Columns are Schema, Name, Definition
-            row.id = t.alloc_id();
+            row.id = t.alloc_id(db);
             row.values[0] = Value::Int(schema_id);
             row.values[1] = Value::String(Rc::new(name.name.clone()));
             row.values[2] = Value::String(source);
