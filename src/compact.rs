@@ -25,7 +25,6 @@ use std::collections::BTreeSet;
 ///
 /// Note: for a free logical page a link to the next free logical page is stored after the page size, then a special value.
 
-
 pub struct CompactFile {
     /// Underlying storage.
     pub stg: Box<dyn Storage>,

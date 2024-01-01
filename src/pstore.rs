@@ -423,7 +423,6 @@ impl AccessPagedData {
         self.stash().set(lpnum2, old2, data);
         lpnum2
     }
-
 }
 
 impl Drop for AccessPagedData {

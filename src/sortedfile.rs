@@ -48,7 +48,7 @@ impl SortedFile {
             if p.pnum != u64::MAX {
                 p.compress(db);
                 p.write_header();
-                db.file.set_data(p.pnum, p.data.to_data());
+                db.apd.set_data(p.pnum, p.data.to_data());
             }
         }
     }
@@ -280,7 +280,7 @@ impl SortedFile {
         if let Some(p) = self.dirty_pages.borrow().get(&pnum) {
             return p.clone();
         }
-        let data = db.file.get_data(pnum);
+        let data = db.apd.get_data(pnum);
         let level = if data.len() == 0 { 0 } else { data[0] };
         util::new(Page::new(
             if level != 0 {
@@ -462,7 +462,7 @@ impl SortedFile {
         let p = &mut pp.borrow_mut();
         if p.level != 0 {
             if p.first_page >= target {
-                p.first_page = db.renumber_page(p.first_page);
+                p.first_page = db.apd.renumber_page(p.first_page);
                 self.set_dirty(p, &pp);
             }
             if p.level > 1 {
@@ -483,7 +483,7 @@ impl SortedFile {
         let mut cp = p.child_page(x);
         let cp_ren = cp >= target;
         if cp_ren {
-            cp = db.renumber_page(cp);
+            cp = db.apd.renumber_page(cp);
             p.set_child_page(x, cp);
         }
         if p.level > 1 {

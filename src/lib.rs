@@ -303,7 +303,7 @@ pub type BuiltinMap = HashMap<String, (DataKind, CompileFunc)>;
 /// Database with SQL-like interface.
 pub struct Database {
     /// Page storage.
-    pub file: AccessPagedData,
+    pub apd: AccessPagedData,
 
     /// Defined builtin functions.
     pub builtins: Arc<BuiltinMap>,
@@ -350,8 +350,8 @@ impl Database {
     /// Construct a new DB, based on the specified file.
     /// initsql is used to initialise a new database.
     /// builtins specifies the functions callable in SQL code such as SUBSTR, REPLACE etc.
-    pub fn new(file: AccessPagedData, initsql: &str, builtins: Arc<BuiltinMap>) -> DB {
-        let is_new = file.is_new();
+    pub fn new(apd: AccessPagedData, initsql: &str, builtins: Arc<BuiltinMap>) -> DB {
+        let is_new = apd.is_new();
         let mut tb = TableBuilder::new();
         let sys_schema = tb.nt("Schema", &[("Name", STRING)]);
         let sys_table = tb.nt(
@@ -383,10 +383,10 @@ impl Database {
             bs.push(ByteStorage::new(ft as u64, ft));
         }
 
-        let page_size_max = file.spd.page_size_max();
+        let page_size_max = apd.spd.page_size_max();
 
         let db = Rc::new(Database {
-            file,
+            apd,
             sys_schema,
             sys_table,
             sys_column,
@@ -541,7 +541,7 @@ GO
             self.functions.borrow_mut().clear();
             self.function_reset.set(false);
         }
-        self.file.save(op)
+        self.apd.save(op)
     }
 
     #[cfg(not(feature = "table"))]
@@ -621,18 +621,18 @@ GO
 
     /// Allocate a page of underlying file storage.
     fn alloc_page(self: &DB) -> u64 {
-        self.file.alloc_page()
+        self.apd.alloc_page()
     }
 
     /// Free a page of underlying file storage.
     fn free_page(self: &DB, lpnum: u64) {
-        self.file.free_page(lpnum);
+        self.apd.free_page(lpnum);
     }
 
     #[cfg(feature = "pack")]
     /// Get size of logical page.
     fn lp_size(&self, pnum: u64) -> u64 {
-        self.file.spd.file.read().unwrap().lp_size(pnum) as u64
+        self.apd.spd.file.read().unwrap().lp_size(pnum) as u64
     }
 
     #[cfg(feature = "pack")]
@@ -655,7 +655,7 @@ GO
     #[cfg(feature = "verify")]
     /// Verify the page structure of the database.
     pub fn verify(self: &DB) -> String {
-        let (mut pages, total) = self.file.spd.file.read().unwrap().get_info();
+        let (mut pages, total) = self.apd.spd.file.read().unwrap().get_info();
         let total = total as usize;
 
         let free = pages.len();
@@ -679,16 +679,10 @@ GO
         )
     }
 
-    /// Renumber a page.
-    #[cfg(feature = "renumber")]
-    fn renumber_page(self: &DB, pnum: u64) -> u64 {
-        self.file.renumber_page(pnum)
-    }
-
     /// Renumber pages.
     #[cfg(feature = "renumber")]
     pub fn renumber(self: &DB) {
-        let target = self.file.spd.file.write().unwrap().load_free_pages();
+        let target = self.apd.spd.file.write().unwrap().load_free_pages();
 
         for bs in &self.bs {
             bs.file.renumber(self, target);
@@ -698,7 +692,7 @@ GO
             let tf = &t.file;
             let mut root_page = tf.root_page.get();
             if root_page >= target {
-                root_page = self.renumber_page(root_page);
+                root_page = self.apd.renumber_page(root_page);
                 tf.root_page.set(root_page);
                 sys::set_root(self, t.id, root_page);
             }
@@ -706,14 +700,14 @@ GO
             for ix in &mut *t.ixlist.borrow_mut() {
                 let mut root_page = ix.file.root_page.get();
                 if root_page >= target {
-                    root_page = self.renumber_page(root_page);
+                    root_page = self.apd.renumber_page(root_page);
                     ix.file.root_page.set(root_page);
                     sys::set_ix_root(self, ix.id, root_page);
                 }
                 ix.file.renumber(self, target);
             }
         }
-        self.file.spd.file.write().unwrap().set_lpalloc(target);
+        self.apd.spd.file.write().unwrap().set_lpalloc(target);
     }
 } // end impl Database
 

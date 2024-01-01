@@ -277,7 +277,7 @@ impl CExp<Value> for Substring {
                 break;
             }
         }
-        let result = s[f..end].to_string();
+        let result = s[0..end].to_string();
         Value::String(Rc::new(result))
     }
 }
