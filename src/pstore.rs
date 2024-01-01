@@ -293,11 +293,6 @@ impl SharedPagedData {
         let ep_max = (self.sp_size - 2) / 8;
         (self.ep_size - 16) * ep_max + (self.sp_size - 2)
     }
-
-    /// Trim cache.
-    pub fn trim_cache(&self) {
-        self.stash.lock().unwrap().trim_cache();
-    }
 }
 
 /// Access to shared paged data.
