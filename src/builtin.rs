@@ -260,12 +260,24 @@ impl CExp<Value> for Substring {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
         let s = self.s.eval(ee, d).str();
         let f = self.f.eval(ee, d) as usize - 1;
-        let n = self.n.eval(ee, d) as usize;
-        let mut lim = s.len();
-        if lim > f + n {
-            lim = f + n;
+        let mut n = self.n.eval(ee, d) as usize;
+
+        let s = &s[f..];
+        let mut chars = s.char_indices();
+        let end;
+        loop {
+            if let Some((x, _)) = chars.next() {
+                if n == 0 {
+                    end = x;
+                    break;
+                }
+                n -= 1;
+            } else {
+                end = s.len();
+                break;
+            }
         }
-        let result = s[f..lim].to_string();
+        let result = s[f..end].to_string();
         Value::String(Rc::new(result))
     }
 }
