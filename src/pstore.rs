@@ -624,17 +624,17 @@ pub fn test2() {
     let mut rng = rand::thread_rng();
 
     let mut h = Heap::default();
-    let mut pages = HashMap::<u64, u32>::default();
+    let mut pages = HashMap::default();
     for _i in 0..1000000 {
         let pnum = rng.gen::<u64>() % 100;
         let usage = rng.gen::<u64>() % 100;
-        let action = rng.gen::<usize>() % 3;
+        let action = rng.gen::<u8>() % 3;
         if action == 0 {
-            let handle = h.insert(pnum, usage);
-            pages.insert(pnum, handle);
+            let x = h.insert(pnum, usage);
+            pages.insert(pnum, x);
         } else if action == 1 {
-            if let Some(handle) = pages.get(&pnum) {
-                h.modify(*handle, usage);
+            if let Some(x) = pages.get(&pnum) {
+                h.modify(*x, usage);
             }
         } else if action == 2 && h.n > 0 {
             let pnum = h.pop();

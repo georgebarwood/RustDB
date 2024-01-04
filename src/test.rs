@@ -120,7 +120,7 @@ BEGIN
   WHILE n > 0
   BEGIN
     SET result |= s
-    SET n = n - 1
+    SET n -= 1
   END
 END
 
@@ -236,7 +236,7 @@ pub fn insert_delete() {
       WHILE @i < {}
       BEGIN
         INSERT INTO sys.test(x,name) VALUES(@i,'Hello World')    
-        SET @i = @i + 1
+        SET @i += 1
       END      
       DELETE FROM sys.test WHERE Id % 3 = 1
       DELETE FROM sys.test WHERE Id % 3 = 2

@@ -40,7 +40,7 @@ pub trait Storage: Send + Sync {
     }
 }
 
-/// Simple implementation of storage using `Vec<u8>`.
+/// Simple implementation of [Storage] using `Vec<u8>`.
 #[derive(Default)]
 pub struct MemFile {
     v: Mutex<Vec<u8>>,
@@ -88,7 +88,7 @@ impl Storage for MemFile {
 use crate::Mutex;
 use std::{fs, fs::OpenOptions, io::Read, io::Seek, io::SeekFrom, io::Write};
 
-/// Simple implementation of Storage using `std::fs::File`.
+/// Simple implementation of [Storage] using `std::fs::File`.
 pub struct SimpleFileStorage {
     file: Mutex<fs::File>,
 }

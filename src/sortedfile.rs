@@ -346,12 +346,12 @@ impl SortedFile {
         let full = (n * db.page_size_max) as u64;
         let space = full - total;
 
-        let div = std::cmp::min(10, n as u64);
+        let div = std::cmp::min(5, n as u64);
         if space < full / div {
             return;
         }
 
-        // Iterate over the page child records, appnding them into a PageList of new pages.
+        // Iterate over the page child records, appending them into a PageList of new pages.
         let mut plist = PageList::default();
         plist.add(db, p.first_page, r, self, None, 0);
         self.move_children(db, p, p.root, r, &mut plist);
