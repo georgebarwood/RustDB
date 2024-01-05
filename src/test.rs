@@ -148,6 +148,7 @@ BEGIN
     WHEN r % 20 = 0 THEN 'SELECT VERIFYDB()'
     WHEN r % 20 = 19 THEN 'SELECT REPACKFILE(-4,'''','''')'
     WHEN r % 20 = 18 THEN 'SELECT REPACKFILE(-3,'''','''')'
+    WHEN r % 20 = 17 THEN 'SELECT RENUMBER()'
     WHEN exists = '' THEN 
       CASE WHEN r % 2 =1 THEN 'CREATE TABLE rtestdata.[' | tname | '](x string, y int(5))'
       ELSE 'CREATE TABLE rtestdata.[' | tname | '](x string, y int(3), z string )'

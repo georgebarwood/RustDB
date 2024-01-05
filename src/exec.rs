@@ -240,6 +240,7 @@ impl<'r> EvalEnv<'r> {
     /// Execute SQL string.
     fn execute(&mut self) {
         let s = self.pop_string();
+        // println!("EXECUTE {}",s);
         self.db.run(&s, self.tr);
     }
 

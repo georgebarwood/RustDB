@@ -420,25 +420,26 @@ impl CompactFile {
     /// Efficiently move the data associated with lpnum to new logical page.
     pub fn renumber(&mut self, lpnum: u64) -> u64 {
         let lpnum2 = self.alloc_page();
-        // println!("renumber {} to {}", lpnum, lpnum2);
-        let mut starter = vec![0_u8; self.sp_size];
-        let foff = Self::HSIZE + (self.sp_size as u64) * lpnum;
-        self.stg.read(foff, &mut starter);
-        let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
-        let ext = self.ext(size); // Number of extension pages.
+        if self.lp_valid(lpnum) {
+            let mut starter = vec![0_u8; self.sp_size];
+            let foff = Self::HSIZE + (self.sp_size as u64) * lpnum;
+            self.stg.read(foff, &mut starter);
+            let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
+            let ext = self.ext(size); // Number of extension pages.
 
-        // Modify the extension pages.
-        for i in 0..ext {
-            let page = util::getu64(&starter, 2 + i * 8);
-            let woff = page * (self.ep_size as u64);
-            debug_assert!(self.stg.read_u64(woff) == lpnum);
-            self.stg.write_u64(woff, lpnum2);
+            // Modify the extension pages.
+            for i in 0..ext {
+                let page = util::getu64(&starter, 2 + i * 8);
+                let woff = page * (self.ep_size as u64);
+                debug_assert!(self.stg.read_u64(woff) == lpnum);
+                self.stg.write_u64(woff, lpnum2);
+            }
+
+            // Write the starter data.
+            let foff2 = Self::HSIZE + (self.sp_size as u64) * lpnum2;
+            self.stg.write_vec(foff2, starter);
         }
-
-        // Write the starter data.
-        let foff2 = Self::HSIZE + (self.sp_size as u64) * lpnum2;
-        self.stg.write_vec(foff2, starter);
-
+        self.free_page(lpnum);
         lpnum2
     }
 
@@ -461,10 +462,22 @@ impl CompactFile {
     /// All lpnums >= target must have been renumbered to be < target at this point.
     pub fn set_lpalloc(&mut self, target: u64) {
         assert!(self.lp_first == u64::MAX);
-        self.lp_alloc = target;
+        assert!(self.ep_free.len() == 0);
+        assert!(self.lp_free.len() as u64 == self.lp_alloc - target);
+        self.extend_starter_pages(target);
         self.reduce_starter_pages(target);
+        self.lp_alloc = target;
         self.lp_free.clear();
         self.lp_alloc_dirty = true;
+        self.clear_lp();
+    }
+
+    #[cfg(feature = "renumber")]
+    fn clear_lp(&mut self) {
+        let start = Self::HSIZE + (self.sp_size as u64) * self.lp_alloc;
+        let end = self.ep_resvd * self.ep_size as u64;
+        let buf = vec![0; (end - start) as usize];
+        self.stg.write(start, &buf);
     }
 } // end impl CompactFile
 
