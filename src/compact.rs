@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 ///
 /// When an extension page is freed, the last extension page in the file is relocated to fill it.
 ///
-/// If the starter page array needs to be enlarged, the first extension page is relocated to the end of the file.
+/// The starter page array is extended as required when a logical page is written by relocating the first extension page to the end of the file.
 ///
 /// File layout: file header | starter pages | extension pages.
 ///
@@ -24,6 +24,8 @@ use std::collections::BTreeSet;
 /// Layout of extension page: 8 byte logical page number | user data | unused data.
 ///
 /// Note: for a free logical page a link to the next free logical page is stored after the page size, then a special value.
+///
+/// All pages ( whether allocated or not ) initially have size zero.
 
 pub struct CompactFile {
     /// Underlying storage.
@@ -107,8 +109,9 @@ impl CompactFile {
 
     /// Get the current size of the specified logical page.
     pub fn lp_size(&self, lpnum: u64) -> usize {
-        if self.lp_valid(lpnum) {
-            self.read_u16(Self::HSIZE + (self.sp_size as u64) * lpnum)
+        let off = self.lp_off(lpnum);
+        if off != 0 {
+            self.read_u16(off)
         } else {
             0
         }
@@ -176,11 +179,11 @@ impl CompactFile {
 
     /// Get logical page contents.
     pub fn get_page(&self, lpnum: u64) -> Data {
-        if !self.lp_valid(lpnum) {
+        let foff = self.lp_off(lpnum);
+        if foff == 0 {
             return nd();
         }
         let mut starter = vec![0_u8; self.sp_size];
-        let foff = Self::HSIZE + (self.sp_size as u64) * lpnum;
         self.stg.read(foff, &mut starter);
         let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
         let mut data = vec![0u8; size];
@@ -332,15 +335,19 @@ impl CompactFile {
         self.stg.write(epnum * self.ep_size as u64, &buf);
     }
 
-    /// Check if logical page number is within reserved region.
-    fn lp_valid(&self, lpnum: u64) -> bool {
-        Self::HSIZE + (lpnum + 1) * (self.sp_size as u64) <= self.ep_resvd * (self.ep_size as u64)
+    /// Get offset of starter page ( returns zero if not in reserved region ).
+    fn lp_off(&self, lpnum: u64) -> u64 {
+        let mut off = Self::HSIZE + (lpnum + 1) * (self.sp_size as u64);
+        if off >= self.ep_resvd * (self.ep_size as u64) {
+            off = 0;
+        }
+        off
     }
 
     /// Extend the starter page array so that lpnum is valid.
     fn extend_starter_pages(&mut self, lpnum: u64) {
         let mut save = false;
-        while !self.lp_valid(lpnum) {
+        while self.lp_off(lpnum) == 0 {
             if !self.ep_free.remove(&self.ep_resvd)
             // Do not relocate a free extended page.
             {
@@ -407,6 +414,7 @@ impl CompactFile {
     #[cfg(feature = "renumber")]
     /// Load free pages into lp_free, preparation for page renumbering. Returns number of used pages.
     pub fn load_free_pages(&mut self) -> u64 {
+        assert!(self.ep_free.is_empty());
         let mut p = self.lp_first;
         while p != u64::MAX {
             self.free_page(p);
@@ -420,9 +428,9 @@ impl CompactFile {
     /// Efficiently move the data associated with lpnum to new logical page.
     pub fn renumber(&mut self, lpnum: u64) -> u64 {
         let lpnum2 = self.alloc_page();
-        if self.lp_valid(lpnum) {
+        let foff = self.lp_off(lpnum);
+        if foff != 0 {
             let mut starter = vec![0_u8; self.sp_size];
-            let foff = Self::HSIZE + (self.sp_size as u64) * lpnum;
             self.stg.read(foff, &mut starter);
             let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
             let ext = self.ext(size); // Number of extension pages.
@@ -439,7 +447,6 @@ impl CompactFile {
             let foff2 = Self::HSIZE + (self.sp_size as u64) * lpnum2;
             self.stg.write_vec(foff2, starter);
         }
-        self.free_page(lpnum);
         lpnum2
     }
 
@@ -450,10 +457,8 @@ impl CompactFile {
         while self.ep_resvd > resvd {
             self.ep_count -= 1;
             let from = self.ep_count;
-            if !self.ep_free.remove(&from) {
-                self.ep_resvd -= 1;
-                self.relocate(from, self.ep_resvd);
-            }
+            self.ep_resvd -= 1;
+            self.relocate(from, self.ep_resvd);
         }
         self.stg.write_u64(0, self.ep_resvd);
     }
@@ -462,9 +467,7 @@ impl CompactFile {
     /// All lpnums >= target must have been renumbered to be < target at this point.
     pub fn set_lpalloc(&mut self, target: u64) {
         assert!(self.lp_first == u64::MAX);
-        assert!(self.ep_free.len() == 0);
-        assert!(self.lp_free.len() as u64 == self.lp_alloc - target);
-        self.extend_starter_pages(target);
+        assert!(self.ep_free.is_empty());
         self.reduce_starter_pages(target);
         self.lp_alloc = target;
         self.lp_free.clear();
@@ -473,11 +476,14 @@ impl CompactFile {
     }
 
     #[cfg(feature = "renumber")]
+    /// Set size of renumbered pages >= lp_alloc to zero.
     fn clear_lp(&mut self) {
         let start = Self::HSIZE + (self.sp_size as u64) * self.lp_alloc;
         let end = self.ep_resvd * self.ep_size as u64;
-        let buf = vec![0; (end - start) as usize];
-        self.stg.write(start, &buf);
+        if end > start {
+            let buf = vec![0; (end - start) as usize];
+            self.stg.write(start, &buf);
+        }
     }
 } // end impl CompactFile
 
