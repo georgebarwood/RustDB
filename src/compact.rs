@@ -337,8 +337,9 @@ impl CompactFile {
 
     /// Get offset of starter page ( returns zero if not in reserved region ).
     fn lp_off(&self, lpnum: u64) -> u64 {
-        let mut off = Self::HSIZE + (lpnum + 1) * (self.sp_size as u64);
-        if off >= self.ep_resvd * (self.ep_size as u64) {
+        let sp_size = self.sp_size as u64;
+        let mut off = Self::HSIZE + lpnum * sp_size;
+        if off + sp_size > self.ep_resvd * (self.ep_size as u64) {
             off = 0;
         }
         off
