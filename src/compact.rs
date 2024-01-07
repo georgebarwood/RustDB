@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 ///
 /// When an extension page is freed, the last extension page in the file is relocated to fill it.
 ///
-/// The starter page array is extended as required when a logical page is written by relocating the first extension page to the end of the file.
+/// The starter page section is extended as required when a logical page is written by relocating the first extension page to the end of the file.
 ///
 /// File layout: file header | starter pages | extension pages.
 ///
@@ -26,6 +26,8 @@ use std::collections::BTreeSet;
 /// Note: for a free logical page a link to the next free logical page is stored after the page size, then a special value.
 ///
 /// All pages ( whether allocated or not ) initially have size zero.
+///
+/// Pages are allocated by simply incrementing lp_alloc, so sizes in the starter page section must be pre-initialised to zero when it is extended or after a renumber operation.
 
 pub struct CompactFile {
     /// Underlying storage.

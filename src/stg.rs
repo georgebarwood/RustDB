@@ -118,22 +118,18 @@ impl Storage for SimpleFileStorage {
     fn read(&self, off: u64, bytes: &mut [u8]) {
         let mut f = self.file.lock().unwrap();
         f.seek(SeekFrom::Start(off)).unwrap();
-        let _x = f.read_exact(bytes);
+        f.read(bytes).unwrap();
     }
 
     fn write(&self, off: u64, bytes: &[u8]) {
         let mut f = self.file.lock().unwrap();
         f.seek(SeekFrom::Start(off)).unwrap();
-        if let Err(e) = f.write(bytes) {
-            std::panic::panic_any(e);
-        }
+        f.write(bytes).unwrap();
     }
 
     fn commit(&self, size: u64) {
         let f = self.file.lock().unwrap();
         f.set_len(size).unwrap();
-        if let Err(e) = f.sync_all() {
-            std::panic::panic_any(e);
-        }
+        f.sync_all().unwrap();
     }
 }
