@@ -118,13 +118,13 @@ impl Storage for SimpleFileStorage {
     fn read(&self, off: u64, bytes: &mut [u8]) {
         let mut f = self.file.lock().unwrap();
         f.seek(SeekFrom::Start(off)).unwrap();
-        f.read(bytes).unwrap();
+        let _ = f.read(bytes).unwrap();
     }
 
     fn write(&self, off: u64, bytes: &[u8]) {
         let mut f = self.file.lock().unwrap();
         f.seek(SeekFrom::Start(off)).unwrap();
-        f.write(bytes).unwrap();
+        let _ = f.write(bytes).unwrap();
     }
 
     fn commit(&self, size: u64) {
