@@ -256,25 +256,29 @@ pub fn data_size(x: DataType) -> usize {
 
 /// Compilation block ( body of function or batch section ).
 pub struct Block<'a> {
-    ///
+    /// Number of function parameters.
     pub param_count: usize,
-    ///
+    /// Function return type.
     pub return_type: DataType,
-    ///
+    /// Datatypes of paramaters and local variables.
     pub local_typ: Vec<DataType>,
-    ///
+    /// List of instructions.
     pub ilist: Vec<Instruction>,
-    ///
+    /// Id of break.
     pub break_id: usize,
     /// Database.
     pub db: DB,
     /// Current table in scope by FROM clause( or UPDATE statment ).
     pub from: Option<CTableExpression>,
-    ///
+    /// Only parse, no type checking or compilation.
     pub parse_only: bool,
+    /// List of jumps.
     jumps: Vec<usize>,
+    /// Lookup jump label by name.   
     labels: HashMap<&'a [u8], usize>,
+    /// Lookup local variable by name.
     local_map: HashMap<&'a [u8], usize>,
+    /// Names of local variables.
     locals: Vec<&'a [u8]>,
 }
 

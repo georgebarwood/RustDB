@@ -359,7 +359,7 @@ impl Page {
 
     // Node Id Allocation.
 
-    ///
+    /// Clear the page ( no nodes ).
     pub fn clear(&mut self) {
         self.root = 0;
         self.count = 0;
@@ -367,7 +367,7 @@ impl Page {
         self.resize_data();
     }
 
-    ///
+    /// Drop the key for the specified node.
     pub fn drop_key(&self, db: &DB, x: usize, r: &dyn Record) {
         r.drop_key(db, &self.data[self.rec_offset(x)..]);
     }
