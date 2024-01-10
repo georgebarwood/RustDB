@@ -123,6 +123,14 @@ impl Storage for SimpleFileStorage {
 
     fn write(&self, off: u64, bytes: &[u8]) {
         let mut f = self.file.lock().unwrap();
+        // The list of operating systems which auto-zero is likely more than this...research is todo.
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+        {
+            let size = f.seek(SeekFrom::End(0)).unwrap();
+            if off > size {
+                f.set_len(off).unwrap();
+            }
+        }
         f.seek(SeekFrom::Start(off)).unwrap();
         let _ = f.write(bytes).unwrap();
     }

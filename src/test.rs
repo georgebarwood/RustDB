@@ -106,6 +106,12 @@ BEGIN
   DELETE FROM sys.Table WHERE Id = t
 END
 
+CREATE FN sys.ClearTable
+(t int) AS 
+BEGIN 
+  EXECUTE( 'DELETE FROM ' | sys.TableName(t) | ' WHERE true' )
+END
+
 CREATE SCHEMA rtest
 GO
 CREATE TABLE rtest.Gen(x int)
@@ -153,7 +159,8 @@ BEGIN
       CASE WHEN r % 2 =1 THEN 'CREATE TABLE rtestdata.[' | tname | '](x string, y int(5))'
       ELSE 'CREATE TABLE rtestdata.[' | tname | '](x string, y int(3), z string )'
       END
-    WHEN r % 10 = 0 THEN 'DROP TABLE rtestdata.[' | tname | ']'
+    WHEN r % 5 = 0 THEN 'ALTER TABLE rtestdata.[' | tname | '] ADD [z' | r | '] binary' 
+    WHEN r % 21 = 1 THEN 'DROP TABLE rtestdata.[' | tname | ']'
     WHEN r % 2 = 1 THEN 'INSERT INTO rtestdata.[' | tname | '](x,y) VALUES ( rtest.repeat(''George Gordon Fairbrother Barwood'','|(r % 1000)|'),' | (r % 10) | ')'
     ELSE 'DELETE FROM rtestdata.[' | tname | '] WHERE y = ' | ( r%15)
   END
@@ -183,7 +190,7 @@ GO
         db.save();
         let s = std::str::from_utf8(&tr.rp.output).unwrap();
         if s.len() > 0 {
-            // println!("output={}", s);
+            println!("output={}", s);
         }
     }
     // assert!(false);
