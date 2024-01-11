@@ -65,7 +65,7 @@ impl SortedFile {
         self.ok.set(false);
     }
 
-    /// Insert a Record. If the key is a duplicate, the record is not saved.
+    /// Insert a Record. Panics if the key is a duplicate.
     pub fn insert(&self, db: &DB, r: &dyn Record) {
         while !self.insert_leaf(db, self.root_page.get(), r, None) {
             // We get here if a child page needed to be split.
