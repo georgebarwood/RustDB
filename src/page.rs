@@ -296,7 +296,6 @@ impl Page {
 
     /// Get the left child node for node x. Result is zero if there is no child.
     pub fn left(&self, x: usize) -> usize {
-        debug_assert!(x != 0);
         let off = self.over_off(x);
         let data = &self.data;
         data[off + 1] as usize | (getbits!(data[off] as usize, 2, NF) << 8)
@@ -304,7 +303,6 @@ impl Page {
 
     /// Get the right child node for node x. Result is zero if there is no child.
     pub fn right(&self, x: usize) -> usize {
-        debug_assert!(x != 0);
         let off = self.over_off(x);
         let data = &self.data;
         data[off + 2] as usize | (getbits!(data[off] as usize, 2 + NF, NF) << 8)
@@ -322,7 +320,6 @@ impl Page {
     /// Get the child page number for node x in a parent page.
     pub fn child_page(&self, x: usize) -> u64 {
         debug_assert!(self.level != 0);
-        debug_assert!(x != 0);
         let off = self.over_off(x) - PAGE_ID_SIZE;
         util::get(&self.data, off, PAGE_ID_SIZE)
     }
@@ -330,7 +327,6 @@ impl Page {
     /// Set the child page for node x.
     pub fn set_child_page(&mut self, x: usize, pnum: u64) {
         debug_assert!(self.level != 0);
-        debug_assert!(x != 0);
         let off = self.over_off(x) - PAGE_ID_SIZE;
         util::set(&mut self.data, off, pnum, PAGE_ID_SIZE);
     }
@@ -492,7 +488,6 @@ impl<'a> MutPage<'a> {
 
     /// Get the left child node for node x. Result is zero if there is no child.
     fn left(&self, x: usize) -> usize {
-        debug_assert!(x != 0);
         let off = self.over_off(x);
         let data = &self.data;
         data[off + 1] as usize | (getbits!(data[off] as usize, 2, NF) << 8)
@@ -500,7 +495,6 @@ impl<'a> MutPage<'a> {
 
     /// Get the right child node for node x. Result is zero if there is no child.
     fn right(&self, x: usize) -> usize {
-        debug_assert!(x != 0);
         let off = self.over_off(x);
         let data = &self.data;
         data[off + 2] as usize | (getbits!(data[off] as usize, 2 + NF, NF) << 8)
