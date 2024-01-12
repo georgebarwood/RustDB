@@ -340,7 +340,6 @@ impl Page {
 
     /// Compare record data for node x with record r.
     pub fn compare(&self, db: &DB, r: &dyn Record, x: usize) -> Ordering {
-        debug_assert!(x != 0);
         let off = self.rec_offset(x);
         let size = self.rec_size();
         r.compare(db, &self.data[off..off + size])
@@ -520,7 +519,6 @@ impl<'a> MutPage<'a> {
 
     /// Compare record data for node x with record r.
     fn compare(&self, db: &DB, r: &dyn Record, x: usize) -> Ordering {
-        debug_assert!(x != 0);
         let off = self.rec_offset(x);
         let size = self.rec_size();
         r.compare(db, &self.data[off..off + size])

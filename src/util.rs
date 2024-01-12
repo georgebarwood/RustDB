@@ -98,6 +98,24 @@ macro_rules! setbits {
     };
 }
 
+/// In debug mode or feature unsafe_opt not enabled, same as debug_assert! otherwise unsafe compiler hint.
+#[cfg(any(debug_assertions, not(feature = "unsafe_opt")))]
+macro_rules! perf_assert {
+    ( $cond: expr ) => {
+        debug_assert!($cond)
+    };
+}
+
+/// In debug mode or feature unsafe_opt not enabled, same as debug_assert! otherwise unsafe compiler hint.
+#[cfg(all(not(debug_assertions), feature = "unsafe_opt"))]
+macro_rules! perf_assert {
+    ( $cond: expr ) => {
+        if !$cond {
+            unsafe { std::hint::unreachable_unchecked() }
+        }
+    };
+}
+
 /// Convert a hex char byte to a byte in range 0..15.
 pub fn hex(c: u8) -> u8 //
 {

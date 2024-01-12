@@ -33,8 +33,9 @@
 //! - `verify` : Allows database structure to be verified using builtin function VERIFYDB.
 //! - `pack` : Allows database pages to be packed using builtin function REPACKFILE.
 //! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
+//! - `unsafe_opt` : Enable unsafe optimisations in release mode.
 //!
-//! By default, all features are enabled.
+//! By default, all features except unsafe_opt are enabled.
 //!
 //!# General Design of Database
 //!
@@ -85,7 +86,10 @@
 //!     assert!( tr.rp.output == b"freddy" );
 //! ```
 
-#![forbid(unsafe_code)]
+#![cfg_attr(
+    any(debug_assertions, not(feature = "unsafe_opt")),
+    forbid(unsafe_code)
+)] // see util::perf_assert! macro
 #![deny(missing_docs)]
 
 pub use crate::{
@@ -255,6 +259,12 @@ mod run;
 pub mod cexp;
 #[cfg(not(feature = "max"))]
 mod cexp;
+
+#[cfg(feature = "max")]
+/// Heap with keys that can be modified for tracking least used page.
+pub mod heap;
+#[cfg(not(feature = "max"))]
+mod heap;
 
 #[cfg(feature = "max")]
 /// Storage of variable length values : [ByteStorage].
