@@ -1,5 +1,23 @@
 use crate::{Arc, BTreeSet, Data, HashMap, Rc, RefCell};
 
+/// In debug mode or feature unsafe_opt not enabled, same as debug_assert! otherwise unsafe compiler hint.
+#[cfg(any(debug_assertions, not(feature = "unsafe_opt")))]
+macro_rules! perf_assert {
+    ( $cond: expr ) => {
+        debug_assert!($cond)
+    };
+}
+
+/// In debug mode or feature unsafe_opt not enabled, same as debug_assert! otherwise unsafe compiler hint.
+#[cfg(all(not(debug_assertions), feature = "unsafe_opt"))]
+macro_rules! perf_assert {
+    ( $cond: expr ) => {
+        if !$cond {
+            unsafe { std::hint::unreachable_unchecked() }
+        }
+    };
+}
+
 /// Wrap a type in Rc + RefCell.
 pub fn new<T>(x: T) -> std::rc::Rc<std::cell::RefCell<T>> {
     Rc::new(RefCell::new(x))
@@ -17,12 +35,14 @@ pub fn newmap<K, T>() -> RefCell<HashMap<K, T>> {
 
 /// Extract u64 from byte data.
 pub fn getu64(data: &[u8], off: usize) -> u64 {
+    perf_assert!( off+8 <= data.len() );
     let data = &data[off..off + 8];
     u64::from_le_bytes(data.try_into().unwrap())
 }
 
 /// Store u64 to byte data.
 pub fn setu64(data: &mut [u8], val: u64) {
+    perf_assert!( data.len() >= 8 );
     data[0..8].copy_from_slice(&val.to_le_bytes());
 }
 
@@ -41,6 +61,7 @@ pub fn getf32(data: &[u8], off: usize) -> f32 {
 /// Extract unsigned value of n bytes from data.
 pub fn get(data: &[u8], off: usize, n: usize) -> u64 {
     let mut buf = [0_u8; 8];
+    perf_assert!( off+n <= data.len() );
     buf[0..n].copy_from_slice(&data[off..off + n]);
     u64::from_le_bytes(buf)
 }
@@ -95,24 +116,6 @@ macro_rules! getbits {
 macro_rules! setbits {
     ( $var: expr, $off: expr, $len: expr, $val: expr ) => {
         $var = ($var & !bitmask!($off, $len)) | (($val << $off) & bitmask!($off, $len))
-    };
-}
-
-/// In debug mode or feature unsafe_opt not enabled, same as debug_assert! otherwise unsafe compiler hint.
-#[cfg(any(debug_assertions, not(feature = "unsafe_opt")))]
-macro_rules! perf_assert {
-    ( $cond: expr ) => {
-        debug_assert!($cond)
-    };
-}
-
-/// In debug mode or feature unsafe_opt not enabled, same as debug_assert! otherwise unsafe compiler hint.
-#[cfg(all(not(debug_assertions), feature = "unsafe_opt"))]
-macro_rules! perf_assert {
-    ( $cond: expr ) => {
-        if !$cond {
-            unsafe { std::hint::unreachable_unchecked() }
-        }
     };
 }
 
