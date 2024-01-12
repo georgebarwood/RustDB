@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "5.0.7"
+version = "5.0.9"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -33,6 +33,9 @@ renumber = []
 
 # ```verify``` : Allows database structure to be verified using builtin function VERIFYDB.
 verify = []
+
+# ```unsafe_opt``` : Enable unsafe optimisations in release mode.
+unsafe_opt = []
 
 [dependencies]
 rustc-hash = "1.1.0"
