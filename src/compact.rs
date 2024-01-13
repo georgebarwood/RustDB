@@ -221,7 +221,7 @@ impl CompactFile {
 
     /// Allocate logical page number. Pages are numbered 0,1,2...
     pub fn alloc_page(&mut self) -> u64 {
-        if let Some(p) = self.lp_free.pop_first() {
+        let p = if let Some(p) = self.lp_free.pop_first() {
             p
         } else {
             self.lp_alloc_dirty = true;
@@ -233,7 +233,9 @@ impl CompactFile {
                 self.lp_alloc += 1;
             }
             p
-        }
+        };
+        debug_assert!( self.lp_size(p) == 0 );
+        p
     }
 
     /// Free a logical page number.

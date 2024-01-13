@@ -1,3 +1,7 @@
+/* Each test should first create a table with two columns, insert 8,192 identical rows 'Alice', 1000.
+   Then (the timed part) it should total the second column ( result 8,192,0000 ) and do this 1,000 times.
+*/ 
+
 #[test]
 fn sqlite_test() {
     let connection = sqlite::open(":memory:").unwrap();
@@ -67,6 +71,56 @@ fn rustdb_test() {
 
     println!(
         "rustdb test took {} milli-seconds",
+        start.elapsed().unwrap().as_millis()
+    );
+}
+
+#[test]
+fn rustdb_direct_test() {
+    use crate::*;
+
+    let stg = AtomicFile::new(MemFile::new(), MemFile::new());
+
+    let mut bmap = BuiltinMap::default();
+    standard_builtins(&mut bmap);
+    let bmap = Arc::new(bmap);
+
+    let spd = SharedPagedData::new(stg);
+    let wapd = AccessPagedData::new_writer(spd.clone());
+    let db = Database::new(wapd, "", bmap.clone());
+
+    let mut tr = GenTransaction::default();
+
+    let sql = "
+    CREATE SCHEMA test GO
+    CREATE TABLE test.users (name string, age int) GO";
+
+    db.run(&sql, &mut tr);
+
+    let sql = "DECLARE @i int SET @i = 8192
+      WHILE @i > 0
+      BEGIN
+        INSERT INTO test.users(name,age) VALUES ('Alice', 1000)
+        SET @i -= 1
+      END";
+
+    db.run(&sql, &mut tr);
+
+    let start = std::time::SystemTime::now();
+
+    for _i in 0..1000 {
+        let ut = db.table("test", "users");
+        let mut total = 0;
+        for (pp, off) in ut.scan(&db) {
+                let p = &pp.borrow();
+                let a = ut.access(p, off);
+                total += a.int(1);
+        }
+        assert_eq!(total, 8192000);
+    }
+
+    println!(
+        "rustdb direct test took {} milli-seconds",
         start.elapsed().unwrap().as_millis()
     );
 }

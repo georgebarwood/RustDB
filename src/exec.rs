@@ -38,12 +38,11 @@ impl<'r> EvalEnv<'r> {
 
     /// Execute list of instructions.
     pub fn go(&mut self, ilist: &[Instruction]) {
-        let n = ilist.len();
         let mut ip = 0;
-        while ip < n {
-            let i = &ilist[ip];
+        while ip < ilist.len() {
+            let inst = &ilist[ip];
             ip += 1;
-            match i {
+            match inst {
                 PushConst(x) => self.stack.push((*x).clone()),
                 PushValue(e) => {
                     let v = e.eval(self, &[]);
