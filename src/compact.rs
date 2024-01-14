@@ -234,7 +234,7 @@ impl CompactFile {
             }
             p
         };
-        debug_assert!( self.lp_size(p) == 0 );
+        debug_assert!(self.lp_size(p) == 0);
         p
     }
 

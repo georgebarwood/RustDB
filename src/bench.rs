@@ -1,6 +1,6 @@
 /* Each test should first create a table with two columns, insert 8,192 identical rows 'Alice', 1000.
-   Then (the timed part) it should total the second column ( result 8,192,0000 ) and do this 1,000 times.
-*/ 
+   Then (the timed part) should total the second column ( result 8,192,000 ) and do this 1,000 times.
+*/
 
 #[test]
 fn sqlite_test() {
@@ -18,14 +18,14 @@ fn sqlite_test() {
         connection.execute(sql).unwrap();
     }
 
-    let start = std::time::SystemTime::now();
+    let start = std::time::Instant::now();
     for _i in 0..1000 {
         let sql = "SELECT SUM(age) FROM users";
         connection.execute(sql).unwrap();
     }
     println!(
         "sqllite test took {} milli-seconds",
-        start.elapsed().unwrap().as_millis()
+        start.elapsed().as_millis()
     );
 }
 
@@ -60,7 +60,7 @@ fn rustdb_test() {
 
     db.run(&sql, &mut tr);
 
-    let start = std::time::SystemTime::now();
+    let start = std::time::Instant::now();
 
     for _i in 0..1000 {
         let sql = "DECLARE @total int FOR @total += age FROM test.users BEGIN END SELECT ''|@total";
@@ -71,7 +71,7 @@ fn rustdb_test() {
 
     println!(
         "rustdb test took {} milli-seconds",
-        start.elapsed().unwrap().as_millis()
+        start.elapsed().as_millis()
     );
 }
 
@@ -106,21 +106,21 @@ fn rustdb_direct_test() {
 
     db.run(&sql, &mut tr);
 
-    let start = std::time::SystemTime::now();
+    let start = std::time::Instant::now();
 
     for _i in 0..1000 {
         let ut = db.table("test", "users");
         let mut total = 0;
         for (pp, off) in ut.scan(&db) {
-                let p = &pp.borrow();
-                let a = ut.access(p, off);
-                total += a.int(1);
+            let p = &pp.borrow();
+            let a = ut.access(p, off);
+            total += a.int(1);
         }
         assert_eq!(total, 8192000);
     }
 
     println!(
         "rustdb direct test took {} milli-seconds",
-        start.elapsed().unwrap().as_millis()
+        start.elapsed().as_millis()
     );
 }

@@ -333,7 +333,7 @@ impl Record for Zero {
     }
 }
 
-/// Helper class to read byte data using ColInfo.
+/// Helper struct to access byte data using ColInfo ( returned by [Table::access] method ).
 pub struct Access<'d, 'i> {
     data: &'d [u8],
     info: &'i ColInfo,
@@ -342,29 +342,52 @@ pub struct Access<'d, 'i> {
 impl<'d, 'i> Access<'d, 'i> {
     /// Extract int from byte data for specified column.
     pub fn int(&self, colnum: usize) -> i64 {
+        debug_assert!(data_kind(self.info.typ[colnum]) == DataKind::Int);
         util::iget(self.data, self.info.off[colnum], self.info.siz(colnum))
     }
 
     /// Extract string from byte data for specified column.
     pub fn str(&self, db: &DB, colnum: usize) -> String {
+        debug_assert!(data_kind(self.info.typ[colnum]) == DataKind::String);
         let off = self.info.off[colnum];
         let size = self.info.siz(colnum);
         let bytes = get_bytes(db, &self.data[off..], size).0;
         String::from_utf8(bytes).unwrap()
     }
 
+    /// Extract binary from byte data for specified column.
+    pub fn bin(&self, db: &DB, colnum: usize) -> Vec<u8> {
+        debug_assert!(data_kind(self.info.typ[colnum]) == DataKind::Binary);
+        let off = self.info.off[colnum];
+        let size = self.info.siz(colnum);
+        get_bytes(db, &self.data[off..], size).0
+    }
+
     /// Extract Id from byte data.
     pub fn id(&self) -> u64 {
         util::getu64(self.data, 0)
     }
+
+    /// Extract f32 from byte data for specified column.
+    pub fn f32(&self, colnum: usize) -> f32 {
+        debug_assert!(self.info.typ[colnum] == FLOAT);
+        util::getf32(self.data, self.info.off[colnum])
+    }
+
+    /// Extract f64 from byte data for specified column.
+    pub fn f64(&self, colnum: usize) -> f64 {
+        debug_assert!(self.info.typ[colnum] == DOUBLE);
+        util::getf64(self.data, self.info.off[colnum])
+    }
 }
 
-/// Helper class to write byte data using ColInfo.
+/// Helper class to read/write byte data using ColInfo.
 pub struct WriteAccess<'d, 'i> {
     data: &'d mut [u8],
     info: &'i ColInfo,
 }
 
+/// Helper struct to read/write byte data using ColInfo ( returned by [Table::write_access] method ).
 impl<'d, 'i> WriteAccess<'d, 'i> {
     /// Save int to byte data.
     pub fn set_int(&mut self, colnum: usize, val: i64) {
@@ -380,6 +403,8 @@ impl<'d, 'i> WriteAccess<'d, 'i> {
     pub fn id(&self) -> u64 {
         util::getu64(self.data, 0)
     }
+
+    /* ToDo... add more methods as appropriate */
 }
 
 /// Table name, column names/types and other calculated values for a table.

@@ -13,7 +13,7 @@ pub struct Code {
 /// Simple value ( Binary, String, Int, Float, Bool ).
 ///
 /// When stored in a database record, binary(n) and string(n) values are allocated (n+1) bytes (8<=n<=249).
-/// If the value is more than n bytes, the length and the first (n-8) bytes are stored inline, and the rest are coded.
+/// If the value is more than n bytes, the first (n-8) bytes are stored inline, and the rest are coded.
 #[non_exhaustive]
 pub enum Value {
     ///
