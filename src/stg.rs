@@ -94,7 +94,7 @@ pub struct SimpleFileStorage {
 }
 
 impl SimpleFileStorage {
-    /// Construct from filename ( Unboxed ).
+    /// Construct from filename.
     pub fn new(filename: &str) -> Box<Self> {
         Box::new(Self {
             file: Mutex::new(
