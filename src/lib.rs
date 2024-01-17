@@ -96,7 +96,7 @@ pub use crate::{
     atomfile::AtomicFile,
     builtin::standard_builtins,
     pstore::{AccessPagedData, SharedPagedData},
-    stg::{MemFile, SimpleFileStorage, Storage},
+    stg::{MemFile, MultiFileStorage, SimpleFileStorage, Storage},
 };
 
 #[cfg(feature = "gentrans")]

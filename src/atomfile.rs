@@ -1,4 +1,4 @@
-use crate::{Arc, BTreeMap, Data, Mutex, Storage};
+use crate::{Arc, BTreeMap, Data, Storage};
 use std::cmp::min;
 
 /// Slice of Data to be written to storage.
@@ -16,14 +16,14 @@ pub struct AtomicFile {
     /// Temporary storage for updates during commit.
     pub upd: Box<dyn Storage>,
     /// Map of existing outstanding writes. Note the key is the file address of the last byte written.
-    map: Mutex<BTreeMap<u64, DataSlice>>,
+    map: BTreeMap<u64, DataSlice>,
 }
 
 impl AtomicFile {
     /// Construct a new AtomicFle. stg is the main underlying storage, upd is temporary storage for updates during commit.
     pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Box<Self> {
-        let result = Self {
-            map: Mutex::new(BTreeMap::new()),
+        let mut result = Self {
+            map: BTreeMap::new(),
             stg,
             upd,
         };
@@ -32,7 +32,7 @@ impl AtomicFile {
     }
 
     /// Apply outstanding updates.
-    fn init(&self) {
+    fn init(&mut self) {
         let end = self.upd.read_u64(0);
         let size = self.upd.read_u64(8);
         if end == 0 {
@@ -55,9 +55,8 @@ impl AtomicFile {
     }
 
     /// Perform the specified phase ( 1 or 2 ) of a two-phase commit.
-    pub fn commit_phase(&self, size: u64, phase: u8) {
-        let mut map = self.map.lock().unwrap();
-        if map.is_empty() {
+    pub fn commit_phase(&mut self, size: u64, phase: u8) {
+        if self.map.is_empty() {
             return;
         }
 
@@ -70,7 +69,7 @@ impl AtomicFile {
 
             // Write the update records.
             let mut pos: u64 = 16;
-            for (k, v) in map.iter() {
+            for (k, v) in self.map.iter() {
                 let start = k + 1 - v.len as u64;
                 let len = v.len as u64;
                 self.upd.write_u64(pos, start);
@@ -87,11 +86,11 @@ impl AtomicFile {
             self.upd.write_u64(8, size);
             self.upd.commit(pos);
         } else {
-            for (k, v) in map.iter() {
+            for (k, v) in self.map.iter() {
                 let start = k + 1 - v.len as u64;
                 self.stg.write(start, &v.data[v.off..v.off + v.len]);
             }
-            map.clear();
+            self.map.clear();
             self.stg.commit(size);
             self.upd.commit(0);
         }
@@ -99,7 +98,7 @@ impl AtomicFile {
 }
 
 impl Storage for AtomicFile {
-    fn commit(&self, size: u64) {
+    fn commit(&mut self, size: u64) {
         self.commit_phase(size, 1);
         self.commit_phase(size, 2);
     }
@@ -115,8 +114,7 @@ impl Storage for AtomicFile {
         }
         let mut done: usize = 0;
 
-        let map = self.map.lock().unwrap();
-        for (&k, v) in map.range(start..) {
+        for (&k, v) in self.map.range(start..) {
             let estart = k + 1 - v.len as u64;
             if estart > start + done as u64 {
                 let lim = (estart - (start + done as u64)) as usize;
@@ -146,7 +144,7 @@ impl Storage for AtomicFile {
         }
     }
 
-    fn write_data(&self, start: u64, data: Data, off: usize, len: usize) {
+    fn write_data(&mut self, start: u64, data: Data, off: usize, len: usize) {
         if len == 0 {
             return;
         }
@@ -156,8 +154,7 @@ impl Storage for AtomicFile {
         let mut add = Vec::new();
         let end = start + len as u64;
 
-        let mut map = self.map.lock().unwrap();
-        for (&k, v) in map.range_mut(start..) {
+        for (&k, v) in self.map.range_mut(start..) {
             let eend = k + 1; // end of existing write.
             let estart = eend - v.len as u64; // start of existing write.
 
@@ -195,16 +192,18 @@ impl Storage for AtomicFile {
             }
         }
         for k in remove {
-            map.remove(&k);
+            self.map.remove(&k);
         }
         for (start, data, off, len) in add {
-            map.insert(start + len as u64 - 1, DataSlice { data, off, len });
+            self.map
+                .insert(start + len as u64 - 1, DataSlice { data, off, len });
         }
 
-        map.insert(start + len as u64 - 1, DataSlice { data, off, len });
+        self.map
+            .insert(start + len as u64 - 1, DataSlice { data, off, len });
     }
 
-    fn write(&self, start: u64, data: &[u8]) {
+    fn write(&mut self, start: u64, data: &[u8]) {
         let len = data.len();
         let d = Arc::new(data.to_vec());
         self.write_data(start, d, 0, len);
@@ -222,8 +221,8 @@ pub fn test() {
     for _ in 0..100 {
         let s0 = Box::new(MemFile::default());
         let s1 = Box::new(MemFile::default());
-        let s2 = AtomicFile::new(s0, s1);
-        let s3 = MemFile::default();
+        let mut s2 = AtomicFile::new(s0, s1);
+        let mut s3 = MemFile::default();
 
         for _ in 0..1000 {
             let off: usize = rng.gen::<usize>() % 100;

@@ -18,15 +18,16 @@ fn sqlite_test() {
         connection.execute(sql).unwrap();
     }
 
-    let start = std::time::Instant::now();
-    for _i in 0..1000 {
-        let sql = "SELECT SUM(age) FROM users";
-        connection.execute(sql).unwrap();
+    let mut results = Vec::new();
+    for _outer in 0..100 {
+        let start = std::time::Instant::now();
+        for _i in 0..1000 {
+            let sql = "SELECT SUM(age) FROM users";
+            connection.execute(sql).unwrap();
+        }
+        results.push(start.elapsed().as_millis() as u64);
     }
-    println!(
-        "sqllite test took {} milli-seconds",
-        start.elapsed().as_millis()
-    );
+    print_results("sqlite_test", results);
 }
 
 #[test]
@@ -60,19 +61,21 @@ fn rustdb_test() {
 
     db.run(&sql, &mut tr);
 
-    let start = std::time::Instant::now();
+    let mut results = Vec::new();
+    for _outer in 0..100 {
+        let start = std::time::Instant::now();
 
-    for _i in 0..1000 {
-        let sql = "DECLARE @total int FOR @total += age FROM test.users BEGIN END SELECT ''|@total";
-        let mut tr = GenTransaction::default();
-        db.run(&sql, &mut tr);
-        assert_eq!(tr.rp.output, b"8192000");
+        for _i in 0..1000 {
+            let sql =
+                "DECLARE @total int FOR @total += age FROM test.users BEGIN END SELECT ''|@total";
+            let mut tr = GenTransaction::default();
+            db.run(&sql, &mut tr);
+            assert_eq!(tr.rp.output, b"8192000");
+        }
+
+        results.push(start.elapsed().as_millis() as u64);
     }
-
-    println!(
-        "rustdb test took {} milli-seconds",
-        start.elapsed().as_millis()
-    );
+    print_results("rustdb_test", results);
 }
 
 #[test]
@@ -106,21 +109,37 @@ fn rustdb_direct_test() {
 
     db.run(&sql, &mut tr);
 
-    let start = std::time::Instant::now();
-
-    for _i in 0..1000 {
-        let ut = db.table("test", "users");
-        let mut total = 0;
-        for (pp, off) in ut.scan(&db) {
-            let p = &pp.borrow();
-            let a = ut.access(p, off);
-            total += a.int(1);
+    let mut results = Vec::new();
+    for _outer in 0..100 {
+        let start = std::time::Instant::now();
+        for _i in 0..1000 {
+            let ut = db.table("test", "users");
+            let mut total = 0;
+            for (pp, off) in ut.scan(&db) {
+                let p = &pp.borrow();
+                let a = ut.access(p, off);
+                total += a.int(1);
+            }
+            assert_eq!(total, 8192000);
         }
-        assert_eq!(total, 8192000);
+        results.push(start.elapsed().as_millis() as u64);
     }
+    print_results("rustdb_direct_test", results);
+}
 
+#[cfg(test)]
+fn print_results(name: &str, mut results: Vec<u64>) {
+    results.sort();
+    let n = results.len() / 10;
+    let results = &results[0..n];
+    let mut total = 0;
+    for result in results {
+        total += result;
+    }
     println!(
-        "rustdb direct test took {} milli-seconds",
-        start.elapsed().as_millis()
+        "{} average time={} sorted results={:?}",
+        name,
+        total / (n as u64),
+        results
     );
 }
