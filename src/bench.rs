@@ -21,11 +21,11 @@ fn sqlite_test() {
     let mut results = Vec::new();
     for _outer in 0..100 {
         let start = std::time::Instant::now();
-        for _i in 0..1000 {
+        for _i in 0..10 {
             let sql = "SELECT SUM(age) FROM users";
             connection.execute(sql).unwrap();
         }
-        results.push(start.elapsed().as_millis() as u64);
+        results.push(start.elapsed().as_micros() as u64);
     }
     print_results("sqlite_test", results);
 }
@@ -65,7 +65,7 @@ fn rustdb_test() {
     for _outer in 0..100 {
         let start = std::time::Instant::now();
 
-        for _i in 0..1000 {
+        for _i in 0..10 {
             let sql =
                 "DECLARE @total int FOR @total += age FROM test.users BEGIN END SELECT ''|@total";
             let mut tr = GenTransaction::default();
@@ -73,7 +73,7 @@ fn rustdb_test() {
             assert_eq!(tr.rp.output, b"8192000");
         }
 
-        results.push(start.elapsed().as_millis() as u64);
+        results.push(start.elapsed().as_micros() as u64);
     }
     print_results("rustdb_test", results);
 }
@@ -112,17 +112,20 @@ fn rustdb_direct_test() {
     let mut results = Vec::new();
     for _outer in 0..100 {
         let start = std::time::Instant::now();
-        for _i in 0..1000 {
+        for _i in 0..10 {
             let ut = db.table("test", "users");
+            assert!(data_kind(ut.info.typ[1]) == DataKind::Int);
+            assert!(data_size(ut.info.typ[1]) == 8);
+            let col_off = ut.info.off[1];
             let mut total = 0;
             for (pp, off) in ut.scan(&db) {
                 let p = &pp.borrow();
-                let a = ut.access(p, off);
-                total += a.int(1);
+                // let a = ut.access(p, off); total += a.int(1);
+                total += util::iget(&p.data, off + col_off, 8);
             }
             assert_eq!(total, 8192000);
         }
-        results.push(start.elapsed().as_millis() as u64);
+        results.push(start.elapsed().as_micros() as u64);
     }
     print_results("rustdb_direct_test", results);
 }

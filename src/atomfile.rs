@@ -1,7 +1,46 @@
 use crate::{Arc, BTreeMap, Data, Storage};
 use std::cmp::min;
 
+/* Plan is to have a process that does commits.
+   When reading, all the maps that have not been fully applied need to be checked before reading from underlying storage.
+   Each map has a weak link to previous (older) map.
+   Once the commit process has finished doing the updates, the weak link will no longer upgrade.
+   If the weak link does not upgrade, the underlying storage is used ( it can be passed by reference to the map methods).
+*/
+
+/// Function to compare bytes. Length is taken from a. Result is ranges (start,len) that are different.
+fn diff(a: &[u8], b: &[u8]) -> Vec<(usize, usize)> {
+    let mut result = Vec::new();
+    let mut i = 0;
+    let n = a.len();
+    while i < n && a[i] == b[i] {
+        i += 1;
+    }
+    while i < n {
+        let start = i;
+        let mut end;
+        loop {
+            while i < n && a[i] != b[i] {
+                i += 1;
+            }
+            end = i;
+            // Check that following equal range is reasonably long (or is trailing).
+            while i < n && a[i] == b[i] {
+                i += 1;
+            }
+            if i - end > 16 || i == n {
+                break;
+            }
+        }
+        if end > start {
+            result.push((start, end - start));
+        }
+    }
+    result
+}
+
 /// Slice of Data to be written to storage.
+#[derive(Clone)]
 struct DataSlice {
     off: usize,
     len: usize,
@@ -17,6 +56,8 @@ pub struct AtomicFile {
     pub upd: Box<dyn Storage>,
     /// Map of existing outstanding writes. Note the key is the file address of the last byte written.
     map: BTreeMap<u64, DataSlice>,
+    ///
+    list: Vec<(u64, DataSlice)>,
 }
 
 impl AtomicFile {
@@ -24,6 +65,7 @@ impl AtomicFile {
     pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Box<Self> {
         let mut result = Self {
             map: BTreeMap::new(),
+            list: Vec::new(),
             stg,
             upd,
         };
@@ -56,11 +98,33 @@ impl AtomicFile {
 
     /// Perform the specified phase ( 1 or 2 ) of a two-phase commit.
     pub fn commit_phase(&mut self, size: u64, phase: u8) {
-        if self.map.is_empty() {
+        if self.map.is_empty() && self.list.is_empty() {
             return;
         }
-
         if phase == 1 {
+            /* Get list of updates, doing comparison with old data to reduce the write data */
+            let mut buf = Vec::new();
+            for (k, v) in self.map.iter() {
+                let start = k + 1 - v.len as u64;
+                let len = v.len;
+                if buf.len() < len {
+                    buf.resize(len, 0);
+                }
+                self.stg.read(start, &mut buf[0..len]);
+                let diffs = diff(&v.data[v.off..v.off + len], &buf);
+                for (off, len) in diffs {
+                    self.list.push((
+                        start + off as u64,
+                        DataSlice {
+                            off: v.off + off,
+                            len,
+                            data: v.data.clone(),
+                        },
+                    ));
+                }
+            }
+            self.map.clear();
+
             // Write the updates to upd.
             // First set the end position to zero.
             self.upd.write_u64(0, 0);
@@ -69,10 +133,9 @@ impl AtomicFile {
 
             // Write the update records.
             let mut pos: u64 = 16;
-            for (k, v) in self.map.iter() {
-                let start = k + 1 - v.len as u64;
+            for (start, v) in self.list.iter() {
                 let len = v.len as u64;
-                self.upd.write_u64(pos, start);
+                self.upd.write_u64(pos, *start);
                 pos += 8;
                 self.upd.write_u64(pos, len);
                 pos += 8;
@@ -86,11 +149,10 @@ impl AtomicFile {
             self.upd.write_u64(8, size);
             self.upd.commit(pos);
         } else {
-            for (k, v) in self.map.iter() {
-                let start = k + 1 - v.len as u64;
-                self.stg.write(start, &v.data[v.off..v.off + v.len]);
+            for (start, v) in self.list.iter() {
+                self.stg.write(*start, &v.data[v.off..v.off + v.len]);
             }
-            self.map.clear();
+            self.list.clear();
             self.stg.commit(size);
             self.upd.commit(0);
         }
