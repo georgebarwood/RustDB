@@ -1,44 +1,6 @@
 use crate::{Arc, BTreeMap, Data, Storage};
 use std::cmp::min;
 
-/* Plan is to have a process that does commits.
-   When reading, all the maps that have not been fully applied need to be checked before reading from underlying storage.
-   Each map has a weak link to previous (older) map.
-   Once the commit process has finished doing the updates, the weak link will no longer upgrade.
-   If the weak link does not upgrade, the underlying storage is used ( it can be passed by reference to the map methods).
-*/
-
-/// Function to compare bytes. Length is taken from a. Result is ranges (start,len) that are different.
-fn diff(a: &[u8], b: &[u8]) -> Vec<(usize, usize)> {
-    let mut result = Vec::new();
-    let mut i = 0;
-    let n = a.len();
-    while i < n && a[i] == b[i] {
-        i += 1;
-    }
-    while i < n {
-        let start = i;
-        let mut end;
-        loop {
-            while i < n && a[i] != b[i] {
-                i += 1;
-            }
-            end = i;
-            // Check that following equal range is reasonably long (or is trailing).
-            while i < n && a[i] == b[i] {
-                i += 1;
-            }
-            if i - end > 16 || i == n {
-                break;
-            }
-        }
-        if end > start {
-            result.push((start, end - start));
-        }
-    }
-    result
-}
-
 /// Slice of Data to be written to storage.
 #[derive(Clone)]
 struct DataSlice {
@@ -308,4 +270,35 @@ pub fn test() {
             }
         }
     }
+}
+
+/// Function to compare bytes. Length is taken from a. Result is ranges (start,len) that are different.
+fn diff(a: &[u8], b: &[u8]) -> Vec<(usize, usize)> {
+    let mut result = Vec::new();
+    let mut i = 0;
+    let n = a.len();
+    while i < n && a[i] == b[i] {
+        i += 1;
+    }
+    while i < n {
+        let start = i;
+        let mut end;
+        loop {
+            while i < n && a[i] != b[i] {
+                i += 1;
+            }
+            end = i;
+            // Check that following equal range is reasonably long (or is trailing).
+            while i < n && a[i] == b[i] {
+                i += 1;
+            }
+            if i - end > 16 || i == n {
+                break;
+            }
+        }
+        if end > start {
+            result.push((start, end - start));
+        }
+    }
+    result
 }
