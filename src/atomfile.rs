@@ -73,8 +73,7 @@ impl AtomicFile {
                     buf.resize(len, 0);
                 }
                 self.stg.read(start, &mut buf[0..len]);
-                let diffs = diff(&v.data[v.off..v.off + len], &buf);
-                for (off, len) in diffs {
+                diff(&v.data[v.off..v.off + len], &buf, 17, |off, len| {
                     self.list.push((
                         start + off as u64,
                         DataSlice {
@@ -83,7 +82,7 @@ impl AtomicFile {
                             data: v.data.clone(),
                         },
                     ));
-                }
+                });
             }
             self.map.clear();
 
@@ -272,9 +271,11 @@ pub fn test() {
     }
 }
 
-/// Function to compare bytes. Length is taken from a. Result is ranges (start,len) that are different.
-fn diff(a: &[u8], b: &[u8]) -> Vec<(usize, usize)> {
-    let mut result = Vec::new();
+/// Function to compare bytes. Length is taken from a. Calls d for each range that is different.
+fn diff<F>(a: &[u8], b: &[u8], min_eq: usize, mut d: F)
+where
+    F: FnMut(usize, usize),
+{
     let mut i = 0;
     let n = a.len();
     while i < n && a[i] == b[i] {
@@ -288,17 +289,16 @@ fn diff(a: &[u8], b: &[u8]) -> Vec<(usize, usize)> {
                 i += 1;
             }
             end = i;
-            // Check that following equal range is reasonably long (or is trailing).
+            // Check that following equal range is at least me.
             while i < n && a[i] == b[i] {
                 i += 1;
             }
-            if i - end > 16 || i == n {
+            if i - end >= min_eq || i == n {
                 break;
             }
         }
         if end > start {
-            result.push((start, end - start));
+            d(start, end - start);
         }
     }
-    result
 }
