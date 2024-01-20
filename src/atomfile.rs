@@ -1,4 +1,4 @@
-use crate::{Arc, BTreeMap, Data, Storage};
+use crate::{Arc, BTreeMap, Data, Storage, util};
 use std::cmp::min;
 
 /// Slice of Data to be written to storage.
@@ -73,7 +73,7 @@ impl AtomicFile {
                     buf.resize(len, 0);
                 }
                 self.stg.read(start, &mut buf[0..len]);
-                diff(&v.data[v.off..v.off + len], &buf, 17, |off, len| {
+                util::diff(&v.data[v.off..v.off + len], &buf, 17, |off, len| {
                     self.list.push((
                         start + off as u64,
                         DataSlice {
@@ -271,34 +271,3 @@ pub fn test() {
     }
 }
 
-/// Function to compare bytes. Length is taken from a. Calls d for each range that is different.
-fn diff<F>(a: &[u8], b: &[u8], min_eq: usize, mut d: F)
-where
-    F: FnMut(usize, usize),
-{
-    let mut i = 0;
-    let n = a.len();
-    while i < n && a[i] == b[i] {
-        i += 1;
-    }
-    while i < n {
-        let start = i;
-        let mut end;
-        loop {
-            while i < n && a[i] != b[i] {
-                i += 1;
-            }
-            end = i;
-            // Check that following equal range is at least me.
-            while i < n && a[i] == b[i] {
-                i += 1;
-            }
-            if i - end >= min_eq || i == n {
-                break;
-            }
-        }
-        if end > start {
-            d(start, end - start);
-        }
-    }
-}
