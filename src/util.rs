@@ -203,7 +203,7 @@ impl SmallSet {
 }
 
 /// Function to compare bytes. Length is taken from a. Calls d for each range that is different.
-/// Interior equal ranges less than min_eq are ignored.
+/// Interior equal ranges less than min_eq are taken as different.
 pub fn diff<F>(a: &[u8], b: &[u8], min_eq: usize, mut d: F)
 where
     F: FnMut(usize, usize),
@@ -217,8 +217,11 @@ where
         let start = i;
         let mut end;
         loop {
-            while i < n && a[i] != b[i] {
+            loop {
                 i += 1;
+                if i == n || a[i] == b[i] {
+                    break;
+                }
             }
             end = i;
             // Check that following equal range is at least min_eq.
@@ -229,8 +232,6 @@ where
                 break;
             }
         }
-        if end > start {
-            d(start, end - start);
-        }
+        d(start, end - start);
     }
 }

@@ -1,4 +1,4 @@
-use crate::{Arc, BTreeMap, Data, Storage, util};
+use crate::{util, Arc, BTreeMap, Data, Storage};
 use std::cmp::min;
 
 /// Slice of Data to be written to storage.
@@ -270,4 +270,3 @@ pub fn test() {
         }
     }
 }
-

@@ -190,7 +190,7 @@ GO
         db.save();
         let s = std::str::from_utf8(&tr.rp.output).unwrap();
         if s.len() > 0 {
-            println!("output={}", s);
+            // println!("output={}", s);
         }
     }
     // assert!(false);
