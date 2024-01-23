@@ -1,8 +1,119 @@
-use crate::{util, wmap::DataSlice, wmap::WMap, Arc, Data, Storage};
+use crate::{util, wmap::DataSlice, wmap::WMap, Arc, Data, RwLock, Storage};
 
 /// AtomicFile makes sure that database updates are all-or-nothing.
 /// Keeps a map of outstanding writes which have not yet been written to the underlying file.
 pub struct AtomicFile {
+    /// Map of existing outstanding writes. Note the key is the file address of the last byte written.
+    map: WMap,
+    ///
+    cf: Arc<RwLock<CommitFile>>,
+    ///
+    size: u64,
+    ///
+    tx: std::sync::mpsc::Sender<(u64, WMap)>,
+}
+
+impl AtomicFile {
+    /// Construct a new AtomicFle. stg is the main underlying storage, upd is temporary storage for updates during commit.
+    pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Self {
+        let size = stg.size();
+        let mut baf = BasicAtomicFile::new(stg.clone(), upd);
+        let (tx, rx) = std::sync::mpsc::channel::<(u64, WMap)>();
+        let cf = Arc::new(RwLock::new(CommitFile {
+            stg,
+            map: WMap::default(),
+            todo: 0,
+        }));
+        let result = Self {
+            map: WMap::default(),
+            cf: cf.clone(),
+            size,
+            tx,
+        };
+        std::thread::spawn(move || {
+            while let Ok((size, map)) = rx.recv() {
+                for (k, v) in map.map.iter() {
+                    let start = k + 1 - v.len as u64;
+                    baf.write_data(start, v.data.clone(), v.off, v.len);
+                }
+                baf.commit(size);
+                cf.write().unwrap().commit(size);
+            }
+        });
+        result
+    }
+}
+
+impl Storage for AtomicFile {
+    fn commit(&mut self, size: u64) {
+        self.size = size;
+        if self.map.map.is_empty() {
+            return;
+        }
+        let map = std::mem::take(&mut self.map);
+        let cf = &mut self.cf.write().unwrap();
+        cf.todo += 1;
+        for (k, v) in map.map.iter() {
+            let start = k + 1 - v.len as u64;
+            cf.write_data(start, v.data.clone(), v.off, v.len);
+        }
+        let _ = self.tx.send((size, map));
+    }
+
+    fn size(&self) -> u64 {
+        self.size
+    }
+
+    fn read(&self, start: u64, data: &mut [u8]) {
+        self.map.read(start, data, &*self.cf.read().unwrap());
+    }
+
+    fn write_data(&mut self, start: u64, data: Data, off: usize, len: usize) {
+        self.map.write(start, data, off, len);
+    }
+
+    fn write(&mut self, start: u64, data: &[u8]) {
+        let len = data.len();
+        let d = Arc::new(data.to_vec());
+        self.write_data(start, d, 0, len);
+    }
+}
+
+struct CommitFile {
+    ///
+    pub stg: Box<dyn Storage>,
+    /// Map of writes.
+    map: WMap,
+    /// Number of commits outstanding
+    todo: u64,
+}
+
+impl Storage for CommitFile {
+    fn commit(&mut self, _size: u64) {
+        self.todo -= 1;
+        if self.todo == 0 {
+            self.map = WMap::default();
+        }
+    }
+
+    fn size(&self) -> u64 {
+        self.stg.size()
+    }
+
+    fn read(&self, start: u64, data: &mut [u8]) {
+        self.map.read(start, data, &*self.stg);
+    }
+    fn write_data(&mut self, start: u64, data: Data, off: usize, len: usize) {
+        self.map.write(start, data, off, len);
+    }
+
+    fn write(&mut self, _start: u64, _data: &[u8]) {
+        panic!()
+    }
+}
+
+///
+struct BasicAtomicFile {
     /// The main underlying storage.
     pub stg: Box<dyn Storage>,
     /// Temporary storage for updates during commit.
@@ -13,9 +124,9 @@ pub struct AtomicFile {
     list: Vec<(u64, DataSlice)>,
 }
 
-impl AtomicFile {
+impl BasicAtomicFile {
     /// Construct a new AtomicFle. stg is the main underlying storage, upd is temporary storage for updates during commit.
-    pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Box<Self> {
+    pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Self {
         let mut result = Self {
             map: WMap::default(),
             list: Vec::new(),
@@ -23,7 +134,7 @@ impl AtomicFile {
             upd,
         };
         result.init();
-        Box::new(result)
+        result
     }
 
     /// Apply outstanding updates.
@@ -111,7 +222,7 @@ impl AtomicFile {
     }
 }
 
-impl Storage for AtomicFile {
+impl Storage for BasicAtomicFile {
     fn commit(&mut self, size: u64) {
         self.commit_phase(size, 1);
         self.commit_phase(size, 2);

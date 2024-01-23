@@ -1,5 +1,4 @@
-use crate::stg::Storage;
-use crate::{nd, util, Arc, Data};
+use crate::{nd, util, Arc, AtomicFile, Data, Storage};
 use std::cmp::min;
 use std::collections::BTreeSet;
 
@@ -31,7 +30,7 @@ use std::collections::BTreeSet;
 
 pub struct CompactFile {
     /// Underlying storage.
-    pub stg: Box<dyn Storage>,
+    pub stg: AtomicFile,
 
     /// Size of starter page
     pub(crate) sp_size: usize,
@@ -71,7 +70,7 @@ impl CompactFile {
     const SPECIAL_VALUE: u64 = 0xf1e2d3c4b5a697;
 
     /// Construct a new CompactFile.
-    pub fn new(stg: Box<dyn Storage>, sp_size: usize, ep_size: usize) -> Self {
+    pub fn new(stg: AtomicFile, sp_size: usize, ep_size: usize) -> Self {
         let fsize = stg.size();
         let is_new = fsize == 0;
         let mut x = Self {
@@ -500,8 +499,8 @@ pub fn test() {
 
     let mut rng = rand::thread_rng();
 
-    let s0 = MemFile::new();
-    let s1 = MemFile::new();
+    let s0 = AtomicFile::new(MemFile::new(), MemFile::new());
+    let s1 = AtomicFile::new(MemFile::new(), MemFile::new());
 
     let mut cf0 = CompactFile::new(s0, 200, 512);
     let mut cf1 = CompactFile::new(s1, 136, 1024);

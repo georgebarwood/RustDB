@@ -1,4 +1,4 @@
-use crate::{Arc, Data};
+use crate::{Arc, Data, Mutex};
 
 /// Interface for database storage.
 pub trait Storage: Send + Sync {
@@ -38,12 +38,17 @@ pub trait Storage: Send + Sync {
         self.read(start, &mut bytes);
         u64::from_le_bytes(bytes)
     }
+
+    ///
+    fn clone(&self) -> Box<dyn Storage> {
+        panic!()
+    }
 }
 
 /// Simple implementation of [Storage] using `Vec<u8>`.
 #[derive(Default)]
 pub struct MemFile {
-    v: Mutex<Vec<u8>>,
+    v: Arc<Mutex<Vec<u8>>>,
 }
 
 impl MemFile {
@@ -83,28 +88,31 @@ impl Storage for MemFile {
         let mut v = self.v.lock().unwrap();
         v.resize(size as usize, 0);
     }
+
+    fn clone(&self) -> Box<dyn Storage> {
+        Box::new(Self { v: self.v.clone() })
+    }
 }
 
-use crate::Mutex;
 use std::{fs, fs::OpenOptions, io::Read, io::Seek, io::SeekFrom, io::Write};
 
 /// Simple implementation of [Storage] using `std::fs::File`.
 pub struct SimpleFileStorage {
-    file: Mutex<fs::File>,
+    file: Arc<Mutex<fs::File>>,
 }
 
 impl SimpleFileStorage {
     /// Construct from filename.
     pub fn new(filename: &str) -> Box<Self> {
         Box::new(Self {
-            file: Mutex::new(
+            file: Arc::new(Mutex::new(
                 OpenOptions::new()
                     .read(true)
                     .write(true)
                     .create(true)
                     .open(filename)
                     .unwrap(),
-            ),
+            )),
         })
     }
 }
@@ -140,13 +148,19 @@ impl Storage for SimpleFileStorage {
         f.set_len(size).unwrap();
         f.sync_all().unwrap();
     }
+
+    fn clone(&self) -> Box<dyn Storage> {
+        Box::new(Self {
+            file: self.file.clone(),
+        })
+    }
 }
 
 /// Alternative to SimpleFileStorage that uses multiple [SimpleFileStorage]s to allow parallel reads/writes by different processes.
 #[allow(clippy::vec_box)]
 pub struct MultiFileStorage {
     filename: String,
-    files: Mutex<Vec<Box<SimpleFileStorage>>>,
+    files: Arc<Mutex<Vec<Box<SimpleFileStorage>>>>,
 }
 
 impl MultiFileStorage {
@@ -154,7 +168,7 @@ impl MultiFileStorage {
     pub fn new(filename: &str) -> Box<Self> {
         Box::new(Self {
             filename: filename.to_string(),
-            files: Mutex::new(Vec::new()),
+            files: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -195,5 +209,12 @@ impl Storage for MultiFileStorage {
         let mut f = self.get_file();
         f.commit(size);
         self.put_file(f);
+    }
+
+    fn clone(&self) -> Box<dyn Storage> {
+        Box::new(Self {
+            filename: self.filename.clone(),
+            files: self.files.clone(),
+        })
     }
 }

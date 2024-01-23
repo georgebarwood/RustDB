@@ -1,6 +1,6 @@
 use crate::{
-    heap::GHeap, nd, Arc, BTreeMap, CompactFile, Data, HashMap, HashSet, Mutex, RwLock, SaveOp,
-    Storage,
+    heap::GHeap, nd, Arc, AtomicFile, BTreeMap, CompactFile, Data, HashMap, HashSet, Mutex, RwLock,
+    SaveOp,
 };
 
 type HX = u32; // Typical 8M cache will have 1K x 8KB pages, so 10 bits is typical, 32 should be plenty.
@@ -270,7 +270,7 @@ const SP_SIZE: usize = (EP_MAX + 1) * 8;
 
 impl SharedPagedData {
     /// Construct SharedPageData based on specified underlying storage.
-    pub fn new(file: Box<dyn Storage>) -> Arc<Self> {
+    pub fn new(file: AtomicFile) -> Arc<Self> {
         let file = CompactFile::new(file, SP_SIZE, EP_SIZE);
         // Note : if it's not a new file, sp_size and ep_size are read from file header.
         let sp_size = file.sp_size;

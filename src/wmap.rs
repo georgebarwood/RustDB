@@ -12,9 +12,9 @@ pub struct DataSlice {
     pub data: Data,
 }
 
-/// Map of outstanding writes which have not yet been written to the underlying file.
+/// Implements an updateable file based on some underlying storage.
 pub struct WMap {
-    ///
+    /// Map of outstanding writes which have not yet been written to the underlying file.
     pub map: BTreeMap<u64, DataSlice>,
 }
 
@@ -28,7 +28,7 @@ impl Default for WMap {
 }
 
 impl WMap {
-    ///
+    /// Read from file, taking writes into account. Unwritten ranges are read from underlying storage.
     pub fn read(&self, start: u64, data: &mut [u8], u: &dyn Storage) {
         let mut todo: usize = data.len();
         if todo == 0 {
@@ -64,13 +64,11 @@ impl WMap {
         }
     }
 
-    ///
+    /// Write to file. Existing writes which overlap with new write need to be trimmed or removed.
     pub fn write(&mut self, start: u64, data: Data, off: usize, len: usize) {
         if len == 0 {
             return;
         }
-
-        // Existing writes which overlap with new write need to be trimmed or removed.
         let mut remove = Vec::new();
         let mut add = Vec::new();
         let end = start + len as u64;
