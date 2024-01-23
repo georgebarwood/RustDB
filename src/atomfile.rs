@@ -1,13 +1,4 @@
-use crate::{util, Arc, BTreeMap, Data, Storage};
-use std::cmp::min;
-
-/// Slice of Data to be written to storage.
-#[derive(Clone)]
-struct DataSlice {
-    off: usize,
-    len: usize,
-    data: Data,
-}
+use crate::{util, wmap::DataSlice, wmap::WMap, Arc, Data, Storage};
 
 /// AtomicFile makes sure that database updates are all-or-nothing.
 /// Keeps a map of outstanding writes which have not yet been written to the underlying file.
@@ -17,7 +8,7 @@ pub struct AtomicFile {
     /// Temporary storage for updates during commit.
     pub upd: Box<dyn Storage>,
     /// Map of existing outstanding writes. Note the key is the file address of the last byte written.
-    map: BTreeMap<u64, DataSlice>,
+    map: WMap,
     ///
     list: Vec<(u64, DataSlice)>,
 }
@@ -26,7 +17,7 @@ impl AtomicFile {
     /// Construct a new AtomicFle. stg is the main underlying storage, upd is temporary storage for updates during commit.
     pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Box<Self> {
         let mut result = Self {
-            map: BTreeMap::new(),
+            map: WMap::default(),
             list: Vec::new(),
             stg,
             upd,
@@ -60,13 +51,13 @@ impl AtomicFile {
 
     /// Perform the specified phase ( 1 or 2 ) of a two-phase commit.
     pub fn commit_phase(&mut self, size: u64, phase: u8) {
-        if self.map.is_empty() && self.list.is_empty() {
+        if self.map.map.is_empty() && self.list.is_empty() {
             return;
         }
         if phase == 1 {
             /* Get list of updates, doing comparison with old data to reduce the write data */
             let mut buf = Vec::new();
-            for (k, v) in self.map.iter() {
+            for (k, v) in self.map.map.iter() {
                 let start = k + 1 - v.len as u64;
                 let len = v.len;
                 if buf.len() < len {
@@ -84,7 +75,7 @@ impl AtomicFile {
                     ));
                 });
             }
-            self.map.clear();
+            self.map.map.clear();
 
             // Write the updates to upd.
             // First set the end position to zero.
@@ -131,99 +122,11 @@ impl Storage for AtomicFile {
     }
 
     fn read(&self, start: u64, data: &mut [u8]) {
-        let mut todo: usize = data.len();
-        if todo == 0 {
-            return;
-        }
-        let mut done: usize = 0;
-
-        for (&k, v) in self.map.range(start..) {
-            let estart = k + 1 - v.len as u64;
-            if estart > start + done as u64 {
-                let lim = (estart - (start + done as u64)) as usize;
-                let amount = min(todo, lim);
-                self.stg
-                    .read(start + done as u64, &mut data[done..done + amount]);
-                done += amount;
-                todo -= amount;
-            }
-            if estart > start + data.len() as u64 {
-                break;
-            } else {
-                let skip = (start + done as u64 - estart) as usize;
-                let amount = min(todo, v.len - skip);
-                data[done..done + amount]
-                    .copy_from_slice(&v.data[v.off + skip..v.off + skip + amount]);
-                done += amount;
-                todo -= amount;
-            }
-            if todo == 0 {
-                break;
-            }
-        }
-        if todo > 0 {
-            self.stg
-                .read(start + done as u64, &mut data[done..done + todo]);
-        }
+        self.map.read(start, data, &*self.stg);
     }
 
     fn write_data(&mut self, start: u64, data: Data, off: usize, len: usize) {
-        if len == 0 {
-            return;
-        }
-
-        // Existing writes which overlap with new write need to be trimmed or removed.
-        let mut remove = Vec::new();
-        let mut add = Vec::new();
-        let end = start + len as u64;
-
-        for (&k, v) in self.map.range_mut(start..) {
-            let eend = k + 1; // end of existing write.
-            let estart = eend - v.len as u64; // start of existing write.
-
-            // (a) New write ends before existing write.
-            if end <= estart {
-                break;
-            }
-            // (b) New write subsumes existing write entirely, remove existing write.
-            else if start <= estart && end >= eend {
-                remove.push(eend - 1);
-            }
-            // (c) New write starts before existing write, but doesn't subsume it. Trim existing write.
-            else if start <= estart {
-                let trim = (end - estart) as usize;
-                v.len -= trim;
-                v.off += trim;
-            }
-            // (d) New write starts in middle of existing write, ends before end of existing write...
-            // .. put start of existing write in add list, trim existing write.
-            else if start > estart && end < eend {
-                let remain = (start - estart) as usize;
-                add.push((estart, v.data.clone(), v.off, remain));
-
-                let trim = (end - estart) as usize;
-                v.len -= trim;
-                v.off += trim;
-            }
-            // (e) New write starts in middle of existing write, ends after existing write...
-            // ... put start of existing write in add list, remove existing write,
-            else {
-                let remain = (start - estart) as usize;
-                add.push((estart, v.data.clone(), v.off, remain));
-
-                remove.push(eend - 1);
-            }
-        }
-        for k in remove {
-            self.map.remove(&k);
-        }
-        for (start, data, off, len) in add {
-            self.map
-                .insert(start + len as u64 - 1, DataSlice { data, off, len });
-        }
-
-        self.map
-            .insert(start + len as u64 - 1, DataSlice { data, off, len });
+        self.map.write(start, data, off, len);
     }
 
     fn write(&mut self, start: u64, data: &[u8]) {
