@@ -1,4 +1,4 @@
-use crate::{nd, util, Arc, AtomicFile, Data, Storage};
+use crate::{nd, util, Arc, Data, Storage};
 use std::cmp::min;
 use std::collections::BTreeSet;
 
@@ -30,7 +30,7 @@ use std::collections::BTreeSet;
 
 pub struct CompactFile {
     /// Underlying storage.
-    pub stg: AtomicFile,
+    pub stg: Box<dyn Storage>,
 
     /// Size of starter page
     pub(crate) sp_size: usize,
@@ -70,7 +70,7 @@ impl CompactFile {
     const SPECIAL_VALUE: u64 = 0xf1e2d3c4b5a697;
 
     /// Construct a new CompactFile.
-    pub fn new(stg: AtomicFile, sp_size: usize, ep_size: usize) -> Self {
+    pub fn new(stg: Box<dyn Storage>, sp_size: usize, ep_size: usize) -> Self {
         let fsize = stg.size();
         let is_new = fsize == 0;
         let mut x = Self {
@@ -108,7 +108,7 @@ impl CompactFile {
         x
     }
 
-    /// Get the current size of the specified logical page.
+    /// Get the current size of the specified logical page. Note: not valid for a newly allocated page until it is first written.
     pub fn lp_size(&self, lpnum: u64) -> usize {
         let off = self.lp_off(lpnum);
         if off != 0 {
@@ -220,7 +220,7 @@ impl CompactFile {
 
     /// Allocate logical page number. Pages are numbered 0,1,2...
     pub fn alloc_page(&mut self) -> u64 {
-        let p = if let Some(p) = self.lp_free.pop_first() {
+        if let Some(p) = self.lp_free.pop_first() {
             p
         } else {
             self.lp_alloc_dirty = true;
@@ -232,9 +232,7 @@ impl CompactFile {
                 self.lp_alloc += 1;
             }
             p
-        };
-        debug_assert!(self.lp_size(p) == 0);
-        p
+        }
     }
 
     /// Free a logical page number.
@@ -493,7 +491,7 @@ impl CompactFile {
 
 #[test]
 pub fn test() {
-    use crate::stg::MemFile;
+    use crate::{AtomicFile, MemFile};
     use rand::Rng;
     /* Idea of test is to check two CompactFiles with different parameters behave the same */
 

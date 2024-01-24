@@ -15,7 +15,7 @@ pub struct AtomicFile {
 
 impl AtomicFile {
     /// Construct a new AtomicFle. stg is the main underlying storage, upd is temporary storage for updates during commit.
-    pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Self {
+    pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Box<Self> {
         let size = stg.size();
         let mut baf = BasicAtomicFile::new(stg.clone(), upd);
         let (tx, rx) = std::sync::mpsc::channel::<(u64, WMap)>();
@@ -37,7 +37,7 @@ impl AtomicFile {
                 cf.write().unwrap().commit(size);
             }
         });
-        result
+        Box::new(result)
     }
 }
 
@@ -109,8 +109,8 @@ impl Storage for CommitFile {
     }
 }
 
-///
-struct BasicAtomicFile {
+/// Non-buffered alternative to AtomicFile.
+pub struct BasicAtomicFile {
     /// The main underlying storage.
     pub stg: Box<dyn Storage>,
     /// Temporary storage for updates during commit.
@@ -123,7 +123,7 @@ struct BasicAtomicFile {
 
 impl BasicAtomicFile {
     /// Construct a new AtomicFle. stg is the main underlying storage, upd is temporary storage for updates during commit.
-    pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Self {
+    pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Box<Self> {
         let mut result = Self {
             map: WMap::default(),
             list: Vec::new(),
@@ -131,7 +131,7 @@ impl BasicAtomicFile {
             upd,
         };
         result.init();
-        result
+        Box::new(result)
     }
 
     /// Apply outstanding updates.
