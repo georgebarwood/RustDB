@@ -2,7 +2,6 @@ use crate::{BTreeMap, Data, Storage};
 use std::cmp::min;
 
 /// Slice of Data to be written to storage.
-#[derive(Clone)]
 pub struct DataSlice {
     ///
     pub off: usize,
