@@ -32,10 +32,7 @@ impl AtomicFile {
         };
         std::thread::spawn(move || {
             while let Ok((size, map)) = rx.recv() {
-                for (k, v) in map.map.iter() {
-                    let start = k + 1 - v.len as u64;
-                    baf.write_data(start, v.data.clone(), v.off, v.len);
-                }
+                baf.map = map;
                 baf.commit(size);
                 cf.write().unwrap().commit(size);
             }
@@ -118,7 +115,7 @@ struct BasicAtomicFile {
     pub stg: Box<dyn Storage>,
     /// Temporary storage for updates during commit.
     pub upd: Box<dyn Storage>,
-    /// Map of existing outstanding writes. Note the key is the file address of the last byte written.
+    /// Map of writes. Note the key is the file address of the last byte written.
     map: WMap,
     ///
     list: Vec<(u64, DataSlice)>,
@@ -166,7 +163,7 @@ impl BasicAtomicFile {
             return;
         }
         if phase == 1 {
-            /* Get list of updates, doing comparison with old data to reduce the write data */
+            /* Get list of updates, compare with old data to reduce the size of upd file */
             let mut buf = Vec::new();
             for (k, v) in self.map.map.iter() {
                 let start = k + 1 - v.len as u64;
@@ -256,8 +253,8 @@ pub fn test() {
     let mut rng = rand::thread_rng();
 
     for _ in 0..100 {
-        let s0 = Box::new(MemFile::default());
-        let s1 = Box::new(MemFile::default());
+        let s0 = MemFile::new();
+        let s1 = MemFile::new();
         let mut s2 = AtomicFile::new(s0, s1);
         let mut s3 = MemFile::default();
 
