@@ -131,7 +131,7 @@ fn rustdb_direct_test() {
 }
 
 #[cfg(test)]
-fn print_results(name: &str, mut results: Vec<u64>) {
+pub fn print_results(name: &str, mut results: Vec<u64>) {
     results.sort();
     let n = results.len() / 10;
     let results = &results[0..n];

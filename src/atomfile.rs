@@ -5,11 +5,8 @@ use crate::{util, wmap::DataSlice, wmap::WMap, Arc, Data, RwLock, Storage};
 pub struct AtomicFile {
     /// Map of existing outstanding writes. Note the key is the file address of the last byte written.
     map: WMap,
-    ///
     cf: Arc<RwLock<CommitFile>>,
-    ///
     size: u64,
-    ///
     tx: std::sync::mpsc::Sender<(u64, WMap)>,
 }
 
@@ -19,25 +16,34 @@ impl AtomicFile {
         let size = stg.size();
         let mut baf = BasicAtomicFile::new(stg.clone(), upd);
         let (tx, rx) = std::sync::mpsc::channel::<(u64, WMap)>();
-        let cf = Arc::new(RwLock::new(CommitFile {
+        let cf1 = Arc::new(RwLock::new(CommitFile {
             stg,
             map: WMap::default(),
             todo: 0,
+            waiting_client: None,
         }));
-        let result = Self {
-            map: WMap::default(),
-            cf: cf.clone(),
-            size,
-            tx,
-        };
+        let cf = cf1.clone();
         std::thread::spawn(move || {
             while let Ok((size, map)) = rx.recv() {
                 baf.map = map;
                 baf.commit(size);
-                cf.write().unwrap().commit(size);
+                cf1.write().unwrap().done_one();
             }
         });
-        Box::new(result)
+        Box::new(Self {
+            map: WMap::default(),
+            cf,
+            size,
+            tx,
+        })
+    }
+}
+
+impl Drop for AtomicFile {
+    fn drop(&mut self) {
+        while self.cf.write().unwrap().wait(0) {
+            std::thread::park();
+        }
     }
 }
 
@@ -47,14 +53,24 @@ impl Storage for AtomicFile {
         if self.map.map.is_empty() {
             return;
         }
-        let map = std::mem::take(&mut self.map);
-        let cf = &mut self.cf.write().unwrap();
-        cf.todo += 1;
-        for (k, v) in map.map.iter() {
-            let start = k + 1 - v.len as u64;
-            cf.write_data(start, v.data.clone(), v.off, v.len);
+        while {
+            let cf = &mut self.cf.write().unwrap();
+            // If the CommitFile map has got "large" wait for the commit process to finish (so the map is reset).
+            if cf.wait(3000) {
+                true
+            } else {
+                let map = std::mem::take(&mut self.map);
+                cf.todo += 1;
+                for (k, v) in map.map.iter() {
+                    let start = k + 1 - v.len as u64;
+                    cf.write_data(start, v.data.clone(), v.off, v.len);
+                }
+                self.tx.send((size, map)).unwrap();
+                false
+            }
+        } {
+            std::thread::park();
         }
-        let _ = self.tx.send((size, map));
     }
 
     fn size(&self) -> u64 {
@@ -77,29 +93,48 @@ impl Storage for AtomicFile {
 }
 
 struct CommitFile {
-    ///
-    pub stg: Box<dyn Storage>,
-    /// Map of writes.
+    stg: Box<dyn Storage>,
     map: WMap,
-    /// Number of commits outstanding
-    todo: u64,
+    todo: usize,
+    waiting_client: Option<std::thread::Thread>,
+}
+
+impl CommitFile {
+    fn done_one(&mut self) {
+        self.todo -= 1;
+        if self.todo == 0 {
+            self.map = WMap::default();
+            if let Some(client) = std::mem::take(&mut self.waiting_client) {
+                client.unpark();
+            }
+        }
+    }
+
+    fn wait(&mut self, n: usize) -> bool {
+        let len = self.map.map.len();
+        if len > n {
+            // println!("client waiting n={} len={} todo={}", n, len, self.todo );
+            self.waiting_client = Some(std::thread::current());
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Storage for CommitFile {
     fn commit(&mut self, _size: u64) {
-        self.todo -= 1;
-        if self.todo == 0 {
-            self.map = WMap::default();
-        }
+        panic!()
     }
 
     fn size(&self) -> u64 {
-        self.stg.size()
+        panic!()
     }
 
     fn read(&self, start: u64, data: &mut [u8]) {
         self.map.read(start, data, &*self.stg);
     }
+
     fn write_data(&mut self, start: u64, data: Data, off: usize, len: usize) {
         self.map.write(start, data, off, len);
     }
@@ -122,7 +157,7 @@ pub struct BasicAtomicFile {
 }
 
 impl BasicAtomicFile {
-    /// Construct a new AtomicFle. stg is the main underlying storage, upd is temporary storage for updates during commit.
+    /// stg is the main underlying storage, upd is temporary storage for updates during commit.
     pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Box<Self> {
         let mut result = Self {
             map: WMap::default(),
@@ -253,10 +288,8 @@ pub fn test() {
     let mut rng = rand::thread_rng();
 
     for _ in 0..100 {
-        let s0 = MemFile::new();
-        let s1 = MemFile::new();
-        let mut s2 = AtomicFile::new(s0, s1);
-        let mut s3 = MemFile::default();
+        let mut s1 = AtomicFile::new(MemFile::new(), MemFile::new());
+        let mut s2 = MemFile::new();
 
         for _ in 0..1000 {
             let off: usize = rng.gen::<usize>() % 100;
@@ -269,13 +302,13 @@ pub fn test() {
                     let b: u8 = rng.gen::<u8>();
                     bytes.push(b);
                 }
+                s1.write(off as u64, &bytes);
                 s2.write(off as u64, &bytes);
-                s3.write(off as u64, &bytes);
             } else {
                 let mut b2 = vec![0; len];
                 let mut b3 = vec![0; len];
-                s2.read(off as u64, &mut b2);
-                s3.read(off as u64, &mut b3);
+                s1.read(off as u64, &mut b2);
+                s2.read(off as u64, &mut b3);
                 assert!(b2 == b3);
             }
         }

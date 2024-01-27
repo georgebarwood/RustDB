@@ -202,20 +202,27 @@ pub fn test2() {
 
     let mut h = GHeap::<u64, u64, u32>::default();
     let mut pages = crate::HashMap::default();
-    for _i in 0..1000000 {
-        let pnum = rng.gen::<u64>() % 100;
-        let usage = rng.gen::<u64>() % 100;
-        let action = rng.gen::<u8>() % 3;
-        if action == 0 {
-            let x = h.insert(pnum, usage);
-            pages.insert(pnum, x);
-        } else if action == 1 {
-            if let Some(x) = pages.get(&pnum) {
-                h.modify(*x, usage);
+
+    let mut results = Vec::new();
+    for _outer in 0..100 {
+        let start = std::time::Instant::now();
+        for _i in 0..10000 {
+            let pnum = rng.gen::<u64>() % 100;
+            let usage = rng.gen::<u64>() % 100;
+            let action = rng.gen::<u8>() % 3;
+            if action == 0 {
+                let x = h.insert(pnum, usage);
+                pages.insert(pnum, x);
+            } else if action == 1 {
+                if let Some(x) = pages.get(&pnum) {
+                    h.modify(*x, usage);
+                }
+            } else if action == 2 && h.n > 0 {
+                let pnum = h.pop();
+                pages.remove(&pnum);
             }
-        } else if action == 2 && h.n > 0 {
-            let pnum = h.pop();
-            pages.remove(&pnum);
         }
+        results.push(start.elapsed().as_micros() as u64);
     }
+    crate::bench::print_results("heap test", results);
 }
