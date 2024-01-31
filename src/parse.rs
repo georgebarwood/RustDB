@@ -1,7 +1,11 @@
-use crate::*;
-use compile::*;
+use crate::{
+    c_bool, compile, data_kind, panic, util, AlterCol, AssignOp, Block, ColInfo, DataType, EvalEnv,
+    Expr, ExprIs, FromExpression, IndexInfo, Instruction, ObjRef, Rc, SqlError, TableExpression,
+    Token, Transaction, Value, BINARY, BOOL, DB, DO, DOUBLE, FLOAT, INT, NONE, STRING,
+};
+use compile::{c_delete, c_for, c_function, c_select, c_set, c_table, c_te, c_update, push};
 use std::{mem, str};
-use Instruction::*;
+use Instruction::{Call, Execute, Jump, JumpIfFalse, PopToLocal, Return, Select, Throw};
 
 /// SQL parser.
 ///

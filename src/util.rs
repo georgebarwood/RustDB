@@ -1,7 +1,7 @@
 use crate::{Arc, BTreeSet, Data, HashMap, Rc, RefCell};
 
 /// In debug mode or feature unsafe_opt not enabled, same as debug_assert! otherwise unsafe compiler hint.
-#[cfg(any(debug_assertions, not(feature = "unsafe_opt")))]
+#[cfg(any(debug_assertions, not(feature = "unsafe-optim")))]
 macro_rules! perf_assert {
     ( $cond: expr ) => {
         debug_assert!($cond)
@@ -9,7 +9,7 @@ macro_rules! perf_assert {
 }
 
 /// In debug mode or feature unsafe_opt not enabled, same as debug_assert! otherwise unsafe compiler hint.
-#[cfg(all(not(debug_assertions), feature = "unsafe_opt"))]
+#[cfg(all(not(debug_assertions), feature = "unsafe-optim"))]
 macro_rules! perf_assert {
     ( $cond: expr ) => {
         if !$cond {

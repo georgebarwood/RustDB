@@ -43,6 +43,9 @@ pub trait Storage: Send + Sync {
     fn clone(&self) -> Box<dyn Storage> {
         panic!()
     }
+
+    /// Finish writing data to permanent storage.
+    fn flush(&mut self) {}
 }
 
 /// Simple implementation of [Storage] using `Vec<u8>`.
@@ -216,5 +219,30 @@ impl Storage for MultiFileStorage {
             filename: self.filename.clone(),
             files: self.files.clone(),
         })
+    }
+}
+
+/// Dummy Stg that can be used for Atomic upd file if "reliable" atomic commits are not required.
+pub struct DummyFile {}
+impl DummyFile {
+    ///
+    pub fn new() -> Box<Self> {
+        Box::new(Self {})
+    }
+}
+
+impl Storage for DummyFile {
+    fn size(&self) -> u64 {
+        0
+    }
+
+    fn read(&self, _off: u64, _bytes: &mut [u8]) {}
+
+    fn write(&mut self, _off: u64, _bytes: &[u8]) {}
+
+    fn commit(&mut self, _size: u64) {}
+
+    fn clone(&self) -> Box<dyn Storage> {
+        Self::new()
     }
 }

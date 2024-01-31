@@ -232,7 +232,7 @@ impl Stash {
 
     /// Trim cached data to configured limit.
     fn trim_cache(&mut self) {
-        while self.total > self.mem_limit && self.min.n > 0 {
+        while self.total > self.mem_limit && self.min.len() > 0 {
             let lpnum = self.min.pop();
             let mut p = self.pages.get(&lpnum).unwrap().lock().unwrap();
             p.hx = HX::MAX;
@@ -245,7 +245,7 @@ impl Stash {
 
     /// Return the number of pages currently cached.
     pub fn cached(&self) -> usize {
-        self.min.n as usize
+        self.min.len() as usize
     }
 }
 
@@ -292,6 +292,11 @@ impl SharedPagedData {
     pub fn page_size_max(&self) -> usize {
         let ep_max = (self.sp_size - 2) / 8;
         (self.ep_size - 16) * ep_max + (self.sp_size - 2)
+    }
+
+    /// Wait until all commits have been written to secondary storage.
+    pub fn flush(&self) {
+        self.file.write().unwrap().stg.flush();
     }
 }
 

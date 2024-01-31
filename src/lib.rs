@@ -33,9 +33,9 @@
 //! - `verify` : Allows database structure to be verified using builtin function VERIFYDB.
 //! - `pack` : Allows database pages to be packed using builtin function REPACKFILE.
 //! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
-//! - `unsafe_opt` : Enable unsafe optimisations in release mode.
+//! - `unsafe-optim` : Enable unsafe optimisations in release mode.
 //!
-//! By default, all features except unsafe_opt are enabled.
+//! By default, all features except unsafe-optim are enabled.
 //!
 //!# General Design of Database
 //!
@@ -87,7 +87,7 @@
 //! ```
 
 #![cfg_attr(
-    any(debug_assertions, not(feature = "unsafe_opt")),
+    any(debug_assertions, not(feature = "unsafe-optim")),
     forbid(unsafe_code)
 )] // see util::perf_assert! macro
 #![deny(missing_docs)]
@@ -96,7 +96,7 @@ pub use crate::{
     atomfile::AtomicFile,
     builtin::standard_builtins,
     pstore::{AccessPagedData, SharedPagedData},
-    stg::{MemFile, MultiFileStorage, SimpleFileStorage, Storage},
+    stg::{DummyFile, MemFile, MultiFileStorage, SimpleFileStorage, Storage},
 };
 
 #[cfg(feature = "gentrans")]

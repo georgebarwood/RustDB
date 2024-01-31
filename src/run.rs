@@ -1,4 +1,7 @@
-use crate::*;
+use crate::{
+    panic, Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, Rc,
+    RefCell, Table, Value,
+};
 
 /// Instruction.
 #[non_exhaustive]
@@ -81,7 +84,7 @@ pub trait CExp<T> {
 /// Pointer to [CExp].
 pub type CExpPtr<T> = Box<dyn CExp<T>>;
 
-/// Function that compiles a builtin function call ( see [Database]::new ).
+/// Function that compiles a builtin function call.
 #[derive(Clone, Copy)]
 #[non_exhaustive]
 pub enum CompileFunc {

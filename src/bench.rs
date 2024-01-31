@@ -34,7 +34,7 @@ fn sqlite_test() {
 fn rustdb_test() {
     use crate::*;
 
-    let stg = AtomicFile::new(MemFile::new(), MemFile::new());
+    let stg = AtomicFile::new(MemFile::new(), DummyFile::new());
 
     let mut bmap = BuiltinMap::default();
     standard_builtins(&mut bmap);

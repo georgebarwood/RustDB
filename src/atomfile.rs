@@ -8,6 +8,7 @@ pub struct AtomicFile {
     cf: Arc<RwLock<CommitFile>>,
     size: u64,
     tx: std::sync::mpsc::Sender<(u64, WMap)>,
+    stopping: bool,
 }
 
 impl AtomicFile {
@@ -35,15 +36,8 @@ impl AtomicFile {
             cf,
             size,
             tx,
+            stopping: false,
         })
-    }
-}
-
-impl Drop for AtomicFile {
-    fn drop(&mut self) {
-        while self.cf.write().unwrap().wait(0) {
-            std::thread::park();
-        }
     }
 }
 
@@ -56,7 +50,7 @@ impl Storage for AtomicFile {
         while {
             let cf = &mut self.cf.write().unwrap();
             // If the CommitFile map has got "large" wait for the commit process to finish (so the map is reset).
-            if cf.wait(3000) {
+            if !self.stopping && cf.wait(3000) {
                 true
             } else {
                 let map = std::mem::take(&mut self.map);
@@ -69,6 +63,16 @@ impl Storage for AtomicFile {
                 false
             }
         } {
+            std::thread::park();
+        }
+        if self.stopping {
+            self.flush();
+        }
+    }
+
+    fn flush(&mut self) {
+        self.stopping = true;
+        while self.cf.write().unwrap().wait(0) {
             std::thread::park();
         }
     }

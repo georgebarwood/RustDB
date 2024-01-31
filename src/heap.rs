@@ -1,7 +1,7 @@
 use crate::Ordering;
 
 /// Vector indexed by U.
-pub struct VecU<T>(Vec<T>);
+struct VecU<T>(Vec<T>);
 
 impl<T, U> std::ops::Index<U> for VecU<T>
 where
@@ -27,7 +27,7 @@ where
 }
 
 /// Heap Node.
-pub struct HeapNode<K, T, U> {
+struct HeapNode<K, T, U> {
     /// Index of node from heap position.
     pub x: U,
     /// Heap position of this node.
@@ -41,11 +41,11 @@ pub struct HeapNode<K, T, U> {
 /// Generic heap with keys that can be modified for tracking least used page.
 pub struct GHeap<K, T, U> {
     /// Number of heap nodes, not including free nodes.
-    pub n: U,
+    n: U,
     /// 1 + Index of start of free list.
-    pub free: U,
+    free: U,
     /// Vector of heap nodes.
-    pub v: VecU<HeapNode<K, T, U>>,
+    v: VecU<HeapNode<K, T, U>>,
 }
 
 impl<K, T, U> Default for GHeap<K, T, U>
@@ -76,6 +76,11 @@ where
         + std::ops::Div<Output = U>,
     usize: TryFrom<U>,
 {
+    /// Current number of heap nodes.
+    pub fn len(&self) -> U {
+        self.n
+    }
+
     /// Insert id into heap with specified key (usage). Result is index of heap node.
     pub fn insert(&mut self, id: T, key: K) -> U {
         let pos = self.n;
