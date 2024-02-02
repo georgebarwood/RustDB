@@ -208,6 +208,7 @@ pub fn diff<F>(a: &[u8], b: &[u8], min_eq: usize, mut d: F)
 where
     F: FnMut(usize, usize),
 {
+    let mut check = 0;
     let mut i = 0;
     let n = a.len();
     while i < n && a[i] == b[i] {
@@ -232,6 +233,33 @@ where
                 break;
             }
         }
+        assert_eq!(a[check..start], b[check..start]);
+        check = end;
         d(start, end - start);
+    }
+    assert_eq!(a[check..n], b[check..n]);
+}
+
+#[test]
+fn difftest() {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    for _ in 0..1000 {
+        let mut v = Vec::new();
+        for _i in 0..100 {
+            v.push(0);
+        }
+        let mut v2 = v.clone();
+        for _ in 0..rng.gen::<usize>() % 50 {
+            v2[rng.gen::<usize>() % 100] = 1;
+        }
+        let mut x = 0;
+        diff(&v, &v2, 2, |off, len| {
+            //println!("off={off} len={len}");
+            assert_eq!(v[x..off], v2[x..off]);
+            x = off + len;
+        });
+        assert_eq!(v[x..], v2[x..]);
+        //println!("Done a test");
     }
 }

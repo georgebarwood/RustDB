@@ -24,7 +24,7 @@ pub trait Storage: Send + Sync {
         self.write(start, &data[off..off + len]);
     }
 
-    /// Finish write transaction, size is new size of underlying storage.
+    /// Finish write transaction, size is new size of underlying storage, time is the database time (#commits since server started).
     fn commit(&mut self, size: u64);
 
     /// Write u64 to storage.
@@ -46,6 +46,11 @@ pub trait Storage: Send + Sync {
 
     /// Finish writing data to permanent storage.
     fn flush(&mut self) {}
+
+    /// Is flushing complete?
+    fn complete(&self, _done: u64) -> (bool, u64) {
+        (true, 0)
+    }
 }
 
 /// Simple implementation of [Storage] using `Vec<u8>`.
@@ -135,11 +140,15 @@ impl Storage for SimpleFileStorage {
     fn write(&mut self, off: u64, bytes: &[u8]) {
         let mut f = self.file.lock().unwrap();
         // The list of operating systems which auto-zero is likely more than this...research is todo.
-        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+        // #[cfg(not(any(target_os = "windows", target_os = "linux")))] // This doesn't seem to work reliably, at least not on windows??!!
         {
             let size = f.seek(SeekFrom::End(0)).unwrap();
             if off > size {
-                f.set_len(off).unwrap();
+                // f.set_len(off).unwrap();
+                let len = (off - size) as usize;
+                let zb = vec![0; len];
+                f.seek(SeekFrom::Start(size)).unwrap();
+                let _ = f.write(&zb).unwrap();
             }
         }
         f.seek(SeekFrom::Start(off)).unwrap();

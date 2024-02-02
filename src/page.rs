@@ -108,9 +108,38 @@ impl Page {
         }
     }
 
+    ///
+    pub fn validate_child_pages(&self) {
+        if self.level == 0 {
+            return;
+        }
+        let mut s = crate::HashSet::<u64>::default();
+        s.insert(self.first_page);
+        self.validate_child_page(self.root, &mut s);
+        // println!("child page validated ok pnum={}", self.pnum);
+    }
+
+    fn validate_child_page(&self, x: usize, s: &mut crate::HashSet<u64>) {
+        if x == 0 {
+            return;
+        }
+        let cp = self.child_page(x);
+        if !s.insert(cp) {
+            println!(
+                "panic pnum={} level={} first_page={} cp={} s={:?}",
+                self.pnum, self.level, self.first_page, cp, s
+            );
+            panic!();
+        }
+        self.validate_child_page(self.left(x), s);
+        self.validate_child_page(self.right(x), s);
+    }
+
     /// Sets header and trailer (if parent) data. Called just before page is saved to file.
     pub fn write_header(&mut self) {
         debug_assert!(self.size() == self.data.len());
+        self.validate_child_pages();
+
         let u = self.level as u64
             | ((self.root as u64) << 8)
             | ((self.count as u64) << (8 + NODE_ID_BITS))
@@ -328,6 +357,7 @@ impl Page {
 
     /// Set the child page for node x.
     pub fn set_child_page(&mut self, x: usize, pnum: u64) {
+        // println!("set child page page pnum={} x={} pnum={}", self.pnum, x, pnum);
         debug_assert!(self.level != 0);
         let off = self.over_off(x) - PAGE_ID_SIZE;
         util::set(&mut self.data, off, pnum, PAGE_ID_SIZE);

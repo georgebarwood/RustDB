@@ -183,6 +183,12 @@ GO
     let wapd = AccessPagedData::new_writer(spd.clone());
     let db = Database::new(wapd, INITSQL, bmap.clone());
 
+    // To check things work with low mem_limit.
+    {
+        let mut s = spd.stash.lock().unwrap();
+        s.mem_limit = 1;
+    }
+
     for _i in 0..1000 * test_amount() {
         let mut tr = GenTransaction::default();
         let sql = "EXEC rtest.OneTest()";

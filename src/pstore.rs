@@ -60,6 +60,7 @@ impl PageInfo {
         let file = a.spd.file.read().unwrap();
         let data = file.get_page(lpnum);
         self.current = Some(data.clone());
+
         (data, true)
     }
 
@@ -297,6 +298,11 @@ impl SharedPagedData {
     /// Wait until all commits have been written to secondary storage.
     pub fn flush(&self) {
         self.file.write().unwrap().stg.flush();
+    }
+
+    /// Are commits complete?
+    pub fn complete(&self, done: u64) -> (bool, u64) {
+        self.file.read().unwrap().stg.complete(done)
     }
 }
 

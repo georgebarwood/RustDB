@@ -21,6 +21,7 @@ impl AtomicFile {
             stg,
             map: WMap::default(),
             todo: 0,
+            done: 0,
             waiting_client: None,
         }));
         let cf = cf1.clone();
@@ -94,19 +95,30 @@ impl Storage for AtomicFile {
         let d = Arc::new(data.to_vec());
         self.write_data(start, d, 0, len);
     }
+
+    fn complete(&self, done: u64) -> (bool, u64) {
+        self.cf.read().unwrap().complete(done)
+    }
 }
 
 struct CommitFile {
     stg: Box<dyn Storage>,
     map: WMap,
     todo: usize,
+    done: u64,
     waiting_client: Option<std::thread::Thread>,
 }
 
 impl CommitFile {
+    fn complete(&self, done: u64) -> (bool, u64) {
+        let result = self.todo == 0 || self.done > done;
+        (result, self.done)
+    }
+
     fn done_one(&mut self) {
         self.todo -= 1;
         if self.todo == 0 {
+            self.done += 1;
             self.map = WMap::default();
             if let Some(client) = std::mem::take(&mut self.waiting_client) {
                 client.unpark();
@@ -203,25 +215,42 @@ impl BasicAtomicFile {
         }
         if phase == 1 {
             /* Get list of updates, compare with old data to reduce the size of upd file */
-            let mut buf = Vec::new();
-            for (k, v) in self.map.map.iter() {
-                let start = k + 1 - v.len as u64;
-                let len = v.len;
-                if buf.len() < len {
-                    buf.resize(len, 0);
+            if false {
+                let mut buf = Vec::new();
+                for (k, v) in self.map.map.iter() {
+                    let start = k + 1 - v.len as u64;
+                    let len = v.len;
+                    if buf.len() < len {
+                        buf.resize(len, 0);
+                    }
+                    self.stg.read(start, &mut buf[0..len]);
+                    util::diff(&v.data[v.off..v.off + len], &buf, 17, |off, len| {
+                        self.list.push((
+                            start + off as u64,
+                            DataSlice {
+                                off: v.off + off,
+                                len,
+                                data: v.data.clone(),
+                            },
+                        ));
+                    });
                 }
-                self.stg.read(start, &mut buf[0..len]);
-                util::diff(&v.data[v.off..v.off + len], &buf, 17, |off, len| {
+            } else {
+                for (k, v) in self.map.map.iter() {
+                    let start = k + 1 - v.len as u64;
+                    let len = v.len;
                     self.list.push((
-                        start + off as u64,
+                        start,
                         DataSlice {
-                            off: v.off + off,
+                            off: v.off,
                             len,
                             data: v.data.clone(),
                         },
                     ));
-                });
+                }
             }
+            println!("Commit # writes={}", self.list.len());
+
             self.map.map.clear();
 
             // Write the updates to upd.
