@@ -233,7 +233,6 @@ impl SortedFile {
         let p = &mut *pp.borrow_mut();
         self.set_dirty(p, &pp);
         p.append_page(k, cpnum);
-        p.validate_child_pages();
     }
 
     /// Construct a new empty page.
@@ -264,7 +263,6 @@ impl SortedFile {
             let p = &mut *pp.borrow_mut();
             p.pnum = pnum;
             self.set_dirty(p, &pp);
-            p.validate_child_pages();
         }
         self.dirty_pages.borrow_mut().insert(pnum, pp);
     }

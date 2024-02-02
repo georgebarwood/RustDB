@@ -249,7 +249,7 @@ impl BasicAtomicFile {
                     ));
                 }
             }
-            println!("Commit # writes={}", self.list.len());
+            // println!("Commit # writes={}", self.list.len());
 
             self.map.map.clear();
 
