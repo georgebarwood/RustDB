@@ -180,7 +180,7 @@ impl BasicAtomicFile {
         let mut result = Self {
             map: WMap::default(),
             list: Vec::new(),
-            stg : WriteBuffer::new(stg),
+            stg: WriteBuffer::new(stg),
             upd: WriteBuffer::new(upd),
         };
         result.init();
@@ -218,27 +218,27 @@ impl BasicAtomicFile {
         if phase == 1 {
             /* Get list of updates, compare with old data to reduce the size of upd file */
             if false {
-/*
-                let mut buf = Vec::new();
-                for (k, v) in self.map.map.iter() {
-                    let start = k + 1 - v.len as u64;
-                    let len = v.len;
-                    if buf.len() < len {
-                        buf.resize(len, 0);
-                    }
-                    self.stg.read(start, &mut buf[0..len]);
-                    util::diff(&v.data[v.off..v.off + len], &buf, 17, |off, len| {
-                        self.list.push((
-                            start + off as u64,
-                            DataSlice {
-                                off: v.off + off,
-                                len,
-                                data: v.data.clone(),
-                            },
-                        ));
-                    });
-                }
-*/
+                /*
+                                let mut buf = Vec::new();
+                                for (k, v) in self.map.map.iter() {
+                                    let start = k + 1 - v.len as u64;
+                                    let len = v.len;
+                                    if buf.len() < len {
+                                        buf.resize(len, 0);
+                                    }
+                                    self.stg.read(start, &mut buf[0..len]);
+                                    util::diff(&v.data[v.off..v.off + len], &buf, 17, |off, len| {
+                                        self.list.push((
+                                            start + off as u64,
+                                            DataSlice {
+                                                off: v.off + off,
+                                                len,
+                                                data: v.data.clone(),
+                                            },
+                                        ));
+                                    });
+                                }
+                */
             } else {
                 for (k, v) in self.map.map.iter() {
                     let start = k + 1 - v.len as u64;
