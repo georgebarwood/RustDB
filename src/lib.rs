@@ -162,6 +162,9 @@ pub mod gentrans;
 /// Backing [Storage] for database. See also [AtomicFile].
 pub mod stg;
 
+/// Buffered File.
+pub mod buf;
+
 /// Write map.
 pub mod wmap;
 

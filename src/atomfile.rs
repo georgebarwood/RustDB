@@ -1,4 +1,4 @@
-use crate::{util, wmap::DataSlice, wmap::WMap, Arc, Data, RwLock, Storage};
+use crate::{wmap::DataSlice, wmap::WMap, Arc, Data, RwLock, Storage};
 
 /// AtomicFile makes sure that database updates are all-or-nothing.
 /// Keeps a map of outstanding writes which have not yet been written to the underlying file.
@@ -160,12 +160,14 @@ impl Storage for CommitFile {
     }
 }
 
-/// Non-buffered alternative to AtomicFile.
+use crate::buf::WriteBuffer;
+
+/// Alternative to AtomicFile.
 pub struct BasicAtomicFile {
     /// The main underlying storage.
-    pub stg: Box<dyn Storage>,
+    pub stg: WriteBuffer,
     /// Temporary storage for updates during commit.
-    pub upd: Box<dyn Storage>,
+    pub upd: WriteBuffer,
     /// Map of writes. Note the key is the file address of the last byte written.
     map: WMap,
     ///
@@ -178,8 +180,8 @@ impl BasicAtomicFile {
         let mut result = Self {
             map: WMap::default(),
             list: Vec::new(),
-            stg,
-            upd,
+            stg : WriteBuffer::new(stg),
+            upd: WriteBuffer::new(upd),
         };
         result.init();
         Box::new(result)
@@ -187,20 +189,20 @@ impl BasicAtomicFile {
 
     /// Apply outstanding updates.
     fn init(&mut self) {
-        let end = self.upd.read_u64(0);
-        let size = self.upd.read_u64(8);
+        let end = self.upd.stg.read_u64(0);
+        let size = self.upd.stg.read_u64(8);
         if end == 0 {
             return;
         }
-        assert!(end == self.upd.size());
+        assert!(end == self.upd.stg.size());
         let mut pos = 16;
         while pos < end {
-            let start = self.upd.read_u64(pos);
+            let start = self.upd.stg.read_u64(pos);
             pos += 8;
-            let len = self.upd.read_u64(pos);
+            let len = self.upd.stg.read_u64(pos);
             pos += 8;
             let mut buf = vec![0; len as usize];
-            self.upd.read(pos, &mut buf);
+            self.upd.stg.read(pos, &mut buf);
             pos += len;
             self.stg.write(start, &buf);
         }
@@ -216,6 +218,7 @@ impl BasicAtomicFile {
         if phase == 1 {
             /* Get list of updates, compare with old data to reduce the size of upd file */
             if false {
+/*
                 let mut buf = Vec::new();
                 for (k, v) in self.map.map.iter() {
                     let start = k + 1 - v.len as u64;
@@ -235,6 +238,7 @@ impl BasicAtomicFile {
                         ));
                     });
                 }
+*/
             } else {
                 for (k, v) in self.map.map.iter() {
                     let start = k + 1 - v.len as u64;
@@ -294,11 +298,11 @@ impl Storage for BasicAtomicFile {
     }
 
     fn size(&self) -> u64 {
-        self.stg.size()
+        self.stg.stg.size()
     }
 
     fn read(&self, start: u64, data: &mut [u8]) {
-        self.map.read(start, data, &*self.stg);
+        self.map.read(start, data, &*self.stg.stg);
     }
 
     fn write_data(&mut self, start: u64, data: Data, off: usize, len: usize) {
