@@ -8,6 +8,7 @@ pub struct AtomicFile {
     cf: Arc<RwLock<CommitFile>>,
     size: u64,
     tx: std::sync::mpsc::Sender<(u64, WMap)>,
+    busy: Arc<Mutex<()>>, // This is locked while a commit is being performed.
 }
 
 impl AtomicFile {
@@ -21,13 +22,13 @@ impl AtomicFile {
             map: WMap::default(),
             todo: 0,
             done: 0,
-            busy: Arc::new(Mutex::new(())),
         }));
+        let busy = Arc::new(Mutex::new(()));
+        let busy1 = busy.clone();
         let cf = cf1.clone();
         std::thread::spawn(move || {
             while let Ok((size, map)) = rx.recv() {
-                let busy = cf1.read().unwrap().busy.clone();
-                let _lock = busy.lock();
+                let _lock = busy1.lock();
                 baf.map = map;
                 baf.commit(size);
                 cf1.write().unwrap().done_one();
@@ -38,13 +39,13 @@ impl AtomicFile {
             cf,
             size,
             tx,
+            busy,
         })
     }
 
     /// Wait for the write process.
     fn wait(&self) {
-        let busy = self.cf.read().unwrap().busy.clone();
-        let _ = busy.lock();
+        let _ = self.busy.lock();
     }
 }
 
@@ -54,8 +55,8 @@ impl Storage for AtomicFile {
         if self.map.map.is_empty() {
             return;
         }
-        while self.cf.read().unwrap().map.map.len() >= 300 {
-            self.wait();
+        if self.cf.read().unwrap().map.map.len() >= 300 {
+            self.wait_complete();
         }
         let map = std::mem::take(&mut self.map);
         let cf = &mut *self.cf.write().unwrap();
@@ -97,7 +98,6 @@ struct CommitFile {
     map: WMap,
     todo: usize,
     done: u64,
-    busy: Arc<Mutex<()>>, // This is locked while a commit is being performed.
 }
 
 impl CommitFile {
