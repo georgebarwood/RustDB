@@ -8,8 +8,9 @@ pub struct WriteBuffer {
     pos: u64,
     ///
     pub stg: Box<dyn Storage>,
-    _write_count: u64,
-    _flush_count: u64,
+    write: u64,
+    flush: u64,
+    total: u64,
     buf: Vec<u8>,
 }
 
@@ -20,8 +21,9 @@ impl WriteBuffer {
             ix: 0,
             pos: u64::MAX,
             stg,
-            _write_count: 0,
-            _flush_count: 0,
+            write: 0,
+            flush: 0,
+            total: 0,
             buf: vec![0; BUF_SIZE],
         }
     }
@@ -33,6 +35,8 @@ impl WriteBuffer {
         }
         let mut done: usize = 0;
         let mut todo: usize = data.len();
+        self.write += 1;
+        self.total += todo as u64;
         while todo > 0 {
             let mut n: usize = BUF_SIZE - self.ix;
             if n == 0 {
@@ -47,14 +51,13 @@ impl WriteBuffer {
             done += n;
             self.ix += n;
         }
-        self._write_count += 1;
     }
 
     fn flush(&mut self, new_pos: u64) {
         if self.ix > 0 {
             // println!("WriterBuffer flush pos={} size={}", self.pos, self.ix);
             self.stg.write(self.pos, &self.buf[0..self.ix]);
-            self._flush_count += 1;
+            self.flush += 1;
         }
         self.ix = 0;
         self.pos = new_pos;
@@ -63,10 +66,17 @@ impl WriteBuffer {
     ///
     pub fn commit(&mut self, size: u64) {
         self.flush(u64::MAX);
-        // if size > 0 { println!("WriteBuffer commit size={size} write_count={} flush_count={}", self._write_count, self._flush_count); }
+        #[cfg(feature = "log")]
+        if size > 0 {
+            println!(
+                "WriteBuffer commit size={size} write={} flush={} total={}",
+                self.write, self.flush, self.total
+            );
+        }
         self.stg.commit(size);
-        self._write_count = 0;
-        self._flush_count = 0;
+        self.write = 0;
+        self.flush = 0;
+        self.total = 0;
     }
 
     ///

@@ -198,6 +198,7 @@ GO
         if s.len() > 0 {
             // println!("output={}", s);
         }
+        assert_eq!(tr.get_error(), "");
     }
     // assert!(false);
 }

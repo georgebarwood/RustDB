@@ -34,8 +34,9 @@
 //! - `pack` : Allows database pages to be packed using builtin function REPACKFILE.
 //! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
 //! - `unsafe-optim` : Enable unsafe optimisations in release mode.
+//! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
 //!
-//! By default, all features except unsafe-optim are enabled.
+//! By default, all features except unsafe-optim and log are enabled.
 //!
 //!# General Design of Database
 //!
@@ -94,6 +95,7 @@
 
 pub use crate::{
     atomfile::AtomicFile,
+    basicatomfile::BasicAtomicFile,
     builtin::standard_builtins,
     pstore::{AccessPagedData, SharedPagedData},
     stg::{DummyFile, MemFile, MultiFileStorage, SimpleFileStorage, Storage},
@@ -180,6 +182,9 @@ pub mod pstore;
 
 /// [AtomicFile].
 pub mod atomfile;
+
+/// [BasicAtomicFile]
+pub mod basicatomfile;
 
 // Conditional modules.
 
