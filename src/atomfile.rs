@@ -1,4 +1,4 @@
-use crate::{wmap::DataSlice, wmap::WMap, Arc, Data, RwLock, Storage};
+use crate::{wmap::DataSlice, wmap::WMap, Arc, Data, Mutex, RwLock, Storage};
 
 /// AtomicFile makes sure that database updates are all-or-nothing.
 /// Keeps a map of outstanding writes which have not yet been written to the underlying file.
@@ -8,7 +8,6 @@ pub struct AtomicFile {
     cf: Arc<RwLock<CommitFile>>,
     size: u64,
     tx: std::sync::mpsc::Sender<(u64, WMap)>,
-    stopping: bool,
 }
 
 impl AtomicFile {
@@ -22,11 +21,13 @@ impl AtomicFile {
             map: WMap::default(),
             todo: 0,
             done: 0,
-            waiting_client: None,
+            busy: Arc::new(Mutex::new(())),
         }));
         let cf = cf1.clone();
         std::thread::spawn(move || {
             while let Ok((size, map)) = rx.recv() {
+                let busy = cf1.read().unwrap().busy.clone();
+                let _lock = busy.lock();
                 baf.map = map;
                 baf.commit(size);
                 cf1.write().unwrap().done_one();
@@ -37,8 +38,13 @@ impl AtomicFile {
             cf,
             size,
             tx,
-            stopping: false,
         })
+    }
+
+    /// Wait for the write process.
+    fn wait(&self) {
+        let busy = self.cf.read().unwrap().busy.clone();
+        let _ = busy.lock();
     }
 }
 
@@ -48,34 +54,17 @@ impl Storage for AtomicFile {
         if self.map.map.is_empty() {
             return;
         }
-        while {
-            let cf = &mut self.cf.write().unwrap();
-            // If the CommitFile map has got "large" wait for the commit process to finish (so the map is reset).
-            if !self.stopping && cf.wait(3000) {
-                true
-            } else {
-                let map = std::mem::take(&mut self.map);
-                cf.todo += 1;
-                for (k, v) in map.map.iter() {
-                    let start = k + 1 - v.len as u64;
-                    cf.write_data(start, v.data.clone(), v.off, v.len);
-                }
-                self.tx.send((size, map)).unwrap();
-                false
-            }
-        } {
-            std::thread::park();
+        while self.cf.read().unwrap().map.map.len() >= 300 {
+            self.wait();
         }
-        if self.stopping {
-            self.flush();
+        let map = std::mem::take(&mut self.map);
+        let cf = &mut *self.cf.write().unwrap();
+        cf.todo += 1;
+        for (k, v) in map.map.iter() {
+            let start = k + 1 - v.len as u64;
+            cf.write_data(start, v.data.clone(), v.off, v.len);
         }
-    }
-
-    fn flush(&mut self) {
-        self.stopping = true;
-        while self.cf.write().unwrap().wait(0) {
-            std::thread::park();
-        }
+        self.tx.send((size, map)).unwrap();
     }
 
     fn size(&self) -> u64 {
@@ -96,8 +85,10 @@ impl Storage for AtomicFile {
         self.write_data(start, d, 0, len);
     }
 
-    fn complete(&self, done: u64) -> (bool, u64) {
-        self.cf.read().unwrap().complete(done)
+    fn wait_complete(&self) {
+        while self.cf.read().unwrap().todo != 0 {
+            self.wait();
+        }
     }
 }
 
@@ -106,34 +97,15 @@ struct CommitFile {
     map: WMap,
     todo: usize,
     done: u64,
-    waiting_client: Option<std::thread::Thread>,
+    busy: Arc<Mutex<()>>, // This is locked while a commit is being performed.
 }
 
 impl CommitFile {
-    fn complete(&self, done: u64) -> (bool, u64) {
-        let result = self.todo == 0 || self.done > done;
-        (result, self.done)
-    }
-
     fn done_one(&mut self) {
         self.todo -= 1;
         if self.todo == 0 {
             self.done += 1;
             self.map = WMap::default();
-            if let Some(client) = std::mem::take(&mut self.waiting_client) {
-                client.unpark();
-            }
-        }
-    }
-
-    fn wait(&mut self, n: usize) -> bool {
-        let len = self.map.map.len();
-        if len > n {
-            // println!("client waiting n={} len={} todo={}", n, len, self.todo );
-            self.waiting_client = Some(std::thread::current());
-            true
-        } else {
-            false
         }
     }
 }
@@ -177,14 +149,14 @@ pub struct BasicAtomicFile {
 impl BasicAtomicFile {
     /// stg is the main underlying storage, upd is temporary storage for updates during commit.
     pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Box<Self> {
-        let mut result = Self {
+        let mut result = Box::new(Self {
             map: WMap::default(),
             list: Vec::new(),
             stg: WriteBuffer::new(stg),
             upd: WriteBuffer::new(upd),
-        };
+        });
         result.init();
-        Box::new(result)
+        result
     }
 
     /// Apply outstanding updates.

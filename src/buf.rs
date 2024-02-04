@@ -1,28 +1,28 @@
 use crate::stg::Storage;
 
-///
+const BUF_SIZE: usize = 1024 * 1024;
+
+/// Write Buffer.
 pub struct WriteBuffer {
+    ix: usize,
+    pos: u64,
     ///
     pub stg: Box<dyn Storage>,
-    pos: u64, // Current writing position
-    ix: usize,
-    buf: [u8; BUF_SIZE],
     _write_count: u64,
     _flush_count: u64,
+    buf: Vec<u8>,
 }
-
-const BUF_SIZE: usize = 64 * 1024;
 
 impl WriteBuffer {
     ///
     pub fn new(stg: Box<dyn Storage>) -> Self {
         Self {
-            stg,
-            pos: u64::MAX,
             ix: 0,
-            buf: [0; BUF_SIZE],
+            pos: u64::MAX,
+            stg,
             _write_count: 0,
             _flush_count: 0,
+            buf: vec![0; BUF_SIZE],
         }
     }
 
@@ -42,8 +42,7 @@ impl WriteBuffer {
             if n > todo {
                 n = todo;
             }
-            let buf = self.buf.as_mut_slice();
-            buf[self.ix..self.ix + n].copy_from_slice(&data[done..done + n]);
+            self.buf[self.ix..self.ix + n].copy_from_slice(&data[done..done + n]);
             todo -= n;
             done += n;
             self.ix += n;
@@ -51,21 +50,21 @@ impl WriteBuffer {
         self._write_count += 1;
     }
 
-    ///
-    fn flush(&mut self, pos: u64) {
+    fn flush(&mut self, new_pos: u64) {
         if self.ix > 0 {
+            // println!("WriterBuffer flush pos={} size={}", self.pos, self.ix);
             self.stg.write(self.pos, &self.buf[0..self.ix]);
             self._flush_count += 1;
         }
         self.ix = 0;
-        self.pos = pos;
+        self.pos = new_pos;
     }
 
     ///
     pub fn commit(&mut self, size: u64) {
         self.flush(u64::MAX);
+        // if size > 0 { println!("WriteBuffer commit size={size} write_count={} flush_count={}", self._write_count, self._flush_count); }
         self.stg.commit(size);
-        // if size > 0 { println!("commit size={size} write_count={} flush_count={}", self._write_count, self._flush_count); }
         self._write_count = 0;
         self._flush_count = 0;
     }

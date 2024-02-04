@@ -44,13 +44,8 @@ pub trait Storage: Send + Sync {
         panic!()
     }
 
-    /// Finish writing data to permanent storage.
-    fn flush(&mut self) {}
-
-    /// Is flushing complete?
-    fn complete(&self, _done: u64) -> (bool, u64) {
-        (true, 0)
-    }
+    /// Waiting until current writes are complete.
+    fn wait_complete(&self) {}
 }
 
 /// Simple implementation of [Storage] using `Vec<u8>`.

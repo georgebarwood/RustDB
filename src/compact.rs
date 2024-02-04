@@ -165,16 +165,16 @@ impl CompactFile {
             done += amount;
         }
 
-        // Write any remaining data.
+        info.resize(self.sp_size, 0);
+
+        // Save any remaining data using unused portion of starter page.
         let amount = size - done;
         if amount > 0 {
             let off = 2 + ext * 8;
-            assert!(off + amount <= self.sp_size);
-            self.stg.write_data(foff + off as u64, data, done, amount);
+            info[off..off + amount].copy_from_slice(&data[done..size]);
         }
 
         // Write the info.
-        debug_assert!(info.len() == 2 + ext * 8);
         self.stg.write_vec(foff, info);
     }
 

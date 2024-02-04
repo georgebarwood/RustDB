@@ -295,14 +295,9 @@ impl SharedPagedData {
         (self.ep_size - 16) * ep_max + (self.sp_size - 2)
     }
 
-    /// Wait until all commits have been written to secondary storage.
-    pub fn flush(&self) {
-        self.file.write().unwrap().stg.flush();
-    }
-
-    /// Are commits complete?
-    pub fn complete(&self, done: u64) -> (bool, u64) {
-        self.file.read().unwrap().stg.complete(done)
+    /// Wait until current commits have been written.
+    pub fn wait_complete(&self) {
+        self.file.read().unwrap().stg.wait_complete();
     }
 }
 
