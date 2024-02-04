@@ -21,7 +21,6 @@ impl AtomicFile {
             stg,
             map: WMap::default(),
             todo: 0,
-            done: 0,
         }));
         let busy = Arc::new(Mutex::new(()));
         let busy1 = busy.clone();
@@ -97,14 +96,12 @@ struct CommitFile {
     stg: Box<dyn Storage>,
     map: WMap,
     todo: usize,
-    done: u64,
 }
 
 impl CommitFile {
     fn done_one(&mut self) {
         self.todo -= 1;
         if self.todo == 0 {
-            self.done += 1;
             self.map = WMap::default();
         }
     }
