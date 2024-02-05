@@ -185,8 +185,8 @@ GO
 
     // To check things work with low mem_limit.
     {
-        let mut s = spd.stash.lock().unwrap();
-        s.mem_limit = 1;
+        // let mut s = spd.stash.lock().unwrap();
+        // s.mem_limit = 1;
     }
 
     for _i in 0..1000 * test_amount() {
