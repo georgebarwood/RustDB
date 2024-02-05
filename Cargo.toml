@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "5.2.5"
+version = "5.2.10"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -36,6 +36,9 @@ verify = []
 
 # ```unsafe-optim``` : Enable unsafe optimisations in release mode.
 unsafe-optim = []
+
+# ```log``` : Logging.
+log = []
 
 [dependencies]
 rustc-hash = "1.1.0"
