@@ -10,16 +10,20 @@ pub struct BasicAtomicFile {
     pub map: WMap,
     ///
     list: Vec<(u64, DataSlice)>,
+    ///
+    size: u64,
 }
 
 impl BasicAtomicFile {
     /// stg is the main underlying storage, upd is temporary storage for updates during commit.
     pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Box<Self> {
+        let size = stg.size();
         let mut result = Box::new(Self {
             map: WMap::default(),
             list: Vec::new(),
             stg: WriteBuffer::new(stg),
             upd: WriteBuffer::new(upd),
+            size,
         });
         result.init();
         result
@@ -102,15 +106,27 @@ impl BasicAtomicFile {
             self.upd.commit(16); // Not clear if this is necessary.
 
             // Write the update records.
+            let mut stg_written = false;
             let mut pos: u64 = 16;
             for (start, v) in self.list.iter() {
                 let len = v.len as u64;
-                self.upd.write_u64(pos, *start);
-                pos += 8;
-                self.upd.write_u64(pos, len);
-                pos += 8;
-                self.upd.write(pos, &v.data[v.off..v.off + v.len]);
-                pos += len;
+                let start = *start;
+                let data = &v.data[v.off..v.off + v.len];
+                if start >= self.size {
+                    // Writes beyond current stg size can be written directly.
+                    stg_written = true;
+                    self.stg.write(start, data);
+                } else {
+                    self.upd.write_u64(pos, start);
+                    pos += 8;
+                    self.upd.write_u64(pos, len);
+                    pos += 8;
+                    self.upd.write(pos, data);
+                    pos += len;
+                }
+            }
+            if stg_written {
+                self.stg.commit(size);
             }
             self.upd.commit(pos); // Not clear if this is necessary.
 
@@ -120,7 +136,11 @@ impl BasicAtomicFile {
             self.upd.commit(pos);
         } else {
             for (start, v) in self.list.iter() {
-                self.stg.write(*start, &v.data[v.off..v.off + v.len]);
+                let start = *start;
+                if start < self.size {
+                    // Writes beyond current stg size have already been written.
+                    self.stg.write(start, &v.data[v.off..v.off + v.len]);
+                }
             }
             self.list.clear();
             self.stg.commit(size);
@@ -133,10 +153,11 @@ impl Storage for BasicAtomicFile {
     fn commit(&mut self, size: u64) {
         self.commit_phase(size, 1);
         self.commit_phase(size, 2);
+        self.size = size;
     }
 
     fn size(&self) -> u64 {
-        self.stg.stg.size()
+        self.size
     }
 
     fn read(&self, start: u64, data: &mut [u8]) {

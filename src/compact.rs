@@ -53,9 +53,6 @@ pub struct CompactFile {
     /// Start of linked list of free logical pages.        
     lp_first: u64,
 
-    /// lp allocation fields updated.
-    lp_alloc_dirty: bool,
-
     /// Temporary set of free logical pages.
     lp_free: BTreeSet<u64>,
 
@@ -64,10 +61,12 @@ pub struct CompactFile {
 }
 
 impl CompactFile {
-    /// = 28. Size of file header.
-    const HSIZE: u64 = 28;
+    /// = 44. Size of file header.
+    const HSIZE: u64 = 44;
     // Special value used to validate free chain entries.
     const SPECIAL_VALUE: u64 = 0xf1e2d3c4b5a697;
+    // Magic value to ensure file is correct format.
+    const MAGIC_VALUE: [u8; 8] = *b"RDBF1000";
 
     /// Construct a new CompactFile.
     pub fn new(stg: Box<dyn Storage>, sp_size: usize, ep_size: usize) -> Self {
@@ -82,30 +81,46 @@ impl CompactFile {
             ep_free: BTreeSet::new(),
             lp_alloc: 0,
             lp_first: u64::MAX,
-            lp_alloc_dirty: false,
             lp_free: BTreeSet::new(),
             is_new,
         };
+        let magic: u64 = crate::util::getu64(&Self::MAGIC_VALUE, 0);
         if is_new {
-            x.stg.write_u64(0, x.ep_resvd);
-            x.write_u16(24, x.sp_size as u16);
-            x.write_u16(26, x.ep_size as u16);
-            x.lp_alloc_dirty = true;
+            x.stg.write_u64(0, magic);
+            x.write_header();
+            x.write_ep_resvd();
+            x.write_u16(40, x.sp_size as u16);
+            x.write_u16(42, x.ep_size as u16);
         } else {
-            x.ep_resvd = x.stg.read_u64(0);
-            x.lp_alloc = x.stg.read_u64(8);
-            x.lp_first = x.stg.read_u64(16);
-            x.sp_size = x.read_u16(24);
-            x.ep_size = x.read_u16(26);
-        }
-        x.ep_count = (fsize + (x.ep_size as u64) - 1) / (x.ep_size as u64);
-        if x.ep_count < x.ep_resvd {
-            x.ep_count = x.ep_resvd;
+            assert!(
+                x.stg.read_u64(0) == magic,
+                "Database File Invalid (maybe wrong version)"
+            );
+            x.read_header();
+            x.ep_resvd = x.stg.read_u64(32);
+            x.sp_size = x.read_u16(40);
+            x.ep_size = x.read_u16(42);
         }
         if is_new {
             x.save();
         }
         x
+    }
+
+    fn read_header(&mut self) {
+        self.ep_count = self.stg.read_u64(8);
+        self.lp_alloc = self.stg.read_u64(16);
+        self.lp_first = self.stg.read_u64(24);
+    }
+
+    fn write_header(&mut self) {
+        self.stg.write_u64(8, self.ep_count);
+        self.stg.write_u64(16, self.lp_alloc);
+        self.stg.write_u64(24, self.lp_first);
+    }
+
+    fn write_ep_resvd(&mut self) {
+        self.stg.write_u64(32, self.ep_resvd);
     }
 
     /// Get the current size of the specified logical page. Note: not valid for a newly allocated page until it is first written.
@@ -223,7 +238,6 @@ impl CompactFile {
         if let Some(p) = self.lp_free.pop_first() {
             p
         } else {
-            self.lp_alloc_dirty = true;
             let mut p = self.lp_first;
             if p != u64::MAX {
                 self.lp_first = self.next_free(p);
@@ -248,11 +262,7 @@ impl CompactFile {
     /// Resets logical page allocation to last save.
     pub fn rollback(&mut self) {
         self.lp_free.clear();
-        if self.lp_alloc_dirty {
-            self.lp_alloc_dirty = false;
-            self.lp_alloc = self.stg.read_u64(8);
-            self.lp_first = self.stg.read_u64(16);
-        }
+        self.read_header();
     }
 
     /// Process the temporary sets of free pages and write the file header.
@@ -269,7 +279,6 @@ impl CompactFile {
             self.stg.write_u64(lpoff + 2, self.lp_first);
 
             self.lp_first = p;
-            self.lp_alloc_dirty = true;
         }
         // Relocate pages to fill any free extension pages.
         while !self.ep_free.is_empty() {
@@ -281,12 +290,7 @@ impl CompactFile {
                 self.relocate(from, to);
             }
         }
-        // Save the lp alloc values and file size.
-        if self.lp_alloc_dirty {
-            self.lp_alloc_dirty = false;
-            self.stg.write_u64(8, self.lp_alloc);
-            self.stg.write_u64(16, self.lp_first);
-        }
+        self.write_header();
         self.stg.commit(self.ep_count * self.ep_size as u64);
     }
 
@@ -363,7 +367,7 @@ impl CompactFile {
             save = true;
         }
         if save {
-            self.stg.write_u64(0, self.ep_resvd);
+            self.write_ep_resvd();
         }
     }
 
@@ -462,7 +466,7 @@ impl CompactFile {
             self.ep_resvd -= 1;
             self.relocate(from, self.ep_resvd);
         }
-        self.stg.write_u64(0, self.ep_resvd);
+        self.write_ep_resvd();
     }
 
     #[cfg(feature = "renumber")]
@@ -473,7 +477,6 @@ impl CompactFile {
         self.reduce_starter_pages(target);
         self.lp_alloc = target;
         self.lp_free.clear();
-        self.lp_alloc_dirty = true;
         self.clear_lp();
     }
 
