@@ -142,9 +142,9 @@ fn c_builtin_value(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<Value> {
 /// Compile an expression.
 pub fn c_value(b: &Block, e: &mut Expr) -> CExpPtr<Value> {
     match b.kind(e) {
-        DataKind::Bool => Box::new(cexp::BoolToVal { ce: c_bool(b, e) }),
-        DataKind::Int => Box::new(cexp::IntToVal { ce: c_int(b, e) }),
-        DataKind::Float => Box::new(cexp::FloatToVal { ce: c_float(b, e) }),
+        DataKind::Bool => Box::new(cexp::BoolToVal(c_bool(b, e))),
+        DataKind::Int => Box::new(cexp::IntToVal(c_int(b, e))),
+        DataKind::Float => Box::new(cexp::FloatToVal(c_float(b, e))),
         _ => match &mut e.exp {
             ExprIs::ColName(x) => {
                 let (off, typ) = name_to_col(b, x);
@@ -155,19 +155,17 @@ pub fn c_value(b: &Block, e: &mut Expr) -> CExpPtr<Value> {
                     _ => panic!(),
                 }
             }
-            ExprIs::Const(x) => Box::new(cexp::Const {
-                value: (*x).clone(),
-            }),
-            ExprIs::Local(x) => Box::new(cexp::Local { num: *x }),
+            ExprIs::Const(x) => Box::new(cexp::Const((*x).clone())),
+            ExprIs::Local(x) => Box::new(cexp::Local(*x)),
             ExprIs::Binary(op, b1, b2) => {
                 let c1 = c_value(b, b1);
                 let c2 = c_value(b, b2);
                 match op {
                     Token::VBar => {
                         if data_kind(b1.data_type) == DataKind::Binary {
-                            Box::new(cexp::BinConcat { c1, c2 })
+                            Box::new(cexp::BinConcat(c1, c2))
                         } else {
-                            Box::new(cexp::Concat { c1, c2 })
+                            Box::new(cexp::Concat(c1, c2))
                         }
                     }
                     _ => panic!("invalid operator {:?}", op),
@@ -196,14 +194,12 @@ pub fn c_int(b: &Block, e: &mut Expr) -> CExpPtr<i64> {
                 _ => Box::new(cexp::ColumnI { off, size }),
             }
         }
-        ExprIs::Const(Value::Int(b)) => Box::new(cexp::Const::<i64> { value: *b }),
-        ExprIs::Local(num) => Box::new(cexp::Local { num: *num }),
+        ExprIs::Const(Value::Int(b)) => Box::new(cexp::Const::<i64>(*b)),
+        ExprIs::Local(num) => Box::new(cexp::Local(*num)),
         ExprIs::Binary(op, b1, b2) => c_arithmetic(b, *op, b1, b2, c_int),
-        ExprIs::Minus(x) => Box::new(cexp::Minus::<i64> { ce: c_int(b, x) }),
+        ExprIs::Minus(x) => Box::new(cexp::Minus::<i64>(c_int(b, x))),
         ExprIs::Case(w, e) => c_case(b, w, e, c_int),
-        ExprIs::FuncCall(n, a) => Box::new(cexp::ValToInt {
-            ce: c_call(b, n, a),
-        }),
+        ExprIs::FuncCall(n, a) => Box::new(cexp::ValToInt(c_call(b, n, a))),
         ExprIs::BuiltinCall(n, a) => c_builtin_int(b, n, a),
         _ => panic!(),
     }
@@ -223,13 +219,11 @@ pub fn c_float(b: &Block, e: &mut Expr) -> CExpPtr<f64> {
                 _ => panic!(),
             }
         }
-        ExprIs::Local(num) => Box::new(cexp::Local { num: *num }),
+        ExprIs::Local(num) => Box::new(cexp::Local(*num)),
         ExprIs::Binary(op, b1, b2) => c_arithmetic(b, *op, b1, b2, c_float),
-        ExprIs::Minus(x) => Box::new(cexp::Minus::<f64> { ce: c_float(b, x) }),
+        ExprIs::Minus(x) => Box::new(cexp::Minus::<f64>(c_float(b, x))),
         ExprIs::Case(w, e) => c_case(b, w, e, c_float),
-        ExprIs::FuncCall(n, a) => Box::new(cexp::ValToFloat {
-            ce: c_call(b, n, a),
-        }),
+        ExprIs::FuncCall(n, a) => Box::new(cexp::ValToFloat(c_call(b, n, a))),
         ExprIs::BuiltinCall(n, a) => c_builtin_float(b, n, a),
         _ => panic!(),
     }
@@ -245,15 +239,15 @@ pub fn c_bool(b: &Block, e: &mut Expr) -> CExpPtr<bool> {
             let (off, _typ) = name_to_col(b, x);
             Box::new(cexp::ColumnBool { off })
         }
-        ExprIs::Const(Value::Bool(b)) => Box::new(cexp::Const::<bool> { value: *b }),
-        ExprIs::Local(x) => Box::new(cexp::Local { num: *x }),
+        ExprIs::Const(Value::Bool(b)) => Box::new(cexp::Const::<bool>(*b)),
+        ExprIs::Local(x) => Box::new(cexp::Local(*x)),
         ExprIs::Binary(op, b1, b2) => {
             if *op == Token::Or || *op == Token::And {
                 let c1 = c_bool(b, b1);
                 let c2 = c_bool(b, b2);
                 match op {
-                    Token::Or => Box::new(cexp::Or { c1, c2 }),
-                    Token::And => Box::new(cexp::And { c1, c2 }),
+                    Token::Or => Box::new(cexp::Or(c1, c2)),
+                    Token::And => Box::new(cexp::And(c1, c2)),
                     _ => panic!(),
                 }
             } else {
@@ -265,10 +259,8 @@ pub fn c_bool(b: &Block, e: &mut Expr) -> CExpPtr<bool> {
                 }
             }
         }
-        ExprIs::Not(x) => Box::new(cexp::Not { ce: c_bool(b, x) }),
-        ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToBool {
-            ce: c_call(b, name, parms),
-        }),
+        ExprIs::Not(x) => Box::new(cexp::Not(c_bool(b, x))),
+        ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToBool(c_call(b, name, parms))),
         ExprIs::Case(list, els) => c_case(b, list, els, c_bool),
         _ => panic!(),
     }
@@ -293,11 +285,11 @@ where
     let c1 = cexp(b, e1);
     let c2 = cexp(b, e2);
     match op {
-        Token::Plus => Box::new(cexp::Add::<T> { c1, c2 }),
-        Token::Minus => Box::new(cexp::Sub::<T> { c1, c2 }),
-        Token::Times => Box::new(cexp::Mul::<T> { c1, c2 }),
-        Token::Divide => Box::new(cexp::Div::<T> { c1, c2 }),
-        Token::Percent => Box::new(cexp::Rem::<T> { c1, c2 }),
+        Token::Plus => Box::new(cexp::Add::<T>(c1, c2)),
+        Token::Minus => Box::new(cexp::Sub::<T>(c1, c2)),
+        Token::Times => Box::new(cexp::Mul::<T>(c1, c2)),
+        Token::Divide => Box::new(cexp::Div::<T>(c1, c2)),
+        Token::Percent => Box::new(cexp::Rem::<T>(c1, c2)),
         _ => panic!(),
     }
 }
@@ -316,12 +308,12 @@ where
     let c1 = cexp(b, e1);
     let c2 = cexp(b, e2);
     match op {
-        Token::Equal => Box::new(cexp::Equal::<T> { c1, c2 }),
-        Token::NotEqual => Box::new(cexp::NotEqual::<T> { c1, c2 }),
-        Token::Less => Box::new(cexp::Less::<T> { c1, c2 }),
-        Token::Greater => Box::new(cexp::Greater::<T> { c1, c2 }),
-        Token::LessEqual => Box::new(cexp::LessEqual::<T> { c1, c2 }),
-        Token::GreaterEqual => Box::new(cexp::GreaterEqual::<T> { c1, c2 }),
+        Token::Equal => Box::new(cexp::Equal::<T>(c1, c2)),
+        Token::NotEqual => Box::new(cexp::NotEqual::<T>(c1, c2)),
+        Token::Less => Box::new(cexp::Less::<T>(c1, c2)),
+        Token::Greater => Box::new(cexp::Greater::<T>(c1, c2)),
+        Token::LessEqual => Box::new(cexp::LessEqual::<T>(c1, c2)),
+        Token::GreaterEqual => Box::new(cexp::GreaterEqual::<T>(c1, c2)),
         _ => panic!(),
     }
 }

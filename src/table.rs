@@ -873,7 +873,7 @@ fn get_keys(
 
             return if let Some(c1) = x1 {
                 if let Some(c2) = x2 {
-                    Some(Box::new(cexp::And { c1, c2 }))
+                    Some(Box::new(cexp::And(c1, c2)))
                 } else {
                     Some(c1)
                 }
