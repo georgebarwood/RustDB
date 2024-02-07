@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "5.2.12"
+version = "5.2.15"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -10,8 +10,12 @@ categories = ["database-implementations"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[dependencies]
+rustc-hash = "1.1.0"
+serde = { version = "1.0.131", features = ["derive","rc"] }
+
 [features]
-default = ["builtin","gentrans","pack","verify","table","max","renumber"]
+default = ["builtin","pack","verify","table","max","renumber","gentrans"]
 
 # GenTransaction ( implementation of Transaction )
 gentrans = []
@@ -40,11 +44,9 @@ unsafe-optim = []
 # ```log``` : Logging.
 log = []
 
-[dependencies]
-rustc-hash = "1.1.0"
-serde = { version = "1.0.131", features = ["derive","rc"] }
-
 [dev-dependencies]
 rand = "0.8.4"
 sqlite = "0.32.0"
+
+
 
