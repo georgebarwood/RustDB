@@ -8,10 +8,17 @@ pub struct WriteBuffer {
     pos: u64,
     ///
     pub stg: Box<dyn Storage>,
+    buf: Vec<u8>,
+    #[cfg(feature = "log")]
+    log: Log,
+}
+
+#[cfg(feature = "log")]
+struct Log {
     write: u64,
     flush: u64,
     total: u64,
-    buf: Vec<u8>,
+    first_flush_time: std::time::Instant,
 }
 
 impl WriteBuffer {
@@ -21,10 +28,14 @@ impl WriteBuffer {
             ix: 0,
             pos: u64::MAX,
             stg,
-            write: 0,
-            flush: 0,
-            total: 0,
             buf: vec![0; BUF_SIZE],
+            #[cfg(feature = "log")]
+            log: Log {
+                write: 0,
+                flush: 0,
+                total: 0,
+                first_flush_time: std::time::Instant::now(),
+            },
         }
     }
 
@@ -35,8 +46,11 @@ impl WriteBuffer {
         }
         let mut done: usize = 0;
         let mut todo: usize = data.len();
-        self.write += 1;
-        self.total += todo as u64;
+        #[cfg(feature = "log")]
+        {
+            self.log.write += 1;
+            self.log.total += todo as u64;
+        }
         while todo > 0 {
             let mut n: usize = BUF_SIZE - self.ix;
             if n == 0 {
@@ -57,7 +71,13 @@ impl WriteBuffer {
         if self.ix > 0 {
             // println!("WriterBuffer flush pos={} size={}", self.pos, self.ix);
             self.stg.write(self.pos, &self.buf[0..self.ix]);
-            self.flush += 1;
+            #[cfg(feature = "log")]
+            {
+                if self.log.flush == 0 {
+                    self.log.first_flush_time = std::time::Instant::now();
+                }
+                self.log.flush += 1;
+            }
         }
         self.ix = 0;
         self.pos = new_pos;
@@ -67,16 +87,21 @@ impl WriteBuffer {
     pub fn commit(&mut self, size: u64) {
         self.flush(u64::MAX);
         #[cfg(feature = "log")]
-        if size > 0 {
-            println!(
-                "WriteBuffer commit size={size} write={} flush={} total={}",
-                self.write, self.flush, self.total
-            );
+        {
+            if size > 0 {
+                println!(
+                    "WriteBuffer commit size={size} write={} flush={} total={} time(micros)={}",
+                    self.log.write,
+                    self.log.flush,
+                    self.log.total,
+                    self.log.first_flush_time.elapsed().as_micros()
+                );
+            }
+            self.log.write = 0;
+            self.log.flush = 0;
+            self.log.total = 0;
         }
         self.stg.commit(size);
-        self.write = 0;
-        self.flush = 0;
-        self.total = 0;
     }
 
     ///
