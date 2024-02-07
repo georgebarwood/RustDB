@@ -299,7 +299,7 @@ impl Page {
     pub fn left(&self, x: usize) -> usize {
         let off = self.over_off(x);
         let data = &self.data;
-        perf_assert!(off + 1 < data.len());
+        unsafe_assert!(off + 1 < data.len());
         data[off + 1] as usize | (getbits!(data[off] as usize, 2, NF) << 8)
     }
 
@@ -307,7 +307,7 @@ impl Page {
     pub fn right(&self, x: usize) -> usize {
         let off = self.over_off(x);
         let data = &self.data;
-        perf_assert!(off + 2 < data.len());
+        unsafe_assert!(off + 2 < data.len());
         data[off + 2] as usize | (getbits!(data[off] as usize, 2 + NF, NF) << 8)
     }
 
@@ -476,7 +476,7 @@ impl<'a> MutPage<'a> {
     /// Get balance for node x.
     fn balance(&self, x: usize) -> Balance {
         let off = self.over_off(x);
-        perf_assert!(off < self.data.len());
+        unsafe_assert!(off < self.data.len());
         match getbits!(self.data[off], 0, 2) {
             0 => LeftHigher,
             1 => Balanced,
@@ -487,7 +487,7 @@ impl<'a> MutPage<'a> {
     /// Set balance for node x.
     fn set_balance(&mut self, x: usize, balance: Balance) {
         let off = self.over_off(x);
-        perf_assert!(off < self.data.len());
+        unsafe_assert!(off < self.data.len());
         setbits!(self.data[off], 0, 2, balance as u8);
     }
 
@@ -495,7 +495,7 @@ impl<'a> MutPage<'a> {
     fn left(&self, x: usize) -> usize {
         let off = self.over_off(x);
         let data = &self.data;
-        perf_assert!(off + 1 < data.len());
+        unsafe_assert!(off + 1 < data.len());
         data[off + 1] as usize | (getbits!(data[off] as usize, 2, NF) << 8)
     }
 
@@ -503,7 +503,7 @@ impl<'a> MutPage<'a> {
     fn right(&self, x: usize) -> usize {
         let off = self.over_off(x);
         let data = &self.data;
-        perf_assert!(off + 2 < data.len());
+        unsafe_assert!(off + 2 < data.len());
         data[off + 2] as usize | (getbits!(data[off] as usize, 2 + NF, NF) << 8)
     }
 
@@ -511,7 +511,7 @@ impl<'a> MutPage<'a> {
     fn set_left(&mut self, x: usize, y: usize) {
         let off = self.over_off(x);
         let data = &mut self.data;
-        perf_assert!(off + 1 < data.len());
+        unsafe_assert!(off + 1 < data.len());
         data[off + 1] = (y & 255) as u8;
         setbits!(data[off], 2, NF, (y >> 8) as u8);
         debug_assert!(self.left(x) == y);
@@ -521,7 +521,7 @@ impl<'a> MutPage<'a> {
     fn set_right(&mut self, x: usize, y: usize) {
         let off = self.over_off(x);
         let data = &mut self.data;
-        perf_assert!(off + 2 < data.len());
+        unsafe_assert!(off + 2 < data.len());
         data[off + 2] = (y & 255) as u8;
         setbits!(data[off], 2 + NF, NF, (y >> 8) as u8);
         debug_assert!(self.right(x) == y);
@@ -531,7 +531,7 @@ impl<'a> MutPage<'a> {
     fn compare(&self, db: &DB, r: &dyn Record, x: usize) -> Ordering {
         let off = self.rec_offset(x);
         let size = self.rec_size();
-        perf_assert!(off + size < self.data.len());
+        unsafe_assert!(off + size < self.data.len());
         r.compare(db, &self.data[off..off + size])
     }
 

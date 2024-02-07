@@ -364,6 +364,7 @@ impl AccessPagedData {
                 s.delta((0, loaded), true, false);
             }
             s.set(lpnum, old, data.clone());
+            s.trim_cache();
         }
 
         // Write data to underlying file.

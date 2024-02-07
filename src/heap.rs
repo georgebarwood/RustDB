@@ -10,7 +10,7 @@ where
     type Output = T;
     fn index(&self, x: U) -> &Self::Output {
         let x = usize::try_from(x).ok().unwrap();
-        perf_assert!(x < self.0.len());
+        unsafe_assert!(x < self.0.len());
         &self.0[x]
     }
 }
@@ -21,7 +21,7 @@ where
 {
     fn index_mut(&mut self, x: U) -> &mut Self::Output {
         let x = usize::try_from(x).ok().unwrap();
-        perf_assert!(x < self.0.len());
+        unsafe_assert!(x < self.0.len());
         &mut self.0[x]
     }
 }

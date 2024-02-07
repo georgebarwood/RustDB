@@ -44,7 +44,7 @@ pub trait Storage: Send + Sync {
         panic!()
     }
 
-    /// Waiting until current writes are complete.
+    /// Wait until current writes are complete.
     fn wait_complete(&self) {}
 }
 

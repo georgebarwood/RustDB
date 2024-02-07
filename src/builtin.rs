@@ -174,7 +174,7 @@ struct ParseInt {
 impl CExp<i64> for ParseInt {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> i64 {
         let s = self.s.eval(e, d).str();
-        s.parse().unwrap()
+        s.parse().unwrap_or(0)
     }
 }
 /////////////////////////////

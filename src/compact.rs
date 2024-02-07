@@ -58,6 +58,9 @@ pub struct CompactFile {
 
     /// File is newly created.         
     is_new: bool,
+
+    /// Header fields (ep_count, lp_alloc, lp_first) modified.
+    header_dirty: bool,
 }
 
 impl CompactFile {
@@ -83,6 +86,7 @@ impl CompactFile {
             lp_first: u64::MAX,
             lp_free: BTreeSet::new(),
             is_new,
+            header_dirty: false,
         };
         let magic: u64 = crate::util::getu64(&Self::MAGIC_VALUE, 0);
         if is_new {
@@ -245,6 +249,7 @@ impl CompactFile {
                 p = self.lp_alloc;
                 self.lp_alloc += 1;
             }
+            self.header_dirty = true;
             p
         }
     }
@@ -279,10 +284,12 @@ impl CompactFile {
             self.stg.write_u64(lpoff + 2, self.lp_first);
 
             self.lp_first = p;
+            self.header_dirty = true;
         }
         // Relocate pages to fill any free extension pages.
         while !self.ep_free.is_empty() {
             self.ep_count -= 1;
+            self.header_dirty = true;
             let from = self.ep_count;
             // If the last page is not a free page, relocate it using a free page.
             if !self.ep_free.remove(&from) {
@@ -290,7 +297,9 @@ impl CompactFile {
                 self.relocate(from, to);
             }
         }
-        self.write_header();
+        if self.header_dirty {
+            self.write_header();
+        }
         self.stg.commit(self.ep_count * self.ep_size as u64);
     }
 
@@ -359,6 +368,7 @@ impl CompactFile {
             {
                 self.relocate(self.ep_resvd, self.ep_count);
                 self.ep_count += 1;
+                self.header_dirty = true;
             }
 
             self.ep_clear(self.ep_resvd);
@@ -380,6 +390,7 @@ impl CompactFile {
         } else {
             let p = self.ep_count;
             self.ep_count += 1;
+            self.header_dirty = true;
             p
         }
     }
@@ -427,6 +438,7 @@ impl CompactFile {
             p = self.next_free(p);
         }
         self.lp_first = p;
+        self.header_dirty = true;
         self.lp_alloc - self.lp_free.len() as u64
     }
 
@@ -462,6 +474,7 @@ impl CompactFile {
         let resvd = (resvd + self.ep_size as u64 - 1) / self.ep_size as u64;
         while self.ep_resvd > resvd {
             self.ep_count -= 1;
+            self.header_dirty = true;
             let from = self.ep_count;
             self.ep_resvd -= 1;
             self.relocate(from, self.ep_resvd);
@@ -476,6 +489,7 @@ impl CompactFile {
         assert!(self.ep_free.is_empty());
         self.reduce_starter_pages(target);
         self.lp_alloc = target;
+        self.header_dirty = true;
         self.lp_free.clear();
         self.clear_lp();
     }

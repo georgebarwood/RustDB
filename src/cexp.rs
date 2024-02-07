@@ -1,4 +1,4 @@
-use crate::{get_bytes, panic, util, CExp, CExpPtr, EvalEnv, Function, Rc, Value};
+use crate::{get_bytes, util, CExp, CExpPtr, EvalEnv, Function, Rc, Value};
 
 /// Function call.
 pub(crate) struct Call {
@@ -324,7 +324,7 @@ impl CExp<f64> for Local {
         if let Value::Float(v) = e.stack[e.bp + self.0] {
             v
         } else {
-            panic!()
+            unsafe_panic!()
         }
     }
 }
@@ -333,7 +333,7 @@ impl CExp<i64> for Local {
         if let Value::Int(v) = e.stack[e.bp + self.0] {
             v
         } else {
-            panic!()
+            unsafe_panic!()
         }
     }
 }
@@ -343,7 +343,7 @@ impl CExp<bool> for Local {
         if let Value::Bool(v) = e.stack[e.bp + self.0] {
             v
         } else {
-            panic!()
+            unsafe_panic!()
         }
     }
 }
@@ -371,7 +371,7 @@ impl CExp<i64> for ValToInt {
         if let Value::Int(x) = self.0.eval(e, d) {
             return x;
         }
-        panic!();
+        unsafe_panic!();
     }
 }
 
@@ -382,7 +382,7 @@ impl CExp<f64> for ValToFloat {
         if let Value::Float(x) = self.0.eval(e, d) {
             return x;
         }
-        panic!();
+        unsafe_panic!();
     }
 }
 
@@ -393,7 +393,7 @@ impl CExp<bool> for ValToBool {
         if let Value::Bool(x) = self.0.eval(e, d) {
             return x;
         }
-        panic!();
+        unsafe_panic!();
     }
 }
 

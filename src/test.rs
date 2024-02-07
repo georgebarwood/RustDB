@@ -263,3 +263,116 @@ pub fn insert_delete() {
     db.save();
     assert_eq!(tr.get_error(), "");
 }
+
+//$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+#[test]
+fn test_date_calc() {
+    use crate::*;
+    const INITSQL: &str = "
+CREATE SCHEMA [date]
+CREATE FN [date].[YearDayToYearMonthDay]( yd int ) RETURNS int AS
+BEGIN
+  DECLARE y int, d int, leap bool, fdm int, m int, dim int
+  SET y = yd / 512
+  SET d = yd % 512 - 1
+  SET leap = date.IsLeapYear( y )
+  -- Jan = 0..30, Feb = 0..27 or 0..28  
+  IF NOT leap AND d >= 59 SET d = d + 1
+  SET fdm = CASE 
+    WHEN d < 31 THEN 0 -- Jan
+    WHEN d < 60 THEN 31 -- Feb
+    WHEN d < 91 THEN 60 -- Mar
+    WHEN d < 121 THEN 91 -- Apr
+    WHEN d < 152 THEN 121 -- May
+    WHEN d < 182 THEN 152 -- Jun
+    WHEN d < 213 THEN 182 -- Jul
+    WHEN d < 244 THEN 213 -- Aug
+    WHEN d < 274 THEN 244 -- Sep
+    WHEN d < 305 THEN 274 -- Oct
+    WHEN d < 335 THEN 305 -- Nov
+    ELSE 335 -- Dec
+    END
+  SET dim = d - fdm
+  SET m = ( d - dim + 28 ) / 31
+  RETURN date.YearMonthDay( y, m+1, dim+1 )
+END
+
+CREATE FN [date].[DaysToYearDay]( days int ) RETURNS int AS
+BEGIN
+  -- Given a date represented by the number of days since 1 Jan 0000
+  -- calculate a date in Year/Day representation stored as
+  -- year * 512 + day where day is 1..366, the day in the year.
+  
+  DECLARE year int, day int, cycle int
+  -- 146097 is the number of the days in a 400 year cycle ( 400 * 365 + 97 leap years )
+  SET cycle = days / 146097
+  SET days = days - 146097 * cycle -- Same as days % 146097
+  SET year = days / 365
+  SET day = days - year * 365 -- Same as days % 365
+  -- Need to adjust day to allow for leap years.
+  -- Leap years are 0, 4, 8, 12 ... 96, not 100, 104 ... not 200... not 300, 400, 404 ... not 500.
+  -- Adjustment as function of y is 0 => 0, 1 => 1, 2 =>1, 3 => 1, 4 => 1, 5 => 2 ..
+  SET day = day - ( year + 3 ) / 4 + ( year + 99 ) / 100 - ( year + 399 ) / 400
+  
+  IF day < 0
+  BEGIN
+    SET year -= 1
+    SET day += CASE WHEN date.IsLeapYear( year ) THEN 366 ELSE 365 END
+  END
+  RETURN 512 * ( cycle * 400 + year ) + day + 1
+END
+
+CREATE FN [date].[YearMonthDay]( year int, month int, day int ) RETURNS int AS
+BEGIN
+  RETURN year * 512 + month * 32 + day
+END
+
+CREATE FN [date].[IsLeapYear]( y int ) RETURNS bool AS
+BEGIN
+  RETURN y % 4 = 0 AND ( y % 100 != 0 OR y % 400 = 0 )
+END
+
+CREATE FN [date].[DaysToYearMonthDay]( days int ) RETURNS int AS
+BEGIN
+  RETURN date.YearDayToYearMonthDay( date.DaysToYearDay( days ) )
+END
+
+CREATE FN [date].[test]() AS
+BEGIN
+   DECLARE days int, ymd int
+   WHILE days < 10000
+   BEGIN
+      SET days += 1
+      SET ymd = date.DaysToYearMonthDay(days)
+   END
+END
+";
+
+    let stg = AtomicFile::new(MemFile::new(), MemFile::new());
+
+    let mut bmap = BuiltinMap::default();
+    standard_builtins(&mut bmap);
+    let bmap = Arc::new(bmap);
+
+    let spd = SharedPagedData::new(stg);
+    let wapd = AccessPagedData::new_writer(spd.clone());
+    let db = Database::new(wapd, INITSQL, bmap.clone());
+
+    // To check things work with low mem_limit.
+    {
+        // let mut s = spd.stash.lock().unwrap();
+        // s.mem_limit = 1;
+    }
+
+    let mut results = Vec::new();
+    for _i in 0..100 {
+        let start = std::time::Instant::now();
+        let mut tr = GenTransaction::default();
+        let sql = "EXEC date.test()";
+        db.run(&sql, &mut tr);
+        results.push(start.elapsed().as_micros() as u64);
+        assert_eq!(tr.get_error(), "");
+    }
+    crate::bench::print_results("date calc test", results);
+}
