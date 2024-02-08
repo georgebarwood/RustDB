@@ -299,6 +299,7 @@ impl CompactFile {
         }
         if self.header_dirty {
             self.write_header();
+            self.header_dirty = false;
         }
         self.stg.commit(self.ep_count * self.ep_size as u64);
     }
