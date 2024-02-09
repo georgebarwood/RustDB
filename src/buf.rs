@@ -8,7 +8,7 @@ pub struct WriteBuffer {
     pos: u64,
     ///
     pub stg: Box<dyn Storage>,
-    buf: Vec<u8>,
+    buf: Box<[u8; BUF_SIZE]>,
     #[cfg(feature = "log")]
     log: Log,
 }
@@ -28,7 +28,7 @@ impl WriteBuffer {
             ix: 0,
             pos: u64::MAX,
             stg,
-            buf: vec![0; BUF_SIZE],
+            buf: vec![0; BUF_SIZE].try_into().unwrap(),
             #[cfg(feature = "log")]
             log: Log {
                 write: 0,
