@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "5.2.16"
+version = "5.2.19"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -12,36 +12,19 @@ categories = ["database-implementations"]
 
 [dependencies]
 rustc-hash = "1.1.0"
-serde = { version = "1.0.131", features = ["derive","rc"] }
+serde = { version = "1.0.131", features = ["derive","rc"], optional=true }
 
 [features]
 default = ["builtin","pack","verify","table","max","renumber","gentrans"]
-
-# GenTransaction ( implementation of Transaction )
 gentrans = []
-
-# ````builtin``` : Allows extra SQL builtin functions to be defined.
+serde = ["dep:serde"]
 builtin = []
-
-# ```table``` : Allows direct access to database tables.
 table = []
-
-# ```max``` : Full access, including access to possibly unstable interfaces.
 max = ["builtin","table"]
-
-# ```pack``` : Allows database pages to be packed using builtin function REPACKFILE.
 pack = []
-
-# ```renumber``` : Allows database pages to be renumbered usinging builtin function RENUMBER.
 renumber = []
-
-# ```verify``` : Allows database structure to be verified using builtin function VERIFYDB.
 verify = []
-
-# ```unsafe-optim``` : Enable unsafe optimisations in release mode.
 unsafe-optim = []
-
-# ```log``` : Logging.
 log = []
 
 [dev-dependencies]
