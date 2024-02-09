@@ -1,9 +1,11 @@
 use crate::{panic, Any, Arc, BTreeMap, Data, Rc, Transaction, Value};
 
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// General Query.
-#[derive(Serialize, Deserialize, Debug)]
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
 pub struct GenQuery {
     /// The SQL query string.
@@ -47,7 +49,8 @@ pub struct GenTransaction {
 }
 
 /// Part of multipart data ( uploaded files ).
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Default)]
 #[non_exhaustive]
 pub struct Part {
     /// Part name.

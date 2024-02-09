@@ -27,6 +27,7 @@
 //!
 //! This crate supports the following cargo features:
 //! - `gentrans` : enables gentrans module ( sample implementation of [Transaction] ).
+//! - `serde` : enables serialisation of [Transaction] via serde crate.
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
 //! - `table` : Allow direct access to database tables.
 //! - `max` : maximal interface, including internal modules (which may not be stable).
@@ -36,7 +37,7 @@
 //! - `unsafe-optim` : Enable unsafe optimisations in release mode.
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
 //!
-//! By default, all features except unsafe-optim and log are enabled.
+//! By default, all features except serde, unsafe-optim and log are enabled.
 //!
 //!# General Design of Database
 //!
@@ -676,7 +677,7 @@ GO
     #[cfg(feature = "verify")]
     /// Verify the page structure of the database.
     pub fn verify(self: &DB) -> String {
-        let (mut pages, total) = self.apd.spd.file.read().unwrap().get_info();
+        let (mut pages, total) = self.apd.spd.file.write().unwrap().get_info();
         let total = total as usize;
 
         let free = pages.len();
@@ -704,31 +705,32 @@ GO
     #[cfg(feature = "renumber")]
     pub fn renumber(self: &DB) {
         let target = self.apd.spd.file.write().unwrap().load_free_pages();
-
-        for bs in &self.bs {
-            bs.file.renumber(self, target);
-        }
-
-        for t in self.tables.borrow().values() {
-            let tf = &t.file;
-            let mut root_page = tf.root_page.get();
-            if root_page >= target {
-                root_page = self.apd.renumber_page(root_page);
-                tf.root_page.set(root_page);
-                sys::set_root(self, t.id, root_page);
+        if let Some(target) = target {
+            for bs in &self.bs {
+                bs.file.renumber(self, target);
             }
-            tf.renumber(self, target);
-            for ix in &mut *t.ixlist.borrow_mut() {
-                let mut root_page = ix.file.root_page.get();
+
+            for t in self.tables.borrow().values() {
+                let tf = &t.file;
+                let mut root_page = tf.root_page.get();
                 if root_page >= target {
                     root_page = self.apd.renumber_page(root_page);
-                    ix.file.root_page.set(root_page);
-                    sys::set_ix_root(self, ix.id, root_page);
+                    tf.root_page.set(root_page);
+                    sys::set_root(self, t.id, root_page);
                 }
-                ix.file.renumber(self, target);
+                tf.renumber(self, target);
+                for ix in &mut *t.ixlist.borrow_mut() {
+                    let mut root_page = ix.file.root_page.get();
+                    if root_page >= target {
+                        root_page = self.apd.renumber_page(root_page);
+                        ix.file.root_page.set(root_page);
+                        sys::set_ix_root(self, ix.id, root_page);
+                    }
+                    ix.file.renumber(self, target);
+                }
             }
+            self.apd.spd.file.write().unwrap().set_lpalloc(target);
         }
-        self.apd.spd.file.write().unwrap().set_lpalloc(target);
     }
 } // end impl Database
 

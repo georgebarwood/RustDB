@@ -22,8 +22,6 @@ use std::collections::BTreeSet;
 ///
 /// Layout of extension page: 8 byte logical page number | user data | unused data.
 ///
-/// Note: for a free logical page a link to the next free logical page is stored after the page size, then a special value.
-///
 /// All pages ( whether allocated or not ) initially have size zero.
 ///
 /// Pages are allocated by simply incrementing lp_alloc, so sizes in the starter page section must be pre-initialised to zero when it is extended or after a renumber operation.
@@ -56,6 +54,9 @@ pub struct CompactFile {
     /// Temporary set of free logical pages.
     lp_free: BTreeSet<u64>,
 
+    /// Starter page with list of free logical pages.
+    fsp: FreeStarterPage,
+
     /// File is newly created.         
     is_new: bool,
 
@@ -63,13 +64,12 @@ pub struct CompactFile {
     header_dirty: bool,
 }
 
+/// = 44. Size of file header.
+const HSIZE: u64 = 44;
+
 impl CompactFile {
-    /// = 44. Size of file header.
-    const HSIZE: u64 = 44;
-    // Special value used to validate free chain entries.
-    const SPECIAL_VALUE: u64 = 0xf1e2d3c4b5a697;
     // Magic value to ensure file is correct format.
-    const MAGIC_VALUE: [u8; 8] = *b"RDBF1000";
+    const MAGIC_VALUE: [u8; 8] = *b"RDBF1001";
 
     /// Construct a new CompactFile.
     pub fn new(stg: Box<dyn Storage>, sp_size: usize, ep_size: usize) -> Self {
@@ -87,6 +87,7 @@ impl CompactFile {
             lp_free: BTreeSet::new(),
             is_new,
             header_dirty: false,
+            fsp: FreeStarterPage::new(),
         };
         let magic: u64 = crate::util::getu64(&Self::MAGIC_VALUE, 0);
         if is_new {
@@ -147,7 +148,7 @@ impl CompactFile {
         let ext = self.ext(size);
 
         // Read the current starter info.
-        let foff = Self::HSIZE + (self.sp_size as u64) * lpnum;
+        let foff = HSIZE + (self.sp_size as u64) * lpnum;
         let old_size = self.read_u16(foff);
         let mut old_ext = self.ext(old_size);
 
@@ -229,14 +230,6 @@ impl CompactFile {
         Arc::new(data)
     }
 
-    /// Get the next page in the free chain.
-    fn next_free(&self, p: u64) -> u64 {
-        let lpoff = Self::HSIZE + p * self.sp_size as u64;
-        debug_assert!(self.read_u16(lpoff) == 0);
-        debug_assert!(self.stg.read_u64(lpoff + 10) == Self::SPECIAL_VALUE);
-        self.stg.read_u64(lpoff + 2)
-    }
-
     /// Allocate logical page number. Pages are numbered 0,1,2...
     pub fn alloc_page(&mut self) -> u64 {
         if let Some(p) = self.lp_free.pop_first() {
@@ -244,12 +237,19 @@ impl CompactFile {
         } else {
             let mut p = self.lp_first;
             if p != u64::MAX {
-                self.lp_first = self.next_free(p);
+                self.load_fsp(p);
+                if self.fsp.count > 1 {
+                    p = self.fsp.pop();
+                } else {
+                    self.lp_first = self.fsp.pop();
+                    self.header_dirty = true;
+                    self.fsp.dirty = false;
+                }
             } else {
                 p = self.lp_alloc;
                 self.lp_alloc += 1;
+                self.header_dirty = true;
             }
-            self.header_dirty = true;
             p
         }
     }
@@ -268,6 +268,27 @@ impl CompactFile {
     pub fn rollback(&mut self) {
         self.lp_free.clear();
         self.read_header();
+        self.fsp.clear(u64::MAX);
+    }
+
+    fn perm_free(&mut self, p: u64) {
+        if self.lp_first == u64::MAX {
+            self.fsp.clear(p);
+            self.fsp.push(u64::MAX);
+            self.lp_first = p;
+            self.header_dirty = true;
+        } else {
+            self.load_fsp(self.lp_first);
+            if !self.fsp.full() {
+                self.fsp.push(p);
+            } else {
+                self.save_fsp();
+                self.fsp.clear(p);
+                self.fsp.push(self.lp_first);
+                self.lp_first = p;
+                self.header_dirty = true;
+            }
+        }
     }
 
     /// Process the temporary sets of free pages and write the file header.
@@ -278,13 +299,7 @@ impl CompactFile {
             let p = *p;
             // Set the page size to zero, frees any associated extension pages.
             self.set_page(p, nd());
-            // Store link to old lp_first after size field.
-            let lpoff = Self::HSIZE + p * self.sp_size as u64;
-            self.stg.write_u64(lpoff + 10, Self::SPECIAL_VALUE); // Used to validate free chain entries.
-            self.stg.write_u64(lpoff + 2, self.lp_first);
-
-            self.lp_first = p;
-            self.header_dirty = true;
+            self.perm_free(p);
         }
         // Relocate pages to fill any free extension pages.
         while !self.ep_free.is_empty() {
@@ -297,6 +312,7 @@ impl CompactFile {
                 self.relocate(from, to);
             }
         }
+        self.save_fsp();
         if self.header_dirty {
             self.write_header();
             self.header_dirty = false;
@@ -327,13 +343,15 @@ impl CompactFile {
         let lpnum = util::getu64(&buffer, 0);
         assert!(lpnum < self.lp_alloc);
         // Compute location and length of the array of extension page numbers.
-        let mut off = Self::HSIZE + lpnum * self.sp_size as u64;
+        let mut off = HSIZE + lpnum * self.sp_size as u64;
         let size = self.read_u16(off);
         let mut ext = self.ext(size);
         off += 2;
         // Update the matching extension page number.
         loop {
-            debug_assert!(ext != 0);
+            if ext == 0 {
+                panic!("relocate failed to find matching extension page lpnum={lpnum} from={from}");
+            }
             let x = self.stg.read_u64(off);
             if x == from {
                 self.stg.write_u64(off, to);
@@ -353,7 +371,7 @@ impl CompactFile {
     /// Get offset of starter page ( returns zero if not in reserved region ).
     fn lp_off(&self, lpnum: u64) -> u64 {
         let sp_size = self.sp_size as u64;
-        let mut off = Self::HSIZE + lpnum * sp_size;
+        let mut off = HSIZE + lpnum * sp_size;
         if off + sp_size > self.ep_resvd * (self.ep_size as u64) {
             off = 0;
         }
@@ -419,28 +437,41 @@ impl CompactFile {
 
     #[cfg(feature = "verify")]
     /// Get the set of free logical pages ( also verifies free chain is ok ).
-    pub fn get_info(&self) -> (crate::HashSet<u64>, u64) {
+    pub fn get_info(&mut self) -> (crate::HashSet<u64>, u64) {
         let mut free = crate::HashSet::default();
         let mut p = self.lp_first;
         while p != u64::MAX {
             assert!(free.insert(p));
-            p = self.next_free(p);
+            self.load_fsp(p);
+            for i in 1..self.fsp.count {
+                let p = self.fsp.get(i);
+                assert!(free.insert(p));
+            }
+            p = self.fsp.get(0);
         }
         (free, self.lp_alloc)
     }
 
     #[cfg(feature = "renumber")]
-    /// Load free pages into lp_free, preparation for page renumbering. Returns number of used pages.
-    pub fn load_free_pages(&mut self) -> u64 {
+    /// Load free pages into lp_free, preparation for page renumbering. Returns number of used pages or None if there are no free pages.
+    pub fn load_free_pages(&mut self) -> Option<u64> {
         assert!(self.ep_free.is_empty());
         let mut p = self.lp_first;
-        while p != u64::MAX {
-            self.free_page(p);
-            p = self.next_free(p);
+        if p == u64::MAX {
+            return None;
         }
-        self.lp_first = p;
+        while p != u64::MAX {
+            self.load_fsp(p);
+            for i in 1..self.fsp.count {
+                let p = self.fsp.get(i);
+                self.free_page(p);
+            }
+            self.free_page(p);
+            p = self.fsp.get(0);
+        }
+        self.lp_first = u64::MAX;
         self.header_dirty = true;
-        self.lp_alloc - self.lp_free.len() as u64
+        Some(self.lp_alloc - self.lp_free.len() as u64)
     }
 
     #[cfg(feature = "renumber")]
@@ -463,7 +494,7 @@ impl CompactFile {
             }
 
             // Write the starter data.
-            let foff2 = Self::HSIZE + (self.sp_size as u64) * lpnum2;
+            let foff2 = HSIZE + (self.sp_size as u64) * lpnum2;
             self.stg.write_vec(foff2, starter);
         }
         lpnum2
@@ -471,7 +502,7 @@ impl CompactFile {
 
     #[cfg(feature = "renumber")]
     fn reduce_starter_pages(&mut self, target: u64) {
-        let resvd = Self::HSIZE + target * self.sp_size as u64;
+        let resvd = HSIZE + target * self.sp_size as u64;
         let resvd = (resvd + self.ep_size as u64 - 1) / self.ep_size as u64;
         while self.ep_resvd > resvd {
             self.ep_count -= 1;
@@ -498,14 +529,100 @@ impl CompactFile {
     #[cfg(feature = "renumber")]
     /// Set size of renumbered pages >= lp_alloc to zero.
     fn clear_lp(&mut self) {
-        let start = Self::HSIZE + (self.sp_size as u64) * self.lp_alloc;
+        let start = HSIZE + (self.sp_size as u64) * self.lp_alloc;
         let end = self.ep_resvd * self.ep_size as u64;
         if end > start {
             let buf = vec![0; (end - start) as usize];
             self.stg.write(start, &buf);
         }
     }
+
+    fn load_fsp(&mut self, lpnum: u64) {
+        if lpnum != self.fsp.current {
+            self.save_fsp();
+            let off = HSIZE + 2 + lpnum * self.sp_size as u64;
+            self.stg.read(off, &mut self.fsp.data);
+            self.fsp.init();
+            self.fsp.current = lpnum;
+        }
+    }
+
+    fn save_fsp(&mut self) {
+        if self.fsp.dirty {
+            self.fsp.terminate();
+            let off = HSIZE + 2 + self.fsp.current * self.sp_size as u64;
+            self.stg.write(off, &self.fsp.data);
+            self.fsp.dirty = false;
+        }
+    }
 } // end impl CompactFile
+
+struct FreeStarterPage {
+    current: u64,
+    count: usize,
+    data: [u8; 64],
+    dirty: bool,
+}
+
+impl FreeStarterPage {
+    fn new() -> Self {
+        Self {
+            count: 0,
+            data: [0; 64],
+            dirty: false,
+            current: u64::MAX,
+        }
+    }
+
+    fn full(&self) -> bool {
+        self.count == 8
+    }
+
+    fn push(&mut self, lpnum: u64) {
+        assert!(self.count < 8);
+        self.set(self.count, lpnum);
+        self.count += 1;
+        self.dirty = true;
+    }
+
+    fn pop(&mut self) -> u64 {
+        assert!(self.count > 0);
+        self.count -= 1;
+        self.dirty = true;
+        self.get(self.count)
+    }
+
+    fn terminate(&mut self) {
+        if self.count < 8 {
+            self.set(self.count, u64::MAX - 2);
+        }
+    }
+
+    fn init(&mut self) {
+        self.count = 0;
+        while self.count < 8 && self.get(self.count) != u64::MAX - 2 {
+            self.count += 1;
+        }
+        self.dirty = false;
+    }
+
+    fn get(&self, ix: usize) -> u64 {
+        let off = ix * 8;
+        util::getu64(&self.data, off)
+    }
+
+    fn set(&mut self, ix: usize, lpnum: u64) {
+        let off = ix * 8;
+        util::setu64(&mut self.data[off..off + 8], lpnum);
+    }
+
+    fn clear(&mut self, current: u64) {
+        self.data.fill(0);
+        self.current = current;
+        self.count = 0;
+        self.dirty = false;
+    }
+}
 
 #[test]
 pub fn test() {
