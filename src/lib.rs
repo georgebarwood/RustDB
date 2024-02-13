@@ -26,8 +26,8 @@
 //!# Features
 //!
 //! This crate supports the following cargo features:
-//! - `gentrans` : enables gentrans module ( sample implementation of [Transaction] ).
-//! - `serde` : enables serialisation of [Transaction] via serde crate.
+//! - `gentrans` : enables [gentrans] module ( sample implementation of [Transaction] ).
+//! - `serde` : enables serialisation of [GenQuery] via serde crate.
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
 //! - `table` : Allow direct access to database tables.
 //! - `max` : maximal interface, including internal modules (which may not be stable).
@@ -107,7 +107,7 @@ pub use crate::{
 };
 
 #[cfg(feature = "gentrans")]
-pub use crate::gentrans::{GenTransaction, Part};
+pub use crate::gentrans::{GenQuery, GenTransaction, Part};
 
 #[cfg(feature = "builtin")]
 pub use crate::{
