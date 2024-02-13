@@ -26,8 +26,8 @@
 //!# Features
 //!
 //! This crate supports the following cargo features:
-//! - `gentrans` : enables [gentrans] module ( sample implementation of [Transaction] ).
-//! - `serde` : enables serialisation of [GenQuery] via serde crate.
+//! - `gentrans` : enables gentrans module ( sample implementation of [Transaction] ).
+//! - `serde` : enables serialisation of [Transaction] via serde crate.
 //! - `builtin` : Allows extra SQL builtin functions to be defined.
 //! - `table` : Allow direct access to database tables.
 //! - `max` : maximal interface, including internal modules (which may not be stable).
@@ -97,13 +97,17 @@
 pub use crate::{
     atomfile::AtomicFile,
     basicatomfile::BasicAtomicFile,
+    blockpagestg::BlockPageStg,
     builtin::standard_builtins,
     pstore::{AccessPagedData, SharedPagedData},
-    stg::{DummyFile, MemFile, MultiFileStorage, SimpleFileStorage, Storage},
+    stg::{
+        DummyFile, MemFile, MultiFileStorage, PageStorage, PageStorageInfo, SimpleFileStorage,
+        Storage,
+    },
 };
 
 #[cfg(feature = "gentrans")]
-pub use crate::gentrans::{GenTransaction, Part, GenQuery};
+pub use crate::gentrans::{GenTransaction, Part};
 
 #[cfg(feature = "builtin")]
 pub use crate::{
@@ -164,6 +168,12 @@ pub mod gentrans;
 
 /// Backing [Storage] for database. See also [AtomicFile].
 pub mod stg;
+
+/// Block storage.
+pub mod block;
+
+/// [BlockPageStg] ( implementation of [PageStorage] trait ).
+pub mod blockpagestg;
 
 /// Write Buffer.
 pub mod buf;

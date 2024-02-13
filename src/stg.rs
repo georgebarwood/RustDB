@@ -48,6 +48,44 @@ pub trait Storage: Send + Sync {
     fn wait_complete(&self) {}
 }
 
+/// Interface for page storage.
+pub trait PageStorage {
+    /// Is the underlying storage new?
+    fn is_new(&self) -> bool;
+    /// Information about page sizes.
+    fn info(&self) -> Box<dyn PageStorageInfo>;
+    /// Make a new page, result is page number.
+    fn new_page(&mut self) -> u64;
+    /// Drop page number.
+    fn drop_page(&mut self, pn: u64);
+    /// Set contents of page.
+    fn set_page(&mut self, pn: u64, data: Data);
+    /// Get contents of page.
+    fn get_page(&mut self, pn: u64) -> Data;
+    /// Save pages to underlying storage.
+    fn save(&mut self);
+    /// Wait until save is complete.
+    fn wait_complete(&self);
+}
+
+/// Information about page sizes.
+pub trait PageStorageInfo {
+    /// Number of different page sizes.
+    fn sizes(&self) -> usize;
+    /// Size index for given page size.
+    fn index(&self, size: usize) -> usize;
+    /// Page size for given index ( zero-based ix must be less than sizes() ).
+    fn size(&self, ix: usize) -> usize;
+    /// Maximum page size.
+    fn max_page_size(&self) -> usize {
+        self.size(self.sizes() - 1)
+    }
+    /// Half size.
+    fn half_page_size(&self) -> usize {
+        self.size(self.sizes() / 2 - 1)
+    }
+}
+
 /// Simple implementation of [Storage] using `Vec<u8>`.
 #[derive(Default)]
 pub struct MemFile {

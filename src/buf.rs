@@ -8,7 +8,7 @@ pub struct WriteBuffer {
     pos: u64,
     ///
     pub stg: Box<dyn Storage>,
-    buf: Box<[u8; BUF_SIZE]>,
+    buf: Vec<u8>,
     #[cfg(feature = "log")]
     log: Log,
 }
@@ -28,7 +28,7 @@ impl WriteBuffer {
             ix: 0,
             pos: u64::MAX,
             stg,
-            buf: vec![0; BUF_SIZE].try_into().unwrap(),
+            buf: vec![0; BUF_SIZE],
             #[cfg(feature = "log")]
             log: Log {
                 write: 0,
@@ -69,7 +69,6 @@ impl WriteBuffer {
 
     fn flush(&mut self, new_pos: u64) {
         if self.ix > 0 {
-            // println!("WriterBuffer flush pos={} size={}", self.pos, self.ix);
             self.stg.write(self.pos, &self.buf[0..self.ix]);
             #[cfg(feature = "log")]
             {
@@ -86,6 +85,7 @@ impl WriteBuffer {
     ///
     pub fn commit(&mut self, size: u64) {
         self.flush(u64::MAX);
+        self.stg.commit(size);
         #[cfg(feature = "log")]
         {
             if size > 0 {
@@ -101,7 +101,6 @@ impl WriteBuffer {
             self.log.flush = 0;
             self.log.total = 0;
         }
-        self.stg.commit(size);
     }
 
     ///
