@@ -170,6 +170,11 @@ impl BlockPageStg {
     }
 
     fn write(&mut self, fx: usize, off: u64, data: &[u8]) {
+        let data = Arc::new(data.to_vec());
+        self.write_data(fx, off, data);
+    }
+
+    fn write_data(&mut self, fx: usize, off: u64, data: Data) {
         let mut fd = self.fd[fx];
         fd = self.ds.allocate(fd, off + data.len() as u64);
         if fd.changed {
@@ -177,7 +182,7 @@ impl BlockPageStg {
             self.fd[fx] = fd;
             self.header_dirty = true
         }
-        self.ds.write(fd, off, data);
+        self.ds.write_data(fd, off, data);
     }
 
     fn read(&self, fx: usize, off: u64, data: &mut [u8]) {
@@ -240,7 +245,7 @@ impl PageStorage for BlockPageStg {
         let off = PAGE_HSIZE as u64 + ix * (rsx * PAGE_UNIT) as u64;
 
         // Write data.
-        self.write(rsx, off, &data);
+        self.write_data(rsx, off, data);
     }
 
     fn renumber(&mut self, pn: u64) -> u64 {

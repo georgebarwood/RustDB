@@ -170,7 +170,7 @@ impl BlockStg {
         let off = pb * BLK_SIZE + NUM_SIZE + off;
         self.stg.write_data(off, data, s, n);
     }
-    
+
     ///
     pub fn read(&self, bn: u64, off: u64, data: &mut [u8]) {
         debug_assert!(!self.free.contains(&bn));
