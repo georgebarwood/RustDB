@@ -171,6 +171,9 @@ pub mod stg;
 /// Block storage.
 pub mod block;
 
+/// Storage divided into sub-files.
+pub mod dividedstg;
+
 /// [BlockPageStg] ( implementation of [PageStorage] trait ).
 pub mod blockpagestg;
 

@@ -1,11 +1,11 @@
-use crate::block::*;
+use crate::dividedstg::*;
 use crate::*;
 
 const PAGE_SIZES: usize = 16;
 const PAGE_UNIT: usize = 1024;
 const PAGE_HSIZE: usize = 8;
 
-const HEADER_SIZE: usize = 24 + (8 + FD_SIZE) * PAGE_SIZES;
+const HEADER_SIZE: usize = 24 + (8 + FD_SIZE) * (PAGE_SIZES + 1);
 
 const NOT_PN: u64 = u64::MAX >> 16;
 
@@ -37,12 +37,13 @@ impl PageStorageInfo for Info {
 
 pub struct BlockPageStg {
     /// Underlying Divided Storage.
-    pub ds: DividedStg,
+    ds: DividedStg,
     alloc_pn: u64,
     first_free_pn: u64,
     pn_init: u64,
     fd: [FD; PAGE_SIZES + 1],
     alloc: [u64; PAGE_SIZES + 1],
+    /// alloc[0] is currently unused
     free_pn: BTreeSet<u64>, // Temporary set of free page numbers.
     header_dirty: bool,
     is_new: bool,
@@ -51,7 +52,6 @@ pub struct BlockPageStg {
 impl BlockPageStg {
     ///
     pub fn new(stg: Box<dyn Storage>) -> Self {
-        println!("bps new");
         let is_new = stg.size() == 0;
         let mut result = Self {
             ds: DividedStg::new(stg),
@@ -65,7 +65,6 @@ impl BlockPageStg {
             is_new,
         };
         if is_new {
-            println!("bps is new");
             for i in 0..PAGE_SIZES + 1 {
                 result.fd[i] = result.ds.new_file();
             }
@@ -77,27 +76,25 @@ impl BlockPageStg {
     }
 
     fn read_header(&mut self) {
-        println!("bps read_header");
         let mut buf = [0; HEADER_SIZE];
         self.ds.read(self.fd[PINFO_FILE], 0, &mut buf);
         self.alloc_pn = util::getu64(&buf, 0);
         self.first_free_pn = util::getu64(&buf, 8);
         self.pn_init = util::getu64(&buf, 16);
 
-        for i in 0..PAGE_SIZES - 1 {
+        for i in 0..PAGE_SIZES + 1 {
             self.alloc[i] = util::getu64(&buf, 24 + i * (8 + FD_SIZE));
             self.fd[i].load(&buf[24 + 8 + i * (8 + FD_SIZE)..]);
         }
     }
 
     fn write_header(&mut self) {
-        println!("bps write_header");
         let mut buf = [0; HEADER_SIZE];
         util::setu64(&mut buf, self.alloc_pn);
         util::setu64(&mut buf[8..], self.first_free_pn);
         util::setu64(&mut buf[16..], self.pn_init);
 
-        for i in 0..PAGE_SIZES - 1 {
+        for i in 0..PAGE_SIZES + 1 {
             util::setu64(&mut buf[24 + i * (8 + FD_SIZE)..], self.alloc[i]);
             self.fd[i].save(&mut buf[24 + 8 + i * (8 + FD_SIZE)..]);
         }
@@ -112,7 +109,6 @@ impl BlockPageStg {
     }
 
     fn free_page(&mut self, sx: usize, ix: u64) {
-        println!("free page sx={} ix={}", sx, ix);
         if sx == 0 {
             return;
         }
@@ -128,7 +124,6 @@ impl BlockPageStg {
     }
 
     fn relocate(&mut self, sx: usize, from: u64, to: u64) {
-        println!("relocate sx={} from={} to={}", sx, from, to);
         if from == to {
             return;
         }
@@ -150,13 +145,10 @@ impl BlockPageStg {
         let ix = util::get(&buf, 0, 6);
         let size = util::get(&buf, 6, 2) as usize;
         let sx = if size == 0 { 0 } else { Self::size_index(size) };
-        println!("get_page_info pn={} sx={} ix={}", pn, sx, ix);
         (sx, size, ix)
     }
 
     fn set_page_info(&mut self, pn: u64, size: usize, ix: u64) {
-        println!("set_page_info pn={} size={} ix={}", pn, size, ix);
-
         let mut buf = [0; 8];
         util::set(&mut buf, 0, ix, 6);
         util::set(&mut buf, 6, size as u64, 2);
@@ -229,11 +221,6 @@ impl PageStorage for BlockPageStg {
 
         let (sx, _size, ix) = self.get_page_info(pn);
 
-        println!(
-            "set_page pn={} size={} sx={} rsx={} ix={}",
-            pn, size, sx, rsx, ix
-        );
-
         let ix = if sx != rsx {
             // Re-allocate page.
             self.free_page(sx, ix);
@@ -256,7 +243,6 @@ impl PageStorage for BlockPageStg {
     }
 
     fn get_page(&self, pn: u64) -> Data {
-        println!("get_page pn={}", pn);
         let (sx, size, ix) = self.get_page_info(pn);
 
         if sx == 0 {
@@ -272,8 +258,6 @@ impl PageStorage for BlockPageStg {
     }
 
     fn save(&mut self) {
-        println!("save");
-
         // Free the temporary set of free logical pages.
         let flist = std::mem::take(&mut self.free_pn);
         for pn in flist.iter().rev() {
