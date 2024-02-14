@@ -49,7 +49,7 @@ pub trait Storage: Send + Sync {
 }
 
 /// Interface for page storage.
-pub trait PageStorage {
+pub trait PageStorage: Send + Sync {
     /// Is the underlying storage new?
     fn is_new(&self) -> bool;
     /// Information about page sizes.
@@ -63,7 +63,9 @@ pub trait PageStorage {
     /// Get contents of page.
     fn get_page(&self, pn: u64) -> Data;
     /// Get page size.
-    fn size(&self, _pn: u64) -> u64 { todo!() }
+    fn size(&self, _pn: u64) -> u64 {
+        todo!()
+    }
     /// Renumber page.
     fn renumber(&mut self, pn: u64) -> u64;
     /// Save pages to underlying storage.
@@ -75,7 +77,7 @@ pub trait PageStorage {
 }
 
 /// Information about page sizes.
-pub trait PageStorageInfo {
+pub trait PageStorageInfo: Send + Sync {
     /// Number of different page sizes.
     fn sizes(&self) -> usize;
     /// Size index for given page size.
@@ -92,7 +94,7 @@ pub trait PageStorageInfo {
     }
     /// Is it worth compressing a page of given size by saving.
     fn compress(&self, size: usize, saving: usize) -> bool {
-        self.index(size-saving) < self.index(size)
+        self.index(size - saving) < self.index(size)
     }
 }
 

@@ -93,7 +93,6 @@ fn rustdb_direct_test() {
     let spd = SharedPagedData::new(stg);
     let wapd = AccessPagedData::new_writer(spd.clone());
 
-
     println!("direct_test :: Creating Database");
 
     let db = Database::new(wapd, "", bmap.clone());

@@ -181,7 +181,9 @@ impl BlockStg {
     }
 
     fn relocate(&mut self, from: u64, to: u64) {
-        if from == to { return; }
+        if from == to {
+            return;
+        }
         let mut buf = vec![0; BLK_SIZE as usize];
         self.stg.read(from * BLK_SIZE, &mut buf);
         let bn = util::get(&buf, 0, NUM_SIZE as usize);
@@ -196,12 +198,13 @@ impl BlockStg {
     }
 
     fn expand_binfo(&mut self, bn: u64) {
-        
         let target = HSIZE + bn * NUM_SIZE + NUM_SIZE;
         while target > self.pb_first * BLK_SIZE {
-
             #[cfg(feature = "log")]
-            println!("expand_binfo bn={} target={} pb_first={} pb_count={} lb_count={}", bn, target, self.pb_first, self.pb_count, self.lb_count);
+            println!(
+                "expand_binfo bn={} target={} pb_first={} pb_count={} lb_count={}",
+                bn, target, self.pb_first, self.pb_count, self.lb_count
+            );
             self.relocate(self.pb_first, self.pb_count);
             self.clear_block(self.pb_first);
             self.pb_first += 1;
@@ -418,7 +421,13 @@ impl DividedStg {
 
     /// allocate must be called before write ( although BLK_CAP bytes are pre-allocated ).
     pub fn write(&mut self, f: FD, offset: u64, data: &[u8]) {
-        println!("DS write f.root={} f.level={} offset={} data len={}", f.root, f.level, offset, data.len());
+        println!(
+            "DS write f.root={} f.level={} offset={} data len={}",
+            f.root,
+            f.level,
+            offset,
+            data.len()
+        );
         if f.level == 0 {
             self.0.write(f.root, offset, data);
         } else {

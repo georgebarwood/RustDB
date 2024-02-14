@@ -62,7 +62,7 @@ impl BlockPageStg {
             fd: [FD::default(); PAGE_SIZES + 1],
             free_pn: BTreeSet::default(),
             header_dirty: false,
-            is_new
+            is_new,
         };
         if is_new {
             println!("bps is new");
@@ -149,7 +149,7 @@ impl BlockPageStg {
         self.read(PINFO_FILE, off, &mut buf);
         let ix = util::get(&buf, 0, 6);
         let size = util::get(&buf, 6, 2) as usize;
-        let sx = if size == 0 { 0 } else { Self::size_index( size ) };
+        let sx = if size == 0 { 0 } else { Self::size_index(size) };
         println!("get_page_info pn={} sx={} ix={}", pn, sx, ix);
         (sx, size, ix)
     }
@@ -160,13 +160,12 @@ impl BlockPageStg {
         let mut buf = [0; 8];
         util::set(&mut buf, 0, ix, 6);
         util::set(&mut buf, 6, size as u64, 2);
-        
+
         let off = HEADER_SIZE as u64 + pn * 8;
         self.write(PINFO_FILE, off, &buf);
     }
 
-    fn update_ix(&mut self, pn: u64, ix: u64)
-    {        
+    fn update_ix(&mut self, pn: u64, ix: u64) {
         let mut buf = [0; 6];
         util::set(&mut buf, 0, ix, 6);
         let off = HEADER_SIZE as u64 + pn * 8;
@@ -180,7 +179,7 @@ impl BlockPageStg {
     fn write(&mut self, fx: usize, off: u64, data: &[u8]) {
         let mut fd = self.fd[fx];
         fd = self.ds.allocate(fd, off + data.len() as u64);
-        if fd.changed {            
+        if fd.changed {
             fd.changed = false;
             self.fd[fx] = fd;
             self.header_dirty = true
@@ -239,7 +238,7 @@ impl PageStorage for BlockPageStg {
             // Re-allocate page.
             self.free_page(sx, ix);
             let ix = self.alloc_page(rsx);
-            
+
             // Set first word of page to page number.
             let off = ix * (rsx * PAGE_UNIT) as u64;
             self.write(rsx, off, &pn.to_le_bytes());
@@ -260,12 +259,14 @@ impl PageStorage for BlockPageStg {
         println!("get_page pn={}", pn);
         let (sx, size, ix) = self.get_page_info(pn);
 
-        if sx == 0 { return nd(); }
-       
+        if sx == 0 {
+            return nd();
+        }
+
         // Offset of data within sub-file.
         let off = PAGE_HSIZE as u64 + ix * (sx * PAGE_UNIT) as u64;
 
-        let mut data = vec![0; size as usize];
+        let mut data = vec![0; size];
         self.read(sx, off, &mut data);
         Arc::new(data)
     }
@@ -290,8 +291,7 @@ impl PageStorage for BlockPageStg {
         self.ds.save();
     }
 
-    fn rollback(&mut self)
-    {
+    fn rollback(&mut self) {
         todo!()
     }
 
