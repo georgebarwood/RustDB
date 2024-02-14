@@ -130,7 +130,6 @@ use crate::{
 
 use crate::{
     bytes::ByteStorage,
-    compact::CompactFile,
     expr::*,
     page::{Page, PagePtr},
     parse::Parser,
@@ -415,7 +414,7 @@ impl Database {
             bs.push(ByteStorage::new(ft as u64, ft));
         }
 
-        let page_size_max = apd.spd.page_size_max();
+        let page_size_max = apd.spd.psi.max_page_size();
 
         let db = Rc::new(Database {
             apd,
@@ -664,12 +663,13 @@ GO
     #[cfg(feature = "pack")]
     /// Get size of logical page.
     fn lp_size(&self, pnum: u64) -> u64 {
-        self.apd.spd.file.read().unwrap().lp_size(pnum) as u64
+        self.apd.spd.ps.read().unwrap().size(pnum)
     }
 
     #[cfg(feature = "pack")]
     /// Repack the specified sortedfile.
-    fn repack_file(self: &DB, k: i64, schema: &str, tname: &str) -> i64 {
+    fn repack_file(self: &DB, _k: i64, _schema: &str, _tname: &str) -> i64 {
+/*
         if k >= 0 {
             let name = ObjRef::new(schema, tname);
             if let Some(t) = self.get_table(&name) {
@@ -681,12 +681,14 @@ GO
                 return self.bs[k].repack_file(self);
             }
         }
+*/
         -1
     }
 
     #[cfg(feature = "verify")]
     /// Verify the page structure of the database.
     pub fn verify(self: &DB) -> String {
+/*
         let (mut pages, total) = self.apd.spd.file.write().unwrap().get_info();
         let total = total as usize;
 
@@ -709,11 +711,14 @@ GO
             total,
             pages.len()
         )
+*/
+       format!("verify is ToDo")
     }
 
     /// Renumber pages.
     #[cfg(feature = "renumber")]
     pub fn renumber(self: &DB) {
+/*
         let target = self.apd.spd.file.write().unwrap().load_free_pages();
         if let Some(target) = target {
             for bs in &self.bs {
@@ -741,6 +746,7 @@ GO
             }
             self.apd.spd.file.write().unwrap().set_lpalloc(target);
         }
+*/
     }
 } // end impl Database
 

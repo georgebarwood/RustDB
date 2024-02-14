@@ -61,9 +61,15 @@ pub trait PageStorage {
     /// Set contents of page.
     fn set_page(&mut self, pn: u64, data: Data);
     /// Get contents of page.
-    fn get_page(&mut self, pn: u64) -> Data;
+    fn get_page(&self, pn: u64) -> Data;
+    /// Get page size.
+    fn size(&self, _pn: u64) -> u64 { todo!() }
+    /// Renumber page.
+    fn renumber(&mut self, pn: u64) -> u64;
     /// Save pages to underlying storage.
     fn save(&mut self);
+    ///
+    fn rollback(&mut self);
     /// Wait until save is complete.
     fn wait_complete(&self);
 }
@@ -83,6 +89,10 @@ pub trait PageStorageInfo {
     /// Half size.
     fn half_page_size(&self) -> usize {
         self.size(self.sizes() / 2 - 1)
+    }
+    /// Is it worth compressing a page of given size by saving.
+    fn compress(&self, size: usize, saving: usize) -> bool {
+        self.index(size-saving) < self.index(size)
     }
 }
 

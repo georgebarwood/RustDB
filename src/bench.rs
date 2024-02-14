@@ -92,6 +92,10 @@ fn rustdb_direct_test() {
 
     let spd = SharedPagedData::new(stg);
     let wapd = AccessPagedData::new_writer(spd.clone());
+
+
+    println!("direct_test :: Creating Database");
+
     let db = Database::new(wapd, "", bmap.clone());
 
     let mut tr = GenTransaction::default();
@@ -99,6 +103,8 @@ fn rustdb_direct_test() {
     let sql = "
     CREATE SCHEMA test GO
     CREATE TABLE test.users (name string, age int) GO";
+
+    println!("direct_test :: Creating schema and table");
 
     db.run(&sql, &mut tr);
 
@@ -109,7 +115,11 @@ fn rustdb_direct_test() {
         SET @i -= 1
       END";
 
+    println!("direct_test :: Inserting 8192 rows");
+
     db.run(&sql, &mut tr);
+
+    println!("direct_test :: Starting benchmark");
 
     let mut results = Vec::new();
     for _outer in 0..100 {

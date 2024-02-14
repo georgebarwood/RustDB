@@ -1,6 +1,6 @@
 use crate::{
-    heap::GHeap, nd, Arc, BTreeMap, CompactFile, Data, HashMap, HashSet, Mutex, RwLock, SaveOp,
-    Storage,
+    heap::GHeap, nd, Arc, BTreeMap, Data, HashMap, HashSet, Mutex, RwLock, SaveOp,
+    Storage, PageStorage, PageStorageInfo, BlockPageStg
 };
 
 type HX = u32; // Typical 8M cache will have 1K x 8KB pages, so 10 bits is typical, 32 should be plenty.
@@ -56,9 +56,9 @@ impl PageInfo {
             return (p.clone(), 0);
         }
 
-        // Get data from file.
-        let file = a.spd.file.read().unwrap();
-        let data = file.get_page(lpnum);
+        // Get data from page storage.
+        let ps = a.spd.ps.read().unwrap();
+        let data = ps.get_page(lpnum);
         self.current = Some(data.clone());
         let len = data.len();
         (data, len)
@@ -251,52 +251,39 @@ impl Stash {
 
 /// Allows logical database pages to be shared to allow concurrent readers.
 pub struct SharedPagedData {
-    /// Underlying file.
-    pub file: RwLock<CompactFile>,
-    /// Starter page size.
-    pub sp_size: usize,
-    /// Extension page size.
-    pub ep_size: usize,
+    /// Permanent storage of pages.
+    pub ps: RwLock<Box<dyn PageStorage>>,
     /// Stash of pages.
     pub stash: Mutex<Stash>,
+    /// Info on page sizes.
+    pub psi: Box<dyn PageStorageInfo>,
 }
 
-/// =1024. Size of an extension page.
-const EP_SIZE: usize = 1024;
-/// =16. Maximum number of extension pages.
-const EP_MAX: usize = 16;
-/// =136. Starter page size.
-const SP_SIZE: usize = (EP_MAX + 1) * 8;
 
 impl SharedPagedData {
-    /// Construct SharedPageData based on specified underlying storage.
-    pub fn new(file: Box<dyn Storage>) -> Arc<Self> {
-        let file = CompactFile::new(file, SP_SIZE, EP_SIZE);
-        // Note : if it's not a new file, sp_size and ep_size are read from file header.
-        let sp_size = file.sp_size;
-        let ep_size = file.ep_size;
+    /// Construct SharedPageData based on specified underlying storage ( for compatibility ).
+    pub fn new(stg: Box<dyn Storage>) -> Arc<Self> {
+        Self::new_from_ps( Box::new( BlockPageStg::new( stg ) ) )
+    }
+
+    /// Construct SharedPageData based on specified PageStorage.
+    pub fn new_from_ps(ps: Box<dyn PageStorage>) -> Arc<Self> {
         // Set a default stash memory limit of 10 MB.
         let stash = Stash {
             mem_limit: 10 * 1024 * 1024,
             ..Default::default()
         };
+        let psi = ps.info();
         Arc::new(Self {
             stash: Mutex::new(stash),
-            file: RwLock::new(file),
-            sp_size,
-            ep_size,
+            ps: RwLock::new(ps),
+            psi
         })
-    }
-
-    /// Calculate the maximum size of a logical page. This value is stored in the Database struct.
-    pub fn page_size_max(&self) -> usize {
-        let ep_max = (self.sp_size - 2) / 8;
-        (self.ep_size - 16) * ep_max + (self.sp_size - 2)
     }
 
     /// Wait until current commits have been written.
     pub fn wait_complete(&self) {
-        self.file.read().unwrap().stg.wait_complete();
+        self.ps.read().unwrap().wait_complete();
     }
 }
 
@@ -369,16 +356,16 @@ impl AccessPagedData {
 
         // Write data to underlying file.
         if data.len() > 0 {
-            self.spd.file.write().unwrap().set_page(lpnum, data);
+            self.spd.ps.write().unwrap().set_page(lpnum, data);
         } else {
-            self.spd.file.write().unwrap().free_page(lpnum);
+            self.spd.ps.write().unwrap().drop_page(lpnum);
         }
     }
 
     /// Allocate a logical page.
     pub fn alloc_page(&self) -> u64 {
         debug_assert!(self.writer);
-        self.spd.file.write().unwrap().alloc_page()
+        self.spd.ps.write().unwrap().new_page()
     }
 
     /// Free a logical page.
@@ -388,13 +375,13 @@ impl AccessPagedData {
 
     /// Is the underlying file new (so needs to be initialised ).
     pub fn is_new(&self) -> bool {
-        self.writer && self.spd.file.read().unwrap().is_new()
+        self.writer && self.spd.ps.read().unwrap().is_new()
     }
 
     /// Check whether compressing a page is worthwhile.
     pub fn compress(&self, size: usize, saving: usize) -> bool {
         debug_assert!(self.writer);
-        CompactFile::compress(self.spd.sp_size, self.spd.ep_size, size, saving)
+        self.spd.psi.compress(size, saving)
     }
 
     /// Commit changes to underlying file ( or rollback logical page allocations ).
@@ -402,13 +389,13 @@ impl AccessPagedData {
         debug_assert!(self.writer);
         match op {
             SaveOp::Save => {
-                self.spd.file.write().unwrap().save();
+                self.spd.ps.write().unwrap().save();
                 self.stash().end_write()
             }
             SaveOp::RollBack => {
                 // Note: rollback happens before any pages are updated.
                 // However logical page allocations need to be rolled back.
-                self.spd.file.write().unwrap().rollback();
+                self.spd.ps.write().unwrap().rollback();
                 0
             }
         }
@@ -422,7 +409,7 @@ impl AccessPagedData {
         let data = self.get_data(lpnum);
         self.stash().set(lpnum, data.clone(), nd());
 
-        let lpnum2 = self.spd.file.write().unwrap().renumber(lpnum);
+        let lpnum2 = self.spd.ps.write().unwrap().renumber(lpnum);
         let old2 = self.get_data(lpnum2);
 
         self.stash().set(lpnum2, old2, data);

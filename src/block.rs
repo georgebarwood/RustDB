@@ -181,6 +181,7 @@ impl BlockStg {
     }
 
     fn relocate(&mut self, from: u64, to: u64) {
+        if from == to { return; }
         let mut buf = vec![0; BLK_SIZE as usize];
         self.stg.read(from * BLK_SIZE, &mut buf);
         let bn = util::get(&buf, 0, NUM_SIZE as usize);
@@ -194,8 +195,13 @@ impl BlockStg {
         self.stg.write(to * BLK_SIZE, &buf);
     }
 
-    fn expand_binfo(&mut self, target: u64) {
+    fn expand_binfo(&mut self, bn: u64) {
+        
+        let target = HSIZE + bn * NUM_SIZE + NUM_SIZE;
         while target > self.pb_first * BLK_SIZE {
+
+            #[cfg(feature = "log")]
+            println!("expand_binfo bn={} target={} pb_first={} pb_count={} lb_count={}", bn, target, self.pb_first, self.pb_count, self.lb_count);
             self.relocate(self.pb_first, self.pb_count);
             self.clear_block(self.pb_first);
             self.pb_first += 1;
@@ -295,23 +301,48 @@ fn block_test() {
 
 // *****************************************************************************************************************
 
-/// Divides Storage into sub-files of arbitrary size using BlockStg.
+/// Divides Storage into sub-files of arbitrary size using [BlockStg].
 pub struct DividedStg(BlockStg);
 
 /// Block capacity.
 const BLK_CAP: u64 = BLK_SIZE - NUM_SIZE;
 const NUMS_PER_BLK: u64 = BLK_CAP / NUM_SIZE;
 
-/* Block Layout of sub-file:
-   Root block:
-     Level (8 bits, can be 0, 1 or 2)
-       If Level = 0, user data.
-       If Level > 0, number of level 0 blocks (6 bytes), block numbers.
-   Non-root block: ( level = 0 )
-      User Data
-   Non-root block: ( level > 0 )
-      block numbers.
-*/
+/// Bytes required to save FD ( root, blocks, level ).
+pub const FD_SIZE: usize = 8 + 8 + 1;
+
+/// [DividedStg] File Descriptor.
+#[derive(Clone, Copy, Default)]
+pub struct FD {
+    root: u64,
+    blocks: u64, // Number of child blocks
+    level: u8,
+    ///
+    pub changed: bool,
+}
+
+impl FD {
+    fn set_level(&mut self, level: u8) {
+        self.level = level;
+        self.changed = true;
+    }
+    fn set_blocks(&mut self, blocks: u64) {
+        self.blocks = blocks;
+        self.changed = true;
+    }
+    ///
+    pub fn save(&self, buf: &mut [u8]) {
+        util::setu64(&mut buf[0..8], self.root);
+        util::setu64(&mut buf[8..16], self.blocks);
+        buf[16] = self.level;
+    }
+    ///
+    pub fn load(&mut self, buf: &[u8]) {
+        self.root = util::getu64(buf, 0);
+        self.blocks = util::getu64(buf, 8);
+        self.level = buf[16];
+    }
+}
 
 impl DividedStg {
     ///
@@ -320,94 +351,95 @@ impl DividedStg {
     }
 
     ///
-    pub fn is_new(&self) -> bool {
-        self.0.is_new()
+    pub fn new_file(&mut self) -> FD {
+        FD {
+            root: self.0.new_block(),
+            level: 0,
+            blocks: 0,
+            changed: true,
+        }
     }
 
     ///
-    pub fn new_file(&mut self) -> u64 {
-        self.0.new_block()
-    }
-
-    ///
-    pub fn drop_file(&mut self, file: u64) {
+    pub fn drop_file(&mut self, f: FD) {
         // ToDo: check level and deallocate child blocks
-        self.0.drop_block(file)
+        self.0.drop_block(f.root)
     }
 
-    ///
-    pub fn write(&mut self, file: u64, offset: u64, data: &[u8]) {
-        println!(
-            "DS write file={} offset={} data len={}",
-            file,
-            offset,
-            data.len()
-        );
-        let mut level = self.get_level(file);
-        let end = offset + data.len() as u64;
-        if level == 0 {
-            if end < BLK_CAP {
-                self.0.write(file, 1 + offset, data);
-                return;
+    /// Allocate sufficient blocks for file of specified size.
+    #[must_use]
+    pub fn allocate(&mut self, mut f: FD, size: u64) -> FD {
+        println!("DS allocate f.root={} size={}", f.root, size);
+        if f.level == 0 {
+            if size < BLK_CAP {
+                return f;
             }
             let mut save = vec![0; BLK_CAP as usize - 1];
-            self.read(file, 0, &mut save);
-            level = 1;
-            self.set_level(file, 1);
-            self.set_blocks(file, 0);
-            self.write(file, 0, &save);
+            self.read(f, 0, &mut save);
+            f.set_level(1);
+            f.set_blocks(0);
+            f = self.allocate(f, save.len() as u64);
+            self.write(f, 0, &save);
         }
-        let blks = self.get_blocks(file);
-        let reqd = self.blocks(end);
-        if reqd > blks {
-            if level == 1 && reqd > NUMS_PER_BLK {
+
+        let reqd = self.blocks(size);
+        if reqd > f.blocks {
+            if f.level == 1 && reqd > NUMS_PER_BLK {
                 // Copy existing child block numbers to new block.
                 let blk = self.0.new_block();
-                let mut buf = vec![0; (blks * NUM_SIZE) as usize];
-                self.0.read(file, 1 + NUM_SIZE, &mut buf);
+                let mut buf = vec![0; (f.blocks * NUM_SIZE) as usize];
+                self.0.read(f.root, 0, &mut buf);
                 self.0.write(blk, 0, &buf);
 
-                self.set_block(file, 1, 0, blk);
-                level = 2;
-                self.set_level(file, 2);
-                println!("File {} reached level 2", file);
+                self.set_block(f.root, 1, 0, blk);
+                f.set_level(2);
+                println!("File {} reached level 2", f.root);
             }
-            println!("Adding {} blocks", reqd - blks);
-            self.add_blocks(file, level, blks, reqd);
+            println!("Adding {} blocks", reqd - f.blocks);
+            f = self.add_blocks(f, reqd);
             println!("Finished adding blocks");
         }
-        self.write_blocks(file, level, offset, data);
-        println!("DS write complete");
+        f
     }
 
     ///
-    pub fn read(&self, file: u64, offset: u64, data: &mut [u8]) {
+    #[must_use]
+    pub fn truncate(&mut self, mut f: FD, size: u64) -> FD {
+        if f.level == 0 {
+            // ToDo : maybe free physical block if size == 0
+        } else {
+            let need = self.blocks(size);
+            if need < f.blocks {
+                f = self.drop_blocks(f, need);
+            }
+        }
+        f
+    }
+
+    /// allocate must be called before write ( although BLK_CAP bytes are pre-allocated ).
+    pub fn write(&mut self, f: FD, offset: u64, data: &[u8]) {
+        println!("DS write f.root={} f.level={} offset={} data len={}", f.root, f.level, offset, data.len());
+        if f.level == 0 {
+            self.0.write(f.root, offset, data);
+        } else {
+            self.write_blocks(f, offset, data);
+            println!("DS write complete");
+        }
+    }
+
+    ///
+    pub fn read(&self, f: FD, offset: u64, data: &mut [u8]) {
         println!(
-            "DS read file={} offset={} data len={}",
-            file,
+            "DS read f.root={} f.level=={} offset={} data len={}",
+            f.root,
+            f.level,
             offset,
             data.len()
         );
-        let level = self.get_level(file);
-        if level == 0 {
-            self.0.read(file, 1 + offset, data);
-            return;
-        }
-        self.read_blocks(file, level, offset, data);
-        println!("DS read complete");
-    }
-
-    ///
-    pub fn truncate(&mut self, file: u64, size: u64) {
-        let level = self.get_level(file);
-        if level == 0 {
-            // ToDo : maybe free physical block if size == 0
-            return;
-        }
-        let blks = self.get_blocks(file);
-        let need = self.blocks(size);
-        if need < blks {
-            self.drop_blocks(file, level, blks, need);
+        if f.level == 0 {
+            self.0.read(f.root, offset, data);
+        } else {
+            self.read_blocks(f, offset, data);
         }
     }
 
@@ -421,22 +453,21 @@ impl DividedStg {
         self.0.stg.wait_complete();
     }
 
-    fn write_blocks(&mut self, file: u64, level: u8, offset: u64, data: &[u8]) {
+    fn write_blocks(&mut self, f: FD, offset: u64, data: &[u8]) {
         let mut done = 0;
         let len = data.len();
         while done < len {
             let off = offset + done as u64;
             let blk = off / BLK_CAP;
             let off = off - blk * BLK_CAP;
-            let blk = self.get_block(file, level, blk);
+            let blk = self.get_block(f.root, f.level, blk);
             let amount = min(len - done, (BLK_CAP - off) as usize);
             self.0.write(blk, off, &data[done..done + amount]);
             done += amount;
         }
     }
 
-    fn read_blocks(&self, file: u64, level: u8, offset: u64, data: &mut [u8]) {
-        let blks = self.get_blocks(file);
+    fn read_blocks(&self, f: FD, offset: u64, data: &mut [u8]) {
         let mut done = 0;
         let len = data.len();
         while done < len {
@@ -444,74 +475,57 @@ impl DividedStg {
             let blk = off / BLK_CAP;
             let off = off - blk * BLK_CAP;
             let amount = min(len - done, (BLK_CAP - off) as usize);
-            if blk < blks {
-                let blk = self.get_block(file, level, blk);
+            if blk < f.blocks {
+                let blk = self.get_block(f.root, f.level, blk);
                 self.0.read(blk, off, &mut data[done..done + amount]);
             }
             done += amount;
         }
     }
 
-    fn add_blocks(&mut self, file: u64, level: u8, old: u64, new: u64) {
-        for i in old..new {
+    fn add_blocks(&mut self, mut f: FD, new: u64) -> FD {
+        for i in f.blocks..new {
             let blk = self.0.new_block();
-            self.set_block(file, level, i, blk);
+            self.set_block(f.root, f.level, i, blk);
         }
-        self.set_blocks(file, new);
+        f.set_blocks(new);
+        f
     }
 
-    fn drop_blocks(&mut self, file: u64, level: u8, old: u64, new: u64) {
-        for i in new..old {
-            let blk = self.get_block(file, level, i);
+    fn drop_blocks(&mut self, mut f: FD, new: u64) -> FD {
+        for i in new..f.blocks {
+            let blk = self.get_block(f.root, f.level, i);
             self.0.drop_block(blk);
         }
-        self.set_blocks(file, new);
+        f.set_blocks(new);
+        f
     }
-
-    fn set_level(&mut self, file: u64, level: u8) {
-        self.0.write(file, 0, &[level]);
-    }
-
-    fn get_level(&self, file: u64) -> u8 {
-        let mut buf = [0];
-        self.0.read(file, 0, &mut buf);
-        buf[0]
-    }
-
-    fn set_blocks(&mut self, file: u64, n: u64) {
-        self.set_num(file, 1, n);
-    }
-
-    fn get_blocks(&self, file: u64) -> u64 {
-        self.get_num(file, 1)
-    }
-
-    fn set_block(&mut self, file: u64, level: u8, ix: u64, value: u64) {
+    fn set_block(&mut self, blk: u64, level: u8, ix: u64, value: u64) {
         if level == 1 {
-            self.set_num(file, 1 + NUM_SIZE + ix * NUM_SIZE, value)
+            self.set_num(blk, ix * NUM_SIZE, value)
         } else {
             debug_assert!(level == 2);
             let x = ix / NUMS_PER_BLK;
             let ix = ix % NUMS_PER_BLK;
             let blk = if ix == 0 {
                 let blk = self.0.new_block();
-                self.set_block(file, 1, x, blk);
+                self.set_block(blk, 1, x, blk);
                 blk
             } else {
-                self.get_block(file, 1, x)
+                self.get_block(blk, 1, x)
             };
             self.set_num(blk, ix * NUM_SIZE, value)
         }
     }
 
-    fn get_block(&self, file: u64, level: u8, ix: u64) -> u64 {
+    fn get_block(&self, blk: u64, level: u8, ix: u64) -> u64 {
         if level == 1 {
-            self.get_num(file, 1 + NUM_SIZE + ix * NUM_SIZE)
+            self.get_num(blk, ix * NUM_SIZE)
         } else {
             debug_assert!(level == 2);
             let x = ix / NUMS_PER_BLK;
             let ix = ix % NUMS_PER_BLK;
-            let blk = self.get_block(file, 1, x);
+            let blk = self.get_block(blk, 1, x);
             self.get_num(blk, ix * NUM_SIZE)
         }
     }
@@ -538,12 +552,15 @@ fn divided_stg_test() {
     let mut ds = DividedStg::new(stg.clone());
 
     let fx = ds.new_file();
-    let f = ds.new_file();
+    let mut f = ds.new_file();
     let data = b"hello george";
     ds.write(fx, 1, data);
 
-    let test_off = 2 * (BLK_CAP + 1) * NUMS_PER_BLK + 10;
+    // let test_off = 2 * (BLK_CAP + 1) * NUMS_PER_BLK + 10;
+
+    let test_off = 4 * BLK_CAP;
     // ds.write(f, 0, data);
+    f = ds.allocate(f, test_off + data.len() as u64);
     ds.write(f, test_off, data);
     ds.drop_file(fx);
     ds.save();
