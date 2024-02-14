@@ -1,4 +1,8 @@
 use crate::*;
+use std::cmp::min;
+
+#[cfg(feature = "log")]
+
 
 /// Magic Value ( first word of file for version check).
 const MAGIC_VALUE: [u8; 8] = *b"RDBF1099";
