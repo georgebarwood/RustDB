@@ -42,9 +42,8 @@ pub struct BlockPageStg {
     first_free_pn: u64,
     pn_init: u64,
     fd: [FD; PAGE_SIZES + 1],
-    alloc: [u64; PAGE_SIZES + 1],
-    /// alloc[0] is currently unused
-    free_pn: BTreeSet<u64>, // Temporary set of free page numbers.
+    alloc: [u64; PAGE_SIZES + 1], // alloc[0] is currently unused
+    free_pn: BTreeSet<u64>,       // Temporary set of free page numbers.
     header_dirty: bool,
     is_new: bool,
 }
@@ -86,6 +85,7 @@ impl BlockPageStg {
             self.alloc[i] = util::getu64(&buf, 24 + i * (8 + FD_SIZE));
             self.fd[i].load(&buf[24 + 8 + i * (8 + FD_SIZE)..]);
         }
+        self.header_dirty = false;
     }
 
     fn write_header(&mut self) {
@@ -99,6 +99,7 @@ impl BlockPageStg {
             self.fd[i].save(&mut buf[24 + 8 + i * (8 + FD_SIZE)..]);
         }
         self.ds.write(self.fd[PINFO_FILE], 0, &buf);
+        self.header_dirty = false;
     }
 
     fn alloc_page(&mut self, sx: usize) -> u64 {
@@ -271,13 +272,13 @@ impl PageStorage for BlockPageStg {
 
         if self.header_dirty {
             self.write_header();
-            self.header_dirty = false;
         }
         self.ds.save();
     }
 
     fn rollback(&mut self) {
-        todo!()
+        self.free_pn.clear();
+        self.read_header();
     }
 
     fn renumber(&mut self, _pn: u64) -> u64 {

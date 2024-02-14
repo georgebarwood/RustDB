@@ -1,8 +1,5 @@
-use crate::block::*;
-use crate::*;
+use crate::{block::*, *};
 use std::cmp::min;
-
-// *****************************************************************************************************************
 
 /// Divides Storage into sub-files of arbitrary size using [BlockStg].
 pub struct DividedStg(BlockStg);
@@ -193,34 +190,28 @@ impl DividedStg {
         f.set_blocks(new);
         f
     }
-    fn set_block(&mut self, blk: u64, level: u8, ix: u64, value: u64) {
-        if level == 1 {
-            self.set_num(blk, ix * NUM_SIZE, value)
-        } else {
-            debug_assert!(level == 2);
+    fn set_block(&mut self, mut blk: u64, level: u8, mut ix: u64, value: u64) {
+        if level == 2 {
             let x = ix / NUMS_PER_BLK;
-            let ix = ix % NUMS_PER_BLK;
-            let blk = if ix == 0 {
+            ix %= NUMS_PER_BLK;
+            blk = if ix == 0 {
                 let blk = self.0.new_block();
                 self.set_block(blk, 1, x, blk);
                 blk
             } else {
                 self.get_block(blk, 1, x)
             };
-            self.set_num(blk, ix * NUM_SIZE, value)
         }
+        self.set_num(blk, ix * NUM_SIZE, value);
     }
 
-    fn get_block(&self, blk: u64, level: u8, ix: u64) -> u64 {
-        if level == 1 {
-            self.get_num(blk, ix * NUM_SIZE)
-        } else {
-            debug_assert!(level == 2);
+    fn get_block(&self, mut blk: u64, level: u8, mut ix: u64) -> u64 {
+        if level == 2 {
             let x = ix / NUMS_PER_BLK;
-            let ix = ix % NUMS_PER_BLK;
-            let blk = self.get_block(blk, 1, x);
-            self.get_num(blk, ix * NUM_SIZE)
+            ix %= NUMS_PER_BLK;
+            blk = self.get_block(blk, 1, x);
         }
+        self.get_num(blk, ix * NUM_SIZE)
     }
 
     fn get_num(&self, blk: u64, off: u64) -> u64 {
