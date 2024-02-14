@@ -5,11 +5,9 @@ const PAGE_SIZES: usize = 16;
 const PAGE_UNIT: usize = 1024;
 const PAGE_HSIZE: usize = 8;
 
-const HEADER_SIZE: usize = 24 + (8 + FD_SIZE) * (PAGE_SIZES + 1);
-
-const NOT_PN: u64 = u64::MAX >> 16;
-
 const PINFO_FILE: usize = 0;
+const HEADER_SIZE: usize = 24 + (8 + FD_SIZE) * (PAGE_SIZES + 1);
+const NOT_PN: u64 = u64::MAX >> 16;
 
 struct Info();
 impl PageStorageInfo for Info {
@@ -31,9 +29,9 @@ impl PageStorageInfo for Info {
 
 /// Implementation of [PageStorage] using [DividedStg].
 ///
-///  File 0 (PINFO_FILE) is used to store fixed size header ( allocation info ) and info for each numbered page ( 4-bit sub-file index, index into sub-file ).
+///  File 0 (PINFO_FILE) is used to store fixed size header ( allocation info and FDs + info for each numbered page ( 16-bit size and index into sub-file ).
 ///
-///  Within each subfile, first word of allocated page is 64-bit page number ( to allow relocation ), followed by data size (16 bits).
+///  First word of allocated page is 64-bit page number ( to allow relocation ).
 
 pub struct BlockPageStg {
     /// Underlying Divided Storage.
@@ -114,7 +112,7 @@ impl BlockPageStg {
             return;
         }
 
-        // Relocate last item in file.
+        // Relocate last page in file to fill gap.
         self.alloc[sx] -= 1;
         let from = self.alloc[sx];
         self.header_dirty = true;
