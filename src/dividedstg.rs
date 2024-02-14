@@ -60,8 +60,8 @@ impl DividedStg {
     }
 
     ///
-    pub fn drop_file(&mut self, f: FD) {
-        // ToDo: check level and deallocate child blocks
+    pub fn drop_file(&mut self, mut f: FD) {
+        f = self.truncate(f, 0);
         self.0.drop_block(f.root)
     }
 
@@ -186,6 +186,14 @@ impl DividedStg {
         for i in new..f.blocks {
             let blk = self.get_block(f.root, f.level, i);
             self.0.drop_block(blk);
+        }
+        if f.level == 2 {
+            let new_l1 = (new + NUMS_PER_BLK - 1) / NUMS_PER_BLK;
+            let old_l1 = (f.blocks + NUMS_PER_BLK - 1) / NUMS_PER_BLK;
+            for i in new_l1..old_l1 {
+                let blk = self.get_block(f.root, 1, i);
+                self.0.drop_block(blk);
+            }
         }
         f.set_blocks(new);
         f
