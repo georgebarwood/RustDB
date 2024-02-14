@@ -271,6 +271,7 @@ impl PageStorage for BlockPageStg {
 
         if self.header_dirty {
             self.write_header();
+            self.header_dirty = false;
         }
         self.ds.save();
     }
