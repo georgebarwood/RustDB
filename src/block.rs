@@ -131,15 +131,23 @@ impl BlockStg {
 
     ///
     pub fn write(&mut self, bn: u64, off: u64, data: &[u8]) {
+        let n = data.len();
+        let data = Arc::new(data.to_vec());
+        self.write_data(bn, off, data, 0, n);
+    }
+
+    ///
+    pub fn write_data(&mut self, bn: u64, off: u64, data: Data, s: usize, n: usize) {
         debug_assert!(!self.free.contains(&bn));
 
         #[cfg(feature = "log")]
         println!(
-            "block write bn={} off={:?} data len={} data={:?}",
+            "block write bn={} off={:?} s={} n={} data={:?}",
             bn,
             off,
-            data.len(),
-            &data[0..min(data.len(), 20)]
+            s,
+            n,
+            &data[s..s+.min(n, 20)]
         );
 
         self.expand_binfo(bn);
@@ -158,10 +166,11 @@ impl BlockStg {
             self.write_num(pb * BLK_SIZE, bn);
         }
         pb &= NUM_MASK;
-        assert!(NUM_SIZE + off + data.len() as u64 <= BLK_SIZE);
-        self.stg.write(pb * BLK_SIZE + NUM_SIZE + off, data);
+        assert!(NUM_SIZE + off + n as u64 <= BLK_SIZE);
+        let off = pb * BLK_SIZE + NUM_SIZE + off;
+        self.stg.write_data(off, data, s, n);
     }
-
+    
     ///
     pub fn read(&self, bn: u64, off: u64, data: &mut [u8]) {
         debug_assert!(!self.free.contains(&bn));

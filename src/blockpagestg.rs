@@ -269,11 +269,10 @@ impl PageStorage for BlockPageStg {
         Arc::new(data)
     }
 
-    fn size(&self, pn: u64) -> u64
-    {
+    fn size(&self, pn: u64) -> u64 {
         let (_sx, size, _ix) = self.get_page_info(pn);
         size as u64
-    }    
+    }
 
     fn save(&mut self) {
         // Free the temporary set of free logical pages.

@@ -116,12 +116,20 @@ impl DividedStg {
     }
 
     /// allocate must be called before write ( although BLK_CAP bytes are pre-allocated ).
-    pub fn write(&mut self, f: FD, offset: u64, data: &[u8]) {
+    pub fn write_data(&mut self, f: FD, offset: u64, data: Data, s: usize, n: usize)
+    {
         if f.level == 0 {
-            self.0.write(f.root, offset, data);
+            self.0.write_data(f.root, offset, data, s, n);
         } else {
-            self.write_blocks(f, offset, data);
+            self.write_blocks(f, offset, data, s, n);
         }
+    }
+
+    /// allocate must be called before write ( although BLK_CAP bytes are pre-allocated ).
+    pub fn write(&mut self, f: FD, offset: u64, data: &[u8]) {
+        let n = data.len();
+        let data = Arc::new( data.to_vec() );
+        self.write_data(f, offset, data, 0, n);
     }
 
     ///
@@ -143,16 +151,15 @@ impl DividedStg {
         self.0.stg.wait_complete();
     }
 
-    fn write_blocks(&mut self, f: FD, offset: u64, data: &[u8]) {
+    fn write_blocks(&mut self, f: FD, offset: u64, data: Data, s: usize, n: usize) {
         let mut done = 0;
-        let len = data.len();
-        while done < len {
+        while done < n {
             let off = offset + done as u64;
             let blk = off / BLK_CAP;
             let off = off - blk * BLK_CAP;
             let blk = self.get_block(f.root, f.level, blk);
-            let amount = min(len - done, (BLK_CAP - off) as usize);
-            self.0.write(blk, off, &data[done..done + amount]);
+            let amount = min(n - done, (BLK_CAP - off) as usize);
+            self.0.write_data(blk, off, data.clone(), s + done, amount);
             done += amount;
         }
     }
