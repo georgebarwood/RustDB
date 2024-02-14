@@ -62,10 +62,8 @@ pub trait PageStorage: Send + Sync {
     fn set_page(&mut self, pn: u64, data: Data);
     /// Get contents of page.
     fn get_page(&self, pn: u64) -> Data;
-    /// Get page size.
-    fn size(&self, _pn: u64) -> u64 {
-        todo!()
-    }
+    /// Get page size (for repacking).
+    fn size(&self, _pn: u64) -> u64;
     /// Renumber page.
     fn renumber(&mut self, pn: u64) -> u64;
     /// Save pages to underlying storage.

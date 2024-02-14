@@ -243,6 +243,17 @@ impl PageStorage for BlockPageStg {
         self.write(rsx, off, &data);
     }
 
+    fn renumber(&mut self, pn: u64) -> u64 {
+        let new_pn = self.new_page();
+        let (sx, size, ix) = self.get_page_info(pn);
+        let off = ix * (sx * PAGE_UNIT) as u64;
+        self.write(sx, off, &new_pn.to_le_bytes());
+        self.set_page_info(new_pn, size, ix);
+        self.set_page_info(pn, 0, 0);
+        self.drop_page(pn);
+        new_pn
+    }
+
     fn get_page(&self, pn: u64) -> Data {
         let (sx, size, ix) = self.get_page_info(pn);
 
@@ -257,6 +268,12 @@ impl PageStorage for BlockPageStg {
         self.read(sx, off, &mut data);
         Arc::new(data)
     }
+
+    fn size(&self, pn: u64) -> u64
+    {
+        let (_sx, size, _ix) = self.get_page_info(pn);
+        size as u64
+    }    
 
     fn save(&mut self) {
         // Free the temporary set of free logical pages.
@@ -279,10 +296,6 @@ impl PageStorage for BlockPageStg {
     fn rollback(&mut self) {
         self.free_pn.clear();
         self.read_header();
-    }
-
-    fn renumber(&mut self, _pn: u64) -> u64 {
-        todo!()
     }
 
     fn wait_complete(&self) {
