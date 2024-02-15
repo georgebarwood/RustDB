@@ -6,7 +6,7 @@ const PAGE_UNIT: usize = 1024;
 const PAGE_HSIZE: usize = 8;
 
 const PINFO_FILE: usize = 0;
-const HEADER_SIZE: usize = 24 + (8 + FD_SIZE) * (PAGE_SIZES + 1);
+const HEADER_SIZE: usize = 32 + (8 + FD_SIZE) * PAGE_SIZES;
 const NOT_PN: u64 = u64::MAX >> 16;
 
 struct Info();
@@ -65,6 +65,7 @@ impl BlockPageStg {
             for i in 0..PAGE_SIZES + 1 {
                 result.fd[i] = result.ds.new_file();
             }
+            result.ds.set_root(result.fd[0]);
             result.header_dirty = true;
         } else {
             result.read_header();
@@ -73,15 +74,18 @@ impl BlockPageStg {
     }
 
     fn read_header(&mut self) {
+        self.fd[0] = self.ds.get_root();
         let mut buf = [0; HEADER_SIZE];
         self.ds.read(self.fd[PINFO_FILE], 0, &mut buf);
         self.alloc_pn = util::getu64(&buf, 0);
         self.first_free_pn = util::getu64(&buf, 8);
         self.pn_init = util::getu64(&buf, 16);
+        self.alloc[0] = util::getu64(&buf, 24);
 
-        for i in 0..PAGE_SIZES + 1 {
-            self.alloc[i] = util::getu64(&buf, 24 + i * (8 + FD_SIZE));
-            self.fd[i].load(&buf[24 + 8 + i * (8 + FD_SIZE)..]);
+        for i in 1..PAGE_SIZES + 1 {
+            let off = 32 + (i-1) * (8 + FD_SIZE);
+            self.alloc[i] = util::getu64(&buf, off);
+            self.fd[i].load(&buf[off + 8..]);
         }
         self.header_dirty = false;
     }
@@ -91,10 +95,12 @@ impl BlockPageStg {
         util::setu64(&mut buf, self.alloc_pn);
         util::setu64(&mut buf[8..], self.first_free_pn);
         util::setu64(&mut buf[16..], self.pn_init);
+        util::setu64(&mut buf[24..], self.alloc[0]);        
 
-        for i in 0..PAGE_SIZES + 1 {
-            util::setu64(&mut buf[24 + i * (8 + FD_SIZE)..], self.alloc[i]);
-            self.fd[i].save(&mut buf[24 + 8 + i * (8 + FD_SIZE)..]);
+        for i in 1..PAGE_SIZES {
+            let off = 32 + (i-1) * (8 + FD_SIZE);
+            util::setu64(&mut buf[off..], self.alloc[i]);
+            self.fd[i].save(&mut buf[off + 8..]);
         }
         self.ds.write(self.fd[PINFO_FILE], 0, &buf);
         self.header_dirty = false;
@@ -200,7 +206,8 @@ impl BlockPageStg {
         if fd.changed {
             fd.changed = false;
             self.fd[fx] = fd;
-            self.header_dirty = true
+            self.header_dirty = true;
+            if fx == 0 { self.ds.set_root(fd); }
         }
         self.ds.write_data(fd, off, data);
     }

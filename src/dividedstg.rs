@@ -50,6 +50,23 @@ impl DividedStg {
     }
 
     ///
+    pub fn get_root(&self) -> FD
+    {
+        let rsvd = self.0.get_rsvd();
+        let mut fd = FD::default();
+        fd.load( &rsvd );
+        fd        
+    }
+
+    /// 
+    pub fn set_root(&mut self, fd: FD)
+    {
+        let mut rsvd = [0;RSVD_SIZE];
+        fd.save( &mut rsvd );         
+        self.0.set_rsvd(rsvd);
+    }
+
+    ///
     pub fn new_file(&mut self) -> FD {
         FD {
             root: self.0.new_block(),

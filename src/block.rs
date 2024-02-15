@@ -1,14 +1,14 @@
 use crate::*;
 use std::cmp::min;
 
-#[cfg(feature = "log")]
-use std::cmp::min;
-
 /// Magic Value ( first word of file for version check).
-const MAGIC_VALUE: [u8; 8] = *b"RDBF1099";
+const MAGIC_VALUE: [u8; 8] = *b"RDBF1066";
+
+/// Reserved area for client.
+pub const RSVD_SIZE : usize = 24;
 
 /// Size of file header.
-const HSIZE: u64 = 40;
+const HSIZE: u64 = 40 + RSVD_SIZE as u64;
 
 /// Log (base 2) of Block Size.
 const LOG_BLK_SIZE: u8 = 17;
@@ -41,10 +41,13 @@ pub struct BlockStg {
     pb_count: u64, // Number of Physical Blocks.
     pb_first: u64,
     first_free: u64,
+    rsvd : [u8;RSVD_SIZE],        // For boot-strapping first file.
     free: BTreeSet<u64>,          // Temporary set of free logical blocks
     physical_free: BTreeSet<u64>, // Temporary set of free physical blocks
     header_dirty: bool,
+    rsvd_dirty: bool,
     is_new: bool,
+    
 }
 
 impl BlockStg {
@@ -57,9 +60,11 @@ impl BlockStg {
             pb_count: 1,
             pb_first: 1,
             first_free: NOTLB,
+            rsvd: [0; RSVD_SIZE],
             free: BTreeSet::default(),
             physical_free: BTreeSet::default(),
             header_dirty: false,
+            rsvd_dirty: false,
             is_new,
         };
         let magic: u64 = crate::util::getu64(&MAGIC_VALUE, 0);
@@ -79,6 +84,35 @@ impl BlockStg {
     ///
     pub fn is_new(&self) -> bool {
         self.is_new
+    }
+
+    ///
+    pub fn get_rsvd(&self) -> [u8;RSVD_SIZE]
+    {
+        self.rsvd
+    }
+
+    /// 
+    pub fn set_rsvd(&mut self, rsvd: [u8;RSVD_SIZE])
+    {
+        self.rsvd = rsvd;
+        self.rsvd_dirty = true;
+    }
+
+    fn write_header(&mut self) {
+        self.stg.write_u64(8, self.pb_count);
+        self.stg.write_u64(16, self.lb_count);
+        self.stg.write_u64(24, self.first_free);
+        self.stg.write_u64(32, self.pb_first);
+        if self.rsvd_dirty { self.stg.write( 40, &self.rsvd ); self.rsvd_dirty = false; }
+    }
+
+    fn read_header(&mut self) {
+        self.pb_count = self.stg.read_u64(8);
+        self.lb_count = self.stg.read_u64(16);
+        self.first_free = self.stg.read_u64(24);
+        self.pb_first = self.stg.read_u64(32);
+        self.stg.read( 40, &mut self.rsvd );
     }
 
     ///
@@ -246,20 +280,6 @@ impl BlockStg {
             return 0;
         }
         self.read_num(off)
-    }
-
-    fn write_header(&mut self) {
-        self.stg.write_u64(8, self.pb_count);
-        self.stg.write_u64(16, self.lb_count);
-        self.stg.write_u64(24, self.first_free);
-        self.stg.write_u64(32, self.pb_first);
-    }
-
-    fn read_header(&mut self) {
-        self.pb_count = self.stg.read_u64(8);
-        self.lb_count = self.stg.read_u64(16);
-        self.first_free = self.stg.read_u64(24);
-        self.pb_first = self.stg.read_u64(32);
     }
 
     fn free_block(&mut self, bn: u64) {
