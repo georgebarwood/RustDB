@@ -666,7 +666,7 @@ GO
     #[cfg(feature = "pack")]
     /// Get size of logical page.
     fn lp_size(&self, pnum: u64) -> u64 {
-        self.apd.spd.ps.read().unwrap().size(pnum)
+        self.apd.spd.ps.read().unwrap().size(pnum) as u64
     }
 
     #[cfg(feature = "pack")]

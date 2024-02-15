@@ -1,4 +1,4 @@
-use crate::{nd, util, Arc, Data, Storage};
+use crate::{nd, util, Arc, Data, PageStorage, PageStorageInfo, Storage};
 use std::cmp::min;
 use std::collections::BTreeSet;
 
@@ -67,6 +67,270 @@ pub struct CompactFile {
 /// = 44. Size of file header.
 const HSIZE: u64 = 44;
 
+impl PageStorage for CompactFile {
+    /// Get the current size of the specified logical page. Note: not valid for a newly allocated page until it is first written.
+    fn size(&self, lpnum: u64) -> usize {
+        let off = self.lp_off(lpnum);
+        if off != 0 {
+            self.read_u16(off)
+        } else {
+            0
+        }
+    }
+
+    fn info(&self) -> Box<dyn PageStorageInfo> {
+        Box::new(Info {
+            sp_size: self.sp_size,
+            ep_size: self.ep_size,
+        })
+    }
+
+    /// Set the contents of the page.
+    fn set_page(&mut self, lpnum: u64, data: Data) {
+        debug_assert!(!self.lp_free.contains(&lpnum));
+
+        self.extend_starter_pages(lpnum);
+        // Calculate number of extension pages needed.
+        let size = data.len();
+        let ext = self.ext(size);
+
+        // Read the current starter info.
+        let foff = HSIZE + (self.sp_size as u64) * lpnum;
+        let old_size = self.read_u16(foff);
+        let mut old_ext = self.ext(old_size);
+
+        let mut info = vec![0_u8; 2 + old_ext * 8];
+        self.stg.read(foff, &mut info);
+
+        util::set(&mut info, 0, size as u64, 2);
+
+        if ext != old_ext {
+            // Note freed pages.
+            while old_ext > ext {
+                old_ext -= 1;
+                let fp = util::getu64(&info, 2 + old_ext * 8);
+                info.resize(info.len() - 8, 0); // Important or info could over-write data later.
+                self.ep_free.insert(fp);
+            }
+            // Allocate new pages.
+            while old_ext < ext {
+                let np = self.ep_alloc();
+                info.resize(info.len() + 8, 0);
+                util::setu64(&mut info[2 + old_ext * 8..], np);
+                old_ext += 1;
+            }
+        }
+
+        // Write the extension pages.
+        let mut done = 0;
+        for i in 0..ext {
+            let amount = min(size - done, self.ep_size - 8);
+            let page = util::getu64(&info, 2 + i * 8);
+            let foff = page * (self.ep_size as u64);
+            self.stg.write_u64(foff, lpnum);
+            self.stg.write_data(foff + 8, data.clone(), done, amount);
+            done += amount;
+        }
+
+        info.resize(self.sp_size, 0);
+
+        // Save any remaining data using unused portion of starter page.
+        let amount = size - done;
+        if amount > 0 {
+            let off = 2 + ext * 8;
+            info[off..off + amount].copy_from_slice(&data[done..size]);
+        }
+
+        // Write the info.
+        self.stg.write_vec(foff, info);
+    }
+
+    /// Get logical page contents.
+    fn get_page(&self, lpnum: u64) -> Data {
+        let foff = self.lp_off(lpnum);
+        if foff == 0 {
+            return nd();
+        }
+        let mut starter = vec![0_u8; self.sp_size];
+        self.stg.read(foff, &mut starter);
+        let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
+        let mut data = vec![0u8; size];
+        let ext = self.ext(size); // Number of extension pages.
+
+        // Read the extension pages.
+        let mut done = 0;
+        for i in 0..ext {
+            let amount = min(size - done, self.ep_size - 8);
+            let page = util::getu64(&starter, 2 + i * 8);
+            let roff = page * (self.ep_size as u64);
+            debug_assert!(self.stg.read_u64(roff) == lpnum);
+            self.stg.read(roff + 8, &mut data[done..done + amount]);
+            done += amount;
+        }
+
+        let amount = size - done;
+        if amount > 0 {
+            let off = 2 + ext * 8;
+            data[done..size].copy_from_slice(&starter[off..off + amount]);
+        }
+
+        Arc::new(data)
+    }
+
+    /// Allocate logical page number. Pages are numbered 0,1,2...
+    fn new_page(&mut self) -> u64 {
+        if let Some(p) = self.lp_free.pop_first() {
+            p
+        } else {
+            let mut p = self.lp_first;
+            if p != u64::MAX {
+                self.load_fsp(p);
+                if self.fsp.count > 1 {
+                    p = self.fsp.pop();
+                } else {
+                    self.lp_first = self.fsp.pop();
+                    self.header_dirty = true;
+                    self.fsp.dirty = false;
+                }
+            } else {
+                p = self.lp_alloc;
+                self.lp_alloc += 1;
+                self.header_dirty = true;
+            }
+            p
+        }
+    }
+
+    /// Free a logical page number.
+    fn drop_page(&mut self, pnum: u64) {
+        self.lp_free.insert(pnum);
+    }
+
+    /// Is this a new file?
+    fn is_new(&self) -> bool {
+        self.is_new
+    }
+
+    /// Resets logical page allocation to last save.
+    fn rollback(&mut self) {
+        self.lp_free.clear();
+        self.read_header();
+        self.fsp.clear(u64::MAX);
+    }
+
+    /// Process the temporary sets of free pages and write the file header.
+    fn save(&mut self) {
+        // Free the temporary set of free logical pages.
+        let flist = std::mem::take(&mut self.lp_free);
+        for p in flist.iter().rev() {
+            let p = *p;
+            // Set the page size to zero, frees any associated extension pages.
+            self.set_page(p, nd());
+            self.perm_free(p);
+        }
+        // Relocate pages to fill any free extension pages.
+        while !self.ep_free.is_empty() {
+            self.ep_count -= 1;
+            self.header_dirty = true;
+            let from = self.ep_count;
+            // If the last page is not a free page, relocate it using a free page.
+            if !self.ep_free.remove(&from) {
+                let to = self.ep_alloc();
+                self.relocate(from, to);
+            }
+        }
+        self.save_fsp();
+        if self.header_dirty {
+            self.write_header();
+            self.header_dirty = false;
+        }
+        self.stg.commit(self.ep_count * self.ep_size as u64);
+    }
+
+    fn wait_complete(&self) {
+        self.stg.wait_complete();
+    }
+
+    #[cfg(feature = "verify")]
+    /// Get the set of free logical pages ( also verifies free chain is ok ).
+    fn get_free(&mut self) -> (crate::HashSet<u64>, u64) {
+        let mut free = crate::HashSet::default();
+        let mut p = self.lp_first;
+        while p != u64::MAX {
+            assert!(free.insert(p));
+            self.load_fsp(p);
+            for i in 1..self.fsp.count {
+                let p = self.fsp.get(i);
+                assert!(free.insert(p));
+            }
+            p = self.fsp.get(0);
+        }
+        (free, self.lp_alloc)
+    }
+
+    #[cfg(feature = "renumber")]
+    /// Load free pages into lp_free, preparation for page renumbering. Returns number of used pages or None if there are no free pages.
+    fn load_free_pages(&mut self) -> Option<u64> {
+        assert!(self.ep_free.is_empty());
+        let mut p = self.lp_first;
+        if p == u64::MAX {
+            return None;
+        }
+        while p != u64::MAX {
+            self.load_fsp(p);
+            for i in 1..self.fsp.count {
+                let p = self.fsp.get(i);
+                self.drop_page(p);
+            }
+            self.drop_page(p);
+            p = self.fsp.get(0);
+        }
+        self.lp_first = u64::MAX;
+        self.header_dirty = true;
+        Some(self.lp_alloc - self.lp_free.len() as u64)
+    }
+
+    #[cfg(feature = "renumber")]
+    /// Efficiently move the data associated with lpnum to new logical page.
+    fn renumber(&mut self, lpnum: u64) -> u64 {
+        let lpnum2 = self.new_page();
+        let foff = self.lp_off(lpnum);
+        if foff != 0 {
+            let mut starter = vec![0_u8; self.sp_size];
+            self.stg.read(foff, &mut starter);
+            let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
+            let ext = self.ext(size); // Number of extension pages.
+
+            // Modify the extension pages.
+            for i in 0..ext {
+                let page = util::getu64(&starter, 2 + i * 8);
+                let woff = page * (self.ep_size as u64);
+                debug_assert!(self.stg.read_u64(woff) == lpnum);
+                self.stg.write_u64(woff, lpnum2);
+            }
+
+            // Write the starter data.
+            let foff2 = HSIZE + (self.sp_size as u64) * lpnum2;
+            self.stg.write_vec(foff2, starter);
+        }
+        lpnum2
+    }
+
+    #[cfg(feature = "renumber")]
+    /// All lpnums >= target must have been renumbered to be < target at this point.
+    fn set_alloc_pn(&mut self, target: u64) {
+        assert!(self.lp_first == u64::MAX);
+        assert!(self.ep_free.is_empty());
+        self.reduce_starter_pages(target);
+        self.lp_alloc = target;
+        self.header_dirty = true;
+        self.lp_free.clear();
+        self.clear_lp();
+    }
+}
+
+// *******************************************************************************
+
 impl CompactFile {
     // Magic value to ensure file is correct format.
     const MAGIC_VALUE: [u8; 8] = *b"RDBF1001";
@@ -128,149 +392,6 @@ impl CompactFile {
         self.stg.write_u64(32, self.ep_resvd);
     }
 
-    /// Get the current size of the specified logical page. Note: not valid for a newly allocated page until it is first written.
-    pub fn lp_size(&self, lpnum: u64) -> usize {
-        let off = self.lp_off(lpnum);
-        if off != 0 {
-            self.read_u16(off)
-        } else {
-            0
-        }
-    }
-
-    /// Set the contents of the page.
-    pub fn set_page(&mut self, lpnum: u64, data: Data) {
-        debug_assert!(!self.lp_free.contains(&lpnum));
-
-        self.extend_starter_pages(lpnum);
-        // Calculate number of extension pages needed.
-        let size = data.len();
-        let ext = self.ext(size);
-
-        // Read the current starter info.
-        let foff = HSIZE + (self.sp_size as u64) * lpnum;
-        let old_size = self.read_u16(foff);
-        let mut old_ext = self.ext(old_size);
-
-        let mut info = vec![0_u8; 2 + old_ext * 8];
-        self.stg.read(foff, &mut info);
-
-        util::set(&mut info, 0, size as u64, 2);
-
-        if ext != old_ext {
-            // Note freed pages.
-            while old_ext > ext {
-                old_ext -= 1;
-                let fp = util::getu64(&info, 2 + old_ext * 8);
-                info.resize(info.len() - 8, 0); // Important or info could over-write data later.
-                self.ep_free.insert(fp);
-            }
-            // Allocate new pages.
-            while old_ext < ext {
-                let np = self.ep_alloc();
-                info.resize(info.len() + 8, 0);
-                util::setu64(&mut info[2 + old_ext * 8..], np);
-                old_ext += 1;
-            }
-        }
-
-        // Write the extension pages.
-        let mut done = 0;
-        for i in 0..ext {
-            let amount = min(size - done, self.ep_size - 8);
-            let page = util::getu64(&info, 2 + i * 8);
-            let foff = page * (self.ep_size as u64);
-            self.stg.write_u64(foff, lpnum);
-            self.stg.write_data(foff + 8, data.clone(), done, amount);
-            done += amount;
-        }
-
-        info.resize(self.sp_size, 0);
-
-        // Save any remaining data using unused portion of starter page.
-        let amount = size - done;
-        if amount > 0 {
-            let off = 2 + ext * 8;
-            info[off..off + amount].copy_from_slice(&data[done..size]);
-        }
-
-        // Write the info.
-        self.stg.write_vec(foff, info);
-    }
-
-    /// Get logical page contents.
-    pub fn get_page(&self, lpnum: u64) -> Data {
-        let foff = self.lp_off(lpnum);
-        if foff == 0 {
-            return nd();
-        }
-        let mut starter = vec![0_u8; self.sp_size];
-        self.stg.read(foff, &mut starter);
-        let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
-        let mut data = vec![0u8; size];
-        let ext = self.ext(size); // Number of extension pages.
-
-        // Read the extension pages.
-        let mut done = 0;
-        for i in 0..ext {
-            let amount = min(size - done, self.ep_size - 8);
-            let page = util::getu64(&starter, 2 + i * 8);
-            let roff = page * (self.ep_size as u64);
-            debug_assert!(self.stg.read_u64(roff) == lpnum);
-            self.stg.read(roff + 8, &mut data[done..done + amount]);
-            done += amount;
-        }
-
-        let amount = size - done;
-        if amount > 0 {
-            let off = 2 + ext * 8;
-            data[done..size].copy_from_slice(&starter[off..off + amount]);
-        }
-
-        Arc::new(data)
-    }
-
-    /// Allocate logical page number. Pages are numbered 0,1,2...
-    pub fn alloc_page(&mut self) -> u64 {
-        if let Some(p) = self.lp_free.pop_first() {
-            p
-        } else {
-            let mut p = self.lp_first;
-            if p != u64::MAX {
-                self.load_fsp(p);
-                if self.fsp.count > 1 {
-                    p = self.fsp.pop();
-                } else {
-                    self.lp_first = self.fsp.pop();
-                    self.header_dirty = true;
-                    self.fsp.dirty = false;
-                }
-            } else {
-                p = self.lp_alloc;
-                self.lp_alloc += 1;
-                self.header_dirty = true;
-            }
-            p
-        }
-    }
-
-    /// Free a logical page number.
-    pub fn free_page(&mut self, pnum: u64) {
-        self.lp_free.insert(pnum);
-    }
-
-    /// Is this a new file?
-    pub fn is_new(&self) -> bool {
-        self.is_new
-    }
-
-    /// Resets logical page allocation to last save.
-    pub fn rollback(&mut self) {
-        self.lp_free.clear();
-        self.read_header();
-        self.fsp.clear(u64::MAX);
-    }
-
     fn perm_free(&mut self, p: u64) {
         if self.lp_first == u64::MAX {
             self.fsp.clear(p);
@@ -289,35 +410,6 @@ impl CompactFile {
                 self.header_dirty = true;
             }
         }
-    }
-
-    /// Process the temporary sets of free pages and write the file header.
-    pub fn save(&mut self) {
-        // Free the temporary set of free logical pages.
-        let flist = std::mem::take(&mut self.lp_free);
-        for p in flist.iter().rev() {
-            let p = *p;
-            // Set the page size to zero, frees any associated extension pages.
-            self.set_page(p, nd());
-            self.perm_free(p);
-        }
-        // Relocate pages to fill any free extension pages.
-        while !self.ep_free.is_empty() {
-            self.ep_count -= 1;
-            self.header_dirty = true;
-            let from = self.ep_count;
-            // If the last page is not a free page, relocate it using a free page.
-            if !self.ep_free.remove(&from) {
-                let to = self.ep_alloc();
-                self.relocate(from, to);
-            }
-        }
-        self.save_fsp();
-        if self.header_dirty {
-            self.write_header();
-            self.header_dirty = false;
-        }
-        self.stg.commit(self.ep_count * self.ep_size as u64);
     }
 
     /// Read a u16 from the underlying file.
@@ -430,113 +522,6 @@ impl CompactFile {
         n
     }
 
-    /// Check whether compressing a page is worthwhile.
-    pub fn compress(sp_size: usize, ep_size: usize, size: usize, saving: usize) -> bool {
-        Self::ext_pages(sp_size, ep_size, size - saving) < Self::ext_pages(sp_size, ep_size, size)
-    }
-
-    #[cfg(feature = "verify")]
-    /// Get the set of free logical pages ( also verifies free chain is ok ).
-    pub fn get_info(&mut self) -> (crate::HashSet<u64>, u64) {
-        let mut free = crate::HashSet::default();
-        let mut p = self.lp_first;
-        while p != u64::MAX {
-            assert!(free.insert(p));
-            self.load_fsp(p);
-            for i in 1..self.fsp.count {
-                let p = self.fsp.get(i);
-                assert!(free.insert(p));
-            }
-            p = self.fsp.get(0);
-        }
-        (free, self.lp_alloc)
-    }
-
-    #[cfg(feature = "renumber")]
-    /// Load free pages into lp_free, preparation for page renumbering. Returns number of used pages or None if there are no free pages.
-    pub fn load_free_pages(&mut self) -> Option<u64> {
-        assert!(self.ep_free.is_empty());
-        let mut p = self.lp_first;
-        if p == u64::MAX {
-            return None;
-        }
-        while p != u64::MAX {
-            self.load_fsp(p);
-            for i in 1..self.fsp.count {
-                let p = self.fsp.get(i);
-                self.free_page(p);
-            }
-            self.free_page(p);
-            p = self.fsp.get(0);
-        }
-        self.lp_first = u64::MAX;
-        self.header_dirty = true;
-        Some(self.lp_alloc - self.lp_free.len() as u64)
-    }
-
-    #[cfg(feature = "renumber")]
-    /// Efficiently move the data associated with lpnum to new logical page.
-    pub fn renumber(&mut self, lpnum: u64) -> u64 {
-        let lpnum2 = self.alloc_page();
-        let foff = self.lp_off(lpnum);
-        if foff != 0 {
-            let mut starter = vec![0_u8; self.sp_size];
-            self.stg.read(foff, &mut starter);
-            let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
-            let ext = self.ext(size); // Number of extension pages.
-
-            // Modify the extension pages.
-            for i in 0..ext {
-                let page = util::getu64(&starter, 2 + i * 8);
-                let woff = page * (self.ep_size as u64);
-                debug_assert!(self.stg.read_u64(woff) == lpnum);
-                self.stg.write_u64(woff, lpnum2);
-            }
-
-            // Write the starter data.
-            let foff2 = HSIZE + (self.sp_size as u64) * lpnum2;
-            self.stg.write_vec(foff2, starter);
-        }
-        lpnum2
-    }
-
-    #[cfg(feature = "renumber")]
-    fn reduce_starter_pages(&mut self, target: u64) {
-        let resvd = HSIZE + target * self.sp_size as u64;
-        let resvd = (resvd + self.ep_size as u64 - 1) / self.ep_size as u64;
-        while self.ep_resvd > resvd {
-            self.ep_count -= 1;
-            self.header_dirty = true;
-            let from = self.ep_count;
-            self.ep_resvd -= 1;
-            self.relocate(from, self.ep_resvd);
-        }
-        self.write_ep_resvd();
-    }
-
-    #[cfg(feature = "renumber")]
-    /// All lpnums >= target must have been renumbered to be < target at this point.
-    pub fn set_lpalloc(&mut self, target: u64) {
-        assert!(self.lp_first == u64::MAX);
-        assert!(self.ep_free.is_empty());
-        self.reduce_starter_pages(target);
-        self.lp_alloc = target;
-        self.header_dirty = true;
-        self.lp_free.clear();
-        self.clear_lp();
-    }
-
-    #[cfg(feature = "renumber")]
-    /// Set size of renumbered pages >= lp_alloc to zero.
-    fn clear_lp(&mut self) {
-        let start = HSIZE + (self.sp_size as u64) * self.lp_alloc;
-        let end = self.ep_resvd * self.ep_size as u64;
-        if end > start {
-            let buf = vec![0; (end - start) as usize];
-            self.stg.write(start, &buf);
-        }
-    }
-
     fn load_fsp(&mut self, lpnum: u64) {
         if lpnum != self.fsp.current {
             self.save_fsp();
@@ -554,6 +539,31 @@ impl CompactFile {
             self.stg.write(off, &self.fsp.data);
             self.fsp.dirty = false;
         }
+    }
+
+    #[cfg(feature = "renumber")]
+    /// Set size of renumbered pages >= lp_alloc to zero.
+    fn clear_lp(&mut self) {
+        let start = HSIZE + (self.sp_size as u64) * self.lp_alloc;
+        let end = self.ep_resvd * self.ep_size as u64;
+        if end > start {
+            let buf = vec![0; (end - start) as usize];
+            self.stg.write(start, &buf);
+        }
+    }
+
+    #[cfg(feature = "renumber")]
+    fn reduce_starter_pages(&mut self, target: u64) {
+        let resvd = HSIZE + target * self.sp_size as u64;
+        let resvd = (resvd + self.ep_size as u64 - 1) / self.ep_size as u64;
+        while self.ep_resvd > resvd {
+            self.ep_count -= 1;
+            self.header_dirty = true;
+            let from = self.ep_count;
+            self.ep_resvd -= 1;
+            self.relocate(from, self.ep_resvd);
+        }
+        self.write_ep_resvd();
     }
 } // end impl CompactFile
 
@@ -624,6 +634,28 @@ impl FreeStarterPage {
     }
 }
 
+struct Info {
+    sp_size: usize,
+    ep_size: usize,
+}
+
+impl PageStorageInfo for Info {
+    /// The number of different page sizes.
+    fn sizes(&self) -> usize {
+        (self.sp_size - 2) / 8
+    }
+
+    /// Size index for given page size.
+    fn index(&self, size: usize) -> usize {
+        (size + 2) / (self.ep_size - 16)
+    }
+
+    /// Page size for given index.
+    fn size(&self, ix: usize) -> usize {
+        (self.ep_size - 16) * ix + (self.sp_size - 2)
+    }
+}
+
 #[test]
 pub fn test() {
     use crate::{AtomicFile, MemFile};
@@ -638,8 +670,8 @@ pub fn test() {
     let mut cf0 = CompactFile::new(s0, 200, 512);
     let mut cf1 = CompactFile::new(s1, 136, 1024);
     for _ in 0..100 {
-        cf0.alloc_page();
-        cf1.alloc_page();
+        cf0.new_page();
+        cf1.new_page();
     }
 
     for _ in 0..100000 {

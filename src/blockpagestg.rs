@@ -116,6 +116,7 @@ impl BlockPageStg {
         self.alloc[sx] -= 1;
         let from = self.alloc[sx];
         self.header_dirty = true;
+
         self.relocate(sx, from, ix);
 
         let end = from * (sx * PAGE_UNIT) as u64;
@@ -128,6 +129,7 @@ impl BlockPageStg {
         }
         let mut buf = vec![0; sx * PAGE_UNIT];
         let from = from * (sx * PAGE_UNIT) as u64;
+
         self.read(sx, from, &mut buf);
         let pn = util::getu64(&buf, 0);
 
@@ -291,9 +293,9 @@ impl PageStorage for BlockPageStg {
         Arc::new(data)
     }
 
-    fn size(&self, pn: u64) -> u64 {
+    fn size(&self, pn: u64) -> usize {
         let (_sx, size, _ix) = self.get_page_info(pn);
-        size as u64
+        size
     }
 
     fn save(&mut self) {
@@ -325,7 +327,7 @@ impl PageStorage for BlockPageStg {
 
     #[cfg(feature = "verify")]
     /// Get the set of free logical pages ( also verifies free chain is ok ).
-    fn get_free(&self) -> (HashSet<u64>, u64) {
+    fn get_free(&mut self) -> (HashSet<u64>, u64) {
         let mut free = crate::HashSet::default();
         let mut pn = self.first_free_pn;
         while pn != NOT_PN {

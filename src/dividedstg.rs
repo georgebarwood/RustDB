@@ -13,9 +13,9 @@ pub const FD_SIZE: usize = 8 + 8 + 1;
 /// [DividedStg] File Descriptor.
 #[derive(Clone, Copy, Default)]
 pub struct FD {
-    root: u64,
-    blocks: u64,
-    level: u8,
+    pub(crate) root: u64,
+    pub(crate) blocks: u64,
+    pub(crate) level: u8,
     ///
     pub changed: bool,
 }

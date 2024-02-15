@@ -63,7 +63,7 @@ pub trait PageStorage: Send + Sync {
     /// Get contents of page.
     fn get_page(&self, pn: u64) -> Data;
     /// Get page size (for repacking).
-    fn size(&self, pn: u64) -> u64;
+    fn size(&self, pn: u64) -> usize;
     /// Save pages to underlying storage.
     fn save(&mut self);
     /// Undo changes since last save ( but set_page/renumber cannot be undone, only new_page and drop_page can be undone ).
@@ -72,7 +72,7 @@ pub trait PageStorage: Send + Sync {
     fn wait_complete(&self);
     #[cfg(feature = "verify")]
     /// Get set of free pages and number of pages ever allocated ( for VERIFY builtin function ).
-    fn get_free(&self) -> (crate::HashSet<u64>, u64);
+    fn get_free(&mut self) -> (crate::HashSet<u64>, u64);
     #[cfg(feature = "renumber")]
     /// Renumber page.
     fn renumber(&mut self, pn: u64) -> u64;
@@ -94,11 +94,11 @@ pub trait PageStorageInfo: Send + Sync {
     fn size(&self, ix: usize) -> usize;
     /// Maximum page size.
     fn max_page_size(&self) -> usize {
-        self.size(self.sizes() - 1)
+        self.size(self.sizes())
     }
     /// Half size.
     fn half_page_size(&self) -> usize {
-        self.size(self.sizes() / 2 - 1)
+        self.size(self.sizes() / 2)
     }
     /// Is it worth compressing a page of given size by saving.
     fn compress(&self, size: usize, saving: usize) -> bool {

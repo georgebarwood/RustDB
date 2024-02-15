@@ -1,4 +1,5 @@
 use crate::*;
+use std::cmp::min;
 
 #[cfg(feature = "log")]
 use std::cmp::min;
@@ -147,7 +148,7 @@ impl BlockStg {
             off,
             s,
             n,
-            &data[s..s+.min(n, 20)]
+            &data[s..s + min(n, 20)]
         );
 
         self.expand_binfo(bn);
@@ -178,9 +179,10 @@ impl BlockStg {
         let pb = self.get_binfo(bn);
         if pb & ALLOC_BIT != 0 {
             let pb = pb & NUM_MASK;
-            assert!(NUM_SIZE + off + data.len() as u64 <= BLK_SIZE);
-            // println!("read bn={} pb={} off={}", bn, pb, off);
-            self.stg.read(pb * BLK_SIZE + NUM_SIZE + off, data);
+            let avail = BLK_SIZE - (NUM_SIZE + off);
+            let amount = min(data.len(), avail as usize);
+            self.stg
+                .read(pb * BLK_SIZE + NUM_SIZE + off, &mut data[0..amount]);
 
             #[cfg(feature = "log")]
             println!(
