@@ -671,85 +671,77 @@ GO
 
     #[cfg(feature = "pack")]
     /// Repack the specified sortedfile.
-    fn repack_file(self: &DB, _k: i64, _schema: &str, _tname: &str) -> i64 {
-        /*
-                if k >= 0 {
-                    let name = ObjRef::new(schema, tname);
-                    if let Some(t) = self.get_table(&name) {
-                        return t.repack(self, k as usize);
-                    }
-                } else {
-                    let k = (-k - 1) as usize;
-                    if k < 4 {
-                        return self.bs[k].repack_file(self);
-                    }
-                }
-        */
+    fn repack_file(self: &DB, k: i64, schema: &str, tname: &str) -> i64 {
+        if k >= 0 {
+            let name = ObjRef::new(schema, tname);
+            if let Some(t) = self.get_table(&name) {
+                return t.repack(self, k as usize);
+            }
+        } else {
+            let k = (-k - 1) as usize;
+            if k < 4 {
+                return self.bs[k].repack_file(self);
+            }
+        }
         -1
     }
 
     #[cfg(feature = "verify")]
     /// Verify the page structure of the database.
     pub fn verify(self: &DB) -> String {
-        /*
-                let (mut pages, total) = self.apd.spd.file.write().unwrap().get_info();
-                let total = total as usize;
+        let (mut pages, total) = self.apd.spd.ps.write().unwrap().get_free();
+        let total = total as usize;
 
-                let free = pages.len();
+        let free = pages.len();
 
-                for bs in &self.bs {
-                    bs.file.get_used(self, &mut pages);
-                }
+        for bs in &self.bs {
+            bs.file.get_used(self, &mut pages);
+        }
 
-                for t in self.tables.borrow().values() {
-                    t.get_used(self, &mut pages);
-                }
+        for t in self.tables.borrow().values() {
+            t.get_used(self, &mut pages);
+        }
 
-                // assert_eq!(pages.len(), total);
+        assert_eq!(pages.len(), total);
 
-                format!(
-                    "Logical page summary: free={} used={} total={} pages={}",
-                    free,
-                    total - free,
-                    total,
-                    pages.len()
-                )
-        */
-        "verify is ToDo".to_string()
+        format!(
+            "Logical page summary: free={} used={} total={}",
+            free,
+            total - free,
+            total
+        )
     }
 
     /// Renumber pages.
     #[cfg(feature = "renumber")]
     pub fn renumber(self: &DB) {
-        /*
-                let target = self.apd.spd.file.write().unwrap().load_free_pages();
-                if let Some(target) = target {
-                    for bs in &self.bs {
-                        bs.file.renumber(self, target);
-                    }
+        let target = self.apd.spd.ps.write().unwrap().load_free_pages();
+        if let Some(target) = target {
+            for bs in &self.bs {
+                bs.file.renumber(self, target);
+            }
 
-                    for t in self.tables.borrow().values() {
-                        let tf = &t.file;
-                        let mut root_page = tf.root_page.get();
-                        if root_page >= target {
-                            root_page = self.apd.renumber_page(root_page);
-                            tf.root_page.set(root_page);
-                            sys::set_root(self, t.id, root_page);
-                        }
-                        tf.renumber(self, target);
-                        for ix in &mut *t.ixlist.borrow_mut() {
-                            let mut root_page = ix.file.root_page.get();
-                            if root_page >= target {
-                                root_page = self.apd.renumber_page(root_page);
-                                ix.file.root_page.set(root_page);
-                                sys::set_ix_root(self, ix.id, root_page);
-                            }
-                            ix.file.renumber(self, target);
-                        }
-                    }
-                    self.apd.spd.file.write().unwrap().set_lpalloc(target);
+            for t in self.tables.borrow().values() {
+                let tf = &t.file;
+                let mut root_page = tf.root_page.get();
+                if root_page >= target {
+                    root_page = self.apd.renumber_page(root_page);
+                    tf.root_page.set(root_page);
+                    sys::set_root(self, t.id, root_page);
                 }
-        */
+                tf.renumber(self, target);
+                for ix in &mut *t.ixlist.borrow_mut() {
+                    let mut root_page = ix.file.root_page.get();
+                    if root_page >= target {
+                        root_page = self.apd.renumber_page(root_page);
+                        ix.file.root_page.set(root_page);
+                        sys::set_ix_root(self, ix.id, root_page);
+                    }
+                    ix.file.renumber(self, target);
+                }
+            }
+            self.apd.spd.ps.write().unwrap().set_alloc_pn(target);
+        }
     }
 } // end impl Database
 

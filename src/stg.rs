@@ -63,15 +63,25 @@ pub trait PageStorage: Send + Sync {
     /// Get contents of page.
     fn get_page(&self, pn: u64) -> Data;
     /// Get page size (for repacking).
-    fn size(&self, _pn: u64) -> u64;
-    /// Renumber page.
-    fn renumber(&mut self, pn: u64) -> u64;
+    fn size(&self, pn: u64) -> u64;
     /// Save pages to underlying storage.
     fn save(&mut self);
-    ///
+    /// Undo changes since last save ( but set_page/renumber cannot be undone, only new_page and drop_page can be undone ).
     fn rollback(&mut self);
     /// Wait until save is complete.
     fn wait_complete(&self);
+    #[cfg(feature = "verify")]
+    /// Get set of free pages and number of pages ever allocated ( for VERIFY builtin function ).
+    fn get_free(&self) -> (crate::HashSet<u64>, u64);
+    #[cfg(feature = "renumber")]
+    /// Renumber page.
+    fn renumber(&mut self, pn: u64) -> u64;
+    #[cfg(feature = "renumber")]
+    /// Load free pages in preparation for page renumbering. Returns number of used pages or None if there are no free pages.
+    fn load_free_pages(&mut self) -> Option<u64>;
+    #[cfg(feature = "renumber")]
+    /// Final part of page renumber operation.
+    fn set_alloc_pn(&mut self, target: u64);
 }
 
 /// Information about page sizes.

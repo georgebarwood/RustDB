@@ -40,8 +40,8 @@ pub struct BlockPageStg {
     first_free_pn: u64,
     pn_init: u64,
     fd: [FD; PAGE_SIZES + 1],
-    alloc: [u64; PAGE_SIZES + 1], // alloc[0] is currently unused
-    free_pn: BTreeSet<u64>,       // Temporary set of free page numbers.
+    alloc: [u64; PAGE_SIZES + 1],
+    free_pn: BTreeSet<u64>, // Temporary set of free page numbers.
     header_dirty: bool,
     is_new: bool,
 }
@@ -138,6 +138,9 @@ impl BlockPageStg {
     }
 
     fn get_page_info(&self, pn: u64) -> (usize, usize, u64) {
+        if pn >= self.alloc[0] {
+            return (0, 0, 0);
+        }
         let mut buf = [0; 8];
         let off = HEADER_SIZE as u64 + pn * 8;
         self.read(PINFO_FILE, off, &mut buf);
@@ -148,12 +151,22 @@ impl BlockPageStg {
     }
 
     fn set_page_info(&mut self, pn: u64, size: usize, ix: u64) {
+        let off = HEADER_SIZE as u64 + pn * 8;
+        if pn >= self.alloc[0] {
+            let start = HEADER_SIZE as u64 + self.alloc[0] * 8;
+            self.clear(PINFO_FILE, start, off - start);
+            self.alloc[0] = pn + 1;
+            self.header_dirty = true;
+        }
         let mut buf = [0; 8];
         util::set(&mut buf, 0, ix, 6);
         util::set(&mut buf, 6, size as u64, 2);
-
-        let off = HEADER_SIZE as u64 + pn * 8;
         self.write(PINFO_FILE, off, &buf);
+    }
+
+    fn truncate_page_info(&mut self) {
+        let off = HEADER_SIZE as u64 + self.alloc_pn * 8;
+        self.truncate(PINFO_FILE, off);
     }
 
     fn update_ix(&mut self, pn: u64, ix: u64) {
@@ -165,6 +178,13 @@ impl BlockPageStg {
 
     fn size_index(size: usize) -> usize {
         (size + PAGE_HSIZE + PAGE_UNIT - 1) / PAGE_UNIT
+    }
+
+    fn clear(&mut self, fx: usize, off: u64, n: u64) {
+        if n > 0 {
+            let buf = vec![0; n as usize];
+            self.write(fx, off, &buf);
+        }
     }
 
     fn write(&mut self, fx: usize, off: u64, data: &[u8]) {
@@ -181,6 +201,16 @@ impl BlockPageStg {
             self.header_dirty = true
         }
         self.ds.write_data(fd, off, data);
+    }
+
+    fn truncate(&mut self, fx: usize, off: u64) {
+        let mut fd = self.fd[fx];
+        fd = self.ds.truncate(fd, off);
+        if fd.changed {
+            fd.changed = false;
+            self.fd[fx] = fd;
+            self.header_dirty = true
+        }
     }
 
     fn read(&self, fx: usize, off: u64, data: &mut [u8]) {
@@ -246,17 +276,6 @@ impl PageStorage for BlockPageStg {
         self.write_data(rsx, off, data);
     }
 
-    fn renumber(&mut self, pn: u64) -> u64 {
-        let new_pn = self.new_page();
-        let (sx, size, ix) = self.get_page_info(pn);
-        let off = ix * (sx * PAGE_UNIT) as u64;
-        self.write(sx, off, &new_pn.to_le_bytes());
-        self.set_page_info(new_pn, size, ix);
-        self.set_page_info(pn, 0, 0);
-        self.drop_page(pn);
-        new_pn
-    }
-
     fn get_page(&self, pn: u64) -> Data {
         let (sx, size, ix) = self.get_page_info(pn);
 
@@ -302,6 +321,59 @@ impl PageStorage for BlockPageStg {
 
     fn wait_complete(&self) {
         self.ds.wait_complete();
+    }
+
+    #[cfg(feature = "verify")]
+    /// Get the set of free logical pages ( also verifies free chain is ok ).
+    fn get_free(&self) -> (HashSet<u64>, u64) {
+        let mut free = crate::HashSet::default();
+        let mut pn = self.first_free_pn;
+        while pn != NOT_PN {
+            assert!(free.insert(pn));
+            let (_sx, _size, next) = self.get_page_info(pn);
+            pn = next;
+        }
+        (free, self.alloc_pn)
+    }
+
+    #[cfg(feature = "renumber")]
+    /// Load free pages in preparation for page renumbering. Returns number of used pages or None if there are no free pages.
+    fn load_free_pages(&mut self) -> Option<u64> {
+        let mut pn = self.first_free_pn;
+        if pn == NOT_PN {
+            return None;
+        }
+        while pn != NOT_PN {
+            let (_sx, _size, next) = self.get_page_info(pn);
+            self.drop_page(pn);
+            pn = next;
+        }
+        self.first_free_pn = NOT_PN;
+        self.header_dirty = true;
+        Some(self.alloc_pn - self.free_pn.len() as u64)
+    }
+
+    #[cfg(feature = "renumber")]
+    fn renumber(&mut self, pn: u64) -> u64 {
+        let new_pn = self.new_page();
+        let (sx, size, ix) = self.get_page_info(pn);
+        let off = ix * (sx * PAGE_UNIT) as u64;
+        self.write(sx, off, &new_pn.to_le_bytes());
+        self.set_page_info(new_pn, size, ix);
+        self.set_page_info(pn, 0, 0);
+        self.drop_page(pn);
+        new_pn
+    }
+
+    #[cfg(feature = "renumber")]
+    /// Final part of page renumber operation.
+    fn set_alloc_pn(&mut self, target: u64) {
+        assert!(self.first_free_pn == NOT_PN);
+        self.alloc_pn = target;
+        self.alloc[0] = target;
+        self.header_dirty = true;
+        self.free_pn.clear();
+        self.truncate_page_info();
     }
 }
 
