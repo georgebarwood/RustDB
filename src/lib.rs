@@ -36,6 +36,7 @@
 //! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
 //! - `unsafe-optim` : Enable unsafe optimisations in release mode.
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
+//! - `compact` : Default page storage is [compact::CompactFile] rather than [BlockPageStg] (can be set explicitly using [pstore::SharedPagedData::new_from_ps] );
 //!
 //! By default, all features except serde, unsafe-optim and log are enabled.
 //!
@@ -174,7 +175,7 @@ pub mod block;
 /// Storage divided into sub-files.
 pub mod dividedstg;
 
-/// [BlockPageStg] ( implementation of [PageStorage] trait ).
+/// [BlockPageStg] - implementation of [PageStorage] trait.
 pub mod blockpagestg;
 
 /// Write Buffer.
@@ -255,7 +256,7 @@ pub mod exec;
 mod exec;
 
 #[cfg(feature = "max")]
-/// CompactFile : storage of logical pages in smaller regions of backing storage.
+/// CompactFile :  alternative implementation of [PageStorage] trait.
 pub mod compact;
 #[cfg(not(feature = "max"))]
 mod compact;

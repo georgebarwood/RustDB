@@ -279,7 +279,7 @@ impl SharedPagedData {
     }
 
     #[cfg(not(feature = "compact"))]
-    /// Construct default SharedPageData based pn BlockPageStg.
+    /// Construct default SharedPageData based on BlockPageStg.
     pub fn new(stg: Box<dyn Storage>) -> Arc<Self> {
         Self::new_from_ps(Box::new(crate::blockpagestg::BlockPageStg::new(stg)))
     }
