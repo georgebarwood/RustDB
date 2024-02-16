@@ -401,28 +401,27 @@ impl Page {
     /// Reduce page size using free nodes.
     pub fn compress(&mut self, db: &DB) {
         let saving = (self.alloc - self.count) * self.node_size;
-        if saving == 0 || !db.apd.compress(self.size(), saving) {
-            return;
-        }
-        let mut flist = Vec::new();
-        let mut f = self.free;
-        while f != 0 {
-            if f <= self.count {
-                flist.push(f);
+        if saving != 0 && db.apd.compress(self.size(), saving) {
+            let mut flist = Vec::new();
+            let mut f = self.free;
+            while f != 0 {
+                if f <= self.count {
+                    flist.push(f);
+                }
+                f = self.left(f);
             }
-            f = self.left(f);
+            if !flist.is_empty() {
+                let mut mp = MutPage {
+                    data: &mut self.data,
+                    node_size: self.node_size,
+                    level: self.level,
+                    target: self.count,
+                };
+                self.root = mp.relocate(self.root, &mut flist);
+            }
+            self.free = 0;
+            self.alloc = self.count;
         }
-        if !flist.is_empty() {
-            let mut mp = MutPage {
-                data: &mut self.data,
-                node_size: self.node_size,
-                level: self.level,
-                target: self.count,
-            };
-            self.root = mp.relocate(self.root, &mut flist);
-        }
-        self.free = 0;
-        self.alloc = self.count;
         self.resize_data();
     }
 } // end impl Page

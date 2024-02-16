@@ -5,7 +5,7 @@ use std::cmp::min;
 const MAGIC_VALUE: [u8; 8] = *b"RDBF1066";
 
 /// Reserved area for client.
-pub const RSVD_SIZE : usize = 24;
+pub const RSVD_SIZE: usize = 24;
 
 /// Size of file header.
 const HSIZE: u64 = 40 + RSVD_SIZE as u64;
@@ -41,13 +41,12 @@ pub struct BlockStg {
     pb_count: u64, // Number of Physical Blocks.
     pb_first: u64,
     first_free: u64,
-    rsvd : [u8;RSVD_SIZE],        // For boot-strapping first file.
+    rsvd: [u8; RSVD_SIZE],        // For boot-strapping first file.
     free: BTreeSet<u64>,          // Temporary set of free logical blocks
     physical_free: BTreeSet<u64>, // Temporary set of free physical blocks
     header_dirty: bool,
     rsvd_dirty: bool,
     is_new: bool,
-    
 }
 
 impl BlockStg {
@@ -87,16 +86,15 @@ impl BlockStg {
     }
 
     ///
-    pub fn get_rsvd(&self) -> [u8;RSVD_SIZE]
-    {
+    pub fn get_rsvd(&self) -> [u8; RSVD_SIZE] {
         self.rsvd
     }
 
-    /// 
-    pub fn set_rsvd(&mut self, rsvd: [u8;RSVD_SIZE])
-    {
+    ///
+    pub fn set_rsvd(&mut self, rsvd: [u8; RSVD_SIZE]) {
         self.rsvd = rsvd;
         self.rsvd_dirty = true;
+        self.header_dirty = true;
     }
 
     fn write_header(&mut self) {
@@ -104,7 +102,10 @@ impl BlockStg {
         self.stg.write_u64(16, self.lb_count);
         self.stg.write_u64(24, self.first_free);
         self.stg.write_u64(32, self.pb_first);
-        if self.rsvd_dirty { self.stg.write( 40, &self.rsvd ); self.rsvd_dirty = false; }
+        if self.rsvd_dirty {
+            self.stg.write(40, &self.rsvd);
+            self.rsvd_dirty = false;
+        }
     }
 
     fn read_header(&mut self) {
@@ -112,7 +113,7 @@ impl BlockStg {
         self.lb_count = self.stg.read_u64(16);
         self.first_free = self.stg.read_u64(24);
         self.pb_first = self.stg.read_u64(32);
-        self.stg.read( 40, &mut self.rsvd );
+        self.stg.read(40, &mut self.rsvd);
     }
 
     ///

@@ -83,22 +83,24 @@ impl BlockPageStg {
         self.alloc[0] = util::getu64(&buf, 24);
 
         for i in 1..PAGE_SIZES + 1 {
-            let off = 32 + (i-1) * (8 + FD_SIZE);
+            let off = 32 + (i - 1) * (8 + FD_SIZE);
             self.alloc[i] = util::getu64(&buf, off);
             self.fd[i].load(&buf[off + 8..]);
         }
         self.header_dirty = false;
+        // println!("read_header fd ={:?} alloc={:?}", &self.fd, &self.alloc);
     }
 
     fn write_header(&mut self) {
+        // println!("write_header fd ={:?} alloc={:?}", &self.fd, &self.alloc);
         let mut buf = [0; HEADER_SIZE];
         util::setu64(&mut buf, self.alloc_pn);
         util::setu64(&mut buf[8..], self.first_free_pn);
         util::setu64(&mut buf[16..], self.pn_init);
-        util::setu64(&mut buf[24..], self.alloc[0]);        
+        util::setu64(&mut buf[24..], self.alloc[0]);
 
-        for i in 1..PAGE_SIZES {
-            let off = 32 + (i-1) * (8 + FD_SIZE);
+        for i in 1..PAGE_SIZES + 1 {
+            let off = 32 + (i - 1) * (8 + FD_SIZE);
             util::setu64(&mut buf[off..], self.alloc[i]);
             self.fd[i].save(&mut buf[off + 8..]);
         }
@@ -107,6 +109,7 @@ impl BlockPageStg {
     }
 
     fn alloc_page(&mut self, sx: usize) -> u64 {
+        assert!(sx > 0);
         let ix = self.alloc[sx];
         self.alloc[sx] += 1;
         self.header_dirty = true;
@@ -185,7 +188,9 @@ impl BlockPageStg {
     }
 
     fn size_index(size: usize) -> usize {
-        (size + PAGE_HSIZE + PAGE_UNIT - 1) / PAGE_UNIT
+        let ix = (size + PAGE_HSIZE + PAGE_UNIT - 1) / PAGE_UNIT;
+        assert!(ix <= PAGE_SIZES);
+        ix
     }
 
     fn clear(&mut self, fx: usize, off: u64, n: u64) {
@@ -203,23 +208,26 @@ impl BlockPageStg {
     fn write_data(&mut self, fx: usize, off: u64, data: Data) {
         let mut fd = self.fd[fx];
         fd = self.ds.allocate(fd, off + data.len() as u64);
-        if fd.changed {
-            fd.changed = false;
-            self.fd[fx] = fd;
-            self.header_dirty = true;
-            if fx == 0 { self.ds.set_root(fd); }
-        }
+        fd = self.save_fd(fx, fd);
         self.ds.write_data(fd, off, data);
     }
 
     fn truncate(&mut self, fx: usize, off: u64) {
         let mut fd = self.fd[fx];
         fd = self.ds.truncate(fd, off);
+        self.save_fd(fx, fd);
+    }
+
+    fn save_fd(&mut self, fx: usize, mut fd: FD) -> FD {
         if fd.changed {
             fd.changed = false;
             self.fd[fx] = fd;
-            self.header_dirty = true
+            self.header_dirty = true;
+            if fx == 0 {
+                self.ds.set_root(fd);
+            }
         }
+        fd
     }
 
     fn read(&self, fx: usize, off: u64, data: &mut [u8]) {
@@ -261,6 +269,8 @@ impl PageStorage for BlockPageStg {
     fn set_page(&mut self, pn: u64, data: Data) {
         let size = data.len();
         let rsx = Self::size_index(size);
+        assert!(rsx <= PAGE_SIZES);
+        assert!(size == 0 || rsx > 0);
 
         let (sx, _size, ix) = self.get_page_info(pn);
 
@@ -270,19 +280,23 @@ impl PageStorage for BlockPageStg {
             let ix = self.alloc_page(rsx);
 
             // Set first word of page to page number.
-            let off = ix * (rsx * PAGE_UNIT) as u64;
-            self.write(rsx, off, &pn.to_le_bytes());
+            if rsx != 0 {
+                let off = ix * (rsx * PAGE_UNIT) as u64;
+                self.write(rsx, off, &pn.to_le_bytes());
+            }
             ix
         } else {
             ix
         };
         self.set_page_info(pn, size, ix);
 
-        // Offset of user data within sub-file.
-        let off = PAGE_HSIZE as u64 + ix * (rsx * PAGE_UNIT) as u64;
+        if rsx != 0 {
+            // Offset of user data within sub-file.
+            let off = PAGE_HSIZE as u64 + ix * (rsx * PAGE_UNIT) as u64;
 
-        // Write data.
-        self.write_data(rsx, off, data);
+            // Write data.
+            self.write_data(rsx, off, data);
+        }
     }
 
     fn get_page(&self, pn: u64) -> Data {
@@ -333,7 +347,6 @@ impl PageStorage for BlockPageStg {
     }
 
     #[cfg(feature = "verify")]
-    /// Get the set of free logical pages ( also verifies free chain is ok ).
     fn get_free(&mut self) -> (HashSet<u64>, u64) {
         let mut free = crate::HashSet::default();
         let mut pn = self.first_free_pn;
@@ -346,7 +359,6 @@ impl PageStorage for BlockPageStg {
     }
 
     #[cfg(feature = "renumber")]
-    /// Load free pages in preparation for page renumbering. Returns number of used pages or None if there are no free pages.
     fn load_free_pages(&mut self) -> Option<u64> {
         let mut pn = self.first_free_pn;
         if pn == NOT_PN {
@@ -375,7 +387,6 @@ impl PageStorage for BlockPageStg {
     }
 
     #[cfg(feature = "renumber")]
-    /// Final part of page renumber operation.
     fn set_alloc_pn(&mut self, target: u64) {
         assert!(self.first_free_pn == NOT_PN);
         self.alloc_pn = target;

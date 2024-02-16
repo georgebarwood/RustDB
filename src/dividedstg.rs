@@ -11,7 +11,7 @@ const NUMS_PER_BLK: u64 = BLK_CAP / NUM_SIZE;
 pub const FD_SIZE: usize = 8 + 8 + 1;
 
 /// [DividedStg] File Descriptor.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct FD {
     pub(crate) root: u64,
     pub(crate) blocks: u64,
@@ -50,19 +50,17 @@ impl DividedStg {
     }
 
     ///
-    pub fn get_root(&self) -> FD
-    {
+    pub fn get_root(&self) -> FD {
         let rsvd = self.0.get_rsvd();
         let mut fd = FD::default();
-        fd.load( &rsvd );
-        fd        
+        fd.load(&rsvd);
+        fd
     }
 
-    /// 
-    pub fn set_root(&mut self, fd: FD)
-    {
-        let mut rsvd = [0;RSVD_SIZE];
-        fd.save( &mut rsvd );         
+    ///
+    pub fn set_root(&mut self, fd: FD) {
+        let mut rsvd = [0; RSVD_SIZE];
+        fd.save(&mut rsvd);
         self.0.set_rsvd(rsvd);
     }
 
