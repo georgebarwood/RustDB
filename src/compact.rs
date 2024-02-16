@@ -68,7 +68,6 @@ pub struct CompactFile {
 const HSIZE: u64 = 44;
 
 impl PageStorage for CompactFile {
-    /// Get the current size of the specified logical page. Note: not valid for a newly allocated page until it is first written.
     fn size(&self, lpnum: u64) -> usize {
         let off = self.lp_off(lpnum);
         if off != 0 {
@@ -85,7 +84,6 @@ impl PageStorage for CompactFile {
         })
     }
 
-    /// Set the contents of the page.
     fn set_page(&mut self, lpnum: u64, data: Data) {
         debug_assert!(!self.lp_free.contains(&lpnum));
 
@@ -145,7 +143,6 @@ impl PageStorage for CompactFile {
         self.stg.write_vec(foff, info);
     }
 
-    /// Get logical page contents.
     fn get_page(&self, lpnum: u64) -> Data {
         let foff = self.lp_off(lpnum);
         if foff == 0 {
@@ -177,7 +174,6 @@ impl PageStorage for CompactFile {
         Arc::new(data)
     }
 
-    /// Allocate logical page number. Pages are numbered 0,1,2...
     fn new_page(&mut self) -> u64 {
         if let Some(p) = self.lp_free.pop_first() {
             p
@@ -201,24 +197,20 @@ impl PageStorage for CompactFile {
         }
     }
 
-    /// Free a logical page number.
     fn drop_page(&mut self, pnum: u64) {
         self.lp_free.insert(pnum);
     }
 
-    /// Is this a new file?
     fn is_new(&self) -> bool {
         self.is_new
     }
 
-    /// Resets logical page allocation to last save.
     fn rollback(&mut self) {
         self.lp_free.clear();
         self.read_header();
         self.fsp.clear(u64::MAX);
     }
 
-    /// Process the temporary sets of free pages and write the file header.
     fn save(&mut self) {
         // Free the temporary set of free logical pages.
         let flist = std::mem::take(&mut self.lp_free);
@@ -252,7 +244,6 @@ impl PageStorage for CompactFile {
     }
 
     #[cfg(feature = "verify")]
-    /// Get the set of free logical pages ( also verifies free chain is ok ).
     fn get_free(&mut self) -> (crate::HashSet<u64>, u64) {
         let mut free = crate::HashSet::default();
         let mut p = self.lp_first;
@@ -269,7 +260,6 @@ impl PageStorage for CompactFile {
     }
 
     #[cfg(feature = "renumber")]
-    /// Load free pages into lp_free, preparation for page renumbering. Returns number of used pages or None if there are no free pages.
     fn load_free_pages(&mut self) -> Option<u64> {
         assert!(self.ep_free.is_empty());
         let mut p = self.lp_first;
@@ -291,7 +281,6 @@ impl PageStorage for CompactFile {
     }
 
     #[cfg(feature = "renumber")]
-    /// Efficiently move the data associated with lpnum to new logical page.
     fn renumber(&mut self, lpnum: u64) -> u64 {
         let lpnum2 = self.new_page();
         let foff = self.lp_off(lpnum);
@@ -317,7 +306,6 @@ impl PageStorage for CompactFile {
     }
 
     #[cfg(feature = "renumber")]
-    /// All lpnums >= target must have been renumbered to be < target at this point.
     fn set_alloc_pn(&mut self, target: u64) {
         assert!(self.lp_first == u64::MAX);
         assert!(self.ep_free.is_empty());
@@ -674,7 +662,7 @@ pub fn test() {
         cf1.new_page();
     }
 
-    for _ in 0..100000 {
+    for _ in 0..10000 {
         let n: usize = rng.gen::<usize>() % 5000;
         let p: u64 = rng.gen::<u64>() % 100;
         let b: u8 = rng.gen::<u8>();

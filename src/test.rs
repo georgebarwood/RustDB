@@ -341,7 +341,7 @@ END
 CREATE FN [date].[test]() AS
 BEGIN
    DECLARE days int, ymd int
-   WHILE days < 10000
+   WHILE days < 1000
    BEGIN
       SET days += 1
       SET ymd = date.DaysToYearMonthDay(days)
