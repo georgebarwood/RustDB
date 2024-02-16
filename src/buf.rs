@@ -111,122 +111,102 @@ impl WriteBuffer {
 
 use crate::Mutex;
 
+/// ReadBufStg buffers small (< 50 byte) reads to the underlying storage. Only supported functions are read and reset.
 ///
-pub struct ReadBufStg
-{
+/// See implementation of AtomicFile for how this is used in conjunction with WMap.
+pub struct ReadBufStg {
     stg: Box<dyn Storage>,
     inner: Mutex<ReadBuffer>,
 }
 
-impl ReadBufStg
-{
-   ///
-   pub fn new( stg: Box<dyn Storage> ) -> Box<dyn Storage>
-   {
-      Box::new( Self{ stg, inner: Mutex::new( ReadBuffer::new() ) } )
-   }
+impl ReadBufStg {
+    ///
+    pub fn new(stg: Box<dyn Storage>) -> Box<Self> {
+        Box::new(Self {
+            stg,
+            inner: Mutex::new(ReadBuffer::new()),
+        })
+    }
 }
 
+impl Storage for ReadBufStg {
+    fn size(&self) -> u64 {
+        panic!()
+    }
 
-impl Storage for ReadBufStg
-{
-   fn size(&self) -> u64 { panic!() }
+    fn read(&self, start: u64, data: &mut [u8]) {
+        if data.len() < 50 {
+            self.inner.lock().unwrap().read(&*self.stg, start, data);
+        } else {
+            self.stg.read(start, data);
+        }
+    }
 
-   fn read(&self, start: u64, data: &mut [u8])
-   {
-      if data.len() < 50
-      {
-          self.inner.lock().unwrap().read( &*self.stg, start, data );
-      }
-      else
-      {
-          self.stg.read( start, data );
-      }
-   }
+    fn write(&mut self, _start: u64, _data: &[u8]) {
+        panic!();
+    }
 
-   fn write(&mut self, _start: u64, _data: &[u8])
-   {
-      panic!();
-   }
+    fn commit(&mut self, _size: u64) {
+        panic!();
+    }
 
-   fn commit(&mut self, _size: u64)
-   {
-       panic!();
-   }
-
-   fn reset(&mut self)
-   {
-      self.inner.lock().unwrap().reset();
-   }
+    fn reset(&mut self) {
+        self.inner.lock().unwrap().reset();
+    }
 }
 
-use std::cmp::min;
 use crate::HashMap;
+use std::cmp::min;
 
-const BSIZE : usize = 256;
+const BSIZE: usize = 256;
 
-
-struct ReadBuffer
-{ 
-    map: HashMap<u64,Box<[u8;BSIZE]>>,
+struct ReadBuffer {
+    map: HashMap<u64, Box<[u8; BSIZE]>>,
     hits: u64,
     miss: u64,
 }
 
-impl Drop for ReadBuffer
-{
-    fn drop(&mut self)
-    {
-         println!("ReadBuffer drop hits={} misses={}", self.hits, self.miss);
+impl Drop for ReadBuffer {
+    fn drop(&mut self) {
+        // println!("ReadBuffer drop hits={} misses={}", self.hits, self.miss);
     }
 }
 
-impl ReadBuffer
-{
-     fn new() -> Self
-     {
-         Self{ map: HashMap::default(), hits: 0, miss: 0 }
-     }
+impl ReadBuffer {
+    fn new() -> Self {
+        Self {
+            map: HashMap::default(),
+            hits: 0,
+            miss: 0,
+        }
+    }
 
-     ///
-     fn reset(&mut self)
-     {
-         self.map.clear();
-     }
+    ///
+    fn reset(&mut self) {
+        self.map.clear();
+    }
 
-     fn read(&mut self, stg: &dyn Storage, off: u64, data: &mut [u8])
-     {
-         let mut done = 0;
-         while done < data.len()
-         {
+    fn read(&mut self, stg: &dyn Storage, off: u64, data: &mut [u8]) {
+        let mut done = 0;
+        while done < data.len() {
             let off = off + done as u64;
             let sector = off / BSIZE as u64;
-            let disp = ( off % BSIZE as u64 ) as usize;
-            let amount = min( data.len() - done, BSIZE - disp );
-            if let Some(p) = self.map.get(&sector)
-            {
-              data[done..done+amount].copy_from_slice( &p[disp..disp+amount] );
-              self.hits += 1;
-            }
-            else
-            {
-              let p = self.load_sector( stg, sector );
-              data[done..done+amount].copy_from_slice( &p[disp..disp+amount] );
-              self.map.insert( sector, p );
-              self.miss += 1;
+            let disp = (off % BSIZE as u64) as usize;
+            let amount = min(data.len() - done, BSIZE - disp);
+            if let Some(p) = self.map.get(&sector) {
+                data[done..done + amount].copy_from_slice(&p[disp..disp + amount]);
+                self.hits += 1;
+            } else {
+                let mut p: Box<[u8; BSIZE]> = vec![0; 256].try_into().unwrap();
+                stg.read(sector * BSIZE as u64, &mut *p);
+                data[done..done + amount].copy_from_slice(&p[disp..disp + amount]);
+                self.map.insert(sector, p);
+                self.miss += 1;
             }
             done += amount;
-         }    
-         if self.map.len() > 1000
-         {
-            self.map = HashMap::default();
-         }   
-     }
-
-     fn load_sector(&self, stg: &dyn Storage, sector: u64 ) -> Box<[u8;BSIZE]>
-     {
-         let mut p : Box<[u8;BSIZE]> = vec![0;256].try_into().unwrap();
-         stg.read( sector*BSIZE as u64, &mut *p);
-         p
-     }
+        }
+        if self.map.len() > 1000 {
+            self.map.clear();
+        }
+    }
 }

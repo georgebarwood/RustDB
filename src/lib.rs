@@ -178,7 +178,7 @@ pub mod dividedstg;
 /// [BlockPageStg] - implementation of [PageStorage] trait.
 pub mod blockpagestg;
 
-/// Write Buffer.
+/// Buffering.
 pub mod buf;
 
 /// Write map.
