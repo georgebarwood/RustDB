@@ -46,6 +46,9 @@ pub trait Storage: Send + Sync {
 
     /// Wait until current writes are complete.
     fn wait_complete(&self) {}
+
+    /// Reset buffer
+    fn reset(&mut self){panic!()}
 }
 
 /// Interface for page storage.

@@ -272,7 +272,6 @@ impl BlockStg {
         let off = HSIZE + ix * NUM_SIZE;
         self.expand_binfo(off + NUM_SIZE);
         self.write_num(off, value);
-        // println!("set_binfo ix={} value={} alloc_bit={}", ix, value & NUM_MASK, value & ALLOC_BIT != 0);
     }
 
     fn get_binfo(&self, ix: u64) -> u64 {

@@ -18,7 +18,7 @@ impl AtomicFile {
         let mut baf = BasicAtomicFile::new(stg.clone(), upd);
         let (tx, rx) = std::sync::mpsc::channel::<(u64, WMap)>();
         let cf1 = Arc::new(RwLock::new(CommitFile {
-            stg,
+            stg: crate::buf::ReadBufStg::new(stg),
             map: WMap::default(),
             todo: 0,
         }));
@@ -105,6 +105,7 @@ impl CommitFile {
         self.todo -= 1;
         if self.todo == 0 {
             self.map = WMap::default();
+            self.stg.reset();
         }
     }
 }
