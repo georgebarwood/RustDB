@@ -11,11 +11,11 @@ const NUMS_PER_BLK: u64 = BLK_CAP / NUM_SIZE;
 pub const FD_SIZE: usize = 8 + 8 + 1;
 
 /// [DividedStg] File Descriptor.
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default)]
 pub struct FD {
-    pub(crate) root: u64,
-    pub(crate) blocks: u64,
-    pub(crate) level: u8,
+    root: u64,
+    blocks: u64,
+    level: u8,
     ///
     pub changed: bool,
 }
