@@ -4,7 +4,7 @@ use crate::{util, Cell, Ordering, Rc, Record, SaveOp, SortedFile, DB};
 pub const NFT: usize = 4;
 
 /// Bytes per fragment.
-pub static BPF: [usize; NFT] = [40, 127, 333, 1003];
+pub static BPF: [usize; NFT] = [40, 127, 333, 1010];
 
 /// Total bytes used taking into account all overhead ( 3 + 1 + 8 = 12 bytes, per fragment ).
 fn total(len: usize, ft: usize) -> usize {

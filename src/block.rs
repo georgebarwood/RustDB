@@ -2,7 +2,7 @@ use crate::*;
 use std::cmp::min;
 
 /// Magic Value ( first word of file for version check).
-const MAGIC_VALUE: [u8; 8] = *b"RDBF1066";
+const MAGIC_VALUE: [u8; 8] = *b"RDBV1.00";
 
 /// Reserved area for client.
 pub const RSVD_SIZE: usize = 24;
