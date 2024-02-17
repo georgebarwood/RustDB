@@ -36,9 +36,10 @@
 //! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
 //! - `unsafe-optim` : Enable unsafe optimisations in release mode.
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
+//! - `log-block` : Log block storage information.
 //! - `compact` : Default page storage is [compact::CompactFile] rather than [BlockPageStg] (can be set explicitly using [pstore::SharedPagedData::new_from_ps] );
 //!
-//! By default, all features except serde, unsafe-optim and log are enabled.
+//! By default, all features except serde, unsafe-optim, log and log-block are enabled.
 //!
 //!# General Design of Database
 //!
@@ -169,36 +170,35 @@ pub mod gentrans;
 /// Backing [Storage] for database. See also [AtomicFile].
 pub mod stg;
 
-/// Block storage.
+/// [block::BlockStg] - divides [Storage] into fixed size blocks, basis for [dividedstg::DividedStg].
 pub mod block;
 
-/// Storage divided into sub-files.
+/// [dividedstg::DividedStg] divides [Storage] into multiple sub-files of arbitrary size.
 pub mod dividedstg;
 
-/// [BlockPageStg] - implementation of [PageStorage] trait.
+/// [BlockPageStg] - implementation of [PageStorage] trait based on [dividedstg::DividedStg].
 pub mod blockpagestg;
 
-/// Buffering.
+/// Buffering: [buf::WriteBuffer] and [buf::ReadBufStg].
 pub mod buf;
 
-/// Write map.
+/// [wmap::WMap] - map of ranges written, for [AtomicFile].
 pub mod wmap;
+
+/// [AtomicFile] - buffered version of [BasicAtomicFile].
+pub mod atomfile;
+
+/// [BasicAtomicFile] - ensures updates are all or nothing.
+pub mod basicatomfile;
+
+/// Page storage and sharing, [SharedPagedData] and [AccessPagedData].
+pub mod pstore;
 
 /// Test module.
 pub mod test;
 
 /// Benchmark - compare RustDb with competitors!
 pub mod bench;
-
-/// Page storage and sharing, [SharedPagedData] and [AccessPagedData].
-/// Note: several structs and their fields are pub to allow diagnostics but are subject to change.
-pub mod pstore;
-
-/// [AtomicFile].
-pub mod atomfile;
-
-/// [BasicAtomicFile]
-pub mod basicatomfile;
 
 // Conditional modules.
 
@@ -256,7 +256,7 @@ pub mod exec;
 mod exec;
 
 #[cfg(feature = "max")]
-/// CompactFile :  alternative implementation of [PageStorage] trait.
+/// [compact::CompactFile] :  alternative implementation of [PageStorage] trait.
 pub mod compact;
 #[cfg(not(feature = "max"))]
 mod compact;
@@ -842,3 +842,28 @@ impl Transaction for DummyTransaction {
         println!("Error: {}", err);
     }
 }
+
+/// Memory limits.
+#[non_exhaustive]
+pub struct Limits {
+    /// Limit on size of commit write map.
+    pub map_lim: usize,
+    /// Memory for buffering small reads.
+    pub rbuf_mem: usize,
+    /// Memory for buffering writes to main storage.
+    pub swbuf: usize,
+    /// Memory for buffering writes to temorary storage.
+    pub uwbuf: usize,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            map_lim: 5000,
+            rbuf_mem: 0x200000,
+            swbuf: 0x100000,
+            uwbuf: 0x100000,
+        }
+    }
+}
+

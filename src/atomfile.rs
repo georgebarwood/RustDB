@@ -1,30 +1,38 @@
-use crate::{wmap::WMap, Arc, BasicAtomicFile, Data, Mutex, RwLock, Storage};
+use crate::{
+    buf::ReadBufStg, wmap::WMap, Arc, BasicAtomicFile, Data, Limits, Mutex, RwLock, Storage,
+};
 
-/// AtomicFile makes sure that database updates are all-or-nothing.
-/// Keeps a map of outstanding writes which have not yet been written to the underlying file.
+/// Based on [BasicAtomicFile] which makes sure that database updates are all-or-nothing.
+/// Provides read buffering for small reads, and a thread to perform save asyncronously.
 pub struct AtomicFile {
-    /// Map of existing outstanding writes. Note the key is the file address of the last byte written.
     map: WMap,
     cf: Arc<RwLock<CommitFile>>,
     size: u64,
     tx: std::sync::mpsc::Sender<(u64, WMap)>,
-    busy: Arc<Mutex<()>>, // This is locked while a commit is being performed.
+    busy: Arc<Mutex<()>>,
+    map_lim: usize,
 }
 
 impl AtomicFile {
-    /// Construct a new AtomicFle. stg is the main underlying storage, upd is temporary storage for updates during commit.
+    /// Construct AtomicFile with default limits. stg is the main underlying storage, upd is temporary storage for updates during commit.
     pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Box<Self> {
+        Self::new_with_limits(stg, upd, &Limits::default())
+    }
+
+    /// Construct Atomic file with specified limits.
+    pub fn new_with_limits(
+        stg: Box<dyn Storage>,
+        upd: Box<dyn Storage>,
+        lim: &Limits,
+    ) -> Box<Self> {
         let size = stg.size();
-        let mut baf = BasicAtomicFile::new(stg.clone(), upd);
+        let mut baf = BasicAtomicFile::new(stg.clone(), upd, lim);
         let (tx, rx) = std::sync::mpsc::channel::<(u64, WMap)>();
-        let cf1 = Arc::new(RwLock::new(CommitFile {
-            stg: crate::buf::ReadBufStg::new(stg),
-            map: WMap::default(),
-            todo: 0,
-        }));
-        let busy = Arc::new(Mutex::new(()));
-        let busy1 = busy.clone();
-        let cf = cf1.clone();
+        let cf = Arc::new(RwLock::new(CommitFile::new(stg, lim.rbuf_mem)));
+        let busy = Arc::new(Mutex::new(())); // Lock held while async save thread is active.
+
+        // Start the thread which will does save asyncronously.
+        let (cf1, busy1) = (cf.clone(), busy.clone());
         std::thread::spawn(move || {
             while let Ok((size, map)) = rx.recv() {
                 let _lock = busy1.lock();
@@ -39,12 +47,8 @@ impl AtomicFile {
             size,
             tx,
             busy,
+            map_lim: lim.map_lim,
         })
-    }
-
-    /// Wait for the write process.
-    fn wait(&self) {
-        let _ = self.busy.lock();
     }
 }
 
@@ -54,7 +58,7 @@ impl Storage for AtomicFile {
         if self.map.map.is_empty() {
             return;
         }
-        if self.cf.read().unwrap().map.map.len() >= 3000 {
+        if self.cf.read().unwrap().map.map.len() > self.map_lim {
             self.wait_complete();
         }
         let map = std::mem::take(&mut self.map);
@@ -89,7 +93,7 @@ impl Storage for AtomicFile {
         while self.cf.read().unwrap().todo != 0 {
             #[cfg(feature = "log")]
             println!("AtomicFile::wait_complete - waiting for writer process");
-            self.wait();
+            let _ = self.busy.lock();
         }
     }
 }
@@ -101,6 +105,14 @@ struct CommitFile {
 }
 
 impl CommitFile {
+    fn new(stg: Box<dyn Storage>, buf_mem: usize) -> Self {
+        Self {
+            stg: ReadBufStg::<256>::new(stg, 50, buf_mem / 256),
+            map: WMap::default(),
+            todo: 0,
+        }
+    }
+
     fn done_one(&mut self) {
         self.todo -= 1;
         if self.todo == 0 {

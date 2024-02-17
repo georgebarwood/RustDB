@@ -1,6 +1,5 @@
-use crate::stg::Storage;
-
-const BUF_SIZE: usize = 1024 * 1024;
+use crate::{stg::Storage, HashMap};
+use std::cmp::min;
 
 /// Write Buffer.
 pub struct WriteBuffer {
@@ -23,12 +22,12 @@ struct Log {
 
 impl WriteBuffer {
     ///
-    pub fn new(stg: Box<dyn Storage>) -> Self {
+    pub fn new(stg: Box<dyn Storage>, buf_size: usize) -> Self {
         Self {
             ix: 0,
             pos: u64::MAX,
             stg,
-            buf: vec![0; BUF_SIZE],
+            buf: vec![0; buf_size],
             #[cfg(feature = "log")]
             log: Log {
                 write: 0,
@@ -52,10 +51,10 @@ impl WriteBuffer {
             self.log.total += todo as u64;
         }
         while todo > 0 {
-            let mut n: usize = BUF_SIZE - self.ix;
+            let mut n: usize = self.buf.len() - self.ix;
             if n == 0 {
                 self.flush(off + done as u64);
-                n = BUF_SIZE;
+                n = self.buf.len();
             }
             if n > todo {
                 n = todo;
@@ -111,32 +110,37 @@ impl WriteBuffer {
 
 use crate::Mutex;
 
-/// ReadBufStg buffers small (< 50 byte) reads to the underlying storage. Only supported functions are read and reset.
+/// ReadBufStg buffers small (up to limit) reads to the underlying storage. Only supported functions are read and reset.
 ///
 /// See implementation of AtomicFile for how this is used in conjunction with WMap.
-pub struct ReadBufStg {
+///
+/// N is buffer size.
+
+pub struct ReadBufStg<const N: usize> {
     stg: Box<dyn Storage>,
-    inner: Mutex<ReadBuffer>,
+    buf: Mutex<ReadBuffer<N>>,
+    limit: usize,
 }
 
-impl ReadBufStg {
+impl<const N: usize> ReadBufStg<N> {
     ///
-    pub fn new(stg: Box<dyn Storage>) -> Box<Self> {
+    pub fn new(stg: Box<dyn Storage>, limit: usize, max_buf: usize) -> Box<Self> {
         Box::new(Self {
             stg,
-            inner: Mutex::new(ReadBuffer::new()),
+            buf: Mutex::new(ReadBuffer::<N>::new(max_buf)),
+            limit,
         })
     }
 }
 
-impl Storage for ReadBufStg {
+impl<const N: usize> Storage for ReadBufStg<N> {
     fn size(&self) -> u64 {
         panic!()
     }
 
     fn read(&self, start: u64, data: &mut [u8]) {
-        if data.len() < 50 {
-            self.inner.lock().unwrap().read(&*self.stg, start, data);
+        if data.len() <= self.limit {
+            self.buf.lock().unwrap().read(&*self.stg, start, data);
         } else {
             self.stg.read(start, data);
         }
@@ -151,33 +155,20 @@ impl Storage for ReadBufStg {
     }
 
     fn reset(&mut self) {
-        self.inner.lock().unwrap().reset();
+        self.buf.lock().unwrap().reset();
     }
 }
 
-use crate::HashMap;
-use std::cmp::min;
-
-const BSIZE: usize = 256;
-
-struct ReadBuffer {
-    map: HashMap<u64, Box<[u8; BSIZE]>>,
-    hits: u64,
-    miss: u64,
+struct ReadBuffer<const N: usize> {
+    map: HashMap<u64, Box<[u8; N]>>,
+    max_buf: usize,
 }
 
-impl Drop for ReadBuffer {
-    fn drop(&mut self) {
-        // println!("ReadBuffer drop hits={} misses={}", self.hits, self.miss);
-    }
-}
-
-impl ReadBuffer {
-    fn new() -> Self {
+impl<const N: usize> ReadBuffer<N> {
+    fn new(max_buf: usize) -> Self {
         Self {
             map: HashMap::default(),
-            hits: 0,
-            miss: 0,
+            max_buf,
         }
     }
 
@@ -190,23 +181,21 @@ impl ReadBuffer {
         let mut done = 0;
         while done < data.len() {
             let off = off + done as u64;
-            let sector = off / BSIZE as u64;
-            let disp = (off % BSIZE as u64) as usize;
-            let amount = min(data.len() - done, BSIZE - disp);
+            let sector = off / N as u64;
+            let disp = (off % N as u64) as usize;
+            let amount = min(data.len() - done, N - disp);
             if let Some(p) = self.map.get(&sector) {
                 data[done..done + amount].copy_from_slice(&p[disp..disp + amount]);
-                self.hits += 1;
             } else {
-                let mut p: Box<[u8; BSIZE]> = vec![0; 256].try_into().unwrap();
-                stg.read(sector * BSIZE as u64, &mut *p);
+                let mut p: Box<[u8; N]> = vec![0; 256].try_into().unwrap();
+                stg.read(sector * N as u64, &mut *p);
                 data[done..done + amount].copy_from_slice(&p[disp..disp + amount]);
+                if self.map.len() >= self.max_buf {
+                    self.reset();
+                }
                 self.map.insert(sector, p);
-                self.miss += 1;
             }
             done += amount;
-        }
-        if self.map.len() > 1000 {
-            self.map.clear();
         }
     }
 }

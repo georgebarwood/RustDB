@@ -1,11 +1,11 @@
-use crate::{buf::WriteBuffer, wmap::DataSlice, wmap::WMap, Arc, Data, Storage};
+use crate::{buf::WriteBuffer, wmap::DataSlice, wmap::WMap, Arc, Data, Limits, Storage};
 
 /// Alternative to AtomicFile.
 pub struct BasicAtomicFile {
     /// The main underlying storage.
-    pub stg: WriteBuffer,
+    stg: WriteBuffer,
     /// Temporary storage for updates during commit.
-    pub upd: WriteBuffer,
+    upd: WriteBuffer,
     /// Map of writes. Note the key is the file address of the last byte written.
     pub map: WMap,
     ///
@@ -16,13 +16,13 @@ pub struct BasicAtomicFile {
 
 impl BasicAtomicFile {
     /// stg is the main underlying storage, upd is temporary storage for updates during commit.
-    pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>) -> Box<Self> {
+    pub fn new(stg: Box<dyn Storage>, upd: Box<dyn Storage>, lim: &Limits) -> Box<Self> {
         let size = stg.size();
         let mut result = Box::new(Self {
+            stg: WriteBuffer::new(stg, lim.swbuf),
+            upd: WriteBuffer::new(upd, lim.uwbuf),
             map: WMap::default(),
             list: Vec::new(),
-            stg: WriteBuffer::new(stg),
-            upd: WriteBuffer::new(upd),
             size,
         });
         result.init();

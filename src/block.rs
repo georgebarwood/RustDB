@@ -176,7 +176,7 @@ impl BlockStg {
     pub fn write_data(&mut self, bn: u64, off: u64, data: Data, s: usize, n: usize) {
         debug_assert!(!self.free.contains(&bn));
 
-        #[cfg(feature = "log")]
+        #[cfg(feature = "log-block")]
         println!(
             "block write bn={} off={:?} s={} n={} data={:?}",
             bn,
@@ -219,7 +219,7 @@ impl BlockStg {
             self.stg
                 .read(pb * BLK_SIZE + NUM_SIZE + off, &mut data[0..amount]);
 
-            #[cfg(feature = "log")]
+            #[cfg(feature = "log-block")]
             println!(
                 "block read bn={} off={} data len={} data={:?}",
                 bn,
@@ -238,7 +238,7 @@ impl BlockStg {
         self.stg.read(from * BLK_SIZE, &mut buf);
         let bn = util::get(&buf, 0, NUM_SIZE as usize);
 
-        #[cfg(feature = "log")]
+        #[cfg(feature = "log-block")]
         println!("Relocating block from={} to={} bn={}", from, to, bn);
 
         assert!(self.get_binfo(bn) == ALLOC_BIT | from);
@@ -250,7 +250,7 @@ impl BlockStg {
     fn expand_binfo(&mut self, bn: u64) {
         let target = HSIZE + bn * NUM_SIZE + NUM_SIZE;
         while target > self.pb_first * BLK_SIZE {
-            #[cfg(feature = "log")]
+            #[cfg(feature = "log-block")]
             println!(
                 "expand_binfo bn={} target={} pb_first={} pb_count={} lb_count={}",
                 bn, target, self.pb_first, self.pb_count, self.lb_count

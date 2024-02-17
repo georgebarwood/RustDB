@@ -76,7 +76,7 @@ impl BlockPageStg {
     fn read_header(&mut self) {
         self.fd[0] = self.ds.get_root();
         let mut buf = [0; HEADER_SIZE];
-        self.ds.read(self.fd[PINFO_FILE], 0, &mut buf);
+        self.read(PINFO_FILE, 0, &mut buf);
         self.alloc_pn = util::getu64(&buf, 0);
         self.first_free_pn = util::getu64(&buf, 8);
         self.pn_init = util::getu64(&buf, 16);
@@ -88,11 +88,9 @@ impl BlockPageStg {
             self.fd[i].load(&buf[off + 8..]);
         }
         self.header_dirty = false;
-        // println!("read_header fd ={:?} alloc={:?}", &self.fd, &self.alloc);
     }
 
     fn write_header(&mut self) {
-        // println!("write_header fd ={:?} alloc={:?}", &self.fd, &self.alloc);
         let mut buf = [0; HEADER_SIZE];
         util::setu64(&mut buf, self.alloc_pn);
         util::setu64(&mut buf[8..], self.first_free_pn);
@@ -104,7 +102,7 @@ impl BlockPageStg {
             util::setu64(&mut buf[off..], self.alloc[i]);
             self.fd[i].save(&mut buf[off + 8..]);
         }
-        self.ds.write(self.fd[PINFO_FILE], 0, &buf);
+        self.write(PINFO_FILE, 0, &buf);
         self.header_dirty = false;
     }
 
