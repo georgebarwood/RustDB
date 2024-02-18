@@ -137,7 +137,7 @@ impl DividedStg {
         }
     }
 
-    /// Write data to specified file at specified offse. allocate must be called before write.
+    /// Write data to specified file at specified offset. allocate must be called before write.
     pub fn write(&mut self, f: FD, offset: u64, data: &[u8]) {
         let data = Arc::new(data.to_vec());
         self.write_data(f, offset, data);
