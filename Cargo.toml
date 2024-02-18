@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "5.2.19"
+version = "5.2.33"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -26,10 +26,9 @@ renumber = []
 verify = []
 unsafe-optim = []
 log = []
+log-block = []
+compact = []
 
 [dev-dependencies]
 rand = "0.8.4"
 sqlite = "0.32.0"
-
-
-
