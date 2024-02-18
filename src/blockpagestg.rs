@@ -88,6 +88,8 @@ impl BlockPageStg {
             self.fd[i].load(&buf[off + 8..]);
         }
         self.header_dirty = false;
+        #[cfg(feature = "log")]
+        println!("bps read_header alloc={:?} fd={:?}", &self.alloc, &self.fd);
     }
 
     fn write_header(&mut self) {

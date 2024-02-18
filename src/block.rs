@@ -12,7 +12,6 @@ const HSIZE: u64 = 40 + RSVD_SIZE as u64;
 
 /// Log (base 2) of Block Size.
 const LOG_BLK_SIZE: u8 = 17;
-// const LOG_BLK_SIZE: u8 = 8; // Small block size for testing.
 
 /// Size of block.
 const BLK_SIZE: u64 = 1 << LOG_BLK_SIZE;
@@ -34,23 +33,31 @@ const ALLOC_BIT: u64 = 1 << NUM_BITS;
 
 pub(crate) const BLK_CAP: u64 = BLK_SIZE - NUM_SIZE;
 
-/// Manages allocation and deallocation of relocatable fixed size blocks.
+/// Manages allocation and deallocation of numbered relocatable fixed size blocks from underlying Storage.
+///
+/// Blocks are numbered. A map of the physical location of each block is kept at the start of the storage (after the header).
+///
+/// Physical blocks can be relocated by adjusting the map entry to point to the new location.
+///
+/// On save, the map of free block numbers is processed and any associated physical blocks are freed.
+///
+/// When a physical block is freed, the last physical block is relocated to fill it.
+
 pub struct BlockStg {
     pub(crate) stg: Box<dyn Storage>,
     lb_count: u64, // Number of Logical Block Info entries.
     pb_count: u64, // Number of Physical Blocks.
     pb_first: u64,
     first_free: u64,
-    rsvd: [u8; RSVD_SIZE],        // For boot-strapping first file.
-    free: BTreeSet<u64>,          // Temporary set of free logical blocks
-    physical_free: BTreeSet<u64>, // Temporary set of free physical blocks
+    rsvd: [u8; RSVD_SIZE], // For boot-strapping first file.
+    free: BTreeSet<u64>,   // Temporary set of free block numbers.
     header_dirty: bool,
     rsvd_dirty: bool,
     is_new: bool,
 }
 
 impl BlockStg {
-    ///
+    /// Construct BlockStg with specified underlying Storage.
     pub fn new(stg: Box<dyn Storage>) -> Self {
         let is_new = stg.size() == 0;
         let mut x = Self {
@@ -61,7 +68,6 @@ impl BlockStg {
             first_free: NOTLB,
             rsvd: [0; RSVD_SIZE],
             free: BTreeSet::default(),
-            physical_free: BTreeSet::default(),
             header_dirty: false,
             rsvd_dirty: false,
             is_new,
@@ -80,21 +86,143 @@ impl BlockStg {
         x
     }
 
-    ///
+    /// Is this new storage.
     pub fn is_new(&self) -> bool {
         self.is_new
     }
 
-    ///
-    pub fn get_rsvd(&self) -> [u8; RSVD_SIZE] {
-        self.rsvd
+    /// Allocate a new block number.
+    pub fn new_block(&mut self) -> u64 {
+        if let Some(p) = self.free.pop_first() {
+            return p;
+        }
+        let mut p = self.first_free;
+        if p != NOTLB {
+            self.first_free = self.get_binfo(p);
+        } else {
+            p = self.lb_count;
+            self.lb_count += 1;
+        }
+        self.header_dirty = true;
+        p
     }
 
-    ///
+    /// Release a block number ( no longer valid ).
+    pub fn drop_block(&mut self, bn: u64) {
+        self.free.insert(bn);
+    }
+
+    /// Write data to specified numbered block at specified offset.
+    pub fn write(&mut self, bn: u64, offset: u64, data: &[u8]) {
+        let n = data.len();
+        let data = Arc::new(data.to_vec());
+        self.write_data(bn, offset, data, 0, n);
+    }
+
+    /// Write slice of Data to specified numbered block at specified offset.
+    pub fn write_data(&mut self, bn: u64, offset: u64, data: Data, s: usize, n: usize) {
+        debug_assert!(!self.free.contains(&bn));
+
+        #[cfg(feature = "log-block")]
+        println!(
+            "block write bn={} offset={:?} s={} n={} data={:?}",
+            bn,
+            offset,
+            s,
+            n,
+            &data[s..s + min(n, 20)]
+        );
+
+        self.expand_binfo(bn);
+        let mut pb = self.get_binfo(bn);
+        if pb & ALLOC_BIT == 0 {
+            pb = self.pb_count;
+            self.pb_count += 1;
+
+            #[cfg(feature = "log-block")]
+            println!("Allocating physical block {} to block number {}", pb, bn);
+
+            self.header_dirty = true;
+            self.set_binfo(bn, ALLOC_BIT | pb);
+            // Write block number at start of physical block, to allow relocation.
+            self.write_num(pb * BLK_SIZE, bn);
+        }
+        pb &= NUM_MASK;
+        assert!(NUM_SIZE + offset + n as u64 <= BLK_SIZE);
+        let offset = pb * BLK_SIZE + NUM_SIZE + offset;
+        self.stg.write_data(offset, data, s, n);
+    }
+
+    /// Read data from specified numbered block and offset.
+    pub fn read(&self, bn: u64, offset: u64, data: &mut [u8]) {
+        debug_assert!(!self.free.contains(&bn));
+
+        let pb = self.get_binfo(bn);
+        if pb & ALLOC_BIT != 0 {
+            let pb = pb & NUM_MASK;
+            let avail = BLK_SIZE - (NUM_SIZE + offset);
+            let amount = min(data.len(), avail as usize);
+            self.stg
+                .read(pb * BLK_SIZE + NUM_SIZE + offset, &mut data[0..amount]);
+
+            #[cfg(feature = "log-block")]
+            println!(
+                "block read bn={} off={} data len={} data={:?}",
+                bn,
+                offset,
+                data.len(),
+                &data[0..min(data.len(), 20)]
+            );
+        }
+    }
+
+    /// Set the reserved area in the storage header.
     pub fn set_rsvd(&mut self, rsvd: [u8; RSVD_SIZE]) {
         self.rsvd = rsvd;
         self.rsvd_dirty = true;
         self.header_dirty = true;
+    }
+
+    /// Get the reserved area from the storage header.
+    pub fn get_rsvd(&self) -> [u8; RSVD_SIZE] {
+        self.rsvd
+    }
+
+    /// Save changes to underlying storage.
+    pub fn save(&mut self) {
+        // Process the set of freed page numbers, adding any associated physical blocks to a map of free blocks.
+        let flist = std::mem::take(&mut self.free);
+        let mut free_blocks = BTreeSet::default();
+        for bn in flist.iter().rev() {
+            let bn = *bn;
+            let info = self.get_binfo(bn);
+            if info & ALLOC_BIT != 0 {
+                let pp = info & NUM_MASK;
+                free_blocks.insert(pp);
+            }
+            self.set_binfo(bn, self.first_free);
+            self.first_free = bn;
+            self.header_dirty = true;
+        }
+
+        // Relocate blocks from end of file to fill free blocks.
+        while !free_blocks.is_empty() {
+            self.pb_count -= 1;
+            self.header_dirty = true;
+            let from = self.pb_count;
+            // If the last block is not a free block, relocate it using a free block.
+            if !free_blocks.remove(&from) {
+                let to = free_blocks.pop_first().unwrap();
+                self.relocate(from, to);
+            }
+        }
+
+        if self.header_dirty {
+            self.write_header();
+            self.header_dirty = false;
+        }
+
+        self.stg.commit(self.pb_count * BLK_SIZE);
     }
 
     fn write_header(&mut self) {
@@ -116,124 +244,11 @@ impl BlockStg {
         self.stg.read(40, &mut self.rsvd);
     }
 
-    ///
-    pub fn save(&mut self) {
-        let flist = std::mem::take(&mut self.free);
-        for p in flist.iter().rev() {
-            let p = *p;
-            self.free_block(p);
-        }
-
-        // Relocate blocks from end of file to fill free blocks.
-        while !self.physical_free.is_empty() {
-            self.pb_count -= 1;
-            self.header_dirty = true;
-            let from = self.pb_count;
-            // If the last block is not a free block, relocate it using a free block.
-            if !self.physical_free.remove(&from) {
-                let to = self.physical_free.pop_first().unwrap();
-                self.relocate(from, to);
-            }
-        }
-
-        if self.header_dirty {
-            self.write_header();
-            self.header_dirty = false;
-        }
-
-        self.stg.commit(self.pb_count * BLK_SIZE);
-    }
-
-    ///
-    pub fn new_block(&mut self) -> u64 {
-        if let Some(p) = self.free.pop_first() {
-            return p;
-        }
-        let mut p = self.first_free;
-        if p != NOTLB {
-            self.first_free = self.next_free(p);
-        } else {
-            p = self.lb_count;
-            self.lb_count += 1;
-        }
-        self.header_dirty = true;
-        p
-    }
-
-    ///
-    pub fn drop_block(&mut self, bn: u64) {
-        self.free.insert(bn);
-    }
-
-    ///
-    pub fn write(&mut self, bn: u64, off: u64, data: &[u8]) {
-        let n = data.len();
-        let data = Arc::new(data.to_vec());
-        self.write_data(bn, off, data, 0, n);
-    }
-
-    ///
-    pub fn write_data(&mut self, bn: u64, off: u64, data: Data, s: usize, n: usize) {
-        debug_assert!(!self.free.contains(&bn));
-
-        #[cfg(feature = "log-block")]
-        println!(
-            "block write bn={} off={:?} s={} n={} data={:?}",
-            bn,
-            off,
-            s,
-            n,
-            &data[s..s + min(n, 20)]
-        );
-
-        self.expand_binfo(bn);
-        let mut pb = self.get_binfo(bn);
-        if pb & ALLOC_BIT == 0 {
-            pb = if let Some(pb) = self.physical_free.pop_first() {
-                pb
-            } else {
-                let pb = self.pb_count;
-                self.pb_count += 1;
-                self.header_dirty = true;
-                pb
-            };
-            self.set_binfo(bn, ALLOC_BIT | pb);
-            // Write block number at start of physical block, to allow relocation.
-            self.write_num(pb * BLK_SIZE, bn);
-        }
-        pb &= NUM_MASK;
-        assert!(NUM_SIZE + off + n as u64 <= BLK_SIZE);
-        let off = pb * BLK_SIZE + NUM_SIZE + off;
-        self.stg.write_data(off, data, s, n);
-    }
-
-    ///
-    pub fn read(&self, bn: u64, off: u64, data: &mut [u8]) {
-        debug_assert!(!self.free.contains(&bn));
-
-        let pb = self.get_binfo(bn);
-        if pb & ALLOC_BIT != 0 {
-            let pb = pb & NUM_MASK;
-            let avail = BLK_SIZE - (NUM_SIZE + off);
-            let amount = min(data.len(), avail as usize);
-            self.stg
-                .read(pb * BLK_SIZE + NUM_SIZE + off, &mut data[0..amount]);
-
-            #[cfg(feature = "log-block")]
-            println!(
-                "block read bn={} off={} data len={} data={:?}",
-                bn,
-                off,
-                data.len(),
-                &data[0..min(data.len(), 20)]
-            );
-        }
-    }
-
     fn relocate(&mut self, from: u64, to: u64) {
         if from == to {
             return;
         }
+
         let mut buf = vec![0; BLK_SIZE as usize];
         self.stg.read(from * BLK_SIZE, &mut buf);
         let bn = util::get(&buf, 0, NUM_SIZE as usize);
@@ -241,7 +256,7 @@ impl BlockStg {
         #[cfg(feature = "log-block")]
         println!("Relocating block from={} to={} bn={}", from, to, bn);
 
-        assert!(self.get_binfo(bn) == ALLOC_BIT | from);
+        assert_eq!(self.get_binfo(bn), ALLOC_BIT | from);
 
         self.set_binfo(bn, ALLOC_BIT | to);
         self.stg.write(to * BLK_SIZE, &buf);
@@ -268,33 +283,18 @@ impl BlockStg {
         self.stg.write(pb * BLK_SIZE, &buf);
     }
 
-    fn set_binfo(&mut self, ix: u64, value: u64) {
-        let off = HSIZE + ix * NUM_SIZE;
-        self.expand_binfo(off + NUM_SIZE);
+    fn set_binfo(&mut self, bn: u64, value: u64) {
+        self.expand_binfo(bn);
+        let off = HSIZE + bn * NUM_SIZE;
         self.write_num(off, value);
     }
 
-    fn get_binfo(&self, ix: u64) -> u64 {
-        let off = HSIZE + ix * NUM_SIZE;
+    fn get_binfo(&self, bn: u64) -> u64 {
+        let off = HSIZE + bn * NUM_SIZE;
         if off + NUM_SIZE > self.pb_first * BLK_SIZE {
             return 0;
         }
         self.read_num(off)
-    }
-
-    fn free_block(&mut self, bn: u64) {
-        let info = self.get_binfo(bn);
-        if info & ALLOC_BIT != 0 {
-            let pp = info & NUM_MASK;
-            self.physical_free.insert(pp);
-        }
-        self.set_binfo(bn, self.first_free);
-        self.first_free = bn;
-        self.header_dirty = true;
-    }
-
-    fn next_free(&self, bn: u64) -> u64 {
-        self.get_binfo(bn)
     }
 
     fn write_num(&mut self, off: u64, value: u64) {

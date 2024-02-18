@@ -43,6 +43,18 @@ impl FD {
     }
 }
 
+#[cfg(feature = "log")]
+impl std::fmt::Debug for FD {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        f.write_str(&format!(
+            "{},{}{}",
+            self.root,
+            self.blocks,
+            if self.level == 2 { "!" } else { "" }
+        ))
+    }
+}
+
 impl DividedStg {
     ///
     pub fn new(stg: Box<dyn Storage>) -> Self {
