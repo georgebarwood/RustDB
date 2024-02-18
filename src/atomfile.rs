@@ -3,7 +3,7 @@ use crate::{
 };
 
 /// Based on [BasicAtomicFile] which makes sure that database updates are all-or-nothing.
-/// Provides read buffering for small reads, and a thread to perform save asyncronously.
+/// Provides read buffering for small reads, and a thread to perform commit asyncronously.
 pub struct AtomicFile {
     map: WMap,
     cf: Arc<RwLock<CommitFile>>,

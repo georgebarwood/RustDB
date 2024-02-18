@@ -170,7 +170,7 @@ pub mod gentrans;
 /// Backing [Storage] for database. See also [AtomicFile].
 pub mod stg;
 
-/// [block::BlockStg] - divides [Storage] into fixed size blocks, basis for [dividedstg::DividedStg].
+/// [block::BlockStg] - divides [Storage] into relocatable fixed size blocks, basis for [dividedstg::DividedStg].
 pub mod block;
 
 /// [dividedstg::DividedStg] divides [Storage] into multiple sub-files of arbitrary size.
