@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{util, Arc, BTreeSet, Data, Storage};
 use std::cmp::min;
 
 /// Magic Value ( first word of file for version check).
@@ -31,7 +31,8 @@ pub const NUM_SIZE: u64 = (NUM_BITS as u64 + 8) / 8;
 /// Bit that indicates Logical Block Entry represents allocated phsyical page.
 const ALLOC_BIT: u64 = 1 << NUM_BITS;
 
-pub(crate) const BLK_CAP: u64 = BLK_SIZE - NUM_SIZE;
+/// Capacity of block in bytes ( after allowing for number reserved for block number ).
+pub const BLK_CAP: u64 = BLK_SIZE - NUM_SIZE;
 
 /// Manages allocation and deallocation of numbered relocatable fixed size blocks from underlying Storage.
 ///
@@ -209,11 +210,11 @@ impl BlockStg {
         while !free_blocks.is_empty() {
             self.pb_count -= 1;
             self.header_dirty = true;
-            let from = self.pb_count;
+            let last = self.pb_count;
             // If the last block is not a free block, relocate it using a free block.
-            if !free_blocks.remove(&from) {
+            if !free_blocks.remove(&last) {
                 let to = free_blocks.pop_first().unwrap();
-                self.relocate(from, to);
+                self.relocate(last, to);
             }
         }
 
@@ -225,6 +226,7 @@ impl BlockStg {
         self.stg.commit(self.pb_count * BLK_SIZE);
     }
 
+    /// Write header fields to underlying storage.
     fn write_header(&mut self) {
         self.stg.write_u64(8, self.pb_count);
         self.stg.write_u64(16, self.lb_count);
@@ -236,6 +238,7 @@ impl BlockStg {
         }
     }
 
+    /// Read the header fields from underlying storage.
     fn read_header(&mut self) {
         self.pb_count = self.stg.read_u64(8);
         self.lb_count = self.stg.read_u64(16);
@@ -244,6 +247,7 @@ impl BlockStg {
         self.stg.read(40, &mut self.rsvd);
     }
 
+    /// Relocate physical block, from and to are block numbers.
     fn relocate(&mut self, from: u64, to: u64) {
         if from == to {
             return;
@@ -262,6 +266,7 @@ impl BlockStg {
         self.stg.write(to * BLK_SIZE, &buf);
     }
 
+    /// Expand the map to accomodate the specified block number.
     fn expand_binfo(&mut self, bn: u64) {
         let target = HSIZE + bn * NUM_SIZE + NUM_SIZE;
         while target > self.pb_first * BLK_SIZE {
@@ -278,17 +283,20 @@ impl BlockStg {
         }
     }
 
+    /// Fill the specified physical block with zeroes.
     fn clear_block(&mut self, pb: u64) {
         let buf = vec![0; BLK_SIZE as usize];
         self.stg.write(pb * BLK_SIZE, &buf);
     }
 
+    /// Set the value associated with the specified block number.
     fn set_binfo(&mut self, bn: u64, value: u64) {
         self.expand_binfo(bn);
         let off = HSIZE + bn * NUM_SIZE;
         self.write_num(off, value);
     }
 
+    /// Get the value associated with the specified block number.
     fn get_binfo(&self, bn: u64) -> u64 {
         let off = HSIZE + bn * NUM_SIZE;
         if off + NUM_SIZE > self.pb_first * BLK_SIZE {
@@ -297,15 +305,17 @@ impl BlockStg {
         self.read_num(off)
     }
 
-    fn write_num(&mut self, off: u64, value: u64) {
+    /// Write number to specified offset in underlying storage.
+    fn write_num(&mut self, offset: u64, num: u64) {
         self.stg
-            .write(off, &value.to_le_bytes()[0..NUM_SIZE as usize]);
-        assert_eq!(self.read_num(off), value);
+            .write(offset, &num.to_le_bytes()[0..NUM_SIZE as usize]);
+        debug_assert_eq!(self.read_num(offset), num);
     }
 
-    fn read_num(&self, off: u64) -> u64 {
+    /// Read number from specified offset in underlying storage.
+    fn read_num(&self, offset: u64) -> u64 {
         let mut bytes = [0; 8];
-        self.stg.read(off, &mut bytes[0..NUM_SIZE as usize]);
+        self.stg.read(offset, &mut bytes[0..NUM_SIZE as usize]);
         u64::from_le_bytes(bytes)
     }
 }
@@ -313,7 +323,7 @@ impl BlockStg {
 #[test]
 fn block_test() {
     let data = b"hello there";
-    let stg = MemFile::new();
+    let stg = crate::MemFile::new();
     let mut bf = BlockStg::new(stg.clone());
     let bnx = bf.new_block();
     let bny = bf.new_block();

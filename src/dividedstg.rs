@@ -29,13 +29,13 @@ impl FD {
         self.blocks = blocks;
         self.changed = true;
     }
-    ///
+    /// Save to byte buffer.
     pub fn save(&self, buf: &mut [u8]) {
         util::setu64(&mut buf[0..8], self.root);
         util::setu64(&mut buf[8..16], self.blocks);
         buf[16] = self.level;
     }
-    ///
+    /// Load from  byte buffer.
     pub fn load(&mut self, buf: &[u8]) {
         self.root = util::getu64(buf, 0);
         self.blocks = util::getu64(buf, 8);
@@ -56,27 +56,12 @@ impl std::fmt::Debug for FD {
 }
 
 impl DividedStg {
-    ///
+    /// Construct DividedStg from specified Storage.
     pub fn new(stg: Box<dyn Storage>) -> Self {
         Self(BlockStg::new(stg))
     }
 
-    ///
-    pub fn get_root(&self) -> FD {
-        let rsvd = self.0.get_rsvd();
-        let mut fd = FD::default();
-        fd.load(&rsvd);
-        fd
-    }
-
-    ///
-    pub fn set_root(&mut self, fd: FD) {
-        let mut rsvd = [0; RSVD_SIZE];
-        fd.save(&mut rsvd);
-        self.0.set_rsvd(rsvd);
-    }
-
-    ///
+    /// Get file descriptor for a new file.
     pub fn new_file(&mut self) -> FD {
         FD {
             root: self.0.new_block(),
@@ -86,7 +71,7 @@ impl DividedStg {
         }
     }
 
-    ///
+    /// Drop specified file.
     pub fn drop_file(&mut self, mut f: FD) {
         f = self.truncate(f, 0);
         self.0.drop_block(f.root)
@@ -128,7 +113,7 @@ impl DividedStg {
         f
     }
 
-    ///
+    /// Deallocate blocks not required for file of specified size.
     #[must_use]
     pub fn truncate(&mut self, mut f: FD, size: u64) -> FD {
         if f.level == 0 {
@@ -142,7 +127,7 @@ impl DividedStg {
         f
     }
 
-    /// allocate must be called before write ( although BLK_CAP bytes are pre-allocated ).
+    /// Write Data to specified file at specified offset. allocate must be called before write..
     pub fn write_data(&mut self, f: FD, offset: u64, data: Data) {
         if f.level == 0 {
             let n = data.len();
@@ -152,13 +137,13 @@ impl DividedStg {
         }
     }
 
-    /// allocate must be called before write ( although BLK_CAP bytes are pre-allocated ).
+    /// Write data to specified file at specified offse. allocate must be called before write.
     pub fn write(&mut self, f: FD, offset: u64, data: &[u8]) {
         let data = Arc::new(data.to_vec());
         self.write_data(f, offset, data);
     }
 
-    ///
+    /// Read data from file at specified offset.
     pub fn read(&self, f: FD, offset: u64, data: &mut [u8]) {
         if f.level == 0 {
             self.0.read(f.root, offset, data);
@@ -167,12 +152,27 @@ impl DividedStg {
         }
     }
 
-    ///
+    /// Set root file descriptor.
+    pub fn set_root(&mut self, fd: FD) {
+        let mut rsvd = [0; RSVD_SIZE];
+        fd.save(&mut rsvd);
+        self.0.set_rsvd(rsvd);
+    }
+
+    /// Get root file descriptor.
+    pub fn get_root(&self) -> FD {
+        let rsvd = self.0.get_rsvd();
+        let mut fd = FD::default();
+        fd.load(&rsvd);
+        fd
+    }
+
+    /// Save file to backing storage.
     pub fn save(&mut self) {
         self.0.save();
     }
 
-    ///
+    /// Wait for save to complete.
     pub fn wait_complete(&self) {
         self.0.stg.wait_complete();
     }

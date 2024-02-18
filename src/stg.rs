@@ -113,7 +113,6 @@ pub trait PageStorageInfo: Send + Sync {
 
 /// Simple implementation of [Storage] using `Vec<u8>`.
 #[derive(Default)]
-#[cfg_attr(feature = "log", derive(Debug))]
 pub struct MemFile {
     v: Arc<Mutex<Vec<u8>>>,
 }
