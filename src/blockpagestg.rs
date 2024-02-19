@@ -106,6 +106,9 @@ impl BlockPageStg {
         }
         self.write(PINFO_FILE, 0, &buf);
         self.header_dirty = false;
+
+        #[cfg(feature = "log")]
+        println!("bps write_header alloc={:?} fd={:?}", &self.alloc, &self.fd);
     }
 
     fn alloc_page(&mut self, sx: usize) -> u64 {
@@ -129,6 +132,7 @@ impl BlockPageStg {
         self.relocate(sx, from, ix);
 
         let end = from * (sx * PAGE_UNIT) as u64;
+
         self.fd[sx] = self.ds.truncate(self.fd[sx], end);
     }
 
@@ -137,10 +141,13 @@ impl BlockPageStg {
             return;
         }
         let mut buf = vec![0; sx * PAGE_UNIT];
-        let from = from * (sx * PAGE_UNIT) as u64;
+        let from_off = from * (sx * PAGE_UNIT) as u64;
 
-        self.read(sx, from, &mut buf);
+        self.read(sx, from_off, &mut buf);
         let pn = util::getu64(&buf, 0);
+
+        let (sx1, _size, ix1) = self.get_page_info(pn);
+        assert!(sx1 == sx && ix1 == from);
 
         self.update_ix(pn, to);
 

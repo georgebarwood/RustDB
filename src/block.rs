@@ -96,23 +96,25 @@ impl BlockStg {
     }
 
     /// Allocate a new block number.
+    #[cfg(feature = "log-block")]
     pub fn new_block(&mut self) -> u64 {
-        if let Some(p) = self.free.pop_first() {
-            return p;
-        }
-        let mut p = self.first_free;
-        if p != NOTLB {
-            self.first_free = self.get_binfo(p);
-        } else {
-            p = self.lb_count;
-            self.lb_count += 1;
-        }
-        self.header_dirty = true;
-        p
+        let bn = self.alloc_block();
+        println!("block::new_block bn={}", bn);
+        bn
+    }
+
+    /// Allocate a new block number.
+    #[cfg(not(feature = "log-block"))]
+    pub fn new_block(&mut self) -> u64 {
+        self.alloc_block()
     }
 
     /// Release a block number ( no longer valid ).
     pub fn drop_block(&mut self, bn: u64) {
+        #[cfg(feature = "log-block")]
+        println!("block::drop_block bn={}", bn);
+
+        assert!(!self.free.contains(&bn)); // Not a comprehensive check as bn could be in free chain.
         self.free.insert(bn);
     }
 
@@ -129,7 +131,7 @@ impl BlockStg {
 
         #[cfg(feature = "log-block")]
         println!(
-            "block write bn={} offset={:?} s={} n={} data={:?}",
+            "block::write_data bn={} offset={:?} s={} n={} data={:?}",
             bn,
             offset,
             s,
@@ -171,7 +173,7 @@ impl BlockStg {
 
             #[cfg(feature = "log-block")]
             println!(
-                "block read bn={} off={} data len={} data={:?}",
+                "block::read bn={} off={} data len={} data={:?}",
                 bn,
                 offset,
                 data.len(),
@@ -201,8 +203,10 @@ impl BlockStg {
             let bn = *bn;
             let info = self.get_binfo(bn);
             if info & ALLOC_BIT != 0 {
-                let pp = info & NUM_MASK;
-                free_blocks.insert(pp);
+                let pb = info & NUM_MASK;
+                #[cfg(feature = "log-block")]
+                println!("block::save free physical block {}", pb);
+                free_blocks.insert(pb);
             }
             self.set_binfo(bn, self.first_free);
             self.first_free = bn;
@@ -225,6 +229,12 @@ impl BlockStg {
             self.write_header();
             self.header_dirty = false;
         }
+
+        #[cfg(feature = "log")]
+        println!(
+            "block::save allocated blocks={}",
+            self.pb_count - self.pb_first
+        );
 
         self.stg.commit(self.pb_count * BLK_SIZE);
     }
@@ -250,6 +260,23 @@ impl BlockStg {
         self.stg.read(40, &mut self.rsvd);
     }
 
+    /// Allocate a new block number.
+    fn alloc_block(&mut self) -> u64 {
+        if let Some(bn) = self.free.pop_first() {
+            bn
+        } else {
+            let mut bn = self.first_free;
+            if bn != NOTLB {
+                self.first_free = self.get_binfo(bn);
+            } else {
+                bn = self.lb_count;
+                self.lb_count += 1;
+            }
+            self.header_dirty = true;
+            bn
+        }
+    }
+
     /// Relocate physical block, from and to are block numbers.
     fn relocate(&mut self, from: u64, to: u64) {
         if from == to {
@@ -261,7 +288,7 @@ impl BlockStg {
         let bn = util::get(&buf, 0, NUM_SIZE as usize);
 
         #[cfg(feature = "log-block")]
-        println!("Relocating block from={} to={} bn={}", from, to, bn);
+        println!("block::relocate from={} to={} bn={}", from, to, bn);
 
         assert_eq!(self.get_binfo(bn), ALLOC_BIT | from);
 
@@ -275,7 +302,7 @@ impl BlockStg {
         while target > self.pb_first * BLK_SIZE {
             #[cfg(feature = "log-block")]
             println!(
-                "expand_binfo bn={} target={} pb_first={} pb_count={} lb_count={}",
+                "block::expand_binfo bn={} target={} pb_first={} pb_count={} lb_count={}",
                 bn, target, self.pb_first, self.pb_count, self.lb_count
             );
             self.relocate(self.pb_first, self.pb_count);

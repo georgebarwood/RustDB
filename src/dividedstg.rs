@@ -67,11 +67,11 @@ impl DividedStg {
     }
 
     /// Drop specified file.
-    pub fn drop_file(&mut self, mut f: FD) {
+    pub fn drop_file(&mut self, f: FD) {
         #[cfg(feature = "log-div")]
         println!("DS drop_file f={:?}", f);
-        f = self.truncate(f, 0);
-        self.0.drop_block(f.root)
+        let f = self.truncate(f, 0);
+        self.0.drop_block(f.root);
     }
 
     /// Allocate sufficient blocks for file of specified size.
@@ -103,16 +103,6 @@ impl DividedStg {
         f
     }
 
-    fn levels(cap: u64) -> u8 {
-        let mut level = 0;
-        let mut x = 1;
-        while x < cap {
-            level += 1;
-            x *= BASE
-        }
-        level
-    }
-
     /// Deallocate blocks not required for file of specified size.
     #[must_use]
     pub fn truncate(&mut self, mut f: FD, size: u64) -> FD {
@@ -135,31 +125,37 @@ impl DividedStg {
            d d
         */
         let reqd = Self::blocks(size);
-        let levels = Self::levels(reqd);
+        if reqd < f.blocks {
+            let levels = Self::levels(reqd);
 
-        // Calculate new root
-        let mut new_root = f.root;
-        let mut n = f.level;
-        while n > levels {
-            new_root = self.get_num(new_root, 0);
-            n -= 1;
-        }
+            // Calculate new root
+            let mut new_root = f.root;
+            let mut n = f.level;
+            while n > levels {
+                new_root = self.get_num(new_root, 0);
+                n -= 1;
+            }
 
-        // For each level reduce the number of blocks.
-        let mut level = f.level;
-        let mut old = f.blocks;
-        let mut new = reqd;
-        while level > 0 {
-            self.reduce_blocks(f, level, old, new);
-            new = (new + BASE - 1) / BASE;
-            old = (old + BASE - 1) / BASE;
-            level -= 1;
+            // For each level reduce the number of blocks.
+            let mut level = f.level;
+            let mut old = f.blocks;
+            let mut new = reqd;
+            while level > 0 {
+                self.reduce_blocks(f, level, old, new);
+                new = (new + BASE - 1) / BASE;
+                old = (old + BASE - 1) / BASE;
+                level -= 1;
+            }
+            if levels < f.level {
+                self.0.drop_block(f.root);
+                f.root = new_root;
+                f.set_level(levels);
+            }
+            f.set_blocks(reqd);
         }
-        if levels < f.level {
-            f.root = new_root;
-            f.set_level(levels);
+        if f.blocks == 0 {
+            f = self.new_file();
         }
-        f.set_blocks(reqd);
         f
     }
 
@@ -167,6 +163,8 @@ impl DividedStg {
     pub fn write_data(&mut self, f: FD, offset: u64, data: Data) {
         #[cfg(feature = "log-div")]
         println!("DS write_data f={:?} offset={}", f, offset);
+
+        assert!(f.blocks >= Self::blocks(offset + data.len() as u64));
 
         if f.level == 0 {
             let n = data.len();
@@ -269,14 +267,25 @@ impl DividedStg {
         }
     }
 
-    /// Calculate the number of blocks supported for a file of specified level.
-    fn block_limit(&self, mut level: u8) -> u64 {
-        let mut result = 1;
-        while level > 0 {
-            result *= BASE;
-            level -= 1;
+    /// Calculate the number of data blocks required for a file of specified size.
+    fn blocks(size: u64) -> u64 {
+        (size + BLK_CAP - 1) / BLK_CAP
+    }
+
+    /// Calculate the number of data blocks supported for a file of specified level.
+    fn block_limit(&self, level: u8) -> u64 {
+        BASE.pow(level.into())
+    }
+
+    /// Calculates the number of levels needed for specified number of data blocks.
+    fn levels(blocks: u64) -> u8 {
+        let mut level = 0;
+        let mut x = 1;
+        while x < blocks {
+            level += 1;
+            x *= BASE
         }
-        result
+        level
     }
 
     /// Set the block at index ix at specified level.
@@ -315,10 +324,6 @@ impl DividedStg {
         self.0
             .write(blk, off, &value.to_le_bytes()[0..NUM_SIZE as usize]);
     }
-
-    fn blocks(size: u64) -> u64 {
-        (size + BLK_CAP - 1) / BLK_CAP
-    }
 }
 
 #[test]
@@ -333,7 +338,7 @@ fn divided_stg_test() {
     f = ds.allocate(f, data.len() as u64);
     ds.write(f, 0, data);
 
-    let test_off = 200 * BLK_CAP;
+    let test_off = 2 * BLK_CAP;
     f = ds.allocate(f, test_off + data.len() as u64);
     ds.write(f, test_off, data);
 
@@ -351,6 +356,7 @@ fn divided_stg_test() {
 
     f = ds.truncate(f, 10 * BLK_CAP);
     ds.drop_file(f);
+    ds.save();
 
     // ds.write(fx, 1, data);
 
