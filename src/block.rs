@@ -10,6 +10,9 @@ pub const RSVD_SIZE: usize = 24;
 /// Size of file header.
 const HSIZE: u64 = 40 + RSVD_SIZE as u64;
 
+/// BLocks required for file header.
+const HBLKS: u64 = (HSIZE + BLK_SIZE - 1) / BLK_SIZE;
+
 /// Log (base 2) of Block Size.
 const LOG_BLK_SIZE: u8 = 17;
 
@@ -64,8 +67,8 @@ impl BlockStg {
         let mut x = Self {
             stg,
             lb_count: 0,
-            pb_count: 1,
-            pb_first: 1,
+            pb_count: HBLKS,
+            pb_first: HBLKS,
             first_free: NOTLB,
             rsvd: [0; RSVD_SIZE],
             free: BTreeSet::default(),
@@ -156,7 +159,7 @@ impl BlockStg {
 
     /// Read data from specified numbered block and offset.
     pub fn read(&self, bn: u64, offset: u64, data: &mut [u8]) {
-        debug_assert!(!self.free.contains(&bn));
+        debug_assert!(!self.free.contains(&bn), "bn={}", bn);
 
         let pb = self.get_binfo(bn);
         if pb & ALLOC_BIT != 0 {
