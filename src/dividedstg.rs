@@ -29,6 +29,7 @@ impl FD {
     }
     /// Save to byte buffer.
     pub fn save(&self, buf: &mut [u8]) {
+        debug_assert!(self.level == DividedStg::levels(self.blocks));
         util::setu64(&mut buf[0..8], self.root);
         util::setu64(&mut buf[8..16], self.blocks);
     }
@@ -156,14 +157,20 @@ impl DividedStg {
         f
     }
 
+    /// Write data to specified file at specified offset. allocate must be called before write.
+    pub fn write(&mut self, f: FD, offset: u64, data: &[u8]) {
+        let data = Arc::new(data.to_vec());
+        self.write_data(f, offset, data);
+    }
+
     /// Write Data to specified file at specified offset. allocate must be called before write..
     pub fn write_data(&mut self, f: FD, offset: u64, data: Data) {
         #[cfg(feature = "log-div")]
         println!("DS write_data f={:?} offset={}", f, offset);
 
-        assert!(f.blocks >= Self::blocks(offset + data.len() as u64));
+        debug_assert!(f.blocks >= Self::blocks(offset + data.len() as u64));
 
-        if f.level == 0 {
+        if f.blocks == 1 {
             let n = data.len();
             self.0.write_data(f.root, offset, data, 0, n);
         } else {
@@ -171,17 +178,11 @@ impl DividedStg {
         }
     }
 
-    /// Write data to specified file at specified offset. allocate must be called before write.
-    pub fn write(&mut self, f: FD, offset: u64, data: &[u8]) {
-        let data = Arc::new(data.to_vec());
-        self.write_data(f, offset, data);
-    }
-
     /// Read data from file at specified offset.
     pub fn read(&self, f: FD, offset: u64, data: &mut [u8]) {
         #[cfg(feature = "log-div")]
         println!("DS read_data f{:?} offset={}", f, offset);
-        if f.level == 0 {
+        if f.blocks == 1 {
             self.0.read(f.root, offset, data);
         } else {
             self.read_blocks(f, offset, data);
@@ -214,39 +215,35 @@ impl DividedStg {
     }
 
     fn write_blocks(&mut self, f: FD, offset: u64, data: Data) {
-        let mut done = 0;
-        let n = data.len();
-        while done < n {
+        let (mut done, len) = (0, data.len());
+        while done < len {
             let off = offset + done as u64;
-            let blk = off / BLK_CAP;
-            let off = off - blk * BLK_CAP;
+            let (blk, off) = (off / BLK_CAP, off % BLK_CAP);
+            let a = min(len - done, (BLK_CAP - off) as usize);
             let blk = self.get_block(f.root, f.level, blk);
-            let amount = min(n - done, (BLK_CAP - off) as usize);
-            self.0.write_data(blk, off, data.clone(), done, amount);
-            done += amount;
+            self.0.write_data(blk, off, data.clone(), done, a);
+            done += a;
         }
     }
 
     fn read_blocks(&self, f: FD, offset: u64, data: &mut [u8]) {
-        let mut done = 0;
-        let len = data.len();
+        let (mut done, len) = (0, data.len());
         while done < len {
             let off = offset + done as u64;
-            let blk = off / BLK_CAP;
-            let off = off - blk * BLK_CAP;
-            let amount = min(len - done, (BLK_CAP - off) as usize);
+            let (blk, off) = (off / BLK_CAP, off % BLK_CAP);
+            let a = min(len - done, (BLK_CAP - off) as usize);
             if blk < f.blocks {
                 let blk = self.get_block(f.root, f.level, blk);
-                self.0.read(blk, off, &mut data[done..done + amount]);
+                self.0.read(blk, off, &mut data[done..done + a]);
             }
-            done += amount;
+            done += a;
         }
     }
 
     fn add_blocks(&mut self, mut f: FD, new: u64) -> FD {
-        for i in f.blocks..new {
-            let blk = self.0.new_block();
-            self.set_block(f.root, f.level, i, blk);
+        for ix in f.blocks..new {
+            let nb = self.0.new_block();
+            self.set_block(f.root, f.level, ix, nb);
         }
         f.set_blocks(new);
         f
