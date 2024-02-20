@@ -95,14 +95,14 @@ pub trait PageStorageInfo: Send + Sync {
     fn sizes(&self) -> usize;
     /// Size index for given page size.
     fn index(&self, size: usize) -> usize;
-    /// Page size for given index ( zero-based ix must be less than sizes() ).
+    /// Page size for ix ( 1-based ix must be <= sizes() ).
     fn size(&self, ix: usize) -> usize;
-    /// Maximum page size.
-    fn max_page_size(&self) -> usize {
+    /// Maximum size page.
+    fn max_size_page(&self) -> usize {
         self.size(self.sizes())
     }
-    /// Half size.
-    fn half_page_size(&self) -> usize {
+    /// Half size page.
+    fn half_size_page(&self) -> usize {
         self.size(self.sizes() / 2)
     }
     /// Is it worth compressing a page of given size by saving.
@@ -228,7 +228,7 @@ impl Storage for SimpleFileStorage {
     }
 }
 
-/// Alternative to SimpleFileStorage that uses multiple [SimpleFileStorage]s to allow parallel reads/writes by different processes.
+/// Alternative to SimpleFileStorage that uses multiple [SimpleFileStorage]s to allow parallel reads/writes by different threads.
 #[allow(clippy::vec_box)]
 pub struct MultiFileStorage {
     filename: String,

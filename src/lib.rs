@@ -418,7 +418,7 @@ impl Database {
             bs.push(ByteStorage::new(ft as u64, ft));
         }
 
-        let page_size_max = apd.spd.psi.max_page_size();
+        let page_size_max = apd.spd.psi.max_size_page();
 
         let db = Rc::new(Database {
             apd,

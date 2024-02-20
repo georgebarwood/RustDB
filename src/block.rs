@@ -2,7 +2,7 @@ use crate::{util, Arc, BTreeSet, Data, Storage};
 use std::cmp::min;
 
 /// Magic Value ( first word of file for version check).
-const MAGIC_VALUE: [u8; 8] = *b"RDBV1.00";
+const MAGIC_VALUE: [u8; 8] = *b"RDBV1.01";
 
 /// Reserved area for client.
 pub const RSVD_SIZE: usize = 24;
@@ -86,6 +86,13 @@ impl BlockStg {
                 "Database File Invalid (maybe wrong version)"
             );
             x.read_header();
+
+            #[cfg(feature = "log")]
+            println!(
+                "BlockStg::new allocated blocks={} first={}",
+                x.pb_count - x.pb_first,
+                x.pb_first
+            );
         }
         x
     }
@@ -99,7 +106,7 @@ impl BlockStg {
     #[cfg(feature = "log-block")]
     pub fn new_block(&mut self) -> u64 {
         let bn = self.alloc_block();
-        println!("block::new_block bn={}", bn);
+        println!("BlockStg::new_block bn={}", bn);
         bn
     }
 
@@ -112,7 +119,7 @@ impl BlockStg {
     /// Release a block number ( no longer valid ).
     pub fn drop_block(&mut self, bn: u64) {
         #[cfg(feature = "log-block")]
-        println!("block::drop_block bn={}", bn);
+        println!("BlockStg::drop_block bn={}", bn);
 
         assert!(!self.free.contains(&bn)); // Not a comprehensive check as bn could be in free chain.
         self.free.insert(bn);
@@ -131,7 +138,7 @@ impl BlockStg {
 
         #[cfg(feature = "log-block")]
         println!(
-            "block::write_data bn={} offset={:?} s={} n={} data={:?}",
+            "BlockStg::write_data bn={} offset={:?} s={} n={} data={:?}",
             bn,
             offset,
             s,
@@ -173,7 +180,7 @@ impl BlockStg {
 
             #[cfg(feature = "log-block")]
             println!(
-                "block::read bn={} off={} data len={} data={:?}",
+                "BlockStg::read bn={} off={} data len={} data={:?}",
                 bn,
                 offset,
                 data.len(),
@@ -205,7 +212,7 @@ impl BlockStg {
             if info & ALLOC_BIT != 0 {
                 let pb = info & NUM_MASK;
                 #[cfg(feature = "log-block")]
-                println!("block::save free physical block {}", pb);
+                println!("BlockStg::save free physical block {}", pb);
                 free_blocks.insert(pb);
             }
             self.set_binfo(bn, self.first_free);
@@ -232,7 +239,7 @@ impl BlockStg {
 
         #[cfg(feature = "log")]
         println!(
-            "block::save allocated blocks={}",
+            "BlockStg::save allocated blocks={}",
             self.pb_count - self.pb_first
         );
 
@@ -288,7 +295,7 @@ impl BlockStg {
         let bn = util::get(&buf, 0, NUM_SIZE as usize);
 
         #[cfg(feature = "log-block")]
-        println!("block::relocate from={} to={} bn={}", from, to, bn);
+        println!("BlockStg::relocate from={} to={} bn={}", from, to, bn);
 
         assert_eq!(self.get_binfo(bn), ALLOC_BIT | from);
 
@@ -302,7 +309,7 @@ impl BlockStg {
         while target > self.pb_first * BLK_SIZE {
             #[cfg(feature = "log-block")]
             println!(
-                "block::expand_binfo bn={} target={} pb_first={} pb_count={} lb_count={}",
+                "BlockStg::expand_binfo bn={} target={} pb_first={} pb_count={} lb_count={}",
                 bn, target, self.pb_first, self.pb_count, self.lb_count
             );
             self.relocate(self.pb_first, self.pb_count);

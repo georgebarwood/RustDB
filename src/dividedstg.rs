@@ -4,11 +4,13 @@ use std::cmp::min;
 /// Divides Storage into sub-files of arbitrary size using [BlockStg].
 pub struct DividedStg(BlockStg);
 
-/// Block capacity.
+/// Number of block numbers that will fit in a block.
 const BASE: u64 = BLK_CAP / NUM_SIZE;
 
-/// Bytes required to save FD ( root, blocks, level ).
-pub const FD_SIZE: usize = 8 + 8 + 1;
+const NSZ: usize = NUM_SIZE as usize;
+
+/// Bytes required to save FD ( root, blocks ).
+pub const FD_SIZE: usize = 8 + 8;
 
 /// [DividedStg] File Descriptor.
 #[derive(Clone, Copy, Default)]
@@ -21,10 +23,6 @@ pub struct FD {
 }
 
 impl FD {
-    fn set_level(&mut self, level: u8) {
-        self.changed = self.level != level;
-        self.level = level;
-    }
     fn set_blocks(&mut self, blocks: u64) {
         self.changed = self.blocks != blocks;
         self.blocks = blocks;
@@ -33,13 +31,12 @@ impl FD {
     pub fn save(&self, buf: &mut [u8]) {
         util::setu64(&mut buf[0..8], self.root);
         util::setu64(&mut buf[8..16], self.blocks);
-        buf[16] = self.level;
     }
     /// Load from  byte buffer.
     pub fn load(&mut self, buf: &[u8]) {
         self.root = util::getu64(buf, 0);
         self.blocks = util::getu64(buf, 8);
-        self.level = buf[16];
+        self.level = DividedStg::levels(self.blocks);
     }
 }
 
@@ -86,7 +83,7 @@ impl DividedStg {
                 let blk = self.0.new_block();
                 self.set_num(blk, 0, f.root);
                 f.root = blk;
-                f.set_level(f.level + 1);
+                f.level += 1;
                 #[cfg(feature = "log-div")]
                 println!(
                     "File {} reached level {} reqd={} limit={}",
@@ -149,7 +146,7 @@ impl DividedStg {
             if levels < f.level {
                 self.0.drop_block(f.root);
                 f.root = new_root;
-                f.set_level(levels);
+                f.level = levels;
             }
             f.set_blocks(reqd);
         }
@@ -279,8 +276,7 @@ impl DividedStg {
 
     /// Calculates the number of levels needed for specified number of data blocks.
     fn levels(blocks: u64) -> u8 {
-        let mut level = 0;
-        let mut x = 1;
+        let (mut level, mut x) = (0, 1);
         while x < blocks {
             level += 1;
             x *= BASE
@@ -316,13 +312,12 @@ impl DividedStg {
 
     fn get_num(&self, blk: u64, off: u64) -> u64 {
         let mut bytes = [0; 8];
-        self.0.read(blk, off, &mut bytes[0..NUM_SIZE as usize]);
+        self.0.read(blk, off, &mut bytes[0..NSZ]);
         u64::from_le_bytes(bytes)
     }
 
-    fn set_num(&mut self, blk: u64, off: u64, value: u64) {
-        self.0
-            .write(blk, off, &value.to_le_bytes()[0..NUM_SIZE as usize]);
+    fn set_num(&mut self, blk: u64, off: u64, v: u64) {
+        self.0.write(blk, off, &v.to_le_bytes()[0..NSZ]);
     }
 }
 
