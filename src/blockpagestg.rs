@@ -248,6 +248,9 @@ impl PageStorage for BlockPageStg {
     }
 
     fn new_page(&mut self) -> u64 {
+        #[cfg(feature = "log-bps")]
+        println!("bps new_page");
+
         if let Some(pn) = self.free_pn.pop_first() {
             pn
         } else {
@@ -266,6 +269,8 @@ impl PageStorage for BlockPageStg {
     }
 
     fn drop_page(&mut self, pn: u64) {
+        #[cfg(feature = "log-bps")]
+        println!("bps drop_page pn={}", pn);
         self.free_pn.insert(pn);
     }
 
@@ -274,6 +279,9 @@ impl PageStorage for BlockPageStg {
     }
 
     fn set_page(&mut self, pn: u64, data: Data) {
+        #[cfg(feature = "log-bps")]
+        println!("bps set_page pn={} data len={}", pn, data.len());
+
         let size = data.len();
         let rsx = Self::size_index(size);
         assert!(rsx <= PAGE_SIZES);
@@ -307,6 +315,9 @@ impl PageStorage for BlockPageStg {
     }
 
     fn get_page(&self, pn: u64) -> Data {
+        #[cfg(feature = "log-bps")]
+        println!("bps get_page pn={}", pn);
+
         let (sx, size, ix) = self.get_page_info(pn);
 
         if sx == 0 {

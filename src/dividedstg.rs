@@ -5,9 +5,7 @@ use std::cmp::min;
 pub struct DividedStg(BlockStg);
 
 /// Number of block numbers that will fit in a block.
-const BASE: u64 = BLK_CAP / NUM_SIZE;
-
-const NSZ: usize = NUM_SIZE as usize;
+const BASE: u64 = BLK_CAP / NSZ;
 
 /// Bytes required to save FD ( root, blocks ).
 pub const FD_SIZE: usize = 8 + 8;
@@ -79,23 +77,15 @@ impl DividedStg {
         println!("DS allocate f={:?} size={} BASE={}", f, size, BASE);
         let reqd = Self::blocks(size);
         if reqd > f.blocks {
-            // Increase level if necessary.
-            while reqd > self.block_limit(f.level) {
+            let new_level = Self::levels(reqd);
+            while f.level < new_level {
                 let blk = self.0.new_block();
                 self.set_num(blk, 0, f.root);
                 f.root = blk;
                 f.level += 1;
                 #[cfg(feature = "log-div")]
-                println!(
-                    "File {} reached level {} reqd={} limit={}",
-                    f.root,
-                    f.level,
-                    reqd,
-                    self.block_limit(f.level)
-                );
+                println!("DS allocate file level increased f={:?}", f);
             }
-            #[cfg(feature = "log-div")]
-            println!("Adding {} blocks", reqd - f.blocks);
             f = self.add_blocks(f, reqd);
         }
         f
@@ -107,21 +97,6 @@ impl DividedStg {
         #[cfg(feature = "log-div")]
         println!("DS truncate f={:?} size={}", f, size);
 
-        /* With BASE = 2, 5 data blocks looks like this:
-           x
-           x x
-           x x x
-           d d d d d
-
-           If we only need 3 data blocks, it looks like this
-           x
-           x x
-           d d d
-
-           If we only need 2 data blocks, it goes to this:
-           x
-           d d
-        */
         let reqd = Self::blocks(size);
         if reqd < f.blocks {
             let levels = Self::levels(reqd);
@@ -138,7 +113,7 @@ impl DividedStg {
             let mut level = f.level;
             let mut old = f.blocks;
             let mut new = reqd;
-            while level > 0 {
+            while level > 0 && old != new {
                 self.reduce_blocks(f, level, old, new);
                 new = (new + BASE - 1) / BASE;
                 old = (old + BASE - 1) / BASE;
@@ -150,9 +125,9 @@ impl DividedStg {
                 f.level = levels;
             }
             f.set_blocks(reqd);
-        }
-        if f.blocks == 0 {
-            f = self.new_file();
+            if f.blocks == 0 {
+                f = self.new_file();
+            }
         }
         f
     }
@@ -166,7 +141,12 @@ impl DividedStg {
     /// Write Data to specified file at specified offset. allocate must be called before write..
     pub fn write_data(&mut self, f: FD, offset: u64, data: Data) {
         #[cfg(feature = "log-div")]
-        println!("DS write_data f={:?} offset={}", f, offset);
+        println!(
+            "DS write_data f={:?} offset={} data len={}",
+            f,
+            offset,
+            data.len()
+        );
 
         debug_assert!(f.blocks >= Self::blocks(offset + data.len() as u64));
 
@@ -181,7 +161,12 @@ impl DividedStg {
     /// Read data from file at specified offset.
     pub fn read(&self, f: FD, offset: u64, data: &mut [u8]) {
         #[cfg(feature = "log-div")]
-        println!("DS read_data f{:?} offset={}", f, offset);
+        println!(
+            "DS read_data f{:?} offset={} data len={}",
+            f,
+            offset,
+            data.len()
+        );
         if f.blocks == 1 {
             self.0.read(f.root, offset, data);
         } else {
@@ -241,6 +226,8 @@ impl DividedStg {
     }
 
     fn add_blocks(&mut self, mut f: FD, new: u64) -> FD {
+        #[cfg(feature = "log-div")]
+        println!("DS add blocks f={:?} new={}", f, new);
         for ix in f.blocks..new {
             let nb = self.0.new_block();
             self.set_block(f.root, f.level, ix, nb);
@@ -266,19 +253,13 @@ impl DividedStg {
         (size + BLK_CAP - 1) / BLK_CAP
     }
 
-    /// Calculate the number of data blocks supported for a file of specified level.
-    fn block_limit(&self, level: u8) -> u64 {
-        BASE.pow(level.into())
-    }
-
-    /// Calculates the number of levels needed for specified number of data blocks.
+    /// Calculate the number of extra levels needed for specified number of data blocks.
     fn levels(blocks: u64) -> u8 {
-        let (mut level, mut x) = (0, 1);
-        while x < blocks {
-            level += 1;
-            x *= BASE
+        if blocks <= 1 {
+            0
+        } else {
+            (blocks - 1).ilog(BASE) as u8 + 1
         }
-        level
     }
 
     /// Set the block at index ix at specified level.
@@ -294,7 +275,7 @@ impl DividedStg {
                 self.get_block(blk, level - 1, x)
             };
         }
-        self.set_num(blk, ix * NUM_SIZE, value);
+        self.set_num(blk, ix * NSZ, value);
     }
 
     /// Get the block at index ix at specified level.
@@ -304,17 +285,17 @@ impl DividedStg {
             ix %= BASE;
             blk = self.get_block(blk, level - 1, x);
         }
-        self.get_num(blk, ix * NUM_SIZE)
+        self.get_num(blk, ix * NSZ)
     }
 
     fn get_num(&self, blk: u64, off: u64) -> u64 {
         let mut bytes = [0; 8];
-        self.0.read(blk, off, &mut bytes[0..NSZ]);
+        self.0.read(blk, off, &mut bytes[0..NSZ as usize]);
         u64::from_le_bytes(bytes)
     }
 
     fn set_num(&mut self, blk: u64, off: u64, v: u64) {
-        self.0.write(blk, off, &v.to_le_bytes()[0..NSZ]);
+        self.0.write(blk, off, &v.to_le_bytes()[0..NSZ as usize]);
     }
 }
 

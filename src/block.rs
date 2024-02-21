@@ -29,13 +29,13 @@ const NUM_MASK: u64 = (1 << NUM_BITS) - 1;
 const NOTLB: u64 = NUM_MASK;
 
 /// Number of bytes for block number, plus an extra bit (for ALLOC_BIT).
-pub const NUM_SIZE: u64 = (NUM_BITS as u64 + 8) / 8;
+pub const NSZ: u64 = (NUM_BITS as u64 + 8) / 8;
 
 /// Bit that indicates Logical Block Entry represents allocated phsyical page.
 const ALLOC_BIT: u64 = 1 << NUM_BITS;
 
 /// Capacity of block in bytes ( after allowing for number reserved for block number ).
-pub const BLK_CAP: u64 = BLK_SIZE - NUM_SIZE;
+pub const BLK_CAP: u64 = BLK_SIZE - NSZ;
 
 /// Manages allocation and deallocation of numbered relocatable fixed size blocks from underlying Storage.
 ///
@@ -158,11 +158,11 @@ impl BlockStg {
             self.header_dirty = true;
             self.set_binfo(bn, ALLOC_BIT | pb);
             // Write block number at start of physical block, to allow relocation.
-            self.write_num(pb * BLK_SIZE, bn);
+            self.set_num(pb * BLK_SIZE, bn);
         }
         pb &= NUM_MASK;
-        assert!(NUM_SIZE + offset + n as u64 <= BLK_SIZE);
-        let offset = pb * BLK_SIZE + NUM_SIZE + offset;
+        assert!(NSZ + offset + n as u64 <= BLK_SIZE);
+        let offset = pb * BLK_SIZE + NSZ + offset;
         self.stg.write_data(offset, data, s, n);
     }
 
@@ -173,10 +173,9 @@ impl BlockStg {
         let pb = self.get_binfo(bn);
         if pb & ALLOC_BIT != 0 {
             let pb = pb & NUM_MASK;
-            let avail = BLK_SIZE - (NUM_SIZE + offset);
-            let amount = min(data.len(), avail as usize);
-            self.stg
-                .read(pb * BLK_SIZE + NUM_SIZE + offset, &mut data[0..amount]);
+            let avail = BLK_SIZE - (NSZ + offset);
+            let n = min(data.len(), avail as usize);
+            self.stg.read(pb * BLK_SIZE + NSZ + offset, &mut data[0..n]);
 
             #[cfg(feature = "log-block")]
             println!(
@@ -292,7 +291,7 @@ impl BlockStg {
 
         let mut buf = vec![0; BLK_SIZE as usize];
         self.stg.read(from * BLK_SIZE, &mut buf);
-        let bn = util::get(&buf, 0, NUM_SIZE as usize);
+        let bn = util::get(&buf, 0, NSZ as usize);
 
         #[cfg(feature = "log-block")]
         println!("BlockStg::relocate from={} to={} bn={}", from, to, bn);
@@ -305,7 +304,7 @@ impl BlockStg {
 
     /// Expand the map to accomodate the specified block number.
     fn expand_binfo(&mut self, bn: u64) {
-        let target = HSIZE + bn * NUM_SIZE + NUM_SIZE;
+        let target = HSIZE + bn * NSZ + NSZ;
         while target > self.pb_first * BLK_SIZE {
             #[cfg(feature = "log-block")]
             println!(
@@ -329,30 +328,29 @@ impl BlockStg {
     /// Set the value associated with the specified block number.
     fn set_binfo(&mut self, bn: u64, value: u64) {
         self.expand_binfo(bn);
-        let off = HSIZE + bn * NUM_SIZE;
-        self.write_num(off, value);
+        let off = HSIZE + bn * NSZ;
+        self.set_num(off, value);
     }
 
     /// Get the value associated with the specified block number.
     fn get_binfo(&self, bn: u64) -> u64 {
-        let off = HSIZE + bn * NUM_SIZE;
-        if off + NUM_SIZE > self.pb_first * BLK_SIZE {
+        let off = HSIZE + bn * NSZ;
+        if off + NSZ > self.pb_first * BLK_SIZE {
             return 0;
         }
-        self.read_num(off)
+        self.get_num(off)
     }
 
     /// Write number to specified offset in underlying storage.
-    fn write_num(&mut self, offset: u64, num: u64) {
-        self.stg
-            .write(offset, &num.to_le_bytes()[0..NUM_SIZE as usize]);
-        debug_assert_eq!(self.read_num(offset), num);
+    fn set_num(&mut self, offset: u64, num: u64) {
+        self.stg.write(offset, &num.to_le_bytes()[0..NSZ as usize]);
+        debug_assert_eq!(self.get_num(offset), num);
     }
 
     /// Read number from specified offset in underlying storage.
-    fn read_num(&self, offset: u64) -> u64 {
+    fn get_num(&self, offset: u64) -> u64 {
         let mut bytes = [0; 8];
-        self.stg.read(offset, &mut bytes[0..NUM_SIZE as usize]);
+        self.stg.read(offset, &mut bytes[0..NSZ as usize]);
         u64::from_le_bytes(bytes)
     }
 }
