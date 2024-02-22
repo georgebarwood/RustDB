@@ -297,13 +297,12 @@ fn divided_stg_test() {
     let stg = MemFile::new();
     let mut ds = DividedStg::new(stg.clone());
 
-    // let fx = ds.new_file();
     let mut f = ds.new_file();
     let data = b"hello george";
 
     ds.write(&mut f, 0, data);
 
-    let test_off = 2 * BLK_CAP;
+    let test_off = 200 * BLK_CAP;
     ds.write(&mut f, test_off, data);
 
     ds.save();
@@ -321,33 +320,4 @@ fn divided_stg_test() {
     ds.truncate(&mut f, 10 * BLK_CAP);
     ds.drop_file(&mut f);
     ds.save();
-
-    // ds.write(fx, 1, data);
-
-    // let test_off = 2 * (BLK_CAP + 1) * BASE + 10;
-
-    // let test_off = 4 * BLK_CAP;
-    // f = ds.allocate(f, test_off + data.len() as u64);
-    // ds.write(f, test_off, data);
-    // ds.drop_file(fx);
-    // ds.save();
-    /*
-
-        let ds = DividedStg::new(stg.clone());
-
-        let mut buf = vec![0; data.len()];
-        ds.read(f, test_off, &mut buf);
-        assert!(&buf == data);
-
-        let mut buf = vec![0; data.len()];
-        ds.read(f, 0, &mut buf);
-        assert!(&buf == data);
-
-        // ds.truncate(f, 0);
-
-        let ds = DividedStg::new(stg.clone());
-        let mut buf = vec![0; data.len()];
-        ds.read(f, test_off, &mut buf);
-        assert!(&buf == data);
-    */
 }
