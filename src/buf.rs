@@ -110,7 +110,7 @@ impl WriteBuffer {
 
 use crate::Mutex;
 
-/// ReadBufStg buffers small (up to limit) reads to the underlying storage. Only supported functions are read and reset.
+/// ReadBufStg buffers small (up to limit) reads to the underlying storage using multiple buffers. Only supported functions are read and reset.
 ///
 /// See implementation of AtomicFile for how this is used in conjunction with WMap.
 ///
@@ -129,7 +129,7 @@ impl<const N: usize> Drop for ReadBufStg<N> {
 }
 
 impl<const N: usize> ReadBufStg<N> {
-    ///
+    /// limit is the size of a read that is considered "small", max_buf is the maximum number of buffers used.
     pub fn new(stg: Box<dyn Storage>, limit: usize, max_buf: usize) -> Box<Self> {
         Box::new(Self {
             stg,
@@ -203,7 +203,7 @@ impl<const N: usize> ReadBuffer<N> {
                 data[done..done + amount].copy_from_slice(&p[disp..disp + amount]);
                 self.hits += 1;
             } else {
-                let mut p: Box<[u8; N]> = vec![0; 256].try_into().unwrap();
+                let mut p: Box<[u8; N]> = vec![0; N].try_into().unwrap();
                 stg.read(sector * N as u64, &mut *p);
                 data[done..done + amount].copy_from_slice(&p[disp..disp + amount]);
                 if self.map.len() >= self.max_buf {

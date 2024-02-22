@@ -14,7 +14,7 @@ const HSIZE: u64 = 40 + RSVD_SIZE as u64;
 const HBLKS: u64 = (HSIZE + BLK_SIZE - 1) / BLK_SIZE;
 
 /// Log (base 2) of Block Size.
-const LOG_BLK_SIZE: u8 = 17; 
+const LOG_BLK_SIZE: u8 = 17;
 
 /// Size of block.
 const BLK_SIZE: u64 = 1 << LOG_BLK_SIZE;
