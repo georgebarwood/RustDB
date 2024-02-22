@@ -11,6 +11,13 @@ pub struct DataSlice {
     pub data: Data,
 }
 
+impl DataSlice {
+    ///
+    pub fn data(&self) -> &[u8] {
+        &self.data[self.off..self.off + self.len]
+    }
+}
+
 /// Implements an updateable file based on some underlying storage.
 pub struct WMap {
     /// Map of outstanding writes which have not yet been written to the underlying file.

@@ -58,46 +58,10 @@ impl BasicAtomicFile {
             return;
         }
         if phase == 1 {
-            /* Get list of updates, compare with old data to reduce the size of upd file */
-            if false {
-                /*
-                                let mut buf = Vec::new();
-                                for (k, v) in self.map.map.iter() {
-                                    let start = k + 1 - v.len as u64;
-                                    let len = v.len;
-                                    if buf.len() < len {
-                                        buf.resize(len, 0);
-                                    }
-                                    self.stg.read(start, &mut buf[0..len]);
-                                    util::diff(&v.data[v.off..v.off + len], &buf, 17, |off, len| {
-                                        self.list.push((
-                                            start + off as u64,
-                                            DataSlice {
-                                                off: v.off + off,
-                                                len,
-                                                data: v.data.clone(),
-                                            },
-                                        ));
-                                    });
-                                }
-                */
-            } else {
-                for (k, v) in self.map.map.iter() {
-                    let start = k + 1 - v.len as u64;
-                    let len = v.len;
-                    self.list.push((
-                        start,
-                        DataSlice {
-                            off: v.off,
-                            len,
-                            data: v.data.clone(),
-                        },
-                    ));
-                }
+            for (k, v) in std::mem::take(&mut self.map.map) {
+                let start = k + 1 - v.len as u64;
+                self.list.push((start, v));
             }
-            // println!("Commit # writes={}", self.list.len());
-
-            self.map.map.clear();
 
             // Write the updates to upd.
             // First set the end position to zero.
@@ -109,9 +73,7 @@ impl BasicAtomicFile {
             let mut stg_written = false;
             let mut pos: u64 = 16;
             for (start, v) in self.list.iter() {
-                let len = v.len as u64;
-                let start = *start;
-                let data = &v.data[v.off..v.off + v.len];
+                let (start, len, data) = (*start, v.len as u64, v.data());
                 if start >= self.size {
                     // Writes beyond current stg size can be written directly.
                     stg_written = true;
@@ -139,7 +101,7 @@ impl BasicAtomicFile {
                 let start = *start;
                 if start < self.size {
                     // Writes beyond current stg size have already been written.
-                    self.stg.write(start, &v.data[v.off..v.off + v.len]);
+                    self.stg.write(start, v.data());
                 }
             }
             self.list.clear();

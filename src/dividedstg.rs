@@ -63,37 +63,15 @@ impl DividedStg {
     }
 
     /// Drop specified file.
-    pub fn drop_file(&mut self, f: FD) {
+    pub fn drop_file(&mut self, f: &mut FD) {
         #[cfg(feature = "log-div")]
         println!("DS drop_file f={:?}", f);
-        let f = self.truncate(f, 0);
+        self.truncate(f, 0);
         self.0.drop_block(f.root);
     }
 
-    /// Allocate sufficient blocks for file of specified size.
-    #[must_use]
-    pub fn allocate(&mut self, mut f: FD, size: u64) -> FD {
-        #[cfg(feature = "log-div")]
-        println!("DS allocate f={:?} size={} BASE={}", f, size, BASE);
-        let reqd = Self::blocks(size);
-        if reqd > f.blocks {
-            let new_level = Self::levels(reqd);
-            while f.level < new_level {
-                let blk = self.0.new_block();
-                self.set_num(blk, 0, f.root);
-                f.root = blk;
-                f.level += 1;
-                #[cfg(feature = "log-div")]
-                println!("DS allocate file level increased f={:?}", f);
-            }
-            f = self.add_blocks(f, reqd);
-        }
-        f
-    }
-
     /// Deallocate blocks not required for file of specified size.
-    #[must_use]
-    pub fn truncate(&mut self, mut f: FD, size: u64) -> FD {
+    pub fn truncate(&mut self, f: &mut FD, size: u64) {
         #[cfg(feature = "log-div")]
         println!("DS truncate f={:?} size={}", f, size);
 
@@ -126,20 +104,19 @@ impl DividedStg {
             }
             f.set_blocks(reqd);
             if f.blocks == 0 {
-                f = self.new_file();
+                *f = self.new_file();
             }
         }
-        f
     }
 
-    /// Write data to specified file at specified offset. allocate must be called before write.
-    pub fn write(&mut self, f: FD, offset: u64, data: &[u8]) {
+    /// Write data to specified file at specified offset.
+    pub fn write(&mut self, f: &mut FD, offset: u64, data: &[u8]) {
         let data = Arc::new(data.to_vec());
         self.write_data(f, offset, data);
     }
 
-    /// Write Data to specified file at specified offset. allocate must be called before write..
-    pub fn write_data(&mut self, f: FD, offset: u64, data: Data) {
+    /// Write Data to specified file at specified offset.
+    pub fn write_data(&mut self, f: &mut FD, offset: u64, data: Data) {
         #[cfg(feature = "log-div")]
         println!(
             "DS write_data f={:?} offset={} data len={}",
@@ -148,7 +125,7 @@ impl DividedStg {
             data.len()
         );
 
-        debug_assert!(f.blocks >= Self::blocks(offset + data.len() as u64));
+        self.allocate(f, offset + data.len() as u64);
 
         if f.blocks == 1 {
             let n = data.len();
@@ -159,7 +136,7 @@ impl DividedStg {
     }
 
     /// Read data from file at specified offset.
-    pub fn read(&self, f: FD, offset: u64, data: &mut [u8]) {
+    pub fn read(&self, f: &FD, offset: u64, data: &mut [u8]) {
         #[cfg(feature = "log-div")]
         println!(
             "DS read_data f{:?} offset={} data len={}",
@@ -175,18 +152,16 @@ impl DividedStg {
     }
 
     /// Set root file descriptor.
-    pub fn set_root(&mut self, fd: FD) {
+    pub fn set_root(&mut self, fd: &FD) {
         let mut rsvd = [0; RSVD_SIZE];
         fd.save(&mut rsvd);
         self.0.set_rsvd(rsvd);
     }
 
     /// Get root file descriptor.
-    pub fn get_root(&self) -> FD {
+    pub fn get_root(&self, fd: &mut FD) {
         let rsvd = self.0.get_rsvd();
-        let mut fd = FD::default();
         fd.load(&rsvd);
-        fd
     }
 
     /// Save file to backing storage.
@@ -199,7 +174,26 @@ impl DividedStg {
         self.0.stg.wait_complete();
     }
 
-    fn write_blocks(&mut self, f: FD, offset: u64, data: Data) {
+    /// Allocate sufficient blocks for file of specified size.
+    fn allocate(&mut self, f: &mut FD, size: u64) {
+        #[cfg(feature = "log-div")]
+        println!("DS allocate f={:?} size={} BASE={}", f, size, BASE);
+        let reqd = Self::blocks(size);
+        if reqd > f.blocks {
+            let new_level = Self::levels(reqd);
+            while f.level < new_level {
+                let blk = self.0.new_block();
+                self.set_num(blk, 0, f.root);
+                f.root = blk;
+                f.level += 1;
+                #[cfg(feature = "log-div")]
+                println!("DS allocate file level increased f={:?}", f);
+            }
+            self.add_blocks(f, reqd);
+        }
+    }
+
+    fn write_blocks(&mut self, f: &FD, offset: u64, data: Data) {
         let (mut done, len) = (0, data.len());
         while done < len {
             let off = offset + done as u64;
@@ -211,7 +205,7 @@ impl DividedStg {
         }
     }
 
-    fn read_blocks(&self, f: FD, offset: u64, data: &mut [u8]) {
+    fn read_blocks(&self, f: &FD, offset: u64, data: &mut [u8]) {
         let (mut done, len) = (0, data.len());
         while done < len {
             let off = offset + done as u64;
@@ -225,7 +219,7 @@ impl DividedStg {
         }
     }
 
-    fn add_blocks(&mut self, mut f: FD, new: u64) -> FD {
+    fn add_blocks(&mut self, f: &mut FD, new: u64) {
         #[cfg(feature = "log-div")]
         println!("DS add blocks f={:?} new={}", f, new);
         for ix in f.blocks..new {
@@ -233,10 +227,9 @@ impl DividedStg {
             self.set_block(f.root, f.level, ix, nb);
         }
         f.set_blocks(new);
-        f
     }
 
-    fn reduce_blocks(&mut self, f: FD, level: u8, old: u64, new: u64) {
+    fn reduce_blocks(&mut self, f: &mut FD, level: u8, old: u64, new: u64) {
         #[cfg(feature = "log-div")]
         println!(
             "DS reduce blocks f={:?} level={} old={} new={}",
@@ -308,27 +301,25 @@ fn divided_stg_test() {
     let mut f = ds.new_file();
     let data = b"hello george";
 
-    f = ds.allocate(f, data.len() as u64);
-    ds.write(f, 0, data);
+    ds.write(&mut f, 0, data);
 
     let test_off = 2 * BLK_CAP;
-    f = ds.allocate(f, test_off + data.len() as u64);
-    ds.write(f, test_off, data);
+    ds.write(&mut f, test_off, data);
 
     ds.save();
 
     let mut ds = DividedStg::new(stg.clone());
 
     let mut buf = vec![0; data.len()];
-    ds.read(f, 0, &mut buf);
+    ds.read(&f, 0, &mut buf);
     assert!(&buf == data);
 
     let mut buf = vec![0; data.len()];
-    ds.read(f, test_off, &mut buf);
+    ds.read(&f, test_off, &mut buf);
     assert!(&buf == data);
 
-    f = ds.truncate(f, 10 * BLK_CAP);
-    ds.drop_file(f);
+    ds.truncate(&mut f, 10 * BLK_CAP);
+    ds.drop_file(&mut f);
     ds.save();
 
     // ds.write(fx, 1, data);

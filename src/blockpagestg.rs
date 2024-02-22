@@ -65,7 +65,7 @@ impl BlockPageStg {
             for i in 0..PAGE_SIZES + 1 {
                 result.fd[i] = result.ds.new_file();
             }
-            result.ds.set_root(result.fd[0]);
+            result.ds.set_root(&result.fd[0]);
             result.header_dirty = true;
         } else {
             result.read_header();
@@ -74,7 +74,7 @@ impl BlockPageStg {
     }
 
     fn read_header(&mut self) {
-        self.fd[0] = self.ds.get_root();
+        self.ds.get_root(&mut self.fd[0]);
         let mut buf = [0; HEADER_SIZE];
         self.read(PINFO_FILE, 0, &mut buf);
         self.alloc_pn = util::getu64(&buf, 0);
@@ -133,7 +133,7 @@ impl BlockPageStg {
 
         let end = from * (sx * PAGE_UNIT) as u64;
 
-        self.fd[sx] = self.ds.truncate(self.fd[sx], end);
+        self.ds.truncate(&mut self.fd[sx], end);
     }
 
     fn relocate(&mut self, sx: usize, from: u64, to: u64) {
@@ -213,32 +213,28 @@ impl BlockPageStg {
     }
 
     fn write_data(&mut self, fx: usize, off: u64, data: Data) {
-        let mut fd = self.fd[fx];
-        fd = self.ds.allocate(fd, off + data.len() as u64);
-        fd = self.save_fd(fx, fd);
-        self.ds.write_data(fd, off, data);
+        self.ds.write_data(&mut self.fd[fx], off, data);
+        self.save_fd(fx);
     }
 
     fn truncate(&mut self, fx: usize, off: u64) {
-        let mut fd = self.fd[fx];
-        fd = self.ds.truncate(fd, off);
-        self.save_fd(fx, fd);
+        self.ds.truncate(&mut self.fd[fx], off);
+        self.save_fd(fx);
     }
 
-    fn save_fd(&mut self, fx: usize, mut fd: FD) -> FD {
+    fn save_fd(&mut self, fx: usize) {
+        let fd = &mut self.fd[fx];
         if fd.changed {
             fd.changed = false;
-            self.fd[fx] = fd;
             self.header_dirty = true;
             if fx == 0 {
                 self.ds.set_root(fd);
             }
         }
-        fd
     }
 
     fn read(&self, fx: usize, off: u64, data: &mut [u8]) {
-        self.ds.read(self.fd[fx], off, data);
+        self.ds.read(&self.fd[fx], off, data);
     }
 }
 
