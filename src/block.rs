@@ -1,8 +1,12 @@
 use crate::{util, Arc, BTreeSet, Data, Storage};
 use std::cmp::min;
 
+/// Block Capacity.
+/* Note: 27720 = 11 x 9 x 8 * 7 * 5 = 99 * 280 is divisible by all numbers from 1..12 */
+pub const BLK_CAP: u64 = 6 * 27720;
+
 /// Magic Value ( first word of file for version check).
-const MAGIC_VALUE: [u8; 8] = *b"RDBV1.01";
+const MAGIC_VALUE: [u8; 8] = *b"RDBV1.02";
 
 /// Reserved area for client.
 pub const RSVD_SIZE: usize = 24;
@@ -10,14 +14,37 @@ pub const RSVD_SIZE: usize = 24;
 /// Size of file header.
 const HSIZE: u64 = 40 + RSVD_SIZE as u64;
 
+/// Manages allocation and deallocation of numbered relocatable fixed size blocks from underlying Storage.
+///
+/// Blocks are numbered. A map of the physical location of each block is kept at the start of the storage (after the header).
+///
+/// Physical blocks can be relocated by adjusting the map entry to point to the new location.
+///
+/// On save, the map of free block numbers is processed and any associated physical blocks are freed.
+///
+/// When a physical block is freed, the last physical block is relocated to fill it.
+
+pub struct BlockStg {
+    stg: Box<dyn Storage>,
+    lb_count: u64, // Number of Logical Block Info entries.
+    pb_count: u64, // Number of Physical Blocks.
+    pb_first: u64,
+    first_free: u64,
+    rsvd: [u8; RSVD_SIZE], // For boot-strapping first file.
+    free: BTreeSet<u64>,   // Temporary set of free block numbers.
+    header_dirty: bool,
+    rsvd_dirty: bool,
+    is_new: bool,
+}
+
 /// BLocks required for file header.
 const HBLKS: u64 = (HSIZE + BLK_SIZE - 1) / BLK_SIZE;
 
-/// Log (base 2) of Block Size.
-const LOG_BLK_SIZE: u8 = 17;
+/// Block Size including block number.
+const BLK_SIZE: u64 = BLK_CAP + NSZ;
 
-/// Size of block.
-const BLK_SIZE: u64 = 1 << LOG_BLK_SIZE;
+/// Log (base 2) of Block size ( rounded down ).
+const LOG_BLK_SIZE: u8 = BLK_CAP.ilog(2) as u8;
 
 /// Number of bits for block number ( either logical or physical ).
 const NUM_BITS: u8 = 64 - LOG_BLK_SIZE;
@@ -33,32 +60,6 @@ pub const NSZ: u64 = (NUM_BITS as u64 + 8) / 8;
 
 /// Bit that indicates Logical Block Entry represents allocated phsyical page.
 const ALLOC_BIT: u64 = 1 << NUM_BITS;
-
-/// Capacity of block in bytes ( after allowing for number reserved for block number ).
-pub const BLK_CAP: u64 = BLK_SIZE - NSZ;
-
-/// Manages allocation and deallocation of numbered relocatable fixed size blocks from underlying Storage.
-///
-/// Blocks are numbered. A map of the physical location of each block is kept at the start of the storage (after the header).
-///
-/// Physical blocks can be relocated by adjusting the map entry to point to the new location.
-///
-/// On save, the map of free block numbers is processed and any associated physical blocks are freed.
-///
-/// When a physical block is freed, the last physical block is relocated to fill it.
-
-pub struct BlockStg {
-    pub(crate) stg: Box<dyn Storage>,
-    lb_count: u64, // Number of Logical Block Info entries.
-    pb_count: u64, // Number of Physical Blocks.
-    pb_first: u64,
-    first_free: u64,
-    rsvd: [u8; RSVD_SIZE], // For boot-strapping first file.
-    free: BTreeSet<u64>,   // Temporary set of free block numbers.
-    header_dirty: bool,
-    rsvd_dirty: bool,
-    is_new: bool,
-}
 
 impl BlockStg {
     /// Construct BlockStg with specified underlying Storage.
@@ -138,11 +139,7 @@ impl BlockStg {
 
         #[cfg(feature = "log-block")]
         println!(
-            "BlockStg::write_data bn={} offset={:?} s={} n={} data={:?}",
-            bn,
-            offset,
-            s,
-            n,
+            "BlockStg::write_data bn={bn} off={offset} s={s} n={n} data={:?}",
             &data[s..s + min(n, 20)]
         );
 
@@ -179,9 +176,7 @@ impl BlockStg {
 
             #[cfg(feature = "log-block")]
             println!(
-                "BlockStg::read bn={} off={} data len={} data={:?}",
-                bn,
-                offset,
+                "BlockStg::read bn={bn} off={offset} data len={} data={:?}",
                 data.len(),
                 &data[0..min(data.len(), 20)]
             );
@@ -243,6 +238,11 @@ impl BlockStg {
         );
 
         self.stg.commit(self.pb_count * BLK_SIZE);
+    }
+
+    /// Wait for save to complete.
+    pub fn wait_complete(&self) {
+        self.stg.wait_complete();
     }
 
     /// Write header fields to underlying storage.

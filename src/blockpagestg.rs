@@ -1,8 +1,10 @@
-use crate::dividedstg::*;
-use crate::*;
+use crate::{
+    block::BLK_CAP,
+    dividedstg::{DividedStg, FD, FD_SIZE},
+    nd, util, Arc, BTreeSet, Data, HashSet, PageStorage, PageStorageInfo, Storage,
+};
 
-const PAGE_SIZES: usize = 16;
-const PAGE_UNIT: usize = 1024;
+const PAGE_SIZES: usize = 7;
 const PAGE_HSIZE: usize = 8;
 
 const PINFO_FILE: usize = 0;
@@ -18,12 +20,12 @@ impl PageStorageInfo for Info {
 
     /// Size index for given page size.
     fn index(&self, size: usize) -> usize {
-        BlockPageStg::size_index(size)
+        BlockPageStg::size_index(size + PAGE_HSIZE)
     }
 
     /// Page size for given index.
     fn size(&self, ix: usize) -> usize {
-        ix * PAGE_UNIT - PAGE_HSIZE
+        BlockPageStg::page_size(ix) as usize - PAGE_HSIZE
     }
 }
 
@@ -47,6 +49,19 @@ pub struct BlockPageStg {
 }
 
 impl BlockPageStg {
+    /// This is the raw page size including PAGE_HSIZE bytes for the containing page number.
+    fn page_size(ix: usize) -> u64 {
+        BLK_CAP / (13 - ix as u64)
+    }
+
+    fn size_index(size: usize) -> usize {
+        let mut ix = 1;
+        while Self::page_size(ix) < size as u64 {
+            ix += 1;
+        }
+        ix
+    }
+
     ///
     pub fn new(stg: Box<dyn Storage>) -> Self {
         let is_new = stg.size() == 0;
@@ -131,7 +146,7 @@ impl BlockPageStg {
 
         self.relocate(sx, from, ix);
 
-        let end = from * (sx * PAGE_UNIT) as u64;
+        let end = from * Self::page_size(sx);
 
         self.ds.truncate(&mut self.fd[sx], end);
     }
@@ -140,19 +155,21 @@ impl BlockPageStg {
         if from == to {
             return;
         }
-        let mut buf = vec![0; sx * PAGE_UNIT];
-        let from_off = from * (sx * PAGE_UNIT) as u64;
+        let ps = Self::page_size(sx);
+        let mut buf = vec![0; ps as usize];
 
-        self.read(sx, from_off, &mut buf);
+        self.read(sx, from * ps, &mut buf);
         let pn = util::getu64(&buf, 0);
 
         let (sx1, _size, ix1) = self.get_page_info(pn);
-        assert!(sx1 == sx && ix1 == from);
+        assert!(
+            sx1 == sx && ix1 == from,
+            "pn={pn} sx1={sx1} sx={sx} ix1={ix1} from={from}"
+        );
 
         self.update_ix(pn, to);
 
-        let to = to * (sx * PAGE_UNIT) as u64;
-        self.write(sx, to, &buf);
+        self.write(sx, to * ps, &buf);
     }
 
     fn get_page_info(&self, pn: u64) -> (usize, usize, u64) {
@@ -164,7 +181,11 @@ impl BlockPageStg {
         self.read(PINFO_FILE, off, &mut buf);
         let ix = util::get(&buf, 0, 6);
         let size = util::get(&buf, 6, 2) as usize;
-        let sx = if size == 0 { 0 } else { Self::size_index(size) };
+        let sx = if size == 0 {
+            0
+        } else {
+            Self::size_index(size + PAGE_HSIZE)
+        };
         (sx, size, ix)
     }
 
@@ -192,12 +213,6 @@ impl BlockPageStg {
         util::set(&mut buf, 0, ix, 6);
         let off = HEADER_SIZE as u64 + pn * 8;
         self.write(PINFO_FILE, off, &buf);
-    }
-
-    fn size_index(size: usize) -> usize {
-        let ix = (size + PAGE_HSIZE + PAGE_UNIT - 1) / PAGE_UNIT;
-        assert!(ix <= PAGE_SIZES);
-        ix
     }
 
     fn clear(&mut self, fx: usize, off: u64, n: u64) {
@@ -279,7 +294,7 @@ impl PageStorage for BlockPageStg {
         println!("bps set_page pn={} data len={}", pn, data.len());
 
         let size = data.len();
-        let rsx = Self::size_index(size);
+        let rsx = Self::size_index(size + PAGE_HSIZE);
         assert!(rsx <= PAGE_SIZES);
         assert!(size == 0 || rsx > 0);
 
@@ -292,7 +307,7 @@ impl PageStorage for BlockPageStg {
 
             // Set first word of page to page number.
             if rsx != 0 {
-                let off = ix * (rsx * PAGE_UNIT) as u64;
+                let off = ix * Self::page_size(rsx);
                 self.write(rsx, off, &pn.to_le_bytes());
             }
             ix
@@ -303,7 +318,7 @@ impl PageStorage for BlockPageStg {
 
         if rsx != 0 {
             // Offset of user data within sub-file.
-            let off = PAGE_HSIZE as u64 + ix * (rsx * PAGE_UNIT) as u64;
+            let off = PAGE_HSIZE as u64 + ix * Self::page_size(rsx);
 
             // Write data.
             self.write_data(rsx, off, data);
@@ -321,7 +336,7 @@ impl PageStorage for BlockPageStg {
         }
 
         // Offset of data within sub-file.
-        let off = PAGE_HSIZE as u64 + ix * (sx * PAGE_UNIT) as u64;
+        let off = PAGE_HSIZE as u64 + ix * Self::page_size(sx);
 
         let mut data = vec![0; size];
         self.read(sx, off, &mut data);
@@ -392,7 +407,7 @@ impl PageStorage for BlockPageStg {
     fn renumber(&mut self, pn: u64) -> u64 {
         let new_pn = self.new_page();
         let (sx, size, ix) = self.get_page_info(pn);
-        let off = ix * (sx * PAGE_UNIT) as u64;
+        let off = ix * Self::page_size(sx);
         self.write(sx, off, &new_pn.to_le_bytes());
         self.set_page_info(new_pn, size, ix);
         self.set_page_info(pn, 0, 0);
@@ -413,7 +428,7 @@ impl PageStorage for BlockPageStg {
 
 #[test]
 fn test_block_page_stg() {
-    let stg = MemFile::new();
+    let stg = crate::MemFile::new();
     let mut bps = BlockPageStg::new(stg.clone());
 
     let pn = bps.new_page();

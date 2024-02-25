@@ -103,7 +103,7 @@ pub trait PageStorageInfo: Send + Sync {
     }
     /// Half size page.
     fn half_size_page(&self) -> usize {
-        self.size(self.sizes() / 2)
+        self.size(self.index(self.max_size_page() / 2 - 50))
     }
     /// Is it worth compressing a page of given size by saving.
     fn compress(&self, size: usize, saving: usize) -> bool {

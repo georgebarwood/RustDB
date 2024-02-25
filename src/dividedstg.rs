@@ -1,4 +1,7 @@
-use crate::{block::*, *};
+use crate::{
+    block::{BlockStg, BLK_CAP, NSZ, RSVD_SIZE},
+    util, Arc, Data, Storage,
+};
 use std::cmp::min;
 
 /// Divides Storage into sub-files of arbitrary size using [BlockStg].
@@ -171,7 +174,7 @@ impl DividedStg {
 
     /// Wait for save to complete.
     pub fn wait_complete(&self) {
-        self.0.stg.wait_complete();
+        self.0.wait_complete();
     }
 
     /// Allocate sufficient blocks for file of specified size.
@@ -294,7 +297,7 @@ impl DividedStg {
 
 #[test]
 fn divided_stg_test() {
-    let stg = MemFile::new();
+    let stg = crate::MemFile::new();
     let mut ds = DividedStg::new(stg.clone());
 
     let mut f = ds.new_file();

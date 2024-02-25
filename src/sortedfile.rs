@@ -159,13 +159,13 @@ impl SortedFile {
             let p = &mut *pp.borrow_mut();
             if p.level != 0 {
                 p.find_child(db, r)
-            } else if !p.full(db) {
+            } else if !p.full(db.page_size_max) {
                 self.set_dirty(p, &pp);
                 p.insert(db, r);
                 return true;
             } else {
                 // Page is full, divide it into left and right.
-                let sp = Split::new(p);
+                let sp = Split::new(p, db);
                 let sk = &*p.get_key(db, sp.split_node, r);
                 // Could insert r into left or right here.
                 // sp.right is allocated a new page number.
@@ -196,12 +196,12 @@ impl SortedFile {
         let pp = self.load_page(db, into.pnum);
         let p = &mut *pp.borrow_mut();
         // Need to check if page is full.
-        if !p.full(db) {
+        if !p.full(db.page_size_max) {
             self.set_dirty(p, &pp);
             p.insert_page(db, r, cpnum);
         } else {
             // Split the parent page.
-            let mut sp = Split::new(p);
+            let mut sp = Split::new(p, db);
             let sk = &*p.get_key(db, sp.split_node, r);
             // Insert into either left or right.
             let c = p.compare(db, r, sp.split_node);
@@ -504,36 +504,43 @@ struct ParentInfo<'a> {
 /// For dividing full pages into two.
 struct Split {
     count: usize,
-    half: usize,
     split_node: usize,
     left: Page,
     right: Page,
+    half_page_size: usize,
+    left_full: bool,
+    got_split: bool,
 }
 
 impl Split {
     /// Split the records of p into two new pages.
-    fn new(p: &mut Page) -> Self {
+    fn new(p: &mut Page, db: &DB) -> Self {
+        let half_page_size = db.apd.spd.psi.half_size_page();
         p.pnum = u64::MAX; // Invalidate old pnum to prevent old page being saved.
-        let half = p.count / 2;
         let mut result = Split {
             count: 0,
-            half,
             split_node: 0,
-            left: p.new_page(half),
-            right: p.new_page(half),
+            left: p.new_page(half_page_size),
+            right: p.new_page(half_page_size),
+            half_page_size,
+            left_full: false,
+            got_split: false,
         };
         result.left.first_page = p.first_page;
         result.split(p, p.root);
         result
     }
+
     fn split(&mut self, p: &Page, x: usize) {
         if x != 0 {
             self.split(p, p.left(x));
-            if self.count < self.half {
+            if !self.left_full && !self.left.full(self.half_page_size) {
                 self.left.append_from(p, x);
             } else {
-                if self.count == self.half {
+                self.left_full = true;
+                if !self.got_split {
                     self.split_node = x;
+                    self.got_split = true;
                 }
                 self.right.append_from(p, x);
             }
@@ -873,7 +880,7 @@ impl PageList {
         self.packed_record_count += 1;
         let cur = self.list.len() - 1;
         let mut ap = &mut self.list[cur].0;
-        if ap.full(db) {
+        if ap.full(db.page_size_max) {
             // Start a new page.
             let key = if ap.level == 0 {
                 PKey::Dyn(p.get_key(db, x, r))

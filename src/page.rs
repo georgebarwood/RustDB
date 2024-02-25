@@ -128,13 +128,13 @@ impl Page {
     }
 
     /// Is the page full?
-    pub fn full(&self, db: &DB) -> bool {
+    pub fn full(&self, page_limit: usize) -> bool {
         self.free == 0
             && (self.alloc == MAX_NODE
                 || NODE_BASE
                     + (self.alloc + 1) * self.node_size
                     + if self.level != 0 { PAGE_ID_SIZE } else { 0 }
-                    >= db.page_size_max)
+                    > page_limit)
     }
 
     /// Construct a new empty page inheriting record size and level from self.
