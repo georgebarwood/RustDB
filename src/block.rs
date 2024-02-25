@@ -6,10 +6,10 @@ use std::cmp::min;
 pub const BLK_CAP: u64 = 6 * 27720;
 
 /// Magic Value ( first word of file for version check).
-const MAGIC_VALUE: [u8; 8] = *b"RDBV1.02";
+const MAGIC_VALUE: [u8; 8] = *b"RDBV1.03";
 
 /// Reserved area for client.
-pub const RSVD_SIZE: usize = 24;
+pub const RSVD_SIZE: usize = 16;
 
 /// Size of file header.
 const HSIZE: u64 = 40 + RSVD_SIZE as u64;

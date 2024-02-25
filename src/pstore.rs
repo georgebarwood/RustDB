@@ -326,6 +326,16 @@ impl AccessPagedData {
 
     /// Construct access to the database logical pages.
     pub fn new_writer(spd: Arc<SharedPagedData>) -> Self {
+        #[cfg(feature = "log")]
+        {
+            let psi = &spd.psi;
+            println!(
+                "max page size={} half={}",
+                psi.max_size_page(),
+                psi.half_size_page()
+            );
+        }
+
         AccessPagedData {
             writer: true,
             time: 0,

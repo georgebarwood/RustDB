@@ -55,11 +55,12 @@ impl BlockPageStg {
     }
 
     fn size_index(size: usize) -> usize {
-        let mut ix = 1;
-        while Self::page_size(ix) < size as u64 {
-            ix += 1;
+        let r = BLK_CAP as usize / size;
+        if r >= 12 {
+            1
+        } else {
+            13 - r
         }
-        ix
     }
 
     ///
