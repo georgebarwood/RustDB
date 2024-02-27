@@ -1,31 +1,42 @@
 use crate::{
-    block::BLK_CAP,
     dividedstg::{DividedStg, FD, FD_SIZE},
-    nd, util, Arc, BTreeSet, Data, HashSet, PageStorage, PageStorageInfo, Storage,
+    nd, util, Arc, BTreeSet, Data, HashSet, Limits, PageStorage, PageStorageInfo, Storage,
 };
 
-const PAGE_SIZES: usize = 7;
 const PAGE_HSIZE: usize = 8;
+const HEADER_SIZE: usize = 40;
 
 const PINFO_FILE: usize = 0;
-const HEADER_SIZE: usize = 32 + (8 + FD_SIZE) * PAGE_SIZES;
 const NOT_PN: u64 = u64::MAX >> 16;
 
-struct Info();
+#[derive(Clone)]
+struct Info {
+    blk_cap: u64,
+    max_div: usize,
+    sizes: usize,
+}
+
 impl PageStorageInfo for Info {
     /// The number of different page sizes.
     fn sizes(&self) -> usize {
-        PAGE_SIZES
+        self.sizes
     }
 
     /// Size index for given page size.
     fn index(&self, size: usize) -> usize {
-        BlockPageStg::size_index(size + PAGE_HSIZE)
+        let size = size + PAGE_HSIZE;
+        let r = (self.blk_cap as usize) / size;
+        if r >= self.max_div {
+            1
+        } else {
+            1 + self.max_div - r
+        }
     }
 
     /// Page size for given index.
     fn size(&self, ix: usize) -> usize {
-        BlockPageStg::page_size(ix) as usize - PAGE_HSIZE
+        let size = self.blk_cap as usize / (1 + self.max_div - ix);
+        size - PAGE_HSIZE
     }
 }
 
@@ -41,69 +52,95 @@ pub struct BlockPageStg {
     alloc_pn: u64,
     first_free_pn: u64,
     pn_init: u64,
-    fd: [FD; PAGE_SIZES + 1],
-    alloc: [u64; PAGE_SIZES + 1],
+    fd: Vec<FD>,
+    alloc: Vec<u64>,
     free_pn: BTreeSet<u64>, // Temporary set of free page numbers.
     header_dirty: bool,
     is_new: bool,
+    psi: Info,
+    header_size: u64,
 }
 
 impl BlockPageStg {
-    /// This is the raw page size including PAGE_HSIZE bytes for the containing page number.
-    fn page_size(ix: usize) -> u64 {
-        BLK_CAP / (13 - ix as u64)
-    }
-
-    fn size_index(size: usize) -> usize {
-        let r = BLK_CAP as usize / size;
-        if r >= 12 {
-            1
-        } else {
-            13 - r
-        }
+    fn page_size(&self, ix: usize) -> u64 {
+        (self.psi.size(ix) + PAGE_HSIZE) as u64
     }
 
     ///
-    pub fn new(stg: Box<dyn Storage>) -> Self {
+    pub fn new(stg: Box<dyn Storage>, lim: &Limits) -> Box<Self> {
         let is_new = stg.size() == 0;
+
+        let blk_cap = lim.blk_cap;
+        let sizes = lim.page_sizes;
+        let max_div = lim.max_div;
+
         let mut result = Self {
-            ds: DividedStg::new(stg),
+            ds: DividedStg::new(stg, blk_cap),
             alloc_pn: 0,
             first_free_pn: NOT_PN,
             pn_init: 0,
-            alloc: [0; PAGE_SIZES + 1],
-            fd: [FD::default(); PAGE_SIZES + 1],
+            alloc: vec![0; sizes + 1],
+            fd: Vec::new(),
             free_pn: BTreeSet::default(),
             header_dirty: false,
             is_new,
+            psi: Info {
+                blk_cap,
+                max_div,
+                sizes,
+            },
+            header_size: 0,
         };
+
+        // Page sizes are assumed to fit in u16.
+        assert!(
+            result.psi.max_size_page() <= u16::MAX as usize,
+            "Max page size is 65535"
+        );
+
         if is_new {
-            for i in 0..PAGE_SIZES + 1 {
-                result.fd[i] = result.ds.new_file();
+            for _i in 0..sizes + 1 {
+                result.fd.push(result.ds.new_file());
             }
             result.ds.set_root(&result.fd[0]);
             result.header_dirty = true;
+            result.calc_header_size();
         } else {
             result.read_header();
+            result.psi.blk_cap = result.ds.blk_cap();
         }
-        result
+        Box::new(result)
+    }
+
+    fn calc_header_size(&mut self) {
+        self.header_size = (HEADER_SIZE + self.psi.sizes * (8 + FD_SIZE)) as u64;
     }
 
     fn read_header(&mut self) {
-        self.ds.get_root(&mut self.fd[0]);
+        self.fd.clear();
+        self.alloc.clear();
+        self.fd.push(self.ds.get_root());
+
         let mut buf = [0; HEADER_SIZE];
         self.read(PINFO_FILE, 0, &mut buf);
         self.alloc_pn = util::getu64(&buf, 0);
         self.first_free_pn = util::getu64(&buf, 8);
         self.pn_init = util::getu64(&buf, 16);
-        self.alloc[0] = util::getu64(&buf, 24);
+        self.alloc.push(util::getu64(&buf, 24));
+        let x = util::getu64(&buf, 32);
+        self.psi.max_div = x as usize & 0xffff;
+        let sizes = (x >> 16) as usize;
+        self.psi.sizes = sizes;
+        let mut buf = vec![0; (8 + FD_SIZE) * sizes];
+        self.read(PINFO_FILE, HEADER_SIZE as u64, &mut buf);
 
-        for i in 1..PAGE_SIZES + 1 {
-            let off = 32 + (i - 1) * (8 + FD_SIZE);
-            self.alloc[i] = util::getu64(&buf, off);
-            self.fd[i].load(&buf[off + 8..]);
+        for i in 1..self.psi.sizes + 1 {
+            let off = (i - 1) * (8 + FD_SIZE);
+            self.alloc.push(util::getu64(&buf, off));
+            self.fd.push(self.ds.load_fd(&buf[off + 8..]));
         }
         self.header_dirty = false;
+        self.calc_header_size();
         #[cfg(feature = "log")]
         println!("bps read_header alloc={:?} fd={:?}", &self.alloc, &self.fd);
     }
@@ -114,13 +151,17 @@ impl BlockPageStg {
         util::setu64(&mut buf[8..], self.first_free_pn);
         util::setu64(&mut buf[16..], self.pn_init);
         util::setu64(&mut buf[24..], self.alloc[0]);
-
-        for i in 1..PAGE_SIZES + 1 {
-            let off = 32 + (i - 1) * (8 + FD_SIZE);
-            util::setu64(&mut buf[off..], self.alloc[i]);
-            self.fd[i].save(&mut buf[off + 8..]);
-        }
+        let x = (self.psi.sizes << 16) + self.psi.max_div;
+        util::setu64(&mut buf[32..], x as u64);
         self.write(PINFO_FILE, 0, &buf);
+
+        let mut buf = vec![0; (8 + FD_SIZE) * self.psi.sizes];
+        for i in 1..self.psi.sizes + 1 {
+            let off = (i - 1) * (8 + FD_SIZE);
+            util::setu64(&mut buf[off..], self.alloc[i]);
+            self.ds.save_fd(&self.fd[i], &mut buf[off + 8..]);
+        }
+        self.write(PINFO_FILE, HEADER_SIZE as u64, &buf);
         self.header_dirty = false;
 
         #[cfg(feature = "log")]
@@ -147,7 +188,7 @@ impl BlockPageStg {
 
         self.relocate(sx, from, ix);
 
-        let end = from * Self::page_size(sx);
+        let end = from * self.page_size(sx);
 
         self.ds.truncate(&mut self.fd[sx], end);
     }
@@ -156,7 +197,7 @@ impl BlockPageStg {
         if from == to {
             return;
         }
-        let ps = Self::page_size(sx);
+        let ps = self.page_size(sx);
         let mut buf = vec![0; ps as usize];
 
         self.read(sx, from * ps, &mut buf);
@@ -170,7 +211,7 @@ impl BlockPageStg {
 
         self.update_ix(pn, to);
 
-        self.write(sx, to * ps, &buf);
+        self.write_data(sx, to * ps, Arc::new(buf));
     }
 
     fn get_page_info(&self, pn: u64) -> (usize, usize, u64) {
@@ -178,22 +219,18 @@ impl BlockPageStg {
             return (0, 0, 0);
         }
         let mut buf = [0; 8];
-        let off = HEADER_SIZE as u64 + pn * 8;
+        let off = self.header_size + pn * 8;
         self.read(PINFO_FILE, off, &mut buf);
         let ix = util::get(&buf, 0, 6);
         let size = util::get(&buf, 6, 2) as usize;
-        let sx = if size == 0 {
-            0
-        } else {
-            Self::size_index(size + PAGE_HSIZE)
-        };
+        let sx = if size == 0 { 0 } else { self.psi.index(size) };
         (sx, size, ix)
     }
 
     fn set_page_info(&mut self, pn: u64, size: usize, ix: u64) {
-        let off = HEADER_SIZE as u64 + pn * 8;
+        let off = self.header_size + pn * 8;
         if pn >= self.alloc[0] {
-            let start = HEADER_SIZE as u64 + self.alloc[0] * 8;
+            let start = self.header_size + self.alloc[0] * 8;
             self.clear(PINFO_FILE, start, off - start);
             self.alloc[0] = pn + 1;
             self.header_dirty = true;
@@ -205,21 +242,21 @@ impl BlockPageStg {
     }
 
     fn truncate_page_info(&mut self) {
-        let off = HEADER_SIZE as u64 + self.alloc_pn * 8;
+        let off = self.header_size + self.alloc_pn * 8;
         self.truncate(PINFO_FILE, off);
     }
 
     fn update_ix(&mut self, pn: u64, ix: u64) {
         let mut buf = [0; 6];
         util::set(&mut buf, 0, ix, 6);
-        let off = HEADER_SIZE as u64 + pn * 8;
+        let off = self.header_size + pn * 8;
         self.write(PINFO_FILE, off, &buf);
     }
 
     fn clear(&mut self, fx: usize, off: u64, n: u64) {
         if n > 0 {
-            let buf = vec![0; n as usize];
-            self.write(fx, off, &buf);
+            let buf = Arc::new(vec![0; n as usize]);
+            self.write_data(fx, off, buf);
         }
     }
 
@@ -287,7 +324,7 @@ impl PageStorage for BlockPageStg {
     }
 
     fn info(&self) -> Box<dyn PageStorageInfo> {
-        Box::new(Info {})
+        Box::new(self.psi.clone())
     }
 
     fn set_page(&mut self, pn: u64, data: Data) {
@@ -295,8 +332,8 @@ impl PageStorage for BlockPageStg {
         println!("bps set_page pn={} data len={}", pn, data.len());
 
         let size = data.len();
-        let rsx = Self::size_index(size + PAGE_HSIZE);
-        assert!(rsx <= PAGE_SIZES);
+        let rsx = self.psi.index(size);
+        assert!(rsx <= self.psi.sizes);
         assert!(size == 0 || rsx > 0);
 
         let (sx, _size, ix) = self.get_page_info(pn);
@@ -308,7 +345,7 @@ impl PageStorage for BlockPageStg {
 
             // Set first word of page to page number.
             if rsx != 0 {
-                let off = ix * Self::page_size(rsx);
+                let off = ix * self.page_size(rsx);
                 self.write(rsx, off, &pn.to_le_bytes());
             }
             ix
@@ -319,7 +356,7 @@ impl PageStorage for BlockPageStg {
 
         if rsx != 0 {
             // Offset of user data within sub-file.
-            let off = PAGE_HSIZE as u64 + ix * Self::page_size(rsx);
+            let off = PAGE_HSIZE as u64 + ix * self.page_size(rsx);
 
             // Write data.
             self.write_data(rsx, off, data);
@@ -337,7 +374,7 @@ impl PageStorage for BlockPageStg {
         }
 
         // Offset of data within sub-file.
-        let off = PAGE_HSIZE as u64 + ix * Self::page_size(sx);
+        let off = PAGE_HSIZE as u64 + ix * self.page_size(sx);
 
         let mut data = vec![0; size];
         self.read(sx, off, &mut data);
@@ -408,7 +445,7 @@ impl PageStorage for BlockPageStg {
     fn renumber(&mut self, pn: u64) -> u64 {
         let new_pn = self.new_page();
         let (sx, size, ix) = self.get_page_info(pn);
-        let off = ix * Self::page_size(sx);
+        let off = ix * self.page_size(sx);
         self.write(sx, off, &new_pn.to_le_bytes());
         self.set_page_info(new_pn, size, ix);
         self.set_page_info(pn, 0, 0);
@@ -430,7 +467,8 @@ impl PageStorage for BlockPageStg {
 #[test]
 fn test_block_page_stg() {
     let stg = crate::MemFile::new();
-    let mut bps = BlockPageStg::new(stg.clone());
+    let limits = Limits::default();
+    let mut bps = BlockPageStg::new(stg.clone(), &limits);
 
     let pn = bps.new_page();
     let data = Arc::new(b"hello george".to_vec());
@@ -438,7 +476,7 @@ fn test_block_page_stg() {
     bps.set_page(pn, data.clone());
 
     bps.save();
-    let mut bps = BlockPageStg::new(stg);
+    let mut bps = BlockPageStg::new(stg, &limits);
 
     let data1 = bps.get_page(pn);
     assert!(data == data1);

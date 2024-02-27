@@ -1,30 +1,34 @@
 use crate::{util, Cell, Ordering, Rc, Record, SaveOp, SortedFile, DB};
 
-/// =4. Number of fragment types.
+/// Number of fragment types.
 pub const NFT: usize = 4;
 
-/// Bytes per fragment.
-pub static BPF: [usize; NFT] = [40, 127, 333, 1141];
-
 /// Total bytes used taking into account all overhead ( 3 + 1 + 8 = 12 bytes, per fragment ).
-fn total(len: usize, ft: usize) -> usize {
-    let bpf = BPF[ft];
+fn tot(len: usize, bpf: usize) -> usize {
     let nf = (len + bpf - 1) / bpf;
     nf * (bpf + 12)
 }
 
 /// Calculate best fragment type from byte length.
-pub fn fragment_type(len: usize) -> usize {
+pub fn fragment_type(len: usize, bpf: &[usize]) -> usize {
     let mut best = usize::MAX;
     let mut result = 0;
-    for ft in 0..NFT {
-        let t = total(len, ft);
+    for (ft, bpf) in bpf.iter().enumerate() {
+        let t = tot(len, *bpf);
         if t <= best {
             best = t;
             result = ft;
         }
     }
     result
+}
+
+/// Calculate fragment sizes.
+pub fn bpf(hp: usize) -> [usize; NFT] {
+    let hp = hp - 8; // 8 is to account for page header.
+    let pp = hp / 1000;
+    let max_bpf = hp / pp - 12;
+    [40, 127, 333, max_bpf]
 }
 
 /// Storage of variable size values.
@@ -38,8 +42,7 @@ pub struct ByteStorage {
 
 impl ByteStorage {
     /// Construct new ByteStorage with specified root page and fragment type.
-    pub fn new(root_page: u64, ft: usize) -> Self {
-        let bpf = BPF[ft];
+    pub fn new(root_page: u64, bpf: usize) -> Self {
         let file = Rc::new(SortedFile::new(9 + bpf, 8, root_page));
         ByteStorage {
             file,

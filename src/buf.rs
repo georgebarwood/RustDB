@@ -140,10 +140,7 @@ impl<const N: usize> ReadBufStg<N> {
 }
 
 impl<const N: usize> Storage for ReadBufStg<N> {
-    fn size(&self) -> u64 {
-        panic!()
-    }
-
+    /// Read data from storage.
     fn read(&self, start: u64, data: &mut [u8]) {
         if data.len() <= self.limit {
             self.buf.lock().unwrap().read(&*self.stg, start, data);
@@ -152,16 +149,24 @@ impl<const N: usize> Storage for ReadBufStg<N> {
         }
     }
 
+    /// Clears the buffers.
+    fn reset(&mut self) {
+        self.buf.lock().unwrap().reset();
+    }
+
+    /// Panics.
+    fn size(&self) -> u64 {
+        panic!()
+    }
+
+    /// Panics.
     fn write(&mut self, _start: u64, _data: &[u8]) {
         panic!();
     }
 
+    /// Panics.
     fn commit(&mut self, _size: u64) {
         panic!();
-    }
-
-    fn reset(&mut self) {
-        self.buf.lock().unwrap().reset();
     }
 }
 

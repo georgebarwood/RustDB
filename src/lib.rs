@@ -377,6 +377,8 @@ pub struct Database {
     function_reset: Cell<bool>,
     /// Maximum size of logical page.
     page_size_max: usize,
+
+    bpf: [usize; bytes::NFT],
 }
 
 const SYS_ROOT_LAST: u64 = 16;
@@ -413,12 +415,14 @@ impl Database {
         sys_function.add_index(tb.rt(), vec![0, 1], 6);
         sys_function.add_index(tb.rt(), vec![1], 7);
 
-        let mut bs = Vec::new();
-        for ft in 0..bytes::NFT {
-            bs.push(ByteStorage::new(ft as u64, ft));
-        }
-
         let page_size_max = apd.spd.psi.max_size_page();
+
+        let bpf = bytes::bpf(apd.spd.psi.half_size_page());
+
+        let mut bs = Vec::new();
+        for (ft, bpf) in bpf.iter().enumerate() {
+            bs.push(ByteStorage::new(ft as u64, *bpf));
+        }
 
         let db = Rc::new(Database {
             apd,
@@ -438,6 +442,7 @@ impl Database {
             err: Cell::new(false),
             is_new,
             page_size_max,
+            bpf,
         });
 
         assert!(tb.alloc as u64 - 1 == SYS_ROOT_LAST);
@@ -637,7 +642,7 @@ GO
             };
         }
         let tbe = &bytes[size - 9..];
-        let ft = bytes::fragment_type(tbe.len());
+        let ft = bytes::fragment_type(tbe.len(), &self.bpf);
         let id = self.bs[ft].encode(self, &bytes[size - 9..]);
         Code { id, ft }
     }
@@ -852,8 +857,14 @@ pub struct Limits {
     pub rbuf_mem: usize,
     /// Memory for buffering writes to main storage.
     pub swbuf: usize,
-    /// Memory for buffering writes to temorary storage.
+    /// Memory for buffering writes to temporary storage.
     pub uwbuf: usize,
+    /// Block capacity
+    pub blk_cap: u64,
+    /// Number of page sizes
+    pub page_sizes: usize,
+    /// Largest division of page sizes
+    pub max_div: usize,
 }
 
 impl Default for Limits {
@@ -863,6 +874,9 @@ impl Default for Limits {
             rbuf_mem: 0x200000,
             swbuf: 0x100000,
             uwbuf: 0x100000,
+            blk_cap: 27720,
+            page_sizes: 7,
+            max_div: 12,
         }
     }
 }
