@@ -2,7 +2,7 @@ use crate::{util, Arc, BTreeSet, Data, Storage};
 use std::cmp::min;
 
 /// Magic Value ( first word of file for version check).
-const MAGIC_VALUE: [u8; 8] = *b"RDBV1.05";
+const MAGIC_VALUE: [u8; 8] = *b"RDBV1.06";
 
 /// Reserved area for client.
 pub const RSVD_SIZE: usize = 16;
@@ -32,8 +32,7 @@ pub struct BlockStg {
     rsvd_dirty: bool,
     is_new: bool,
     blk_size: u64, // Block Size including block number.
-    ///
-    pub nsz: u8, // Number of bytes for block number.
+    nsz: usize,    // Number of bytes for block number.
 }
 
 impl BlockStg {
@@ -43,22 +42,22 @@ impl BlockStg {
     }
 
     /// Number of bits for block number ( either logical or physical ).
-    fn num_bits(bc: u64) -> u8 {
-        64 - bc.ilog(2) as u8
+    fn num_bits(bc: u64) -> usize {
+        64 - bc.ilog(2) as usize
     }
 
     /// Number of bytes for block number, plus an extra bit (for self.alloc_bit()).
-    fn nsz(bc: u64) -> u8 {
+    fn calc_nsz(bc: u64) -> usize {
         (Self::num_bits(bc) + 8) / 8
     }
 
     /// Bit that indicates Logical Block Entry represents allocated phsyical page.
-    fn alloc_bit0(nsz: u8) -> u64 {
+    fn alloc_bit0(nsz: usize) -> u64 {
         1 << (nsz * 8 - 1)
     }
 
     /// Bit mask for block number.
-    fn num_mask0(nsz: u8) -> u64 {
+    fn num_mask0(nsz: usize) -> u64 {
         Self::alloc_bit0(nsz) - 1
     }
 
@@ -74,7 +73,7 @@ impl BlockStg {
     /// For existing file, block capacity will be read from file header.
     pub fn new(stg: Box<dyn Storage>, blk_cap: u64) -> Self {
         let is_new = stg.size() == 0;
-        let nsz = Self::nsz(blk_cap);
+        let nsz = Self::calc_nsz(blk_cap);
         let blk_size = blk_cap + nsz as u64;
         let hblks = Self::hblks(blk_size);
 
@@ -116,6 +115,11 @@ impl BlockStg {
     /// Get the block capacity.
     pub fn blk_cap(&self) -> u64 {
         self.blk_size - self.nsz as u64
+    }
+
+    /// Get size of block number in bytes.
+    pub fn nsz(&self) -> usize {
+        self.nsz
     }
 
     /// Is this new storage.
@@ -288,7 +292,7 @@ impl BlockStg {
         self.first_free = self.stg.read_u64(24);
         self.pb_first = self.stg.read_u64(32);
         let blk_cap = self.stg.read_u64(40);
-        self.nsz = Self::nsz(blk_cap);
+        self.nsz = Self::calc_nsz(blk_cap);
         self.blk_size = blk_cap + self.nsz as u64;
         self.stg.read(48, &mut self.rsvd);
     }
@@ -318,7 +322,8 @@ impl BlockStg {
 
         let mut buf = vec![0; self.blk_size as usize];
         self.stg.read(from * self.blk_size, &mut buf);
-        let bn = util::get(&buf, 0, self.nsz as usize);
+
+        let bn = util::get(&buf, 0, self.nsz);
 
         #[cfg(feature = "log-block")]
         println!("BlockStg::relocate from={} to={} bn={}", from, to, bn);
@@ -370,15 +375,14 @@ impl BlockStg {
 
     /// Write number to specified offset in underlying storage.
     fn set_num(&mut self, offset: u64, num: u64) {
-        self.stg
-            .write(offset, &num.to_le_bytes()[0..self.nsz as usize]);
+        self.stg.write(offset, &num.to_le_bytes()[0..self.nsz]);
         debug_assert_eq!(self.get_num(offset), num);
     }
 
     /// Read number from specified offset in underlying storage.
     fn get_num(&self, offset: u64) -> u64 {
         let mut bytes = [0; 8];
-        self.stg.read(offset, &mut bytes[0..self.nsz as usize]);
+        self.stg.read(offset, &mut bytes[0..self.nsz]);
         u64::from_le_bytes(bytes)
     }
 }

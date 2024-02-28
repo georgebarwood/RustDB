@@ -4,7 +4,7 @@ use crate::{
 };
 
 const PAGE_HSIZE: usize = 8;
-const HEADER_SIZE: usize = 40;
+const HEADER_SIZE: usize = 32;
 
 const PINFO_FILE: usize = 0;
 const NOT_PN: u64 = u64::MAX >> 16;
@@ -51,7 +51,6 @@ pub struct BlockPageStg {
     ds: DividedStg,
     alloc_pn: u64,
     first_free_pn: u64,
-    pn_init: u64,
     fd: Vec<FD>,
     alloc: Vec<u64>,
     free_pn: BTreeSet<u64>, // Temporary set of free page numbers.
@@ -62,11 +61,7 @@ pub struct BlockPageStg {
 }
 
 impl BlockPageStg {
-    fn page_size(&self, ix: usize) -> u64 {
-        (self.psi.size(ix) + PAGE_HSIZE) as u64
-    }
-
-    ///
+    /// Construct from specified Storage and limits.
     pub fn new(stg: Box<dyn Storage>, lim: &Limits) -> Box<Self> {
         let is_new = stg.size() == 0;
 
@@ -74,11 +69,10 @@ impl BlockPageStg {
         let sizes = lim.page_sizes;
         let max_div = lim.max_div;
 
-        let mut result = Self {
+        let mut s = Self {
             ds: DividedStg::new(stg, blk_cap),
             alloc_pn: 0,
             first_free_pn: NOT_PN,
-            pn_init: 0,
             alloc: vec![0; sizes + 1],
             fd: Vec::new(),
             free_pn: BTreeSet::default(),
@@ -94,26 +88,22 @@ impl BlockPageStg {
 
         // Page sizes are assumed to fit in u16.
         assert!(
-            result.psi.max_size_page() <= u16::MAX as usize,
+            s.psi.max_size_page() <= u16::MAX as usize,
             "Max page size is 65535"
         );
 
         if is_new {
             for _i in 0..sizes + 1 {
-                result.fd.push(result.ds.new_file());
+                s.fd.push(s.ds.new_file());
             }
-            result.ds.set_root(&result.fd[0]);
-            result.header_dirty = true;
-            result.calc_header_size();
+            s.ds.set_root(&s.fd[0]);
+            s.header_dirty = true;
         } else {
-            result.read_header();
-            result.psi.blk_cap = result.ds.blk_cap();
+            s.read_header();
+            s.psi.blk_cap = s.ds.blk_cap();
         }
-        Box::new(result)
-    }
-
-    fn calc_header_size(&mut self) {
-        self.header_size = (HEADER_SIZE + self.psi.sizes * (8 + FD_SIZE)) as u64;
+        s.header_size = (HEADER_SIZE + s.psi.sizes * (8 + FD_SIZE)) as u64;
+        Box::new(s)
     }
 
     fn read_header(&mut self) {
@@ -125,9 +115,8 @@ impl BlockPageStg {
         self.read(PINFO_FILE, 0, &mut buf);
         self.alloc_pn = util::getu64(&buf, 0);
         self.first_free_pn = util::getu64(&buf, 8);
-        self.pn_init = util::getu64(&buf, 16);
-        self.alloc.push(util::getu64(&buf, 24));
-        let x = util::getu64(&buf, 32);
+        self.alloc.push(util::getu64(&buf, 16));
+        let x = util::getu64(&buf, 24);
         self.psi.max_div = x as usize & 0xffff;
         let sizes = (x >> 16) as usize;
         self.psi.sizes = sizes;
@@ -140,7 +129,6 @@ impl BlockPageStg {
             self.fd.push(self.ds.load_fd(&buf[off + 8..]));
         }
         self.header_dirty = false;
-        self.calc_header_size();
         #[cfg(feature = "log")]
         println!("bps read_header alloc={:?} fd={:?}", &self.alloc, &self.fd);
     }
@@ -149,10 +137,9 @@ impl BlockPageStg {
         let mut buf = [0; HEADER_SIZE];
         util::setu64(&mut buf, self.alloc_pn);
         util::setu64(&mut buf[8..], self.first_free_pn);
-        util::setu64(&mut buf[16..], self.pn_init);
-        util::setu64(&mut buf[24..], self.alloc[0]);
+        util::setu64(&mut buf[16..], self.alloc[0]);
         let x = (self.psi.sizes << 16) + self.psi.max_div;
-        util::setu64(&mut buf[32..], x as u64);
+        util::setu64(&mut buf[24..], x as u64);
         self.write(PINFO_FILE, 0, &buf);
 
         let mut buf = vec![0; (8 + FD_SIZE) * self.psi.sizes];
@@ -166,6 +153,10 @@ impl BlockPageStg {
 
         #[cfg(feature = "log")]
         println!("bps write_header alloc={:?} fd={:?}", &self.alloc, &self.fd);
+    }
+
+    fn page_size(&self, ix: usize) -> u64 {
+        (self.psi.size(ix) + PAGE_HSIZE) as u64
     }
 
     fn alloc_page(&mut self, sx: usize) -> u64 {
@@ -204,13 +195,9 @@ impl BlockPageStg {
         let pn = util::getu64(&buf, 0);
 
         let (sx1, _size, ix1) = self.get_page_info(pn);
-        assert!(
-            sx1 == sx && ix1 == from,
-            "pn={pn} sx1={sx1} sx={sx} ix1={ix1} from={from}"
-        );
+        assert!(sx1 == sx && ix1 == from);
 
         self.update_ix(pn, to);
-
         self.write_data(sx, to * ps, Arc::new(buf));
     }
 

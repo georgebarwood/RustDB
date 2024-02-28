@@ -173,7 +173,7 @@ impl<const N: usize> Storage for ReadBufStg<N> {
 struct ReadBuffer<const N: usize> {
     map: HashMap<u64, Box<[u8; N]>>,
     max_buf: usize,
-    hits: u64,
+    reads: u64,
 }
 
 impl<const N: usize> ReadBuffer<N> {
@@ -181,19 +181,18 @@ impl<const N: usize> ReadBuffer<N> {
         Self {
             map: HashMap::default(),
             max_buf,
-            hits: 0,
+            reads: 0,
         }
     }
 
     fn reset(&mut self) {
         #[cfg(feature = "log")]
         println!(
-            "ReadBuffer reset entries={} hits={}",
+            "ReadBuffer reset entries={} reads={}",
             self.map.len(),
-            self.hits
+            self.reads
         );
-
-        self.hits = 0;
+        self.reads = 0;
         self.map.clear();
     }
 
@@ -204,19 +203,19 @@ impl<const N: usize> ReadBuffer<N> {
             let sector = off / N as u64;
             let disp = (off % N as u64) as usize;
             let amount = min(data.len() - done, N - disp);
-            if let Some(p) = self.map.get(&sector) {
-                data[done..done + amount].copy_from_slice(&p[disp..disp + amount]);
-                self.hits += 1;
-            } else {
+
+            self.reads += 1;
+
+            let p = self.map.entry(sector).or_insert_with(|| {
                 let mut p: Box<[u8; N]> = vec![0; N].try_into().unwrap();
                 stg.read(sector * N as u64, &mut *p);
-                data[done..done + amount].copy_from_slice(&p[disp..disp + amount]);
-                if self.map.len() >= self.max_buf {
-                    self.reset();
-                }
-                self.map.insert(sector, p);
-            }
+                p
+            });
+            data[done..done + amount].copy_from_slice(&p[disp..disp + amount]);
             done += amount;
+        }
+        if self.map.len() >= self.max_buf {
+            self.reset();
         }
     }
 }

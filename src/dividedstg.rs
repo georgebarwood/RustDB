@@ -5,7 +5,10 @@ use crate::{
 use std::cmp::min;
 
 /// Divides Storage into sub-files of arbitrary size using [BlockStg].
-pub struct DividedStg(BlockStg);
+pub struct DividedStg {
+    bs: BlockStg,
+    base: u64,
+}
 
 /// Bytes required to save FD ( root, blocks ).
 pub const FD_SIZE: usize = 8 + 8;
@@ -35,30 +38,22 @@ impl std::fmt::Debug for FD {
 }
 
 impl DividedStg {
-    /// Number size.
-    fn nsz(&self) -> u64 {
-        self.0.nsz as u64
-    }
-
-    /// Number of block numbers that will fit in a block.
-    fn base(&self) -> u64 {
-        self.blk_cap() / self.nsz()
-    }
-
     /// Construct DividedStg from specified Storage and block capacity.
     pub fn new(stg: Box<dyn Storage>, blk_cap: u64) -> Self {
-        Self(BlockStg::new(stg, blk_cap))
+        let bs = BlockStg::new(stg, blk_cap);
+        let base = bs.blk_cap() / bs.nsz() as u64;
+        Self { bs, base }
     }
 
     /// Block capacity.
     pub fn blk_cap(&self) -> u64 {
-        self.0.blk_cap()
+        self.bs.blk_cap()
     }
 
     /// Get file descriptor for a new file.
     pub fn new_file(&mut self) -> FD {
         FD {
-            root: self.0.new_block(),
+            root: self.bs.new_block(),
             level: 0,
             blocks: 1,
             changed: true,
@@ -70,7 +65,7 @@ impl DividedStg {
         #[cfg(feature = "log-div")]
         println!("DS drop_file f={:?}", f);
         self.truncate(f, 0);
-        self.0.drop_block(f.root);
+        self.bs.drop_block(f.root);
     }
 
     /// Deallocate blocks not required for file of specified size.
@@ -81,7 +76,6 @@ impl DividedStg {
         let reqd = self.blocks(size);
         if reqd < f.blocks {
             let levels = self.levels(reqd);
-            let base = self.base();
 
             // Calculate new root
             let mut new_root = f.root;
@@ -97,12 +91,12 @@ impl DividedStg {
             let mut new = reqd;
             while level > 0 && old != new {
                 self.reduce_blocks(f, level, old, new);
-                new = (new + base - 1) / base;
-                old = (old + base - 1) / base;
+                new = (new + self.base - 1) / self.base;
+                old = (old + self.base - 1) / self.base;
                 level -= 1;
             }
             if levels < f.level {
-                self.0.drop_block(f.root);
+                self.bs.drop_block(f.root);
                 f.root = new_root;
                 f.level = levels;
             }
@@ -133,7 +127,7 @@ impl DividedStg {
 
         if f.blocks == 1 {
             let n = data.len();
-            self.0.write_data(f.root, offset, data, 0, n);
+            self.bs.write_data(f.root, offset, data, 0, n);
         } else {
             self.write_blocks(f, offset, data);
         }
@@ -149,7 +143,7 @@ impl DividedStg {
             data.len()
         );
         if f.blocks == 1 {
-            self.0.read(f.root, offset, data);
+            self.bs.read(f.root, offset, data);
         } else {
             self.read_blocks(f, offset, data);
         }
@@ -179,39 +173,37 @@ impl DividedStg {
     pub fn set_root(&mut self, fd: &FD) {
         let mut rsvd = [0; RSVD_SIZE];
         self.save_fd(fd, &mut rsvd);
-        self.0.set_rsvd(rsvd);
+        self.bs.set_rsvd(rsvd);
     }
 
     /// Get root file descriptor.
     pub fn get_root(&self) -> FD {
-        let rsvd = self.0.get_rsvd();
+        let rsvd = self.bs.get_rsvd();
         self.load_fd(&rsvd)
     }
 
-    /// Save file to backing storage.
+    /// Save files to backing storage.
     pub fn save(&mut self) {
-        self.0.save();
+        self.bs.save();
     }
 
     /// Wait for save to complete.
     pub fn wait_complete(&self) {
-        self.0.wait_complete();
+        self.bs.wait_complete();
     }
 
     /// Allocate sufficient blocks for file of specified size.
     fn allocate(&mut self, f: &mut FD, size: u64) {
         #[cfg(feature = "log-div")]
         println!(
-            "DS allocate f={:?} size={} self.base()={}",
-            f,
-            size,
-            self.base()
+            "DS allocate f={:?} size={} self.base={}",
+            f, size, self.base
         );
         let reqd = self.blocks(size);
         if reqd > f.blocks {
             let new_level = self.levels(reqd);
             while f.level < new_level {
-                let blk = self.0.new_block();
+                let blk = self.bs.new_block();
                 self.set_num(blk, 0, f.root);
                 f.root = blk;
                 f.level += 1;
@@ -229,7 +221,7 @@ impl DividedStg {
             let (blk, off) = (off / self.blk_cap(), off % self.blk_cap());
             let a = min(len - done, (self.blk_cap() - off) as usize);
             let blk = self.get_block(f.root, f.level, blk);
-            self.0.write_data(blk, off, data.clone(), done, a);
+            self.bs.write_data(blk, off, data.clone(), done, a);
             done += a;
         }
     }
@@ -242,7 +234,7 @@ impl DividedStg {
             let a = min(len - done, (self.blk_cap() - off) as usize);
             if blk < f.blocks {
                 let blk = self.get_block(f.root, f.level, blk);
-                self.0.read(blk, off, &mut data[done..done + a]);
+                self.bs.read(blk, off, &mut data[done..done + a]);
             }
             done += a;
         }
@@ -252,7 +244,7 @@ impl DividedStg {
         #[cfg(feature = "log-div")]
         println!("DS add blocks f={:?} new={}", f, new);
         for ix in f.blocks..new {
-            let nb = self.0.new_block();
+            let nb = self.bs.new_block();
             self.set_block(f.root, f.level, ix, nb);
         }
         f.set_blocks(new);
@@ -266,7 +258,7 @@ impl DividedStg {
         );
         for ix in new..old {
             let blk = self.get_block(f.root, level, ix);
-            self.0.drop_block(blk);
+            self.bs.drop_block(blk);
         }
     }
 
@@ -280,45 +272,49 @@ impl DividedStg {
         if blocks <= 1 {
             0
         } else {
-            (blocks - 1).ilog(self.base()) as u8 + 1
+            (blocks - 1).ilog(self.base) as u8 + 1
         }
+    }
+
+    /// Block number size.
+    fn nsz(&self) -> usize {
+        self.bs.nsz()
     }
 
     /// Set the block at index ix at specified level.
     fn set_block(&mut self, mut blk: u64, level: u8, mut ix: u64, value: u64) {
         if level > 1 {
-            let x = ix / self.base();
-            ix %= self.base();
+            let x = ix / self.base;
+            ix %= self.base;
             blk = if ix == 0 {
-                let nb = self.0.new_block();
+                let nb = self.bs.new_block();
                 self.set_block(blk, level - 1, x, nb);
                 nb
             } else {
                 self.get_block(blk, level - 1, x)
             };
         }
-        self.set_num(blk, ix * self.nsz(), value);
+        self.set_num(blk, ix * self.nsz() as u64, value);
     }
 
     /// Get the block at index ix at specified level.
     fn get_block(&self, mut blk: u64, level: u8, mut ix: u64) -> u64 {
         if level > 1 {
-            let x = ix / self.base();
-            ix %= self.base();
+            let x = ix / self.base;
+            ix %= self.base;
             blk = self.get_block(blk, level - 1, x);
         }
-        self.get_num(blk, ix * self.nsz())
+        self.get_num(blk, ix * self.nsz() as u64)
     }
 
     fn get_num(&self, blk: u64, off: u64) -> u64 {
         let mut bytes = [0; 8];
-        self.0.read(blk, off, &mut bytes[0..self.nsz() as usize]);
+        self.bs.read(blk, off, &mut bytes[0..self.nsz()]);
         u64::from_le_bytes(bytes)
     }
 
     fn set_num(&mut self, blk: u64, off: u64, v: u64) {
-        self.0
-            .write(blk, off, &v.to_le_bytes()[0..self.nsz() as usize]);
+        self.bs.write(blk, off, &v.to_le_bytes()[0..self.nsz()]);
     }
 }
 
