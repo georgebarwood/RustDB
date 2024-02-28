@@ -1,4 +1,4 @@
-use crate::{stg::Storage, HashMap};
+use crate::{stg::Storage, HashMap, Mutex};
 use std::cmp::min;
 
 /// Write Buffer.
@@ -107,8 +107,6 @@ impl WriteBuffer {
         self.write(start, &value.to_le_bytes());
     }
 }
-
-use crate::Mutex;
 
 /// ReadBufStg buffers small (up to limit) reads to the underlying storage using multiple buffers. Only supported functions are read and reset.
 ///

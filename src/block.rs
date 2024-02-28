@@ -2,7 +2,7 @@ use crate::{util, Arc, BTreeSet, Data, Storage};
 use std::cmp::min;
 
 /// Magic Value ( first word of file for version check).
-const MAGIC_VALUE: [u8; 8] = *b"RDBV1.06";
+const MAGIC: u64 = u64::from_le_bytes(*b"RDBV1.06");
 
 /// Reserved area for client.
 pub const RSVD_SIZE: usize = 16;
@@ -91,13 +91,12 @@ impl BlockStg {
             blk_size,
             nsz,
         };
-        let magic: u64 = crate::util::getu64(&MAGIC_VALUE, 0);
         if is_new {
-            x.stg.write_u64(0, magic);
+            x.stg.write_u64(0, MAGIC);
             x.write_header();
         } else {
             assert!(
-                x.stg.read_u64(0) == magic,
+                x.stg.read_u64(0) == MAGIC,
                 "Database File Invalid (maybe wrong version)"
             );
             x.read_header();
