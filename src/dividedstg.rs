@@ -10,13 +10,14 @@ pub struct DividedStg {
     base: u64,
 }
 
-/// Bytes required to save FD ( root, blocks ).
+/// Bytes required to save FD ( root, size ).
 pub const FD_SIZE: usize = 8 + 8;
 
 /// [DividedStg] File Descriptor.
 #[derive(Clone, Copy)]
 pub struct FD {
     root: u64,
+    size: u64,
     blocks: u64,
     level: u8,
     ///
@@ -24,8 +25,13 @@ pub struct FD {
 }
 
 impl FD {
-    fn set_blocks(&mut self, blocks: u64) {
-        self.changed = self.blocks != blocks;
+    /// File size.
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+    fn set_size(&mut self, size: u64, blocks: u64) {
+        self.changed = true;
+        self.size = size;
         self.blocks = blocks;
     }
 }
@@ -33,7 +39,10 @@ impl FD {
 #[cfg(any(feature = "log", feature = "log-div"))]
 impl std::fmt::Debug for FD {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        f.write_str(&format!("{},{},{}", self.root, self.blocks, self.level))
+        f.write_str(&format!(
+            "{},{},{},{}",
+            self.root, self.size, self.blocks, self.level
+        ))
     }
 }
 
@@ -55,6 +64,7 @@ impl DividedStg {
         FD {
             root: self.bs.new_block(),
             level: 0,
+            size: 0,
             blocks: 1,
             changed: true,
         }
@@ -73,37 +83,39 @@ impl DividedStg {
         #[cfg(feature = "log-div")]
         println!("DS truncate f={:?} size={}", f, size);
 
-        let reqd = self.blocks(size);
-        if reqd < f.blocks {
-            let levels = self.levels(reqd);
+        if size < f.size {
+            let reqd = self.blocks(size);
+            if reqd < f.blocks {
+                let levels = self.levels(reqd);
 
-            // Calculate new root
-            let mut new_root = f.root;
-            let mut n = f.level;
-            while n > levels {
-                new_root = self.get_num(new_root, 0);
-                n -= 1;
-            }
+                // Calculate new root
+                let mut new_root = f.root;
+                let mut n = f.level;
+                while n > levels {
+                    new_root = self.get_num(new_root, 0);
+                    n -= 1;
+                }
 
-            // For each level reduce the number of blocks.
-            let mut level = f.level;
-            let mut old = f.blocks;
-            let mut new = reqd;
-            while level > 0 && old != new {
-                self.reduce_blocks(f, level, old, new);
-                new = (new + self.base - 1) / self.base;
-                old = (old + self.base - 1) / self.base;
-                level -= 1;
+                // For each level reduce the number of blocks.
+                let mut level = f.level;
+                let mut old = f.blocks;
+                let mut new = reqd;
+                while level > 0 && old != new {
+                    self.reduce_blocks(f, level, old, new);
+                    new = (new + self.base - 1) / self.base;
+                    old = (old + self.base - 1) / self.base;
+                    level -= 1;
+                }
+                if levels < f.level {
+                    self.bs.drop_block(f.root);
+                    f.root = new_root;
+                    f.level = levels;
+                }
+                if f.blocks == 0 {
+                    *f = self.new_file();
+                }
             }
-            if levels < f.level {
-                self.bs.drop_block(f.root);
-                f.root = new_root;
-                f.level = levels;
-            }
-            f.set_blocks(reqd);
-            if f.blocks == 0 {
-                *f = self.new_file();
-            }
+            f.set_size(size, reqd);
         }
     }
 
@@ -152,17 +164,20 @@ impl DividedStg {
     /// Save fd to byte buffer.
     pub fn save_fd(&self, fd: &FD, buf: &mut [u8]) {
         debug_assert!(fd.level == self.levels(fd.blocks));
+        debug_assert!(fd.blocks == self.blocks(fd.size));
         util::setu64(&mut buf[0..8], fd.root);
-        util::setu64(&mut buf[8..16], fd.blocks);
+        util::setu64(&mut buf[8..16], fd.size);
     }
 
     /// Load fd from  byte buffer.
     pub fn load_fd(&self, buf: &[u8]) -> FD {
         let root = util::getu64(buf, 0);
-        let blocks = util::getu64(buf, 8);
+        let size = util::getu64(buf, 8);
+        let blocks = self.blocks(size);
         let level = self.levels(blocks);
         FD {
             root,
+            size,
             blocks,
             level,
             changed: false,
@@ -199,18 +214,21 @@ impl DividedStg {
             "DS allocate f={:?} size={} self.base={}",
             f, size, self.base
         );
-        let reqd = self.blocks(size);
-        if reqd > f.blocks {
-            let new_level = self.levels(reqd);
-            while f.level < new_level {
-                let blk = self.bs.new_block();
-                self.set_num(blk, 0, f.root);
-                f.root = blk;
-                f.level += 1;
-                #[cfg(feature = "log-div")]
-                println!("DS allocate file level increased f={:?}", f);
+        if size > f.size {
+            let reqd = self.blocks(size);
+            if reqd > f.blocks {
+                let new_level = self.levels(reqd);
+                while f.level < new_level {
+                    let blk = self.bs.new_block();
+                    self.set_num(blk, 0, f.root);
+                    f.root = blk;
+                    f.level += 1;
+                    #[cfg(feature = "log-div")]
+                    println!("DS allocate file level increased f={:?}", f);
+                }
+                self.add_blocks(f, reqd);
             }
-            self.add_blocks(f, reqd);
+            f.set_size(size, reqd);
         }
     }
 
@@ -247,7 +265,6 @@ impl DividedStg {
             let nb = self.bs.new_block();
             self.set_block(f.root, f.level, ix, nb);
         }
-        f.set_blocks(new);
     }
 
     fn reduce_blocks(&mut self, f: &mut FD, level: u8, old: u64, new: u64) {
@@ -264,6 +281,9 @@ impl DividedStg {
 
     /// Calculate the number of data blocks required for a file of specified size.
     fn blocks(&self, size: u64) -> u64 {
+        if size == 0 {
+            return 1;
+        }
         (size + self.blk_cap() - 1) / self.blk_cap()
     }
 

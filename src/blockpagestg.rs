@@ -4,7 +4,7 @@ use crate::{
 };
 
 const PAGE_HSIZE: usize = 8;
-const HEADER_SIZE: usize = 32;
+const HEADER_SIZE: usize = 24;
 
 const PN_FILE: usize = 0;
 const NOT_PN: u64 = u64::MAX >> 16;
@@ -52,7 +52,6 @@ pub struct BlockPageStg {
     alloc_pn: u64,
     first_free_pn: u64,
     fd: Vec<FD>,
-    alloc: Vec<u64>,
     free_pn: BTreeSet<u64>, // Temporary set of free page numbers.
     header_dirty: bool,
     is_new: bool,
@@ -73,7 +72,6 @@ impl BlockPageStg {
             ds: DividedStg::new(stg, blk_cap),
             alloc_pn: 0,
             first_free_pn: NOT_PN,
-            alloc: vec![0; sizes + 1],
             fd: Vec::new(),
             free_pn: BTreeSet::default(),
             header_dirty: false,
@@ -102,69 +100,74 @@ impl BlockPageStg {
             s.read_header();
             s.psi.blk_cap = s.ds.blk_cap();
         }
-        s.header_size = (HEADER_SIZE + s.psi.sizes * (8 + FD_SIZE)) as u64;
+        s.header_size = (HEADER_SIZE + s.psi.sizes * FD_SIZE) as u64;
+
         Box::new(s)
     }
 
     fn read_header(&mut self) {
         self.fd.clear();
-        self.alloc.clear();
         self.fd.push(self.ds.get_root());
 
         let mut buf = [0; HEADER_SIZE];
         self.read(PN_FILE, 0, &mut buf);
         self.alloc_pn = util::getu64(&buf, 0);
         self.first_free_pn = util::getu64(&buf, 8);
-        self.alloc.push(util::getu64(&buf, 16));
-        let x = util::getu64(&buf, 24);
-        self.psi.max_div = x as usize & 0xffff;
-        let sizes = (x >> 16) as usize;
+
+        let x = util::getu64(&buf, 16);
+        self.psi.max_div = (x % u32::MAX as u64) as usize;
+        let sizes = (x >> 32) as usize;
         self.psi.sizes = sizes;
-        let mut buf = vec![0; (8 + FD_SIZE) * sizes];
+
+        let mut buf = vec![0; FD_SIZE * sizes];
         self.read(PN_FILE, HEADER_SIZE as u64, &mut buf);
 
-        for i in 1..self.psi.sizes + 1 {
-            let off = (i - 1) * (8 + FD_SIZE);
-            self.alloc.push(util::getu64(&buf, off));
-            self.fd.push(self.ds.load_fd(&buf[off + 8..]));
+        for i in 0..sizes {
+            let off = i * FD_SIZE;
+            self.fd.push(self.ds.load_fd(&buf[off..]));
         }
         self.header_dirty = false;
         #[cfg(feature = "log")]
-        println!("bps read_header alloc={:?} fd={:?}", &self.alloc, &self.fd);
+        println!("bps read_header fd={:?}", &self.fd);
     }
 
     fn write_header(&mut self) {
-        let mut buf = [0; HEADER_SIZE];
+        let mut buf = vec![0; self.header_size as usize];
         util::setu64(&mut buf, self.alloc_pn);
         util::setu64(&mut buf[8..], self.first_free_pn);
-        util::setu64(&mut buf[16..], self.alloc[0]);
-        let x = (self.psi.sizes << 16) + self.psi.max_div;
-        util::setu64(&mut buf[24..], x as u64);
-        self.write(PN_FILE, 0, &buf);
+        let sizes = self.psi.sizes;
+        let x = ((sizes as u64) << 32) + self.psi.max_div as u64;
+        util::setu64(&mut buf[16..], x);
 
-        let mut buf = vec![0; (8 + FD_SIZE) * self.psi.sizes];
-        for i in 1..self.psi.sizes + 1 {
-            let off = (i - 1) * (8 + FD_SIZE);
-            util::setu64(&mut buf[off..], self.alloc[i]);
-            self.ds.save_fd(&self.fd[i], &mut buf[off + 8..]);
+        for i in 0..sizes {
+            let off = HEADER_SIZE + i * FD_SIZE;
+            self.ds.save_fd(&self.fd[i + 1], &mut buf[off..]);
         }
-        self.write(PN_FILE, HEADER_SIZE as u64, &buf);
+        self.write(PN_FILE, 0, &buf);
         self.header_dirty = false;
 
         #[cfg(feature = "log")]
-        println!("bps write_header alloc={:?} fd={:?}", &self.alloc, &self.fd);
+        println!("bps write_header fd={:?}", &self.fd);
     }
 
     fn page_size(&self, sx: usize) -> u64 {
         (self.psi.size(sx) + PAGE_HSIZE) as u64
     }
 
+    // Use file size to calculate allocation index.
+    fn alloc(&self, ix: usize) -> u64 {
+        let size = self.fd[ix].size();
+        if ix == 0 {
+            (size - self.header_size) / 8
+        } else {
+            let ps = self.page_size(ix);
+            (size + ps - 1) / ps
+        }
+    }
+
     fn alloc_page(&mut self, sx: usize) -> u64 {
         assert!(sx > 0);
-        let ix = self.alloc[sx];
-        self.alloc[sx] += 1;
-        self.header_dirty = true;
-        ix
+        self.alloc(sx)
     }
 
     fn free_page(&mut self, sx: usize, ix: u64) {
@@ -172,9 +175,7 @@ impl BlockPageStg {
             return;
         }
         // Relocate last page in file to fill gap.
-        self.alloc[sx] -= 1;
-        let last = self.alloc[sx];
-        self.header_dirty = true;
+        let last = self.alloc(sx) - 1;
         self.relocate(sx, last, ix);
         self.truncate(sx, last * self.page_size(sx));
     }
@@ -197,11 +198,11 @@ impl BlockPageStg {
     }
 
     fn get_pn_info(&self, pn: u64) -> (usize, usize, u64) {
-        if pn >= self.alloc[0] {
+        let off = self.header_size + pn * 8;
+        if off >= self.fd[0].size() {
             return (0, 0, 0);
         }
         let mut buf = [0; 8];
-        let off = self.header_size + pn * 8;
         self.read(PN_FILE, off, &mut buf);
         let ix = util::get(&buf, 0, 6);
         let size = util::get(&buf, 6, 2) as usize;
@@ -211,11 +212,9 @@ impl BlockPageStg {
 
     fn set_pn_info(&mut self, pn: u64, size: usize, ix: u64) {
         let off = self.header_size + pn * 8;
-        if pn >= self.alloc[0] {
-            let start = self.header_size + self.alloc[0] * 8;
-            self.clear(PN_FILE, start, off - start);
-            self.alloc[0] = pn + 1;
-            self.header_dirty = true;
+        let eof = self.fd[0].size();
+        if off > eof {
+            self.clear(PN_FILE, eof, off - eof);
         }
         let mut buf = [0; 8];
         util::set(&mut buf, 0, ix, 6);
@@ -439,7 +438,6 @@ impl PageStorage for BlockPageStg {
     fn set_alloc_pn(&mut self, target: u64) {
         assert!(self.first_free_pn == NOT_PN);
         self.alloc_pn = target;
-        self.alloc[0] = target;
         self.header_dirty = true;
         self.free_pn.clear();
         self.truncate_pn_info();

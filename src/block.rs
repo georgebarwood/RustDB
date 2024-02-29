@@ -2,7 +2,7 @@ use crate::{util, Arc, BTreeSet, Data, Storage};
 use std::cmp::min;
 
 /// Magic Value ( first word of file for version check).
-const MAGIC: u64 = u64::from_le_bytes(*b"RDBV1.06");
+const MAGIC: u64 = u64::from_le_bytes(*b"RDBV1.07");
 
 /// Reserved area for client.
 pub const RSVD_SIZE: usize = 16;
