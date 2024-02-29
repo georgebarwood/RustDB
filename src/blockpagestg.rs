@@ -57,6 +57,7 @@ pub struct BlockPageStg {
     is_new: bool,
     psi: Info,
     header_size: u64,
+    zbytes: Data,
 }
 
 impl BlockPageStg {
@@ -82,6 +83,7 @@ impl BlockPageStg {
                 sizes,
             },
             header_size: 0,
+            zbytes: nd(),
         };
 
         // Page sizes are assumed to fit in u16.
@@ -101,6 +103,7 @@ impl BlockPageStg {
             s.read_header();
         }
         s.header_size = (HEADER_SIZE + s.psi.sizes * FD_SIZE) as u64;
+        s.zbytes = Arc::new(vec![0; s.psi.max_size_page()]);
         Box::new(s)
     }
 
@@ -248,7 +251,12 @@ impl BlockPageStg {
     }
 
     fn write_data(&mut self, fx: usize, off: u64, data: Data) {
-        self.ds.write_data(&mut self.fd[fx], off, data);
+        let n = data.len();
+        self.write_data_n(fx, off, data, n);
+    }
+
+    fn write_data_n(&mut self, fx: usize, off: u64, data: Data, n: usize) {
+        self.ds.write_data(&mut self.fd[fx], off, data, n);
         self.save_fd(fx);
     }
 
@@ -309,7 +317,7 @@ impl PageStorage for BlockPageStg {
         Box::new(self.psi.clone())
     }
 
-    fn set_page(&mut self, pn: u64, mut data: Data) {
+    fn set_page(&mut self, pn: u64, data: Data) {
         #[cfg(feature = "log-bps")]
         println!("bps set_page pn={} data len={}", pn, data.len());
 
@@ -342,13 +350,13 @@ impl PageStorage for BlockPageStg {
             // Offset of user data within sub-file.
             let off = PAGE_HSIZE as u64 + ix * ps;
 
-            if old_size > size {
-                let d = Arc::make_mut(&mut data);
-                d.resize(old_size, 0);
-            }
-
             // Write data.
-            self.write_data(rsx, off, data);
+            self.write_data_n(rsx, off, data, size);
+
+            // Clear unused space.
+            if old_size > size {
+                self.write_data_n(rsx, off + size as u64, self.zbytes.clone(), old_size - size);
+            }
         }
     }
 

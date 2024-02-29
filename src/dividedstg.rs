@@ -14,7 +14,6 @@ pub struct DividedStg {
 pub const FD_SIZE: usize = 8 + 8;
 
 /// [DividedStg] File Descriptor.
-#[derive(Clone, Copy)]
 pub struct FD {
     root: u64,
     size: u64,
@@ -29,20 +28,11 @@ impl FD {
     pub fn size(&self) -> u64 {
         self.size
     }
+
     fn set_size(&mut self, size: u64, blocks: u64) {
         self.changed = true;
         self.size = size;
         self.blocks = blocks;
-    }
-}
-
-#[cfg(any(feature = "log", feature = "log-div"))]
-impl std::fmt::Debug for FD {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        f.write_str(&format!(
-            "{},{},{},{}",
-            self.root, self.size, self.blocks, self.level
-        ))
     }
 }
 
@@ -121,27 +111,22 @@ impl DividedStg {
 
     /// Write data to specified file at specified offset.
     pub fn write(&mut self, f: &mut FD, offset: u64, data: &[u8]) {
+        let n = data.len();
         let data = Arc::new(data.to_vec());
-        self.write_data(f, offset, data);
+        self.write_data(f, offset, data, n);
     }
 
     /// Write Data to specified file at specified offset.
-    pub fn write_data(&mut self, f: &mut FD, offset: u64, data: Data) {
+    pub fn write_data(&mut self, f: &mut FD, offset: u64, data: Data, n: usize) {
         #[cfg(feature = "log-div")]
-        println!(
-            "DS write_data f={:?} offset={} data len={}",
-            f,
-            offset,
-            data.len()
-        );
+        println!("DS write_data f={:?} offset={} len={}", f, offset, n);
 
-        self.allocate(f, offset + data.len() as u64);
+        self.allocate(f, offset + n as u64);
 
         if f.blocks == 1 {
-            let n = data.len();
             self.bs.write_data(f.root, offset, data, 0, n);
         } else {
-            self.write_blocks(f, offset, data);
+            self.write_blocks(f, offset, data, n);
         }
     }
 
@@ -232,12 +217,12 @@ impl DividedStg {
         }
     }
 
-    fn write_blocks(&mut self, f: &FD, offset: u64, data: Data) {
-        let (mut done, len) = (0, data.len());
-        while done < len {
+    fn write_blocks(&mut self, f: &FD, offset: u64, data: Data, n: usize) {
+        let mut done = 0;
+        while done < n {
             let off = offset + done as u64;
             let (blk, off) = (off / self.blk_cap(), off % self.blk_cap());
-            let a = min(len - done, (self.blk_cap() - off) as usize);
+            let a = min(n - done, (self.blk_cap() - off) as usize);
             let blk = self.get_block(f.root, f.level, blk);
             self.bs.write_data(blk, off, data.clone(), done, a);
             done += a;
