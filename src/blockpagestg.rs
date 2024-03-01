@@ -104,6 +104,10 @@ impl BlockPageStg {
         }
         s.header_size = (HEADER_SIZE + s.psi.sizes * FD_SIZE) as u64;
         s.zbytes = Arc::new(vec![0; s.psi.max_size_page()]);
+
+        #[cfg(feature = "log")]
+        println!("bps new alloc={:?}", &s.alloc_info());
+
         Box::new(s)
     }
 
@@ -143,6 +147,16 @@ impl BlockPageStg {
         }
         self.write(PN_FILE, 0, &buf);
         self.header_dirty = false;
+
+        println!("bps write_header alloc={:?}", &self.alloc_info());
+    }
+
+    fn alloc_info(&self) -> Vec<u64> {
+        let mut result = Vec::new();
+        for ix in 0..self.psi.sizes() + 1 {
+            result.push(self.alloc(ix));
+        }
+        result
     }
 
     fn page_size(&self, sx: usize) -> u64 {

@@ -4,6 +4,45 @@ pub fn test_amount() -> usize {
 }
 
 #[test]
+/// Idea of this test is to check database saves and loads ok.
+pub fn save_test() {
+    use crate::*;
+
+    let mf = MemFile::new();
+
+    for i in 0..2 {
+        println!( "save_test i={i}");
+        let mut bmap = BuiltinMap::default();
+        standard_builtins(&mut bmap);
+        let bmap = Arc::new(bmap);
+
+        let af = AtomicFile::new(mf.clone(), MemFile::new());
+        let spd = SharedPagedData::new(af);
+        let wapd = AccessPagedData::new_writer(spd.clone());
+
+        let db = Database::new(wapd, "CREATE SCHEMA test", bmap.clone());
+
+        let mut tr = GenTransaction::default();
+
+        if i == 0 {
+            let sql = "
+CREATE TABLE test.Cust(Name string) GO
+INSERT INTO test.Cust(Name) VALUES ('freddy')
+";
+            db.run(&sql, &mut tr);
+            assert!(db.changed());
+            assert!(db.save() > 0);
+            spd.wait_complete();
+
+        } else {
+            let sql = "SELECT Name FROM test.Cust";
+            db.run(&sql, &mut tr);
+            assert_eq!(tr.rp.output, b"freddy");
+        }
+    }
+}
+
+#[test]
 pub fn concurrency() {
     use crate::*;
 

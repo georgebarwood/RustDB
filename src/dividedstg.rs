@@ -80,10 +80,8 @@ impl DividedStg {
 
                 // Calculate new root
                 let mut new_root = f.root;
-                let mut n = f.level;
-                while n > levels {
+                for _ in levels..f.level {
                     new_root = self.get_num(new_root, 0);
-                    n -= 1;
                 }
 
                 // For each level reduce the number of blocks.
@@ -100,9 +98,6 @@ impl DividedStg {
                     self.bs.drop_block(f.root);
                     f.root = new_root;
                     f.level = levels;
-                }
-                if f.blocks == 0 {
-                    *f = self.new_file();
                 }
             }
             f.set_size(size, reqd);
