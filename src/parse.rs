@@ -939,19 +939,13 @@ impl<'a> Parser<'a> {
         let source_start = self.source_ix - 2;
         self.read(Token::LBra);
         let mut ti = ColInfo::empty(name);
-        loop {
+        while !self.test(Token::RBra) {
             let cname = self.id();
             let typ = self.read_data_type();
             if ti.add(cname, typ) {
                 panic!("duplicate column name");
             }
-            if self.test(Token::RBra) {
-                break;
-            }
-            if self.token != Token::Comma {
-                panic!("comma or closing bracket expected");
-            }
-            self.read_token();
+            self.test(Token::Comma);
         }
         if !self.b.parse_only {
             let _source = self.source_from(source_start, self.token_start);
