@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "5.2.57"
+version = "5.2.62"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -29,6 +29,7 @@ log = []
 log-block = []
 log-div = []
 log-bps = []
+log-all = ["log", "log-block", "log-bps", "log-div"]
 compact = []
 
 [dev-dependencies]
