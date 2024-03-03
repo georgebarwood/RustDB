@@ -114,11 +114,7 @@ struct BinLen {
 impl CExp<i64> for BinLen {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> i64 {
         let x = self.bv.eval(e, d);
-        match x {
-            Value::RcBinary(xx) => xx.len() as i64,
-            Value::ArcBinary(xx) => xx.len() as i64,
-            _ => panic!(),
-        }
+        x.bina().len() as i64
     }
 }
 /////////////////////////////
@@ -503,10 +499,7 @@ struct Bintostr {
 }
 impl CExp<Value> for Bintostr {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
-        match self.bytes.eval(ee, d) {
-            Value::ArcBinary(x) => Value::String(Rc::new(String::from_utf8(x.to_vec()).unwrap())),
-            Value::RcBinary(x) => Value::String(Rc::new(String::from_utf8(x.to_vec()).unwrap())),
-            _ => panic!(),
-        }
+        let bytes = self.bytes.eval(ee, d);
+        Value::String(Rc::new(String::from_utf8(bytes.bina().to_vec()).unwrap()))
     }
 }

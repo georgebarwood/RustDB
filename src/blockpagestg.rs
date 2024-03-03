@@ -148,9 +148,11 @@ impl BlockPageStg {
         self.write(PN_FILE, 0, &buf);
         self.header_dirty = false;
 
+        #[cfg(feature = "log")]
         println!("bps write_header alloc={:?}", &self.alloc_info());
     }
 
+    #[cfg(feature = "log")]
     fn alloc_info(&self) -> Vec<u64> {
         let mut result = Vec::new();
         for ix in 0..self.psi.sizes() + 1 {
@@ -491,9 +493,5 @@ fn test_block_page_stg() {
     let data1 = bps.get_page(pn);
     assert!(data == data1);
 
-    //let data = Arc::new(vec![99; 2000]);
-    //bps.set_page(pn, data);
-
-    //bps.drop_page(pn);
     bps.save();
 }

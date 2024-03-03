@@ -180,12 +180,23 @@ impl Value {
     /// Convert a Value to a Binary.
     pub fn bin(&self) -> Rc<Vec<u8>> {
         match self {
+            Value::ArcBinary(x) => Rc::new(x.to_vec()),
             Value::RcBinary(x) => x.clone(),
             Value::String(s) => Rc::new(s.as_bytes().to_vec()),
             Value::Float(x) => Rc::new(x.to_le_bytes().to_vec()),
             Value::Int(x) => Rc::new(x.to_le_bytes().to_vec()),
             _ => panic!("bin not implemented"),
         }
+    }
+
+    /// Borrow address of Binary value.
+    pub fn bina(&self) -> &[u8]
+    {
+       match self {
+            Value::RcBinary(data) => data,
+            Value::ArcBinary(data) => data,
+            _ => panic!(),
+       }
     }
 }
 

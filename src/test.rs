@@ -11,7 +11,7 @@ pub fn save_test() {
     let mf = MemFile::new();
 
     for i in 0..2 {
-        println!( "save_test i={i}");
+        println!("save_test i={i}");
         let mut bmap = BuiltinMap::default();
         standard_builtins(&mut bmap);
         let bmap = Arc::new(bmap);
@@ -33,7 +33,6 @@ INSERT INTO test.Cust(Name) VALUES ('freddy')
             assert!(db.changed());
             assert!(db.save() > 0);
             spd.wait_complete();
-
         } else {
             let sql = "SELECT Name FROM test.Cust";
             db.run(&sql, &mut tr);

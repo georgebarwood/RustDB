@@ -14,6 +14,7 @@ pub struct DividedStg {
 pub const FD_SIZE: usize = 8 + 8;
 
 /// [DividedStg] File Descriptor.
+#[derive(Debug)]
 pub struct FD {
     root: u64,
     size: u64,
