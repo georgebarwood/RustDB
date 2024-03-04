@@ -14,7 +14,6 @@ pub struct DividedStg {
 pub const FD_SIZE: usize = 8 + 8;
 
 /// [DividedStg] File Descriptor.
-#[derive(Debug)]
 pub struct FD {
     root: u64,
     size: u64,
@@ -63,17 +62,12 @@ impl DividedStg {
 
     /// Drop specified file.
     pub fn drop_file(&mut self, f: &mut FD) {
-        #[cfg(feature = "log-div")]
-        println!("DS drop_file f={:?}", f);
         self.truncate(f, 0);
         self.bs.drop_block(f.root);
     }
 
     /// Deallocate blocks not required for file of specified size.
     pub fn truncate(&mut self, f: &mut FD, size: u64) {
-        #[cfg(feature = "log-div")]
-        println!("DS truncate f={:?} size={}", f, size);
-
         if size < f.size {
             let reqd = self.blocks(size);
             if reqd < f.blocks {
@@ -114,9 +108,6 @@ impl DividedStg {
 
     /// Write Data to specified file at specified offset.
     pub fn write_data(&mut self, f: &mut FD, offset: u64, data: Data, n: usize) {
-        #[cfg(feature = "log-div")]
-        println!("DS write_data f={:?} offset={} len={}", f, offset, n);
-
         self.allocate(f, offset + n as u64);
 
         if f.blocks == 1 {
@@ -128,13 +119,6 @@ impl DividedStg {
 
     /// Read data from file at specified offset.
     pub fn read(&self, f: &FD, offset: u64, data: &mut [u8]) {
-        #[cfg(feature = "log-div")]
-        println!(
-            "DS read_data f{:?} offset={} data len={}",
-            f,
-            offset,
-            data.len()
-        );
         if f.blocks == 1 {
             self.bs.read(f.root, offset, data);
         } else {
@@ -190,11 +174,6 @@ impl DividedStg {
 
     /// Allocate sufficient blocks for file of specified size.
     fn allocate(&mut self, f: &mut FD, size: u64) {
-        #[cfg(feature = "log-div")]
-        println!(
-            "DS allocate f={:?} size={} self.base={}",
-            f, size, self.base
-        );
         if size > f.size {
             let reqd = self.blocks(size);
             if reqd > f.blocks {
@@ -204,8 +183,6 @@ impl DividedStg {
                     self.set_num(blk, 0, f.root);
                     f.root = blk;
                     f.level += 1;
-                    #[cfg(feature = "log-div")]
-                    println!("DS allocate file level increased f={:?}", f);
                 }
                 self.add_blocks(f, reqd);
             }
@@ -240,8 +217,6 @@ impl DividedStg {
     }
 
     fn add_blocks(&mut self, f: &mut FD, new: u64) {
-        #[cfg(feature = "log-div")]
-        println!("DS add blocks f={:?} new={}", f, new);
         for ix in f.blocks..new {
             let nb = self.bs.new_block();
             self.set_block(f.root, f.level, ix, nb);
@@ -249,11 +224,6 @@ impl DividedStg {
     }
 
     fn reduce_blocks(&mut self, f: &mut FD, level: u8, old: u64, new: u64) {
-        #[cfg(feature = "log-div")]
-        println!(
-            "DS reduce blocks f={:?} level={} old={} new={}",
-            f, level, old, new
-        );
         for ix in new..old {
             let blk = self.get_block(f.root, level, ix);
             self.bs.drop_block(blk);
