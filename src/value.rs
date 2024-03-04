@@ -190,13 +190,12 @@ impl Value {
     }
 
     /// Borrow address of Binary value.
-    pub fn bina(&self) -> &[u8]
-    {
-       match self {
+    pub fn bina(&self) -> &[u8] {
+        match self {
             Value::RcBinary(data) => data,
             Value::ArcBinary(data) => data,
             _ => panic!(),
-       }
+        }
     }
 }
 
