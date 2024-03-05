@@ -135,9 +135,10 @@ impl<'a> Parser<'a> {
             if self.token == Token::RBra {
                 break;
             }
-            if self.token != Token::Comma {
-                panic!("comma or closing bracket expected");
-            }
+            assert!(
+                self.token == Token::Comma,
+                "comma or closing bracket expected"
+            );
             self.read_token();
         }
         self.read(Token::RBra);
@@ -240,9 +241,7 @@ impl<'a> Parser<'a> {
                     let mut start = self.source_ix - 1;
                     self.ts = String::new();
                     loop {
-                        if cc == 0 {
-                            panic!("missing closing quote for string literal");
-                        }
+                        assert!(cc != 0, "missing closing quote for string literal");
                         if cc == b'\'' {
                             cc = self.read_char();
                             if cc != b'\'' {
@@ -349,9 +348,7 @@ impl<'a> Parser<'a> {
     }
 
     fn read_data_type(&mut self) -> DataType {
-        if self.token != Token::Id {
-            panic!("datatype expected");
-        }
+        assert!(self.token == Token::Id, "datatype expected");
         let mut t = match self.id_ref() {
             b"int" => INT,
             b"string" => STRING,
@@ -376,12 +373,8 @@ impl<'a> Parser<'a> {
                     }
                 }
                 INT => {
-                    if n < 1 {
-                        panic!("minimum int precision is 1");
-                    }
-                    if n > 8 {
-                        panic!("maximum int precision is 8");
-                    }
+                    assert!(n >= 1, "minimum int precision is 1");
+                    assert!(n <= 8, "maximum int precision is 8");
                 }
                 _ => panic!("invalid data type specification"),
             }
@@ -414,9 +407,7 @@ impl<'a> Parser<'a> {
     }
 
     fn id_ref(&mut self) -> &'a [u8] {
-        if self.token != Token::Id {
-            panic!("name expected");
-        }
+        assert!(self.token == Token::Id, "name expected");
         let result = self.cs;
         self.read_token();
         result
@@ -424,9 +415,7 @@ impl<'a> Parser<'a> {
 
     fn local(&mut self) -> usize {
         let result: usize;
-        if self.token != Token::Id {
-            panic!("name expected");
-        }
+        assert!(self.token == Token::Id, "name expected");
         if let Some(lnum) = self.b.get_local(self.cs) {
             result = *lnum;
         } else {
@@ -590,9 +579,10 @@ impl<'a> Parser<'a> {
             result = Expr::new(ExprIs::Const(Value::Int(value)));
             self.read_token();
         } else if self.token == Token::Hex {
-            if self.cs.len() % 2 == 1 {
-                panic!("hex literal must have even number of characters");
-            }
+            assert!(
+                self.cs.len() % 2 == 0,
+                "hex literal must have even number of characters"
+            );
             let hb = &self.source[self.token_start + 2..self.source_ix - 1];
             result = Expr::new(ExprIs::Const(Value::RcBinary(Rc::new(util::parse_hex(hb)))));
             self.read_token();
@@ -648,9 +638,7 @@ impl<'a> Parser<'a> {
             let e = self.exp();
             list.push((test, e));
         }
-        if list.is_empty() {
-            panic!("empty CASE expression");
-        }
+        assert!(!list.is_empty(), "empty CASE expression");
         self.read_id(b"ELSE");
         let els = Box::new(self.exp());
         self.read_id(b"END");
@@ -677,14 +665,13 @@ impl<'a> Parser<'a> {
                 if self.test(Token::RBra) {
                     break;
                 }
-                if self.token != Token::Comma {
-                    panic!("comma or closing bracket expected");
-                }
+                assert!(
+                    self.token == Token::Comma,
+                    "comma or closing bracket expected"
+                );
                 self.read_token();
             }
-            if v.len() != expect {
-                panic!("wrong number of values");
-            }
+            assert!(v.len() == expect, "wrong number of values");
             values.push(v);
             if !self.test(Token::Comma) && self.token != Token::LBra {
                 break;
@@ -702,9 +689,7 @@ impl<'a> Parser<'a> {
     }
 
     fn primary_table_exp(&mut self) -> TableExpression {
-        if self.token != Token::Id {
-            panic!("table expected");
-        }
+        assert!(self.token == Token::Id, "table name expected");
         self.te_named_table()
     }
 
@@ -806,16 +791,12 @@ impl<'a> Parser<'a> {
         let mut cnames = Vec::new();
         loop {
             let cname = self.id_ref();
-            if cnames.contains(&cname) {
-                panic!("duplicate column name");
-            }
+            assert!(!cnames.contains(&cname), "duplicate column name");
             cnames.push(cname);
             if self.test(Token::RBra) {
                 break;
             }
-            if !self.test(Token::Comma) {
-                panic!("comma or closing bracket expected");
-            }
+            assert!(self.test(Token::Comma), "comma or closing bracket expected");
         }
         let mut src = self.insert_expression(cnames.len());
         if !self.b.parse_only {
@@ -848,9 +829,7 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        if !self.test_id(b"WHERE") {
-            panic!("UPDATE must have a WHERE");
-        }
+        assert!(self.test_id(b"WHERE"), "UPDATE must have a WHERE");
         let mut wher = Some(self.exp());
         if !self.b.parse_only {
             c_update(&mut self.b, &tname, &mut assigns, &mut wher);
@@ -860,9 +839,7 @@ impl<'a> Parser<'a> {
     fn s_delete(&mut self) {
         self.read_id(b"FROM");
         let tname = self.obj_ref();
-        if !self.test_id(b"WHERE") {
-            panic!("DELETE must have a WHERE");
-        }
+        assert!(self.test_id(b"WHERE"), "DELETE must have a WHERE");
         let mut wher = Some(self.exp());
         if !self.b.parse_only {
             c_delete(&mut self.b, &tname, &mut wher);
@@ -910,6 +887,10 @@ impl<'a> Parser<'a> {
         }
         if !self.b.parse_only {
             let func = c_function(&self.b.db, &name);
+            assert!(
+                func.return_type == NONE,
+                "EXEC function cannot have a return type"
+            );
             self.b.check_types(&func, &pkinds);
             self.b.add(Call(func));
         }
@@ -942,9 +923,7 @@ impl<'a> Parser<'a> {
         while !self.test(Token::RBra) {
             let cname = self.id();
             let typ = self.read_data_type();
-            if ti.add(cname, typ) {
-                panic!("duplicate column name");
-            }
+            assert!(!ti.add(cname, typ), "duplicate column name");
             self.test(Token::Comma);
         }
         if !self.b.parse_only {
@@ -964,9 +943,10 @@ impl<'a> Parser<'a> {
             if self.test(Token::RBra) {
                 break;
             }
-            if self.token != Token::Comma {
-                panic!("comma or closing bracket expected")
-            };
+            assert!(
+                self.token == Token::Comma,
+                "comma or closing bracket expected"
+            );
             self.read_token();
         }
         if !self.b.parse_only {
@@ -1127,9 +1107,7 @@ impl<'a> Parser<'a> {
 
     fn s_break(&mut self) {
         let break_id = self.b.break_id;
-        if break_id == usize::MAX {
-            panic!("no enclosing loop for break");
-        }
+        assert!(break_id != usize::MAX, "no enclosing loop for break");
         self.b.add(Jump(break_id));
     }
 
@@ -1139,9 +1117,12 @@ impl<'a> Parser<'a> {
             if !self.b.parse_only {
                 let k = push(&mut self.b, &mut e);
                 let rk = data_kind(self.b.return_type);
-                if k != rk {
-                    panic!("return type mismatch expected {:?} got {:?}", rk, k)
-                }
+                assert!(
+                    k == rk,
+                    "return type mismatch expected {:?} got {:?}",
+                    rk,
+                    k
+                );
                 self.b.add(PopToLocal(self.b.param_count));
             }
         }
