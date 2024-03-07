@@ -1117,12 +1117,7 @@ impl<'a> Parser<'a> {
             if !self.b.parse_only {
                 let k = push(&mut self.b, &mut e);
                 let rk = data_kind(self.b.return_type);
-                assert!(
-                    k == rk,
-                    "return type mismatch expected {:?} got {:?}",
-                    rk,
-                    k
-                );
+                assert!(k == rk, "return type mismatch expected {rk:?} got {k:?}");
                 self.b.add(PopToLocal(self.b.param_count));
             }
         }

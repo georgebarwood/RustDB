@@ -100,14 +100,14 @@ impl BlockStg {
                 "Database File Invalid (maybe wrong version)"
             );
             x.read_header();
-
-            #[cfg(feature = "log")]
-            println!(
-                "BlockStg::new allocated blocks={} first={}",
-                x.pb_count - x.pb_first,
-                x.pb_first
-            );
         }
+        #[cfg(feature = "log")]
+        println!(
+            "BlockStg::new block size={} allocated={} first={}",
+            x.blk_size,
+            x.pb_count - x.pb_first,
+            x.pb_first
+        );
         x
     }
 
