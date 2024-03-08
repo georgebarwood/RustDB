@@ -528,13 +528,17 @@ impl Split {
         };
         result.left.first_page = p.first_page;
         result.split(p, p.root);
+        assert!(result.split_node != 0);
         result
     }
 
     fn split(&mut self, p: &Page, x: usize) {
         if x != 0 {
             self.split(p, p.left(x));
-            if !self.left_full && !self.left.full(self.half_page_size) {
+            if !self.left_full
+                && !self.left.full(self.half_page_size)
+                && self.left.count + 1 < p.count
+            {
                 self.left.append_from(p, x);
             } else {
                 self.left_full = true;

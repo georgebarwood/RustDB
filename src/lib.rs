@@ -874,9 +874,9 @@ impl Default for Limits {
             rbuf_mem: 0x200000,
             swbuf: 0x100000,
             uwbuf: 0x100000,
-            blk_cap: 27720,
-            page_sizes: 7,
-            max_div: 12,
+            blk_cap: 80000, // 27720,
+            page_sizes: 20, // 7,
+            max_div: 40,    // 12,
         }
     }
 }
