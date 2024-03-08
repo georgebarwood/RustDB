@@ -93,7 +93,7 @@ impl Storage for AtomicFile {
         while self.cf.read().unwrap().todo != 0 {
             #[cfg(feature = "log")]
             println!("AtomicFile::wait_complete - waiting for writer process");
-            let _ = self.busy.lock();
+            let _x = self.busy.lock();
         }
     }
 }

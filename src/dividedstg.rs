@@ -6,7 +6,8 @@ use std::cmp::min;
 
 /// Divides Storage into sub-files of arbitrary size using [BlockStg].
 pub struct DividedStg {
-    bs: BlockStg,
+    /// Underlying block storage.
+    pub bs: BlockStg,
     base: u64,
 }
 

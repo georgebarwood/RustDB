@@ -48,7 +48,7 @@ impl PageStorageInfo for Info {
 
 pub struct BlockPageStg {
     /// Underlying Divided Storage.
-    ds: DividedStg,
+    pub ds: DividedStg,
     alloc_pn: u64,
     first_free_pn: u64,
     fd: Vec<FD>,
