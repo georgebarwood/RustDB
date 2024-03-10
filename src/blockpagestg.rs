@@ -289,7 +289,7 @@ impl PageStorage for BlockPageStg {
     }
 
     fn new_page(&mut self) -> u64 {
-        if let Some(pn) = self.free_pn.pop_first() {
+        let pn = if let Some(pn) = self.free_pn.pop_first() {
             pn
         } else {
             self.header_dirty = true;
@@ -303,7 +303,8 @@ impl PageStorage for BlockPageStg {
                 self.alloc_pn += 1;
                 pn
             }
-        }
+        };
+        pn
     }
 
     fn drop_page(&mut self, pn: u64) {
@@ -410,8 +411,10 @@ impl PageStorage for BlockPageStg {
     fn renumber(&mut self, pn: u64) -> u64 {
         let new_pn = self.new_page();
         let (sx, size, ix) = self.get_pn_info(pn);
-        let off = ix * self.page_size(sx);
-        self.write(sx, off, &new_pn.to_le_bytes());
+        if sx != 0 {
+            let off = ix * self.page_size(sx);
+            self.write(sx, off, &new_pn.to_le_bytes());
+        }
         self.set_pn_info(new_pn, size, ix);
         self.set_pn_info(pn, 0, 0);
         self.drop_page(pn);

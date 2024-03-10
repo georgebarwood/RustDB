@@ -76,7 +76,7 @@ impl PageInfo {
             0
         };
         let new = data.len();
-        self.current = Some(data);
+        self.current = if new == 0 { None } else { Some(data) };
         (old, new)
     }
 
@@ -124,6 +124,8 @@ pub struct Stash {
     pub read: u64,
     /// Total number of misses ( data was not already loaded ).
     pub miss: u64,
+    ///
+    pub renumber_target: u64,
 }
 
 impl Stash {
@@ -428,13 +430,17 @@ impl AccessPagedData {
     #[cfg(feature = "renumber")]
     pub fn renumber_page(&self, lpnum: u64) -> u64 {
         assert!(self.writer);
-
         let data = self.get_data(lpnum);
         self.stash().set(lpnum, data.clone(), nd());
-
         let lpnum2 = self.spd.ps.write().unwrap().renumber(lpnum);
+        debug_assert!(self
+            .stash()
+            .get_pinfo(lpnum2)
+            .lock()
+            .unwrap()
+            .current
+            .is_none());
         let old2 = self.get_data(lpnum2);
-
         self.stash().set(lpnum2, old2, data);
         lpnum2
     }

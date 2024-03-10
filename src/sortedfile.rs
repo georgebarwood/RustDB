@@ -15,7 +15,7 @@ pub struct SortedFile {
     /// The root page.
     pub root_page: Cell<u64>,
     /// Status
-    ok: Cell<bool>,
+    pub ok: Cell<bool>,
 }
 
 impl SortedFile {
@@ -453,6 +453,7 @@ impl SortedFile {
     #[cfg(feature = "renumber")]
     /// Renumber pages >= target.
     pub fn renumber(&self, db: &DB, target: u64) {
+        assert!(self.dirty_pages.borrow().is_empty());
         self.renumber_page(db, target, self.root_page.get());
     }
 

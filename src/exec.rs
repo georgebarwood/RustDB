@@ -239,8 +239,11 @@ impl<'r> EvalEnv<'r> {
     /// Execute SQL string.
     fn execute(&mut self) {
         let s = self.pop_string();
-        // println!("EXECUTE {}",s);
+        #[cfg(feature = "log")]
+        println!("EXECUTE {}", s);
         self.db.run(&s, self.tr);
+        #[cfg(feature = "log")]
+        println!("EXECUTE COMPLETE {}", s);
     }
 
     /// Execute a data operation (DO).

@@ -176,7 +176,6 @@ BEGIN
   DECLARE r int
   SET r = x FROM rtest.Gen
   SET r = r * 48271 % 2147483647
-  UPDATE rtest.Gen SET x = r WHERE true
 
   DECLARE sql string, a int
   SET a = r % 2
@@ -201,12 +200,10 @@ BEGIN
     WHEN r % 21 = 1 THEN 'DROP TABLE rtestdata.[' | tname | ']'
     WHEN r % 2 = 1 THEN 'INSERT INTO rtestdata.[' | tname | '](x,y) VALUES ( rtest.repeat(''George Gordon Fairbrother Barwood'','|(r % 1000)|'),' | (r % 10) | ')'
     ELSE 'DELETE FROM rtestdata.[' | tname | '] WHERE y = ' | ( r%15)
-  END
-  
+  END 
   SELECT ' sql=' | sql
-
   EXECUTE( sql )
- 
+  UPDATE rtest.Gen SET x = r WHERE true 
 END
 GO
 ";
