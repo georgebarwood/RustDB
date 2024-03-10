@@ -186,13 +186,12 @@ impl BlockPageStg {
     }
 
     fn free_page(&mut self, sx: usize, ix: u64) {
-        if sx == 0 {
-            return;
+        if sx != 0 {
+            // Relocate last page in file to fill gap.
+            let last = self.alloc(sx) - 1;
+            self.relocate(sx, last, ix);
+            self.truncate(sx, last * self.page_size(sx));
         }
-        // Relocate last page in file to fill gap.
-        let last = self.alloc(sx) - 1;
-        self.relocate(sx, last, ix);
-        self.truncate(sx, last * self.page_size(sx));
     }
 
     fn relocate(&mut self, sx: usize, from: u64, to: u64) {
@@ -325,40 +324,23 @@ impl PageStorage for BlockPageStg {
 
     fn set_page(&mut self, pn: u64, data: Data) {
         let size = data.len();
-        let rsx = self.psi.index(size);
-        let ps = self.page_size(rsx);
-
-        assert!(rsx > 0 && rsx <= self.psi.sizes);
-
-        let (sx, mut old_size, ix) = self.get_pn_info(pn);
-
-        let ix = if sx != rsx {
-            // Re-allocate page.
-            self.free_page(sx, ix);
-            let ix = self.alloc(rsx);
-
-            // Set first word of page to page number.
-            if rsx != 0 {
-                old_size = ps as usize - PAGE_HSIZE;
-                self.write(rsx, ix * ps, &pn.to_le_bytes());
-            }
-            ix
-        } else {
-            ix
-        };
+        let sx = self.psi.index(size);
+        let ps = self.page_size(sx);
+        let (old_sx, mut old_size, mut ix) = self.get_pn_info(pn);
+        if sx != old_sx {
+            self.free_page(old_sx, ix);
+            ix = self.alloc(sx);
+            old_size = ps as usize - PAGE_HSIZE;
+            self.write(sx, ix * ps, &pn.to_le_bytes());
+        }
         self.set_pn_info(pn, size, ix);
 
-        if rsx != 0 {
-            // Offset of user data within sub-file.
-            let off = PAGE_HSIZE as u64 + ix * ps;
+        let off = PAGE_HSIZE as u64 + ix * ps;
+        self.write_data_n(sx, off, data, size);
 
-            // Write data.
-            self.write_data_n(rsx, off, data, size);
-
-            // Clear unused space.
-            if old_size > size {
-                self.write_data_n(rsx, off + size as u64, self.zbytes.clone(), old_size - size);
-            }
+        // Clear unused space in page.
+        if old_size > size {
+            self.write_data_n(sx, off + size as u64, self.zbytes.clone(), old_size - size);
         }
     }
 
