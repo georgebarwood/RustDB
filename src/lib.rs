@@ -36,7 +36,6 @@
 //! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
 //! - `unsafe-optim` : Enable unsafe optimisations in release mode.
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
-//! - `log-block` : Log block storage information.
 //! - `compact` : Default page storage is [compact::CompactFile] rather than [BlockPageStg] (can be set explicitly using [pstore::SharedPagedData::new_from_ps] );
 //!
 //! By default, all features except serde, unsafe-optim, log and log-block are enabled.

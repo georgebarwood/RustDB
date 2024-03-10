@@ -185,11 +185,6 @@ impl BlockPageStg {
         }
     }
 
-    fn alloc_page(&mut self, sx: usize) -> u64 {
-        assert!(sx > 0);
-        self.alloc(sx)
-    }
-
     fn free_page(&mut self, sx: usize, ix: u64) {
         if sx == 0 {
             return;
@@ -303,9 +298,6 @@ impl PageStorage for BlockPageStg {
     }
 
     fn new_page(&mut self) -> u64 {
-        #[cfg(feature = "log-bps")]
-        println!("bps new_page");
-
         if let Some(pn) = self.free_pn.pop_first() {
             pn
         } else {
@@ -324,8 +316,6 @@ impl PageStorage for BlockPageStg {
     }
 
     fn drop_page(&mut self, pn: u64) {
-        #[cfg(feature = "log-bps")]
-        println!("bps drop_page pn={}", pn);
         self.free_pn.insert(pn);
     }
 
@@ -334,22 +324,18 @@ impl PageStorage for BlockPageStg {
     }
 
     fn set_page(&mut self, pn: u64, data: Data) {
-        #[cfg(feature = "log-bps")]
-        println!("bps set_page pn={} data len={}", pn, data.len());
-
         let size = data.len();
         let rsx = self.psi.index(size);
         let ps = self.page_size(rsx);
 
-        assert!(rsx <= self.psi.sizes);
-        assert!(size == 0 || rsx > 0);
+        assert!(rsx > 0 && rsx <= self.psi.sizes);
 
         let (sx, mut old_size, ix) = self.get_pn_info(pn);
 
         let ix = if sx != rsx {
             // Re-allocate page.
             self.free_page(sx, ix);
-            let ix = self.alloc_page(rsx);
+            let ix = self.alloc(rsx);
 
             // Set first word of page to page number.
             if rsx != 0 {
@@ -377,9 +363,6 @@ impl PageStorage for BlockPageStg {
     }
 
     fn get_page(&self, pn: u64) -> Data {
-        #[cfg(feature = "log-bps")]
-        println!("bps get_page pn={}", pn);
-
         let (sx, size, ix) = self.get_pn_info(pn);
 
         if sx == 0 {
