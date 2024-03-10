@@ -60,7 +60,7 @@
 //!
 //! [AtomicFile] ensures that database updates are all or nothing.
 //!
-//! The hierarchy overall: Table -> SortedFile -> PagedData -> CompactFile -> AtomicFile -> Storage.
+//! The hierarchy overall: [Table] -> [SortedFile] -> [SharedPagedData] -> [PageStorage] -> [AtomicFile] -> [Storage].
 //!
 //!# Test example
 //!

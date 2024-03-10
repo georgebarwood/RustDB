@@ -1,6 +1,6 @@
 use crate::{Arc, BTreeSet, Data, HashMap, Rc, RefCell};
 
-/// In debug mode or feature unsafe_opt not enabled, same as debug_assert! otherwise unsafe compiler hint.
+/// In debug mode or feature unsafe-optim not enabled, same as debug_assert! otherwise unsafe compiler hint.
 #[cfg(any(debug_assertions, not(feature = "unsafe-optim")))]
 macro_rules! unsafe_assert {
     ( $cond: expr ) => {
@@ -8,7 +8,7 @@ macro_rules! unsafe_assert {
     };
 }
 
-/// In debug mode or feature unsafe_opt not enabled, same as debug_assert! otherwise unsafe compiler hint.
+/// In debug mode or feature unsafe-optim not enabled, same as debug_assert! otherwise unsafe compiler hint.
 #[cfg(all(not(debug_assertions), feature = "unsafe-optim"))]
 macro_rules! unsafe_assert {
     ( $cond: expr ) => {
@@ -18,7 +18,7 @@ macro_rules! unsafe_assert {
     };
 }
 
-/// In debug mode or feature unsafe_opt not enabled, same as panic! otherwise unsafe compiler hint.
+/// In debug mode or feature unsafe-optim not enabled, same as panic! otherwise unsafe compiler hint.
 #[cfg(any(debug_assertions, not(feature = "unsafe-optim")))]
 macro_rules! unsafe_panic {
     () => {
@@ -26,7 +26,7 @@ macro_rules! unsafe_panic {
     };
 }
 
-/// In debug mode or feature unsafe_opt not enabled, same as debug_assert! otherwise unsafe compiler hint.
+/// In debug mode or feature unsafe-optim not enabled, same as debug_assert! otherwise unsafe compiler hint.
 #[cfg(all(not(debug_assertions), feature = "unsafe-optim"))]
 macro_rules! unsafe_panic {
     () => {{

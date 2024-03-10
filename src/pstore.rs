@@ -1,6 +1,6 @@
 use crate::{
-    heap::GHeap, nd, Arc, BTreeMap, Data, HashMap, HashSet, Limits, Mutex, PageStorage,
-    PageStorageInfo, RwLock, SaveOp, Storage,
+    heap::GHeap, nd, Arc, BTreeMap, Data, HashMap, HashSet, Mutex, PageStorage, PageStorageInfo,
+    RwLock, SaveOp, Storage,
 };
 
 type HX = u32; // Typical 8M cache will have 1K x 8KB pages, so 10 bits is typical, 32 should be plenty.
@@ -259,29 +259,23 @@ pub struct SharedPagedData {
     pub psi: Box<dyn PageStorageInfo>,
 }
 
-#[cfg(feature = "compact")]
-/// =1024. Size of an extension page.
-const EP_SIZE: usize = 1024;
-#[cfg(feature = "compact")]
-/// =16. Maximum number of extension pages.
-const EP_MAX: usize = 16;
-#[cfg(feature = "compact")]
-/// =136. Starter page size.
-const SP_SIZE: usize = (EP_MAX + 1) * 8;
-
 impl SharedPagedData {
     #[cfg(feature = "compact")]
-    /// Construct default SharedPageData based on CompactFile.
+    /// Construct default SharedPageData ( default depends on compact feature ).
     pub fn new(stg: Box<dyn Storage>) -> Arc<Self> {
+        const EP_SIZE: usize = 1024; // Size of an extension page.
+        const EP_MAX: usize = 16; // Maximum number of extension pages.
+        const SP_SIZE: usize = (EP_MAX + 1) * 8; // =136. Starter page size.
+
         Self::new_from_ps(Box::new(crate::compact::CompactFile::new(
             stg, SP_SIZE, EP_SIZE,
         )))
     }
 
     #[cfg(not(feature = "compact"))]
-    /// Construct default SharedPageData based on BlockPageStg.
+    /// Construct default SharedPageData ( default depends on compact feature ).
     pub fn new(stg: Box<dyn Storage>) -> Arc<Self> {
-        let limits = Limits::default();
+        let limits = crate::Limits::default();
         Self::new_from_ps(crate::blockpagestg::BlockPageStg::new(stg, &limits))
     }
 
