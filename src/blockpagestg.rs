@@ -289,7 +289,7 @@ impl PageStorage for BlockPageStg {
     }
 
     fn new_page(&mut self) -> u64 {
-        let pn = if let Some(pn) = self.free_pn.pop_first() {
+        if let Some(pn) = self.free_pn.pop_first() {
             pn
         } else {
             self.header_dirty = true;
@@ -303,8 +303,7 @@ impl PageStorage for BlockPageStg {
                 self.alloc_pn += 1;
                 pn
             }
-        };
-        pn
+        }
     }
 
     fn drop_page(&mut self, pn: u64) {

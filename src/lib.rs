@@ -722,8 +722,6 @@ GO
     pub fn renumber(self: &DB) {
         let target = self.apd.spd.ps.write().unwrap().load_free_pages();
         if let Some(target) = target {
-            self.apd.stash().renumber_target = target;
-
             for bs in &self.bs {
                 bs.file.renumber(self, target);
             }

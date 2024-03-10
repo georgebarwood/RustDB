@@ -124,8 +124,6 @@ pub struct Stash {
     pub read: u64,
     /// Total number of misses ( data was not already loaded ).
     pub miss: u64,
-    ///
-    pub renumber_target: u64,
 }
 
 impl Stash {
