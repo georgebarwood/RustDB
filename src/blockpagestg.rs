@@ -41,10 +41,14 @@ impl PageStorageInfo for Info {
 }
 
 /// Implementation of [PageStorage] using [DividedStg].
-///
-///  File 0 (PN_FILE) is used to store fixed size header ( allocation info and FDs + info for each numbered page ( 16-bit size and index into sub-file ).
-///
-///  First word of allocated page is 64-bit page number ( to allow relocation ).
+
+/*
+
+File 0 (PN_FILE) has a header ( allocation info and FDs ) then info for each numbered page, a 16-bit size and index into sub-file.
+
+First word of allocated page is 64-bit page number ( to allow relocation ).
+
+*/
 
 pub struct BlockPageStg {
     /// Underlying Divided Storage.
@@ -106,7 +110,7 @@ impl BlockPageStg {
         s.zbytes = Arc::new(vec![0; s.psi.max_size_page()]);
 
         #[cfg(feature = "log")]
-        println!("bps new alloc={:?}", &s.alloc_info());
+        println!("bps new alloc={:?}", &s.allocs());
 
         Box::new(s)
     }
@@ -149,16 +153,12 @@ impl BlockPageStg {
         self.header_dirty = false;
 
         #[cfg(feature = "log")]
-        println!("bps write_header alloc={:?}", &self.alloc_info());
+        println!("bps write_header allocs={:?}", &self.allocs());
     }
 
     #[cfg(feature = "log")]
-    fn alloc_info(&self) -> Vec<u64> {
-        let mut result = Vec::new();
-        for ix in 0..self.psi.sizes() + 1 {
-            result.push(self.alloc(ix));
-        }
-        result
+    fn allocs(&self) -> Vec<u64> {
+        (0..self.psi.sizes() + 1).map(|x| self.alloc(x)).collect()
     }
 
     fn page_size(&self, sx: usize) -> u64 {
@@ -195,20 +195,19 @@ impl BlockPageStg {
     }
 
     fn relocate(&mut self, sx: usize, from: u64, to: u64) {
-        if from == to {
-            return;
+        if from != to {
+            let ps = self.page_size(sx);
+            let mut buf = vec![0; ps as usize];
+
+            self.read(sx, from * ps, &mut buf);
+            let pn = util::getu64(&buf, 0);
+
+            let (sx1, _size, ix1) = self.get_pn_info(pn);
+            assert!(sx1 == sx && ix1 == from);
+
+            self.update_ix(pn, to);
+            self.write_data(sx, to * ps, Arc::new(buf));
         }
-        let ps = self.page_size(sx);
-        let mut buf = vec![0; ps as usize];
-
-        self.read(sx, from * ps, &mut buf);
-        let pn = util::getu64(&buf, 0);
-
-        let (sx1, _size, ix1) = self.get_pn_info(pn);
-        assert!(sx1 == sx && ix1 == from);
-
-        self.update_ix(pn, to);
-        self.write_data(sx, to * ps, Arc::new(buf));
     }
 
     fn get_pn_info(&self, pn: u64) -> (usize, usize, u64) {
@@ -236,11 +235,6 @@ impl BlockPageStg {
         self.write(PN_FILE, off, &buf);
     }
 
-    fn truncate_pn_info(&mut self) {
-        let off = self.header_size + self.alloc_pn * 8;
-        self.truncate(PN_FILE, off);
-    }
-
     fn update_ix(&mut self, pn: u64, ix: u64) {
         let mut buf = [0; 6];
         util::set(&mut buf, 0, ix, 6);
@@ -249,10 +243,8 @@ impl BlockPageStg {
     }
 
     fn clear(&mut self, fx: usize, off: u64, n: u64) {
-        if n > 0 {
-            let buf = Arc::new(vec![0; n as usize]);
-            self.write_data(fx, off, buf);
-        }
+        let z = Arc::new(vec![0; n as usize]);
+        self.write_data(fx, off, z);
     }
 
     fn write(&mut self, fx: usize, off: u64, data: &[u8]) {
@@ -346,22 +338,17 @@ impl PageStorage for BlockPageStg {
 
     fn get_page(&self, pn: u64) -> Data {
         let (sx, size, ix) = self.get_pn_info(pn);
-
         if sx == 0 {
             return nd();
         }
-
-        // Offset of data within sub-file.
-        let off = PAGE_HSIZE as u64 + ix * self.page_size(sx);
-
         let mut data = vec![0; size];
+        let off = PAGE_HSIZE as u64 + ix * self.page_size(sx);
         self.read(sx, off, &mut data);
         Arc::new(data)
     }
 
     fn size(&self, pn: u64) -> usize {
-        let (_sx, size, _ix) = self.get_pn_info(pn);
-        size
+        self.get_pn_info(pn).1
     }
 
     fn save(&mut self) {
@@ -437,7 +424,7 @@ impl PageStorage for BlockPageStg {
         self.alloc_pn = target;
         self.header_dirty = true;
         self.free_pn.clear();
-        self.truncate_pn_info();
+        self.truncate(PN_FILE, self.header_size + target * 8);
     }
 }
 
