@@ -35,6 +35,7 @@ impl PageStorageInfo for Info {
 
     /// Page size for given index.
     fn size(&self, ix: usize) -> usize {
+        debug_assert!(ix > 0 && ix <= self.sizes);
         let size = self.blk_cap as usize / (1 + self.max_div - ix);
         size - PAGE_HSIZE
     }
