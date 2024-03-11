@@ -13,7 +13,7 @@
 //!
 //! The method [Database::run] is called to execute an SQL query.
 //! This takes a [Transaction] parameter which accumulates SELECT results and which also has methods
-//! for accessing input parameters and controlling output. Custom builtin functions implement CExp
+//! for accessing input parameters and controlling output. Custom builtin functions implement [CExp]
 //! and have access to the transaction via an EvalEnv parameter, which can be downcast if necessary.
 //!
 //! It is also possible to access the table data directly, see email_loop in example program.   
@@ -36,7 +36,7 @@
 //! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
 //! - `unsafe-optim` : Enable unsafe optimisations in release mode.
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
-//! - `compact` : Default page storage is [compact::CompactFile] rather than [BlockPageStg] (can be set explicitly using [pstore::SharedPagedData::new_from_ps] );
+//! - `compact` : Default page storage is [compact::CompactFile] rather than [BlockPageStg] (can be set explicitly using [pstore::SharedPagedData::new_from_ps] ).
 //!
 //! By default, all features except serde, unsafe-optim, log and log-block are enabled.
 //!
@@ -865,19 +865,19 @@ impl Transaction for DummyTransaction {
 /// Memory limits.
 #[non_exhaustive]
 pub struct Limits {
-    /// Limit on size of commit write map.
+    /// Limit on size of commit write map
     pub map_lim: usize,
-    /// Memory for buffering small reads.
+    /// Memory for buffering small reads
     pub rbuf_mem: usize,
-    /// Memory for buffering writes to main storage.
+    /// Memory for buffering writes to main storage
     pub swbuf: usize,
-    /// Memory for buffering writes to temporary storage.
+    /// Memory for buffering writes to temporary storage
     pub uwbuf: usize,
     /// Block capacity
     pub blk_cap: u64,
     /// Number of page sizes
     pub page_sizes: usize,
-    /// Largest division of page sizes
+    /// Largest division of page
     pub max_div: usize,
 }
 
