@@ -104,7 +104,7 @@ impl BlockPageStg {
             s.ds.set_root(&s.fd[0]);
             s.header_dirty = true;
         } else {
-            s.psi.blk_cap = s.ds.blk_cap();
+            s.psi.blk_cap = s.ds.blk_cap;
             s.read_header();
         }
         s.header_size = (HEADER_SIZE + s.psi.sizes * FD_SIZE) as u64;

@@ -8,6 +8,9 @@ use std::cmp::min;
 pub struct DividedStg {
     /// Underlying block storage.
     pub bs: BlockStg,
+    /// Block capacity.
+    pub blk_cap: u64,
+    /// Number of block numbers that will fit in a block.
     base: u64,
 }
 
@@ -16,11 +19,15 @@ pub const FD_SIZE: usize = 8 + 8;
 
 /// [DividedStg] File Descriptor.
 pub struct FD {
+    /// Root block.
     root: u64,
+    /// File size in bytes.
     size: u64,
+    /// Number of data blocks needed ( can be computed from file size ).
     blocks: u64,
+    /// Number of levels needed ( can be computed from file size ).
     level: u8,
-    ///
+    /// Set true when the FD is updated.
     pub changed: bool,
 }
 
@@ -30,6 +37,7 @@ impl FD {
         self.size
     }
 
+    /// Sets the file size and number of blocks required.
     fn set_size(&mut self, size: u64, blocks: u64) {
         self.changed = true;
         self.size = size;
@@ -41,13 +49,9 @@ impl DividedStg {
     /// Construct DividedStg from specified Storage and block capacity.
     pub fn new(stg: Box<dyn Storage>, blk_cap: u64) -> Self {
         let bs = BlockStg::new(stg, blk_cap);
-        let base = bs.blk_cap() / bs.nsz() as u64;
-        Self { bs, base }
-    }
-
-    /// Block capacity.
-    pub fn blk_cap(&self) -> u64 {
-        self.bs.blk_cap()
+        let blk_cap = bs.blk_cap();
+        let base = blk_cap / bs.nsz() as u64;
+        Self { bs, base, blk_cap }
     }
 
     /// Get file descriptor for a new file.
@@ -67,7 +71,7 @@ impl DividedStg {
         self.bs.drop_block(f.root);
     }
 
-    /// Deallocate blocks not required for file of specified size.
+    /// Free blocks not required for file of specified size.
     pub fn truncate(&mut self, f: &mut FD, size: u64) {
         if size < f.size {
             let reqd = self.blocks(size);
@@ -112,7 +116,7 @@ impl DividedStg {
         self.allocate(f, offset + n as u64);
 
         if f.blocks == 1 {
-            self.bs.write_data(f.root, offset, data, 0, n);
+            self.bs.set_data(f.root, offset, data, 0, n);
         } else {
             self.write_blocks(f, offset, data, n);
         }
@@ -121,7 +125,7 @@ impl DividedStg {
     /// Read data from file at specified offset.
     pub fn read(&self, f: &FD, offset: u64, data: &mut [u8]) {
         if f.blocks == 1 {
-            self.bs.read(f.root, offset, data);
+            self.bs.get(f.root, offset, data);
         } else {
             self.read_blocks(f, offset, data);
         }
@@ -191,32 +195,35 @@ impl DividedStg {
         }
     }
 
+    /// Write data to file at specified offset.
     fn write_blocks(&mut self, f: &FD, offset: u64, data: Data, n: usize) {
         let mut done = 0;
         while done < n {
             let off = offset + done as u64;
-            let (blk, off) = (off / self.blk_cap(), off % self.blk_cap());
-            let a = min(n - done, (self.blk_cap() - off) as usize);
+            let (blk, off) = (off / self.blk_cap, off % self.blk_cap);
+            let a = min(n - done, (self.blk_cap - off) as usize);
             let blk = self.get_block(f.root, f.level, blk);
-            self.bs.write_data(blk, off, data.clone(), done, a);
+            self.bs.set_data(blk, off, data.clone(), done, a);
             done += a;
         }
     }
 
+    /// Read data from file at specified offset.
     fn read_blocks(&self, f: &FD, offset: u64, data: &mut [u8]) {
         let (mut done, len) = (0, data.len());
         while done < len {
             let off = offset + done as u64;
-            let (blk, off) = (off / self.blk_cap(), off % self.blk_cap());
-            let a = min(len - done, (self.blk_cap() - off) as usize);
+            let (blk, off) = (off / self.blk_cap, off % self.blk_cap);
+            let a = min(len - done, (self.blk_cap - off) as usize);
             if blk < f.blocks {
                 let blk = self.get_block(f.root, f.level, blk);
-                self.bs.read(blk, off, &mut data[done..done + a]);
+                self.bs.get(blk, off, &mut data[done..done + a]);
             }
             done += a;
         }
     }
 
+    /// Add data blocks up to specified number.
     fn add_blocks(&mut self, f: &mut FD, new: u64) {
         for ix in f.blocks..new {
             let nb = self.bs.new_block();
@@ -224,6 +231,7 @@ impl DividedStg {
         }
     }
 
+    /// Reduce blocks at specified level from old to new.
     fn reduce_blocks(&mut self, f: &mut FD, level: u8, old: u64, new: u64) {
         for ix in new..old {
             let blk = self.get_block(f.root, level, ix);
@@ -236,7 +244,7 @@ impl DividedStg {
         if size == 0 {
             return 1;
         }
-        (size + self.blk_cap() - 1) / self.blk_cap()
+        (size + self.blk_cap - 1) / self.blk_cap
     }
 
     /// Calculate the number of extra levels needed for specified number of data blocks.
@@ -246,11 +254,6 @@ impl DividedStg {
         } else {
             (blocks - 1).ilog(self.base) as u8 + 1
         }
-    }
-
-    /// Block number size.
-    fn nsz(&self) -> usize {
-        self.bs.nsz()
     }
 
     /// Set the block at index ix at specified level.
@@ -266,7 +269,7 @@ impl DividedStg {
                 self.get_block(blk, level - 1, x)
             };
         }
-        self.set_num(blk, ix * self.nsz() as u64, value);
+        self.set_num(blk, ix, value);
     }
 
     /// Get the block at index ix at specified level.
@@ -276,17 +279,21 @@ impl DividedStg {
             ix %= self.base;
             blk = self.get_block(blk, level - 1, x);
         }
-        self.get_num(blk, ix * self.nsz() as u64)
+        self.get_num(blk, ix)
     }
 
-    fn get_num(&self, blk: u64, off: u64) -> u64 {
+    /// Get block number from block at specified index.
+    fn get_num(&self, blk: u64, ix: u64) -> u64 {
+        let nsz = self.bs.nsz();
         let mut bytes = [0; 8];
-        self.bs.read(blk, off, &mut bytes[0..self.nsz()]);
+        self.bs.get(blk, ix * nsz as u64, &mut bytes[0..nsz]);
         u64::from_le_bytes(bytes)
     }
 
-    fn set_num(&mut self, blk: u64, off: u64, v: u64) {
-        self.bs.write(blk, off, &v.to_le_bytes()[0..self.nsz()]);
+    /// Set block number in block at specified index.
+    fn set_num(&mut self, blk: u64, ix: u64, v: u64) {
+        let nsz = self.bs.nsz();
+        self.bs.set(blk, ix * nsz as u64, &v.to_le_bytes()[0..nsz]);
     }
 }
 

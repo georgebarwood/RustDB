@@ -52,21 +52,21 @@ impl BlockStg {
     }
 
     /// Bit that indicates Logical Block Entry represents allocated phsyical page.
-    fn alloc_bit0(nsz: usize) -> u64 {
+    fn calc_alloc_bit(nsz: usize) -> u64 {
         1 << (nsz * 8 - 1)
     }
 
     /// Bit mask for block number.
-    fn num_mask0(nsz: usize) -> u64 {
-        Self::alloc_bit0(nsz) - 1
+    fn calc_num_mask(nsz: usize) -> u64 {
+        Self::calc_alloc_bit(nsz) - 1
     }
 
     fn num_mask(&self) -> u64 {
-        Self::num_mask0(self.nsz)
+        Self::calc_num_mask(self.nsz)
     }
 
     fn alloc_bit(&self) -> u64 {
-        Self::alloc_bit0(self.nsz)
+        Self::calc_alloc_bit(self.nsz)
     }
 
     /// Construct BlockStg with specified underlying Storage and block capacity.
@@ -82,7 +82,7 @@ impl BlockStg {
             bn_count: 0,
             blk_count: hblks,
             first_blk: hblks,
-            first_free: Self::num_mask0(nsz),
+            first_free: Self::calc_num_mask(nsz),
             rsvd: [0; RSVD_SIZE],
             free: BTreeSet::default(),
             header_dirty: false,
@@ -149,15 +149,15 @@ impl BlockStg {
         self.free.insert(bn);
     }
 
-    /// Write data to specified numbered block at specified offset.
-    pub fn write(&mut self, bn: u64, offset: u64, data: &[u8]) {
+    /// Set numbered block/offset to specified data.
+    pub fn set(&mut self, bn: u64, offset: u64, data: &[u8]) {
         let n = data.len();
         let data = Arc::new(data.to_vec());
-        self.write_data(bn, offset, data, 0, n);
+        self.set_data(bn, offset, data, 0, n);
     }
 
-    /// Write slice of Data to specified numbered block at specified offset.
-    pub fn write_data(&mut self, bn: u64, offset: u64, data: Data, s: usize, n: usize) {
+    /// Set numbered block/offset to specified slice of Data.
+    pub fn set_data(&mut self, bn: u64, offset: u64, data: Data, s: usize, n: usize) {
         debug_assert!(!self.free.contains(&bn));
 
         self.expand_binfo(bn);
@@ -177,8 +177,8 @@ impl BlockStg {
         self.stg.write_data(offset, data, s, n);
     }
 
-    /// Read data from specified numbered block and offset.
-    pub fn read(&self, bn: u64, offset: u64, data: &mut [u8]) {
+    /// Get data from specified numbered block and offset.
+    pub fn get(&self, bn: u64, offset: u64, data: &mut [u8]) {
         debug_assert!(!self.free.contains(&bn), "bn={}", bn);
 
         let pb = self.get_binfo(bn);
@@ -353,11 +353,11 @@ fn block_test() {
     let bny = bf.new_block();
     let bn = bf.new_block();
 
-    bf.write(bnx, 2, data);
-    bf.write(bny, 1, data);
-    bf.write(bn, 0, data);
+    bf.set(bnx, 2, data);
+    bf.set(bny, 1, data);
+    bf.set(bn, 0, data);
     let mut buf = vec![0; data.len()];
-    bf.read(bn, 0, &mut buf);
+    bf.get(bn, 0, &mut buf);
     assert_eq!(&buf, &data);
 
     bf.drop_block(bnx);
@@ -367,6 +367,6 @@ fn block_test() {
 
     let bf = BlockStg::new(stg.clone(), blk_cap);
     let mut buf = vec![0; data.len()];
-    bf.read(bn, 0, &mut buf);
+    bf.get(bn, 0, &mut buf);
     assert_eq!(&buf, &data);
 }
