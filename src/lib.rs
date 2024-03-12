@@ -373,7 +373,7 @@ pub struct Database {
     /// Storage of variable length data.
     bs: Vec<ByteStorage>,
     /// Flag to reset the functions cache after save.
-    function_reset: Cell<bool>,
+    pub function_reset: Cell<bool>,
     /// Maximum size of logical page.
     page_size_max: usize,
 

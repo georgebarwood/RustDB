@@ -12,26 +12,26 @@ const HSIZE: u64 = 48 + RSVD_SIZE as u64;
 
 /// Manages allocation and deallocation of numbered relocatable fixed size blocks from underlying Storage.
 ///
-/// Blocks are numbered. A map of the physical location of each block is kept at the start of the storage (after the header).
+/// Blocks are numbered. A map of the location of each block is kept at the start of the storage (after the header).
 ///
-/// Physical blocks can be relocated by adjusting the map entry to point to the new location.
+/// Blocks can be relocated by adjusting the map entry to point to the new location.
 ///
-/// On save, the map of free block numbers is processed and any associated physical blocks are freed.
+/// On save, the set of free block numbers is processed and any associated blocks are freed.
 ///
-/// When a physical block is freed, the last physical block is relocated to fill it.
+/// When a block is freed, the last block is relocated to fill it.
 
 pub struct BlockStg {
     stg: Box<dyn Storage>,
-    lb_count: u64, // Number of Logical Block Info entries.
-    pb_count: u64, // Number of Physical Blocks.
-    pb_first: u64,
-    first_free: u64,
-    rsvd: [u8; RSVD_SIZE], // For boot-strapping first file.
-    free: BTreeSet<u64>,   // Temporary set of free block numbers.
+    bn_count: u64,   // Number of block numbers.
+    blk_count: u64,  // Number of blocks.
+    first_blk: u64,  // First block.
+    first_free: u64, // First free block number.
+    rsvd: [u8; RSVD_SIZE],
+    free: BTreeSet<u64>, // Temporary set of free block numbers.
     header_dirty: bool,
     rsvd_dirty: bool,
     is_new: bool,
-    blk_size: u64, // Block Size including block number.
+    blk_size: u64, // Block Size including block number for relocation.
     nsz: usize,    // Number of bytes for block number.
 }
 
@@ -41,7 +41,7 @@ impl BlockStg {
         (HSIZE + bs - 1) / bs
     }
 
-    /// Number of bits for block number ( either logical or physical ).
+    /// Number of bits for block number.
     fn num_bits(bc: u64) -> usize {
         64 - bc.ilog(2) as usize
     }
@@ -79,9 +79,9 @@ impl BlockStg {
 
         let mut x = Self {
             stg,
-            lb_count: 0,
-            pb_count: hblks,
-            pb_first: hblks,
+            bn_count: 0,
+            blk_count: hblks,
+            first_blk: hblks,
             first_free: Self::num_mask0(nsz),
             rsvd: [0; RSVD_SIZE],
             free: BTreeSet::default(),
@@ -105,8 +105,8 @@ impl BlockStg {
         println!(
             "BlockStg::new block size={} allocated={} first={}",
             x.blk_size,
-            x.pb_count - x.pb_first,
-            x.pb_first
+            x.blk_count - x.first_blk,
+            x.first_blk
         );
         x
     }
@@ -116,7 +116,7 @@ impl BlockStg {
         self.blk_size - self.nsz as u64
     }
 
-    /// Get size of block number in bytes.
+    /// Get size of a block number in bytes.
     pub fn nsz(&self) -> usize {
         self.nsz
     }
@@ -135,15 +135,15 @@ impl BlockStg {
             if bn != self.num_mask() {
                 self.first_free = self.get_binfo(bn);
             } else {
-                bn = self.lb_count;
-                self.lb_count += 1;
+                bn = self.bn_count;
+                self.bn_count += 1;
             }
             self.header_dirty = true;
             bn
         }
     }
 
-    /// Release a block number ( no longer valid ).
+    /// Release a block number.
     pub fn drop_block(&mut self, bn: u64) {
         debug_assert!(!self.free.contains(&bn)); // Not a comprehensive check as bn could be in free chain.
         self.free.insert(bn);
@@ -163,12 +163,12 @@ impl BlockStg {
         self.expand_binfo(bn);
         let mut pb = self.get_binfo(bn);
         if pb & self.alloc_bit() == 0 {
-            pb = self.pb_count;
-            self.pb_count += 1;
+            pb = self.blk_count;
+            self.blk_count += 1;
 
             self.header_dirty = true;
             self.set_binfo(bn, self.alloc_bit() | pb);
-            // Write block number at start of physical block, to allow relocation.
+            // Write block number at start of block, to allow relocation.
             self.set_num(pb * self.blk_size, bn);
         }
         pb &= self.num_mask();
@@ -207,7 +207,7 @@ impl BlockStg {
 
     /// Save changes to underlying storage.
     pub fn save(&mut self) {
-        // Process the set of freed page numbers, adding any associated physical blocks to a map of free blocks.
+        // Process the set of freed page numbers, adding any associated blocks to a map of free blocks.
         let flist = std::mem::take(&mut self.free);
         let mut free_blocks = BTreeSet::default();
         for bn in flist.iter().rev() {
@@ -224,9 +224,9 @@ impl BlockStg {
 
         // Relocate blocks from end of file to fill free blocks.
         while !free_blocks.is_empty() {
-            self.pb_count -= 1;
+            self.blk_count -= 1;
             self.header_dirty = true;
-            let last = self.pb_count;
+            let last = self.blk_count;
             // If the last block is not a free block, relocate it using a free block.
             if !free_blocks.remove(&last) {
                 let to = free_blocks.pop_first().unwrap();
@@ -242,10 +242,10 @@ impl BlockStg {
         #[cfg(feature = "log")]
         println!(
             "BlockStg::save allocated blocks={}",
-            self.pb_count - self.pb_first
+            self.blk_count - self.first_blk
         );
 
-        self.stg.commit(self.pb_count * self.blk_size);
+        self.stg.commit(self.blk_count * self.blk_size);
     }
 
     /// Wait for save to complete.
@@ -255,10 +255,10 @@ impl BlockStg {
 
     /// Write header fields to underlying storage.
     fn write_header(&mut self) {
-        self.stg.write_u64(8, self.pb_count);
-        self.stg.write_u64(16, self.lb_count);
+        self.stg.write_u64(8, self.blk_count);
+        self.stg.write_u64(16, self.bn_count);
         self.stg.write_u64(24, self.first_free);
-        self.stg.write_u64(32, self.pb_first);
+        self.stg.write_u64(32, self.first_blk);
         self.stg.write_u64(40, self.blk_cap());
         if self.rsvd_dirty {
             self.stg.write(48, &self.rsvd);
@@ -268,17 +268,17 @@ impl BlockStg {
 
     /// Read the header fields from underlying storage.
     fn read_header(&mut self) {
-        self.pb_count = self.stg.read_u64(8);
-        self.lb_count = self.stg.read_u64(16);
+        self.blk_count = self.stg.read_u64(8);
+        self.bn_count = self.stg.read_u64(16);
         self.first_free = self.stg.read_u64(24);
-        self.pb_first = self.stg.read_u64(32);
+        self.first_blk = self.stg.read_u64(32);
         let blk_cap = self.stg.read_u64(40);
         self.nsz = Self::calc_nsz(blk_cap);
         self.blk_size = blk_cap + self.nsz as u64;
         self.stg.read(48, &mut self.rsvd);
     }
 
-    /// Relocate physical block, from and to are block numbers.
+    /// Relocate block, from and to are block numbers.
     fn relocate(&mut self, from: u64, to: u64) {
         if from == to {
             return;
@@ -298,16 +298,16 @@ impl BlockStg {
     /// Expand the map to accomodate the specified block number.
     fn expand_binfo(&mut self, bn: u64) {
         let target = HSIZE + (bn + 1) * self.nsz as u64;
-        while target > self.pb_first * self.blk_size {
-            self.relocate(self.pb_first, self.pb_count);
-            self.clear_block(self.pb_first);
-            self.pb_first += 1;
-            self.pb_count += 1;
+        while target > self.first_blk * self.blk_size {
+            self.relocate(self.first_blk, self.blk_count);
+            self.clear_block(self.first_blk);
+            self.first_blk += 1;
+            self.blk_count += 1;
             self.header_dirty = true;
         }
     }
 
-    /// Fill the specified physical block with zeroes.
+    /// Fill the specified block with zeroes.
     fn clear_block(&mut self, pb: u64) {
         let buf = vec![0; self.blk_size as usize];
         self.stg.write_vec(pb * self.blk_size, buf);
@@ -323,7 +323,7 @@ impl BlockStg {
     /// Get the value associated with the specified block number.
     fn get_binfo(&self, bn: u64) -> u64 {
         let off = HSIZE + bn * self.nsz as u64;
-        if off + self.nsz as u64 > self.pb_first * self.blk_size {
+        if off + self.nsz as u64 > self.first_blk * self.blk_size {
             return 0;
         }
         self.get_num(off)
