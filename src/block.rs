@@ -31,65 +31,42 @@ pub struct BlockStg {
     header_dirty: bool,
     rsvd_dirty: bool,
     is_new: bool,
-    blk_size: u64, // Block Size including block number for relocation.
-    nsz: usize,    // Number of bytes for block number.
+    nsz: usize,     // Number of bytes for block number.
+    blk_size: u64,  // Block Size including block number for relocation.
+    alloc_bit: u64, // Bit that indicates block info represents allocated page.
 }
 
 impl BlockStg {
-    /// Blocks required for file header.
-    fn hblks(bs: u64) -> u64 {
-        (HSIZE + bs - 1) / bs
-    }
-
-    /// Number of bits for block number.
-    fn num_bits(bc: u64) -> usize {
-        64 - bc.ilog(2) as usize
-    }
-
-    /// Number of bytes for block number, plus an extra bit (for self.alloc_bit()).
-    fn calc_nsz(bc: u64) -> usize {
-        (Self::num_bits(bc) + 8) / 8
-    }
-
-    /// Bit that indicates Logical Block Entry represents allocated phsyical page.
-    fn calc_alloc_bit(nsz: usize) -> u64 {
-        1 << (nsz * 8 - 1)
-    }
-
-    /// Bit mask for block number.
-    fn calc_num_mask(nsz: usize) -> u64 {
-        Self::calc_alloc_bit(nsz) - 1
-    }
-
+    /// Block number mask.
     fn num_mask(&self) -> u64 {
-        Self::calc_num_mask(self.nsz)
-    }
-
-    fn alloc_bit(&self) -> u64 {
-        Self::calc_alloc_bit(self.nsz)
+        self.alloc_bit - 1
     }
 
     /// Construct BlockStg with specified underlying Storage and block capacity.
     /// For existing file, block capacity will be read from file header.
     pub fn new(stg: Box<dyn Storage>, blk_cap: u64) -> Self {
         let is_new = stg.size() == 0;
-        let nsz = Self::calc_nsz(blk_cap);
+        let blk_cap = if is_new { blk_cap } else { stg.read_u64(40) };
+        let bits = 64 - blk_cap.ilog(2) as usize;
+        let nsz = (bits + 8) / 8; // Number of bytes for block number, plus an extra bit (for self.alloc_bit).
         let blk_size = blk_cap + nsz as u64;
-        let hblks = Self::hblks(blk_size);
+        let alloc_bit = 1 << (nsz * 8 - 1);
+        let hblks = (HSIZE + blk_size - 1) / blk_size; // Blocks required for file header.
 
         let mut x = Self {
             stg,
             bn_count: 0,
             blk_count: hblks,
             first_blk: hblks,
-            first_free: Self::calc_num_mask(nsz),
+            first_free: alloc_bit - 1,
             rsvd: [0; RSVD_SIZE],
             free: BTreeSet::default(),
             header_dirty: false,
             rsvd_dirty: false,
             is_new,
-            blk_size,
             nsz,
+            blk_size,
+            alloc_bit,
         };
         if is_new {
             x.stg.write_u64(0, MAGIC);
@@ -162,12 +139,12 @@ impl BlockStg {
 
         self.expand_binfo(bn);
         let mut pb = self.get_binfo(bn);
-        if pb & self.alloc_bit() == 0 {
+        if pb & self.alloc_bit == 0 {
             pb = self.blk_count;
             self.blk_count += 1;
 
             self.header_dirty = true;
-            self.set_binfo(bn, self.alloc_bit() | pb);
+            self.set_binfo(bn, self.alloc_bit | pb);
             // Write block number at start of block, to allow relocation.
             self.set_num(pb * self.blk_size, bn);
         }
@@ -182,7 +159,7 @@ impl BlockStg {
         debug_assert!(!self.free.contains(&bn), "bn={}", bn);
 
         let pb = self.get_binfo(bn);
-        if pb & self.alloc_bit() != 0 {
+        if pb & self.alloc_bit != 0 {
             let pb = pb & self.num_mask();
             let avail = self.blk_size - (self.nsz as u64 + offset);
             let n = min(data.len(), avail as usize);
@@ -213,7 +190,7 @@ impl BlockStg {
         for bn in flist.iter().rev() {
             let bn = *bn;
             let info = self.get_binfo(bn);
-            if info & self.alloc_bit() != 0 {
+            if info & self.alloc_bit != 0 {
                 let pb = info & self.num_mask();
                 free_blocks.insert(pb);
             }
@@ -272,9 +249,6 @@ impl BlockStg {
         self.bn_count = self.stg.read_u64(16);
         self.first_free = self.stg.read_u64(24);
         self.first_blk = self.stg.read_u64(32);
-        let blk_cap = self.stg.read_u64(40);
-        self.nsz = Self::calc_nsz(blk_cap);
-        self.blk_size = blk_cap + self.nsz as u64;
         self.stg.read(48, &mut self.rsvd);
     }
 
@@ -289,9 +263,9 @@ impl BlockStg {
 
         let bn = util::get(&buf, 0, self.nsz);
 
-        debug_assert_eq!(self.get_binfo(bn), self.alloc_bit() | from);
+        debug_assert_eq!(self.get_binfo(bn), self.alloc_bit | from);
 
-        self.set_binfo(bn, self.alloc_bit() | to);
+        self.set_binfo(bn, self.alloc_bit | to);
         self.stg.write_vec(to * self.blk_size, buf);
     }
 

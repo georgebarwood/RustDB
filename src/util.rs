@@ -220,7 +220,7 @@ impl SmallSet {
 
 /// Function to compare bytes. Length is taken from a. Calls d for each range that is different.
 /// Interior equal ranges less than min_eq are taken as different.
-pub fn diff<F>(a: &[u8], b: &[u8], min_eq: usize, mut d: F)
+pub fn _diff<F>(a: &[u8], b: &[u8], min_eq: usize, mut d: F)
 where
     F: FnMut(usize, usize),
 {
@@ -270,7 +270,7 @@ fn difftest() {
             v2[rng.gen::<usize>() % 100] = 1;
         }
         let mut x = 0;
-        diff(&v, &v2, 2, |off, len| {
+        _diff(&v, &v2, 2, |off, len| {
             //println!("off={off} len={len}");
             assert_eq!(v[x..off], v2[x..off]);
             x = off + len;

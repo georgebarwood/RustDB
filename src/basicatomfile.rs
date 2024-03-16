@@ -1,6 +1,6 @@
 use crate::{buf::WriteBuffer, wmap::DataSlice, wmap::WMap, Arc, Data, Limits, Storage};
 
-/// Alternative to AtomicFile.
+/// Basis for [crate::AtomicFile] ( unbuffered alternative ).
 pub struct BasicAtomicFile {
     /// The main underlying storage.
     stg: WriteBuffer,

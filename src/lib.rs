@@ -36,7 +36,7 @@
 //! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
 //! - `unsafe-optim` : Enable unsafe optimisations in release mode.
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
-//! - `compact` : Default page storage is [compact::CompactFile] rather than [BlockPageStg] (can be set explicitly using [pstore::SharedPagedData::new_from_ps] ).
+//! - `compact` : Default page storage is CompactFile rather than [BlockPageStg] (can be set explicitly using [pstore::SharedPagedData::new_from_ps] ).
 //!
 //! By default, all features except serde, unsafe-optim, log and log-block are enabled.
 //!
@@ -254,11 +254,8 @@ pub mod exec;
 #[cfg(not(feature = "max"))]
 mod exec;
 
-#[cfg(feature = "max")]
 /// [compact::CompactFile] :  alternative implementation of [PageStorage] trait.
 pub mod compact;
-#[cfg(not(feature = "max"))]
-mod compact;
 
 #[cfg(feature = "max")]
 /// System table functions.
@@ -725,40 +722,24 @@ GO
             for bs in &self.bs {
                 bs.file.renumber(self, target);
             }
-
-            let mut root_changes = Vec::new();
-            let mut ix_changes = Vec::new();
-
             for t in self.tables.borrow().values() {
                 let tf = &t.file;
-                assert!(!tf.changed());
-                assert!(tf.ok.get());
                 let mut root_page = tf.root_page.get();
                 if root_page >= target {
-                    root_page = self.apd.renumber_page(root_page);
+                    root_page = tf.ren(root_page, self);
                     tf.root_page.set(root_page);
-                    // sys::set_root(self, t.id, root_page);
-                    root_changes.push((t.id, root_page));
+                    sys::set_root(self, t.id, root_page);
                 }
                 tf.renumber(self, target);
                 for ix in &mut *t.ixlist.borrow_mut() {
-                    assert!(!ix.file.changed());
-                    assert!(ix.file.ok.get());
                     let mut root_page = ix.file.root_page.get();
                     if root_page >= target {
-                        root_page = self.apd.renumber_page(root_page);
+                        root_page = ix.file.ren(root_page, self);
                         ix.file.root_page.set(root_page);
-                        // sys::set_ix_root(self, ix.id, root_page);
-                        ix_changes.push((ix.id, root_page));
+                        sys::set_ix_root(self, ix.id, root_page);
                     }
                     ix.file.renumber(self, target);
                 }
-            }
-            while let Some((id, root_page)) = root_changes.pop() {
-                sys::set_root(self, id, root_page);
-            }
-            while let Some((id, root_page)) = ix_changes.pop() {
-                sys::set_ix_root(self, id, root_page);
             }
             self.apd.spd.ps.write().unwrap().set_alloc_pn(target);
         }

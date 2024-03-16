@@ -31,7 +31,7 @@ impl AtomicFile {
         let cf = Arc::new(RwLock::new(CommitFile::new(stg, lim.rbuf_mem)));
         let busy = Arc::new(Mutex::new(())); // Lock held while async save thread is active.
 
-        // Start the thread which will does save asyncronously.
+        // Start the thread which does save asyncronously.
         let (cf1, busy1) = (cf.clone(), busy.clone());
         std::thread::spawn(move || {
             while let Ok((size, map)) = rx.recv() {

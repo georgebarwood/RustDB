@@ -43,13 +43,12 @@ impl SortedFile {
             return;
         }
         let dp = &mut *self.dirty_pages.borrow_mut();
-        for (_pnum, pp) in dp.drain() {
+        for (pnum, pp) in dp.drain() {
             let p = &mut *pp.borrow_mut();
-            if p.pnum != u64::MAX {
-                p.compress(db);
-                p.write_header();
-                db.apd.set_data(p.pnum, p.data.to_data());
-            }
+            p.compress(db);
+            p.write_header();
+            debug_assert!(p.pnum == pnum);
+            db.apd.set_data(pnum, p.data.to_data());
         }
     }
 
@@ -165,6 +164,7 @@ impl SortedFile {
                 return true;
             } else {
                 // Page is full, divide it into left and right.
+                self.remove_page(p.pnum);
                 let sp = Split::new(p, db);
                 let sk = &*p.get_key(db, sp.split_node, r);
                 // Could insert r into left or right here.
@@ -172,13 +172,12 @@ impl SortedFile {
                 let pnum2 = self.alloc_page(db, sp.right);
                 match pi {
                     None => {
-                        // New root page needed.
-                        // New root re-uses the root page number.
+                        // No parent, new root page needed. New root uses pnum.
                         let mut new_root = self.new_page(p.level + 1);
                         // sp.left is allocated a new page number, which is first page of new root.
                         new_root.first_page = self.alloc_page(db, sp.left);
-                        self.publish_page(self.root_page.get(), new_root);
-                        self.append_page(db, self.root_page.get(), sk, pnum2);
+                        self.publish_page(pnum, new_root);
+                        self.append_page(db, pnum, sk, pnum2);
                     }
                     Some(pi) => {
                         self.publish_page(pnum, sp.left);
@@ -193,14 +192,16 @@ impl SortedFile {
 
     /// Insert child into a non-leaf page.
     fn insert_page(&self, db: &DB, into: &ParentInfo, r: &dyn Record, cpnum: u64) {
-        let pp = self.load_page(db, into.pnum);
+        let pnum = into.pnum;
+        let pp = self.load_page(db, pnum);
         let p = &mut *pp.borrow_mut();
         // Need to check if page is full.
         if !p.full(db.page_size_max) {
             self.set_dirty(p, &pp);
             p.insert_page(db, r, cpnum);
         } else {
-            // Split the parent page.
+            // Split p.
+            self.remove_page(pnum);
             let mut sp = Split::new(p, db);
             let sk = &*p.get_key(db, sp.split_node, r);
             // Insert into either left or right.
@@ -213,14 +214,14 @@ impl SortedFile {
             let pnum2 = self.alloc_page(db, sp.right);
             match into.parent {
                 None => {
-                    // New root page needed.
+                    debug_assert!(pnum == self.root_page.get());
                     let mut new_root = self.new_page(p.level + 1);
                     new_root.first_page = self.alloc_page(db, sp.left);
-                    self.publish_page(self.root_page.get(), new_root);
-                    self.append_page(db, self.root_page.get(), sk, pnum2);
+                    self.publish_page(pnum, new_root);
+                    self.append_page(db, pnum, sk, pnum2);
                 }
                 Some(pi) => {
-                    self.publish_page(into.pnum, sp.left);
+                    self.publish_page(pnum, sp.left);
                     self.insert_page(db, pi, sk, pnum2);
                 }
             }
@@ -267,7 +268,6 @@ impl SortedFile {
         self.dirty_pages.borrow_mut().insert(pnum, pp);
     }
 
-    #[cfg(feature = "pack")]
     fn remove_page(&self, pnum: u64) {
         self.dirty_pages.borrow_mut().remove(&pnum);
     }
@@ -451,9 +451,24 @@ impl SortedFile {
     }
 
     #[cfg(feature = "renumber")]
+    /// Renumber, adjusting cache.
+    pub fn ren(&self, from: u64, db: &DB) -> u64 {
+        let to = db.apd.renumber_page(from);
+        let mut dp = self.dirty_pages.borrow_mut();
+        if let Some(p) = dp.remove(&from) {
+            {
+                let mut p = p.borrow_mut();
+                debug_assert!(p.pnum == from);
+                p.pnum = to;
+            }
+            dp.insert(to, p);
+        }
+        to
+    }
+
+    #[cfg(feature = "renumber")]
     /// Renumber pages >= target.
     pub fn renumber(&self, db: &DB, target: u64) {
-        assert!(self.dirty_pages.borrow().is_empty());
         self.renumber_page(db, target, self.root_page.get());
     }
 
@@ -463,7 +478,7 @@ impl SortedFile {
         let p = &mut pp.borrow_mut();
         if p.level != 0 {
             if p.first_page >= target {
-                p.first_page = db.apd.renumber_page(p.first_page);
+                p.first_page = self.ren(p.first_page, db);
                 self.set_dirty(p, &pp);
             }
             if p.level > 1 {
@@ -484,7 +499,7 @@ impl SortedFile {
         let mut cp = p.child_page(x);
         let cp_ren = cp >= target;
         if cp_ren {
-            cp = db.apd.renumber_page(cp);
+            cp = self.ren(cp, db);
             p.set_child_page(x, cp);
         }
         if p.level > 1 {
@@ -517,7 +532,6 @@ impl Split {
     /// Split the records of p into two new pages.
     fn new(p: &mut Page, db: &DB) -> Self {
         let half_page_size = db.apd.spd.psi.half_size_page();
-        p.pnum = u64::MAX; // Invalidate old pnum to prevent old page being saved.
         let mut result = Split {
             count: 0,
             split_node: 0,
