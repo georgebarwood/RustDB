@@ -3,85 +3,82 @@ use std::cmp::min;
 
 /// Slice of Data to be written to storage.
 pub struct DataSlice {
-    ///
-    pub off: usize,
-    ///
-    pub len: usize,
-    ///
+    /// Slice data.
     pub data: Data,
+    /// Start of slice.
+    pub off: usize,
+    /// Length of slice.
+    pub len: usize,
 }
 
 impl DataSlice {
-    ///
+    /// Get reference to the whole slice.
     pub fn data(&self) -> &[u8] {
         &self.data[self.off..self.off + self.len]
     }
+    /// Get reference to part of slice.
+    pub fn part(&self, off: usize, len: usize) -> &[u8] {
+        &self.data[self.off + off..self.off + off + len]
+    }
+    /// Trim specified amount from start of slice.
+    pub fn trim(&mut self, trim: usize) {
+        self.off += trim;
+        self.len -= trim;
+    }
 }
 
-/// Implements an updateable file based on some underlying storage.
+#[derive(Default)]
+/// Updateable storage based on some underlying storage.
 pub struct WMap {
-    /// Map of outstanding writes which have not yet been written to the underlying file.
+    /// Map of writes.
     pub map: BTreeMap<u64, DataSlice>,
 }
 
-impl Default for WMap {
-    /// Construct a new WMap
-    fn default() -> Self {
-        Self {
-            map: BTreeMap::new(),
-        }
-    }
-}
-
 impl WMap {
-    /// Read from file, taking writes into account. Unwritten ranges are read from underlying storage.
+    /// Read from storage, taking map of previous writes into account. Unwritten ranges are read from underlying storage.
     pub fn read(&self, start: u64, data: &mut [u8], u: &dyn Storage) {
-        let mut todo: usize = data.len();
-        if todo == 0 {
-            return;
-        }
-        let mut done: usize = 0;
-
-        for (&k, v) in self.map.range(start..) {
-            let estart = k + 1 - v.len as u64;
-            if estart > start + done as u64 {
-                let lim = (estart - (start + done as u64)) as usize;
-                let amount = min(todo, lim);
-                u.read(start + done as u64, &mut data[done..done + amount]);
-                done += amount;
-                todo -= amount;
+        let len = data.len();
+        if len != 0 {
+            let mut done = 0;
+            for (&k, v) in self.map.range(start..) {
+                let es = k + 1 - v.len as u64;
+                let doff = start + done as u64;
+                if es > doff {
+                    // Read from underlying storage.
+                    let a = min(len - done, (es - doff) as usize);
+                    u.read(doff, &mut data[done..done + a]);
+                    done += a;
+                }
+                if es >= start + len as u64 {
+                    break;
+                } else {
+                    // Use previous write.
+                    let skip = (start + done as u64 - es) as usize;
+                    let a = min(len - done, v.len - skip);
+                    data[done..done + a].copy_from_slice(v.part(skip, a));
+                    done += a;
+                }
+                if done == len {
+                    break;
+                }
             }
-            if estart > start + data.len() as u64 {
-                break;
-            } else {
-                let skip = (start + done as u64 - estart) as usize;
-                let amount = min(todo, v.len - skip);
-                data[done..done + amount]
-                    .copy_from_slice(&v.data[v.off + skip..v.off + skip + amount]);
-                done += amount;
-                todo -= amount;
+            if done < len {
+                u.read(start + done as u64, &mut data[done..len]);
             }
-            if todo == 0 {
-                break;
-            }
-        }
-        if todo > 0 {
-            u.read(start + done as u64, &mut data[done..done + todo]);
         }
     }
 
-    /// Write to file. Existing writes which overlap with new write need to be trimmed or removed.
+    /// Write to storage, previous writes which overlap with new write need to be trimmed or removed.
     pub fn write(&mut self, start: u64, data: Data, off: usize, len: usize) {
         if len == 0 {
             return;
         }
-        let mut remove = Vec::new();
-        let mut add = Vec::new();
+        let (mut insert, mut remove) = (Vec::new(), Vec::new());
         let end = start + len as u64;
 
         for (&k, v) in self.map.range_mut(start..) {
-            let eend = k + 1; // end of existing write.
-            let estart = eend - v.len as u64; // start of existing write.
+            let eend = k + 1;
+            let estart = eend - v.len as u64;
 
             // (a) New write ends before existing write.
             if end <= estart {
@@ -93,37 +90,32 @@ impl WMap {
             }
             // (c) New write starts before existing write, but doesn't subsume it. Trim existing write.
             else if start <= estart {
-                let trim = (end - estart) as usize;
-                v.len -= trim;
-                v.off += trim;
+                v.trim((end - estart) as usize);
+                break;
             }
             // (d) New write starts in middle of existing write, ends before end of existing write...
-            // .. put start of existing write in add list, trim existing write.
+            // .. put start of existing write in insert list, trim existing write.
             else if start > estart && end < eend {
                 let remain = (start - estart) as usize;
-                add.push((estart, v.data.clone(), v.off, remain));
-
-                let trim = (end - estart) as usize;
-                v.len -= trim;
-                v.off += trim;
+                insert.push((estart, v.data.clone(), v.off, remain));
+                v.trim((end - estart) as usize);
+                break;
             }
             // (e) New write starts in middle of existing write, ends after existing write...
-            // ... put start of existing write in add list, remove existing write,
+            // ... put start of existing write in insert list, remove existing write.
             else {
                 let remain = (start - estart) as usize;
-                add.push((estart, v.data.clone(), v.off, remain));
-
+                insert.push((estart, v.data.clone(), v.off, remain));
                 remove.push(eend - 1);
             }
         }
         for k in remove {
             self.map.remove(&k);
         }
-        for (start, data, off, len) in add {
+        for (start, data, off, len) in insert {
             self.map
                 .insert(start + len as u64 - 1, DataSlice { data, off, len });
         }
-
         self.map
             .insert(start + len as u64 - 1, DataSlice { data, off, len });
     }
