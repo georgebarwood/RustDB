@@ -40,7 +40,7 @@ impl BlockPageStg {
         let sizes = lim.page_sizes;
         let max_div = lim.max_div;
         let ds = DividedStg::new(stg, lim.blk_cap);
-        let blk_cap = ds.blk_cap;
+        let blk_cap = ds.blk_cap as usize;
 
         let mut s = Self {
             ds,
@@ -48,7 +48,7 @@ impl BlockPageStg {
             first_free_pn: NOT_PN,
             fd: Vec::new(),
             free_pn: BTreeSet::default(),
-            header_dirty: false,
+            header_dirty: true,
             is_new,
             psi: SizeInfo {
                 blk_cap,
@@ -64,7 +64,6 @@ impl BlockPageStg {
                 s.fd.push(s.ds.new_file());
             }
             s.ds.set_root(&s.fd[0]);
-            s.header_dirty = true;
         } else {
             s.read_header();
         }
@@ -147,7 +146,7 @@ impl BlockPageStg {
         }
     }
 
-    /// Use file size to calculate allocation index.
+    /// Use sub-file size to calculate allocation index.
     fn alloc(&self, fx: usize) -> u64 {
         let size = self.fsize(fx);
         if fx == 0 {
@@ -188,7 +187,7 @@ impl BlockPageStg {
     /// Set numbered page info.
     fn set_pn_info(&mut self, pn: u64, size: usize, ix: u64) {
         let off = self.header_size + pn * 8;
-        let eof = self.fsize(0);
+        let eof = self.fsize(PN_FILE);
         if off > eof {
             self.clear(PN_FILE, eof, off - eof);
         }
@@ -248,7 +247,7 @@ impl BlockPageStg {
         self.save_fd(fx);
     }
 
-    /// Save file descriptor after write or truncate operation.
+    /// Save sub-file descriptor after write or truncate operation.
     fn save_fd(&mut self, fx: usize) {
         let fd = &mut self.fd[fx];
         if fd.changed {
@@ -302,13 +301,16 @@ impl PageStorage for BlockPageStg {
         let fx = self.psi.index(size);
         let ps = self.page_size(fx);
         let (old_fx, mut old_size, mut ix) = self.get_pn_info(pn);
-        if fx != old_fx {
-            self.free_page(old_fx, ix);
-            ix = self.alloc(fx);
-            old_size = ps as usize - PAGE_HSIZE;
-            self.write(fx, ix * ps, &pn.to_le_bytes());
+        if size != old_size {
+            if fx != old_fx {
+                self.free_page(old_fx, ix);
+                ix = self.alloc(fx);
+                old_size = ps as usize - PAGE_HSIZE;
+                self.write(fx, ix * ps, &pn.to_le_bytes());
+                self.set_pn_info(pn, size, ix);
+            }
+            self.set_pn_info(pn, size, ix);
         }
-        self.set_pn_info(pn, size, ix);
 
         let off = PAGE_HSIZE as u64 + ix * ps;
         self.write_data_n(fx, off, data, size);
@@ -414,7 +416,7 @@ impl PageStorage for BlockPageStg {
 
 #[derive(Clone)]
 struct SizeInfo {
-    blk_cap: u64,
+    blk_cap: usize,
     max_div: usize,
     sizes: usize,
 }
@@ -427,8 +429,7 @@ impl PageStorageInfo for SizeInfo {
 
     /// Size index for given page size.
     fn index(&self, size: usize) -> usize {
-        let size = size + PAGE_HSIZE;
-        let r = (self.blk_cap as usize) / size;
+        let r = self.blk_cap / (size + PAGE_HSIZE);
         if r >= self.max_div {
             1
         } else {
@@ -439,7 +440,7 @@ impl PageStorageInfo for SizeInfo {
     /// Page size for given index.
     fn size(&self, ix: usize) -> usize {
         debug_assert!(ix > 0 && ix <= self.sizes);
-        let size = self.blk_cap as usize / (1 + self.max_div - ix);
+        let size = self.blk_cap / (1 + self.max_div - ix);
         size - PAGE_HSIZE
     }
 }
