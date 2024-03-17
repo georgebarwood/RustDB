@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "5.2.64"
+version = "5.2.85"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -26,9 +26,7 @@ renumber = []
 verify = []
 unsafe-optim = []
 log = []
-log-block = []
-log-bps = []
-log-all = ["log", "log-block", "log-bps"]
+log-execute= []
 compact = []
 
 [dev-dependencies]
