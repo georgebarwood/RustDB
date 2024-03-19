@@ -157,30 +157,21 @@ impl BlockPageStg {
         }
     }
 
-    /// Free page by relocating last page in sub-file and truncating.
+    /// Free page by relocating last page in sub-file to fill gap and truncating.
     fn free_page(&mut self, fx: usize, ix: u64) {
         if fx != 0 {
-            // Relocate last page in file to fill gap.
             let last = self.alloc(fx) - 1;
-            self.relocate(fx, last, ix);
-            self.truncate(fx, last * self.page_size(fx));
-        }
-    }
-
-    /// Relocate a page in a sub-file.
-    fn relocate(&mut self, fx: usize, from: u64, to: u64) {
-        if from != to {
             let ps = self.page_size(fx);
-            let mut buf = vec![0; ps as usize];
-
-            self.read(fx, from * ps, &mut buf);
-            let pn = util::getu64(&buf, 0);
-
-            let (fx1, _size, ix1) = self.get_pn_info(pn);
-            assert!(fx1 == fx && ix1 == from);
-
-            self.update_ix(pn, to);
-            self.write_data(fx, to * ps, Arc::new(buf));
+            if last != ix {            
+                let mut buf = vec![0; ps as usize];
+                self.read(fx, last * ps, &mut buf);
+                let pn = util::getu64(&buf, 0);
+                let (fx1, _size, ix1) = self.get_pn_info(pn);
+                assert!(fx1 == fx && ix1 == last);
+                self.update_ix(pn, ix);
+                self.write_data(fx, ix * ps, Arc::new(buf));
+            }
+            self.truncate(fx, last * ps);
         }
     }
 

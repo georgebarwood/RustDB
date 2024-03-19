@@ -437,13 +437,13 @@ use Balance::*;
 
 /// To reduce the number of calls to Arc::make_mut.
 struct MutPage<'a> {
-    ///
+    /// Data.
     data: &'a mut Vec<u8>,
-    ///
+    /// Node size for page.
     node_size: usize,
-    ///
+    /// Page level.
     level: u8,
-    ///
+    /// Target - used for various purposes.
     target: usize,
 }
 

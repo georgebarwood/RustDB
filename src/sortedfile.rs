@@ -587,7 +587,7 @@ pub trait Record {
 
 /// Id record.
 pub struct Id {
-    ///
+    /// Id.
     pub id: u64,
 }
 

@@ -39,7 +39,7 @@ pub trait Storage: Send + Sync {
         u64::from_le_bytes(bytes)
     }
 
-    ///
+    /// Clone.
     fn clone(&self) -> Box<dyn Storage> {
         panic!()
     }
@@ -176,6 +176,7 @@ impl SimpleFileStorage {
                     .read(true)
                     .write(true)
                     .create(true)
+                    .truncate(false)
                     .open(filename)
                     .unwrap(),
             )),
@@ -294,7 +295,7 @@ impl Storage for MultiFileStorage {
 /// Dummy Stg that can be used for Atomic upd file if "reliable" atomic commits are not required.
 pub struct DummyFile {}
 impl DummyFile {
-    ///
+    /// Construct.
     pub fn new() -> Box<Self> {
         Box::new(Self {})
     }

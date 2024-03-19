@@ -302,11 +302,11 @@ pub type Data = Arc<Vec<u8>>;
 pub struct MData(Data);
 
 impl MData {
-    ///
+    /// New MData from Data.
     pub fn new(data: Data) -> MData {
         MData(data)
     }
-    ///
+    /// Data from MData.
     pub fn to_data(&mut self) -> Data {
         self.0.clone()
     }
@@ -340,17 +340,17 @@ pub struct Database {
     pub builtins: Arc<BuiltinMap>,
 
     // System tables.
-    ///
+    /// Schema table.
     pub sys_schema: Rc<Table>,
-    ///
+    /// Table table.
     pub sys_table: Rc<Table>,
-    ///
+    /// Column definitions table.
     pub sys_column: Rc<Table>,
-    ///
+    /// Index table.
     pub sys_index: Rc<Table>,
-    ///
+    /// Index column definitions.
     pub sys_index_col: Rc<Table>,
-    ///
+    /// Function (FN) definitions.
     pub sys_function: Rc<Table>,
 
     /// Cache of loaded Schemas.

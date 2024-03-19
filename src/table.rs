@@ -2,11 +2,11 @@ use crate::*;
 
 /// Table Index.
 pub struct Index {
-    ///
+    /// File.
     pub file: Rc<SortedFile>,
-    ///
+    /// columns.
     pub cols: Rc<Vec<usize>>,
-    ///
+    /// Index id.
     pub id: i64,
 }
 
@@ -16,9 +16,9 @@ pub type IxList = Vec<Index>;
 /// Save or Rollback.
 #[derive(PartialEq, Eq, PartialOrd, Clone, Copy)]
 pub enum SaveOp {
-    ///
+    /// Save.
     Save,
-    ///
+    /// Rollback.
     RollBack,
 }
 
@@ -510,11 +510,11 @@ impl ColInfo {
 /// Index information for creating an index.
 #[non_exhaustive]
 pub struct IndexInfo {
-    ///
+    /// Table name.
     pub tname: ObjRef,
-    ///
+    /// Index name.
     pub iname: String,
-    ///
+    /// Index columns.
     pub cols: Vec<usize>,
 }
 
@@ -522,13 +522,13 @@ pub struct IndexInfo {
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct Row {
-    ///
+    /// Row Id.
     pub id: i64,
-    ///
+    /// Row values.
     pub values: Vec<Value>,
-    ///
+    /// Type information.
     pub info: Rc<ColInfo>,
-    ///
+    /// Codes for variable length ( binary, string ) values.
     pub codes: Vec<Code>,
 }
 

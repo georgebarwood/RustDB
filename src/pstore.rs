@@ -304,7 +304,7 @@ impl SharedPagedData {
 pub struct AccessPagedData {
     writer: bool,
     time: u64,
-    ///
+    /// Shared Page Data.
     pub spd: Arc<SharedPagedData>,
 }
 

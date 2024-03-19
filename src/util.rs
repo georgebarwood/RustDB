@@ -1,4 +1,4 @@
-use crate::{Arc, BTreeSet, Data, HashMap, Rc, RefCell};
+use crate::{BTreeSet, Data, HashMap, Rc, RefCell};
 
 /// In debug mode or feature unsafe-optim not enabled, same as debug_assert! otherwise unsafe compiler hint.
 #[cfg(any(debug_assertions, not(feature = "unsafe-optim")))]
@@ -41,7 +41,7 @@ pub fn new<T>(x: T) -> std::rc::Rc<std::cell::RefCell<T>> {
 
 /// New Data ( `Arc::new(Vec::new())` ).
 pub fn nd() -> Data {
-    Arc::new(Vec::new())
+    Data::default()
 }
 
 /// Construct a new map wrapped in a RefCell.

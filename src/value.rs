@@ -16,23 +16,23 @@ pub struct Code {
 /// If the value is more than n bytes, the first (n-8) bytes are stored inline, and the rest are coded.
 #[non_exhaustive]
 pub enum Value {
-    ///
+    /// No value.
     None,
-    ///
+    /// Binary.
     RcBinary(Rc<Vec<u8>>),
-    ///
+    /// Arc Binary.
     ArcBinary(Arc<Vec<u8>>),
-    ///
+    /// String.
     String(Rc<String>),
-    ///
+    /// Integer.
     Int(i64),
-    ///
+    /// Float.
     Float(f64),
-    ///
+    /// Bool.
     Bool(bool),
-    ///
+    /// For expression.
     For(Rc<RefCell<run::ForState>>),
-    ///
+    /// For expression ( sorted case ).
     ForSort(Rc<RefCell<run::ForSortState>>),
 }
 

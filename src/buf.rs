@@ -5,7 +5,7 @@ use std::cmp::min;
 pub struct WriteBuffer {
     ix: usize,
     pos: u64,
-    ///
+    /// Underlying storage.
     pub stg: Box<dyn Storage>,
     buf: Vec<u8>,
     #[cfg(feature = "log")]
@@ -21,7 +21,7 @@ struct Log {
 }
 
 impl WriteBuffer {
-    ///
+    /// Construct.
     pub fn new(stg: Box<dyn Storage>, buf_size: usize) -> Self {
         Self {
             ix: 0,
@@ -38,7 +38,7 @@ impl WriteBuffer {
         }
     }
 
-    ///
+    /// Write data to specified offset,
     pub fn write(&mut self, off: u64, data: &[u8]) {
         if self.pos + self.ix as u64 != off {
             self.flush(off);
@@ -81,7 +81,7 @@ impl WriteBuffer {
         self.pos = new_pos;
     }
 
-    ///
+    /// Commit.
     pub fn commit(&mut self, size: u64) {
         self.flush(u64::MAX);
         self.stg.commit(size);
@@ -102,7 +102,7 @@ impl WriteBuffer {
         }
     }
 
-    ///
+    /// Write u64.
     pub fn write_u64(&mut self, start: u64, value: u64) {
         self.write(start, &value.to_le_bytes());
     }

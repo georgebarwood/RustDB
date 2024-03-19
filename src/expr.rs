@@ -11,23 +11,22 @@ pub(crate) struct SqlError {
 }
 /// Table Expression ( not yet type-checked or compiled against database ).
 pub enum TableExpression {
-    // Select( FromExpression ),
-    ///
+    /// Base table.
     Base(ObjRef),
-    ///
+    /// VALUEs.
     Values(Vec<Vec<Expr>>),
 }
 /// Assign operation.
 #[derive(Clone, Copy)]
 #[non_exhaustive]
 pub enum AssignOp {
-    ///
+    /// Assign.
     Assign,
-    ///
+    /// append.
     Append,
-    ///
+    /// Increment.
     Inc,
-    ///
+    /// Decrement.
     Dec,
 }
 /// Vector of local variable numbers and AssignOp.
@@ -36,17 +35,17 @@ pub type Assigns = Vec<(usize, AssignOp)>;
 /// From Expression ( not yet compiled ).
 #[non_exhaustive]
 pub struct FromExpression {
-    ///
+    /// Column names.
     pub colnames: Vec<String>,
-    ///
+    /// Assigns.
     pub assigns: Assigns,
-    ///
+    /// Expressions.
     pub exps: Vec<Expr>,
-    ///
+    /// FROM clause.
     pub from: Option<Box<TableExpression>>,
-    ///
+    /// WHERE expression.
     pub wher: Option<Expr>,
-    ///
+    /// ORDER BY clause.
     pub orderby: Vec<(Expr, bool)>,
 }
 
@@ -54,70 +53,70 @@ pub struct FromExpression {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
 pub enum Token {
     /* Note: order is significant */
-    ///
+    /// Less.
     Less,
-    ///
+    /// Less or Equal.
     LessEqual,
-    ///
+    /// Greater or Equal.
     GreaterEqual,
-    ///
+    /// Greater.
     Greater,
-    ///
+    /// Equal.
     Equal,
-    ///
+    /// Not Equal.
     NotEqual,
-    ///
+    /// In.
     In,
-    ///
+    /// +
     Plus,
-    ///
+    /// -
     Minus,
-    ///
+    /// *
     Times,
-    ///
+    /// /
     Divide,
-    ///
+    /// %
     Percent,
-    ///
+    /// |
     VBar,
-    ///
+    /// AND
     And,
-    ///
+    /// OR
     Or,
-    ///
+    /// |=
     VBarEqual,
-    ///
+    /// +=
     PlusEqual,
-    ///
+    /// -=
     MinusEqual,
-    ///
+    /// Identifier.
     Id,
-    ///
+    /// Number.
     Number,
-    ///
+    /// Hex number.
     Hex,
-    ///
+    /// String literal.
     String,
-    ///
+    /// (
     LBra,
-    ///
+    /// )
     RBra,
-    ///
+    /// ,
     Comma,
-    ///
+    /// :
     Colon,
-    ///
+    /// .
     Dot,
-    ///
+    /// !
     Exclamation,
-    ///
+    /// Unknown.
     Unknown,
-    ///
+    /// End of file.
     EndOfFile,
 }
 
 impl Token {
-    ///
+    /// Get precedence of operator.
     pub fn precedence(self) -> i8 {
         const PA: [i8; 15] = [10, 10, 10, 10, 10, 10, 10, 20, 20, 30, 30, 30, 15, 8, 5];
         PA[self as usize]
@@ -127,20 +126,20 @@ impl Token {
 /// Scalar Expression (uncompiled).
 #[non_exhaustive]
 pub struct Expr {
-    ///
+    /// Expression kind.
     pub exp: ExprIs,
-    ///
+    /// Data type.
     pub data_type: DataType,
     /// Doesn't depend on FROM clause.
     pub is_constant: bool,
     /// Has been type-checked.
     pub checked: bool,
-    ///
+    /// Column number.
     pub col: usize,
 }
 
 impl Expr {
-    ///
+    /// Construct new Expr.
     pub fn new(exp: ExprIs) -> Self {
         Expr {
             exp,
@@ -155,27 +154,27 @@ impl Expr {
 /// Scalar Expression variants.
 #[non_exhaustive]
 pub enum ExprIs {
-    ///
+    /// Constant.
     Const(Value),
-    ///
+    /// Local variable.
     Local(usize),
-    ///
+    /// Column.
     ColName(String),
-    ///
+    /// Binary operator expression.
     Binary(Token, Box<Expr>, Box<Expr>),
-    ///
+    /// Not expression.
     Not(Box<Expr>),
-    ///
+    /// Unary minus.
     Minus(Box<Expr>),
-    ///
+    /// Case expression.
     Case(Vec<(Expr, Expr)>, Box<Expr>),
-    ///
+    /// Function call.
     FuncCall(ObjRef, Vec<Expr>),
-    ///
+    /// Builtin function call.
     BuiltinCall(String, Vec<Expr>),
-    ///
+    /// Scalar select.
     ScalarSelect(Box<FromExpression>),
-    ///
+    /// List of expressions.
     List(Vec<Expr>),
 }
 
@@ -183,9 +182,9 @@ pub enum ExprIs {
 #[derive(PartialEq, PartialOrd, Eq, Hash, Clone)]
 #[non_exhaustive]
 pub struct ObjRef {
-    ///
+    /// Schema.
     pub schema: String,
-    ///
+    /// Name within Schema.
     pub name: String,
 }
 
@@ -207,17 +206,17 @@ impl ObjRef {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
 #[non_exhaustive]
 pub enum DataKind {
-    ///
+    /// None.
     None = 0,
-    ///
+    /// Binary.
     Binary = 1,
-    ///
+    /// String.
     String = 2,
-    ///
+    /// Integer.
     Int = 3,
-    ///
+    /// Float.
     Float = 4,
-    ///
+    /// Bool.
     Bool = 5,
 }
 

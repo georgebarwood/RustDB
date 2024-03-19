@@ -33,7 +33,7 @@ pub fn bpf(hp: usize) -> [usize; NFT] {
 
 /// Storage of variable size values.
 pub struct ByteStorage {
-    ///
+    /// File for storing fragments.
     pub file: Rc<SortedFile>,
     id_gen: Cell<u64>,
     /// Bytes per fragment.

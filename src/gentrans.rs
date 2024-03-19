@@ -59,14 +59,14 @@ pub struct Part {
     pub file_name: String,
     /// Part contenttype.
     pub content_type: String,
-    ///
+    /// Text.
     pub text: String,
-    ///
+    /// Data.
     pub data: Data,
 }
 
 impl GenTransaction {
-    ///
+    /// Construct.
     pub fn new() -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
