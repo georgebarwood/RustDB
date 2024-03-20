@@ -516,7 +516,7 @@ pub fn c_table(b: &Block, name: &ObjRef) -> Rc<Table> {
     }
 }
 
-/// Compile named function (if it is if not already compiled ).
+/// Compile named function (if it is not already compiled ).
 pub fn c_function(db: &DB, name: &ObjRef) -> Rc<Function> {
     if let Some(r) = db.get_function(name) {
         let (compiled, src) = { (r.compiled.get(), r.source.clone()) };

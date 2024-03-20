@@ -13,7 +13,7 @@ pub struct DataSlice {
 
 impl DataSlice {
     /// Get reference to the whole slice.
-    pub fn data(&self) -> &[u8] {
+    pub fn all(&self) -> &[u8] {
         &self.data[self.off..self.off + self.len]
     }
     /// Get reference to part of slice.
@@ -34,7 +34,7 @@ impl DataSlice {
 #[derive(Default)]
 /// Updateable storage based on some underlying storage.
 pub struct WMap {
-    /// Map of writes. Key is the storage offset of the last byte.
+    /// Map of writes. Key is the end of the slice.
     pub map: BTreeMap<u64, DataSlice>,
 }
 
@@ -44,8 +44,7 @@ impl WMap {
         if len != 0 {
             let (mut insert, mut remove) = (Vec::new(), Vec::new());
             let end = start + len as u64;
-            for (&k, v) in self.map.range_mut(start..) {
-                let ee = k + 1; // Existing write End.
+            for (&ee, v) in self.map.range_mut(start + 1..) {
                 let es = ee - v.len as u64; // Existing write Start.
                 if es >= end {
                     // Existing write starts after end of new write, nothing to do.
@@ -57,7 +56,7 @@ impl WMap {
                         break;
                     }
                     // New write subsumes existing write entirely, remove existing write.
-                    remove.push(ee - 1);
+                    remove.push(ee);
                 } else if end < ee {
                     // New write starts in middle of existing write, ends before end of existing write,
                     // put start of existing write in insert list, trim existing write.
@@ -68,18 +67,18 @@ impl WMap {
                     // New write starts in middle of existing write, ends after existing write,
                     // put start of existing write in insert list, remove existing write.
                     insert.push((es, v.take(), v.off, (start - es) as usize));
-                    remove.push(ee - 1);
+                    remove.push(ee);
                 }
             }
-            for k in remove {
-                self.map.remove(&k);
+            for end in remove {
+                self.map.remove(&end);
             }
             for (start, data, off, len) in insert {
                 self.map
-                    .insert(start + len as u64 - 1, DataSlice { data, off, len });
+                    .insert(start + len as u64, DataSlice { data, off, len });
             }
             self.map
-                .insert(start + len as u64 - 1, DataSlice { data, off, len });
+                .insert(start + len as u64, DataSlice { data, off, len });
         }
     }
 
@@ -88,8 +87,8 @@ impl WMap {
         let len = data.len();
         if len != 0 {
             let mut done = 0;
-            for (&k, v) in self.map.range(start..) {
-                let es = k + 1 - v.len as u64; // Existing write Start.
+            for (&end, v) in self.map.range(start + 1..) {
+                let es = end - v.len as u64; // Existing write Start.
                 let doff = start + done as u64;
                 if es > doff {
                     // Read from underlying storage.

@@ -56,8 +56,8 @@ impl BasicAtomicFile {
             return;
         }
         if phase == 1 {
-            for (k, v) in std::mem::take(&mut self.map.map) {
-                let start = k + 1 - v.len as u64;
+            for (end, v) in std::mem::take(&mut self.map.map) {
+                let start = end - v.len as u64;
                 self.list.push((start, v));
             }
 
@@ -71,7 +71,7 @@ impl BasicAtomicFile {
             let mut stg_written = false;
             let mut pos: u64 = 16;
             for (start, v) in self.list.iter() {
-                let (start, len, data) = (*start, v.len as u64, v.data());
+                let (start, len, data) = (*start, v.len as u64, v.all());
                 if start >= self.size {
                     // Writes beyond current stg size can be written directly.
                     stg_written = true;
@@ -96,10 +96,9 @@ impl BasicAtomicFile {
             self.upd.commit(pos);
         } else {
             for (start, v) in self.list.iter() {
-                let start = *start;
-                if start < self.size {
+                if *start < self.size {
                     // Writes beyond current stg size have already been written.
-                    self.stg.write(start, v.data());
+                    self.stg.write(*start, v.all());
                 }
             }
             self.list.clear();

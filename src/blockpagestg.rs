@@ -162,7 +162,7 @@ impl BlockPageStg {
         if fx != 0 {
             let last = self.alloc(fx) - 1;
             let ps = self.page_size(fx);
-            if last != ix {            
+            if last != ix {
                 let mut buf = vec![0; ps as usize];
                 self.read(fx, last * ps, &mut buf);
                 let pn = util::getu64(&buf, 0);

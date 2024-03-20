@@ -64,8 +64,8 @@ impl Storage for AtomicFile {
         let map = std::mem::take(&mut self.map);
         let cf = &mut *self.cf.write().unwrap();
         cf.todo += 1;
-        for (k, v) in map.map.iter() {
-            let start = k + 1 - v.len as u64;
+        for (end, v) in map.map.iter() {
+            let start = end - v.len as u64;
             cf.write_data(start, v.data.clone(), v.off, v.len);
         }
         self.tx.send((size, map)).unwrap();
