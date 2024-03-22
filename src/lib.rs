@@ -38,7 +38,7 @@
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
 //! - `compact` : Default page storage is CompactFile rather than [BlockPageStg] (can be set explicitly using [pstore::SharedPagedData::new_from_ps] ).
 //!
-//! By default, all features except serde, unsafe-optim, log and log-block are enabled.
+//! By default, all features except serde, unsafe-optim and log are enabled.
 //!
 //!# General Design of Database
 //!

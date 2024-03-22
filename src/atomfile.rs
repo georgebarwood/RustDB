@@ -55,19 +55,16 @@ impl AtomicFile {
 impl Storage for AtomicFile {
     fn commit(&mut self, size: u64) {
         self.size = size;
-        if self.map.map.is_empty() {
+        if self.map.is_empty() {
             return;
         }
-        if self.cf.read().unwrap().map.map.len() > self.map_lim {
+        if self.cf.read().unwrap().map.len() > self.map_lim {
             self.wait_complete();
         }
         let map = std::mem::take(&mut self.map);
         let cf = &mut *self.cf.write().unwrap();
         cf.todo += 1;
-        for (end, v) in map.map.iter() {
-            let start = end - v.len as u64;
-            cf.write_data(start, v.data.clone(), v.off, v.len);
-        }
+        map.to_storage(cf);
         self.tx.send((size, map)).unwrap();
     }
 

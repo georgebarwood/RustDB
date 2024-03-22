@@ -35,10 +35,42 @@ impl DataSlice {
 /// Updateable storage based on some underlying storage.
 pub struct WMap {
     /// Map of writes. Key is the end of the slice.
-    pub map: BTreeMap<u64, DataSlice>,
+    map: BTreeMap<u64, DataSlice>,
 }
 
 impl WMap {
+    /// Is the map empty?
+    pub fn is_empty(&self) -> bool
+    {
+        self.map.is_empty()
+    }
+
+    /// Number of key-value pairs in the map.
+    pub fn len(&self) -> usize
+    {
+        self.map.len()
+    }
+
+    /// Take the map and convert it to a Vec.
+    pub fn to_vec(&mut self) -> Vec<(u64,DataSlice)>
+    {
+       let mut result = Vec::new();
+       for (end, v) in std::mem::take(&mut self.map) {
+           let start = end - v.len as u64;
+           result.push((start, v));
+       }
+       result
+    }
+
+    /// Write the map into storage.
+    pub fn to_storage(&self, stg: &mut dyn Storage)
+    {
+        for (end, v) in self.map.iter() {
+            let start = end - v.len as u64;
+            stg.write_data(start, v.data.clone(), v.off, v.len);
+        }
+    }
+
     /// Write to storage, existing writes which overlap with new write need to be trimmed or removed.
     pub fn write(&mut self, start: u64, data: Data, off: usize, len: usize) {
         if len != 0 {

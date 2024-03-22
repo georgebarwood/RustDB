@@ -11,7 +11,6 @@ pub fn save_test() {
     let mf = MemFile::new();
 
     for i in 0..2 {
-        println!("save_test i={i}");
         let mut bmap = BuiltinMap::default();
         standard_builtins(&mut bmap);
         let bmap = Arc::new(bmap);

@@ -52,14 +52,11 @@ impl BasicAtomicFile {
 
     /// Perform the specified phase ( 1 or 2 ) of a two-phase commit.
     pub fn commit_phase(&mut self, size: u64, phase: u8) {
-        if self.map.map.is_empty() && self.list.is_empty() {
+        if self.map.is_empty() && self.list.is_empty() {
             return;
         }
         if phase == 1 {
-            for (end, v) in std::mem::take(&mut self.map.map) {
-                let start = end - v.len as u64;
-                self.list.push((start, v));
-            }
+            self.list = self.map.to_vec(); 
 
             // Write the updates to upd.
             // First set the end position to zero.
