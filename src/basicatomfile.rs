@@ -56,7 +56,7 @@ impl BasicAtomicFile {
             return;
         }
         if phase == 1 {
-            self.list = self.map.to_vec(); 
+            self.list = self.map.to_vec();
 
             // Write the updates to upd.
             // First set the end position to zero.
