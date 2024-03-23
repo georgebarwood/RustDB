@@ -6,8 +6,9 @@ pub struct BasicAtomicFile {
     stg: WriteBuffer,
     /// Temporary storage for updates during commit.
     upd: WriteBuffer,
-    /// Map of writes. Note the key is the file address of the last byte written.
+    /// Map of writes.
     pub map: WMap,
+    /// List of writes.
     list: Vec<(u64, DataSlice)>,
     size: u64,
 }

@@ -1,9 +1,10 @@
+use crate::{Data, Storage};
+use std::cmp::min;
+
 #[cfg(not(feature = "btree_experiment"))]
 use crate::BTreeMap;
-use crate::{Data, Storage};
 #[cfg(feature = "btree_experiment")]
 use btree_experiment::BTreeMap;
-use std::cmp::min;
 
 #[derive(Default)]
 /// Slice of Data to be written to storage.
@@ -91,9 +92,8 @@ impl WMap {
     #[cfg(feature = "btree_experiment")]
     /// Write the map into storage.
     pub fn to_storage(&self, stg: &mut dyn Storage) {
-        self.map.walk(&0, &mut |x: &(u64, DataSlice)| {
-            let v = &x.1;
-            let start = x.0 - v.len as u64;
+        self.map.walk(&0, &mut |(end, v): &(u64, DataSlice)| {
+            let start = *end - v.len as u64;
             stg.write_data(start, v.data.clone(), v.off, v.len);
             false
         });
@@ -172,11 +172,6 @@ impl WMap {
                         return true;
                     } else {
                         // New write starts in middle of existing write, ends after existing write,
-
-                        // put start of existing write in insert list, remove existing write.
-                        // insert.push((es, v.take(), v.off, (start - es) as usize));
-                        // remove.push(ee);
-
                         // Trim existing write ( modifies key, but this is ok as ordering is not affected ).
                         v.len = (start - es) as usize;
                         *eend = es + v.len as u64;
