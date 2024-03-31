@@ -58,8 +58,8 @@ impl WMap {
     #[cfg(not(feature = "btree_experiment"))]
     /// Take the map and convert it to a Vec.
     pub fn to_vec(&mut self) -> Vec<(u64, DataSlice)> {
-        let mut result = Vec::new();
         let map = std::mem::take(&mut self.map);
+        let mut result = Vec::with_capacity(map.len());
         for (end, v) in map {
             let start = end - v.len as u64;
             result.push((start, v));
@@ -70,8 +70,8 @@ impl WMap {
     #[cfg(feature = "btree_experiment")]
     /// Take the map and convert it to a Vec.
     pub fn to_vec(&mut self) -> Vec<(u64, DataSlice)> {
-        let mut result = Vec::new();
         let mut map = std::mem::take(&mut self.map);
+        let mut result = Vec::with_capacity(map.len());
         map.walk_mut(&0, &mut |(end, v): &mut (u64, DataSlice)| {
             let start = *end - v.len as u64;
             result.push((start, std::mem::take(v)));

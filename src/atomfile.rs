@@ -147,13 +147,15 @@ pub fn test() {
     use rand::Rng;
     /* Idea of test is to check AtomicFile and MemFile behave the same */
 
+    let ta = crate::test::test_amount();
+
     let mut rng = rand::thread_rng();
 
     for _ in 0..100 {
         let mut s1 = AtomicFile::new(MemFile::new(), MemFile::new());
         let mut s2 = MemFile::new();
 
-        for _ in 0..1000 {
+        for _ in 0..1000 * ta {
             let off: usize = rng.gen::<usize>() % 100;
             let mut len = 1 + rng.gen::<usize>() % 20;
             let w: bool = rng.gen();
