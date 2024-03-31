@@ -130,14 +130,7 @@ impl Stash {
     /// Set the value of the specified page for the current time.
     fn set(&mut self, lpnum: u64, old: Data, data: Data) {
         let time = self.time;
-        let u = {
-            if let Some(u) = self.vers.get_mut(&time) {
-                u
-            } else {
-                self.vers.insert(time, HashSet::default());
-                self.vers.get_mut(&time).unwrap()
-            }
-        };
+        let u = self.vers.entry(time).or_default();
         let do_history = u.insert(lpnum);
         let p = self.get_pinfo(lpnum);
         let diff = p.lock().unwrap().set_data(time, old, data, do_history);
@@ -159,11 +152,8 @@ impl Stash {
     /// Register that there is a client reading the database. The result is the current time.
     fn begin_read(&mut self) -> u64 {
         let time = self.time;
-        if let Some(n) = self.rdrs.get_mut(&time) {
-            *n += 1;
-        } else {
-            self.rdrs.insert(time, 1);
-        }
+        let n = self.rdrs.entry(time).or_insert(0);
+        *n += 1;
         time
     }
 
