@@ -1,4 +1,4 @@
-use crate::{panic, Any, Arc, BTreeMap, Data, Rc, Transaction, Value};
+use crate::{panic, Any, Arc, Data, Rc, Transaction, Value, BTreeMap};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

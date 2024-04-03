@@ -105,7 +105,8 @@ impl WMap {
         if len != 0 {
             let (mut insert, mut remove) = (Vec::new(), Vec::new());
             let end = start + len as u64;
-            for (&ee, v) in self.map.range_mut(start + 1..) {
+            for (ee, v) in self.map.range_mut(start + 1..) {
+                let ee = *ee;
                 let es = ee - v.len as u64; // Existing write Start.
                 if es >= end {
                     // Existing write starts after end of new write, nothing to do.

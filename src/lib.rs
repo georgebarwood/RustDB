@@ -141,11 +141,17 @@ use crate::{
     value::*,
 };
 
+#[cfg(feature = "btree_experiment")]
+pub use btree_experiment::BTreeMap;
+
+#[cfg(not(feature = "btree_experiment"))]
+pub use std::collections::BTreeMap;
+
 use std::{
     any::Any,
     cell::{Cell, RefCell},
     cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     panic,
     rc::Rc,
     sync::{Arc, Mutex, RwLock},
