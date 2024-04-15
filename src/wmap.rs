@@ -1,10 +1,5 @@
-use crate::{Data, Storage};
+use crate::{Data, Storage,BTreeMap};
 use std::cmp::min;
-
-#[cfg(not(feature = "btree_experiment"))]
-use crate::BTreeMap;
-#[cfg(feature = "btree_experiment")]
-use btree_experiment::BTreeMap;
 
 #[derive(Default)]
 /// Slice of Data to be written to storage.
@@ -55,7 +50,6 @@ impl WMap {
         self.map.len()
     }
 
-    #[cfg(not(feature = "btree_experiment"))]
     /// Take the map and convert it to a Vec.
     pub fn to_vec(&mut self) -> Vec<(u64, DataSlice)> {
         let map = std::mem::take(&mut self.map);
@@ -67,36 +61,12 @@ impl WMap {
         result
     }
 
-    #[cfg(feature = "btree_experiment")]
-    /// Take the map and convert it to a Vec.
-    pub fn to_vec(&mut self) -> Vec<(u64, DataSlice)> {
-        let mut map = std::mem::take(&mut self.map);
-        let mut result = Vec::with_capacity(map.len());
-        map.walk_mut(&0, &mut |(end, v): &mut (u64, DataSlice)| {
-            let start = *end - v.len as u64;
-            result.push((start, std::mem::take(v)));
-            false
-        });
-        result
-    }
-
-    #[cfg(not(feature = "btree_experiment"))]
     /// Write the map into storage.
     pub fn to_storage(&self, stg: &mut dyn Storage) {
         for (end, v) in self.map.iter() {
             let start = end - v.len as u64;
             stg.write_data(start, v.data.clone(), v.off, v.len);
         }
-    }
-
-    #[cfg(feature = "btree_experiment")]
-    /// Write the map into storage.
-    pub fn to_storage(&self, stg: &mut dyn Storage) {
-        self.map.walk(&0, &mut |(end, v): &(u64, DataSlice)| {
-            let start = *end - v.len as u64;
-            stg.write_data(start, v.data.clone(), v.off, v.len);
-            false
-        });
     }
 
     #[cfg(not(feature = "btree_experiment"))]
