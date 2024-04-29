@@ -118,46 +118,49 @@ impl WMap {
     /// Write to storage, existing writes which overlap with new write need to be trimmed or removed.
     pub fn write(&mut self, start: u64, data: Data, off: usize, len: usize) {
         if len != 0 {
-            let (mut insert, mut remove) = (Vec::new(), Vec::new());
+            // let (mut insert, mut remove) = (Vec::new(), Vec::new());
             let end = start + len as u64;
-            let mut c = unsafe{ self.map.lower_bound_mut(std::ops::Bound::Included(&start)).with_mutable_key() };
-            while let Some((eend, v)) = c.next()
-            {
-                    let ee = *eend;
-                    let es = ee - v.len as u64; // Existing write Start.
-                    if es >= end {
-                        // Existing write starts after end of new write, nothing to do.
-                        break;
-                    } else if start <= es {
-                        if end < ee {
-                            // New write starts before existing write, but doesn't subsume it. Trim existing write.
-                            v.trim((end - es) as usize);
-                            break;
-                        }
-                        // New write subsumes existing write entirely, remove existing write.
-                        remove.push(ee);
-                    } else if end < ee {
-                        // New write starts in middle of existing write, ends before end of existing write,
-                        // put start of existing write in insert list, trim existing write.
-                        insert.push((es, v.data.clone(), v.off, (start - es) as usize));
-                        v.trim((end - es) as usize);
-                        break;
-                    } else {
-                        // New write starts in middle of existing write, ends after existing write,
-                        // Trim existing write ( modifies key, but this is ok as ordering is not affected ).
-                        v.len = (start - es) as usize;
-                        *eend = es + v.len as u64;
-                    }
-            }
-            for end in remove {
-                self.map.remove(&end);
-            }
-            for (start, data, off, len) in insert {
+            let mut c = unsafe {
                 self.map
-                    .insert(start + len as u64, DataSlice { data, off, len });
+                    .lower_bound_mut(std::ops::Bound::Included(&start))
+                    .with_mutable_key()
+            };
+            while let Some((eend, v)) = c.next() {
+                let ee = *eend;
+                let es = ee - v.len as u64; // Existing write Start.
+                if es >= end {
+                    // Existing write starts after end of new write, nothing to do.
+                    c.prev();
+                    break;
+                } else if start <= es {
+                    if end < ee {
+                        // New write starts before existing write, but doesn't subsume it. Trim existing write.
+                        v.trim((end - es) as usize);
+                        c.prev();
+                        break;
+                    }
+                    // New write subsumes existing write entirely, remove existing write.
+                    c.remove_prev();
+                } else if end < ee {
+                    // New write starts in middle of existing write, ends before end of existing write,
+                    // trim existing write, insert start of existing write.
+                    let (data, off, len) = (v.data.clone(), v.off, (start - es) as usize);
+                    v.trim((end - es) as usize);
+                    c.prev();
+                    c.insert_before(es + len as u64, DataSlice { data, off, len })
+                        .unwrap();
+                    break;
+                } else {
+                    // New write starts in middle of existing write, ends after existing write,
+                    // Trim existing write ( modifies key, but this is ok as ordering is not affected ).
+                    v.len = (start - es) as usize;
+                    *eend = es + v.len as u64;
+                }
             }
-            self.map
-                .insert(start + len as u64, DataSlice { data, off, len });
+            // Insert the new write.
+            c.insert_after(start + len as u64, DataSlice { data, off, len })
+                .unwrap();
+            // self.map.insert(start + len as u64, DataSlice { data, off, len });
         }
     }
 
@@ -198,8 +201,7 @@ impl WMap {
         let len = data.len();
         if len != 0 {
             let mut done = 0;
-            for (end, v) in self.map.range(start..)
-            {
+            for (end, v) in self.map.range(start..) {
                 let end = *end;
                 let es = end - v.len as u64; // Existing write Start.
                 let doff = start + done as u64;
@@ -217,7 +219,9 @@ impl WMap {
                 let a = min(len - done, v.len - skip);
                 data[done..done + a].copy_from_slice(v.part(skip, a));
                 done += a;
-                if done == len { return; }
+                if done == len {
+                    return;
+                }
             }
             if done < len {
                 u.read(start + done as u64, &mut data[done..]);
