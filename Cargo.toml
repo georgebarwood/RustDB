@@ -1,12 +1,13 @@
 [package]
 name = "rustdb"
-version = "5.2.97"
+version = "5.2.99"
 edition = "2021"
 authors = ["George Barwood"]
 description = "SQL database"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/georgebarwood/RustDB/"
 categories = ["database-implementations"]
+include = ["/src"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -25,7 +26,7 @@ max = ["builtin","table"]
 pack = []
 renumber = []
 verify = []
-unsafe-optim = []
+unsafe-optim = ["btree_experiment/unsafe-optim"]
 log = []
 log-execute= []
 compact = []
