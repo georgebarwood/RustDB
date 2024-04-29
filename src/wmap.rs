@@ -1,4 +1,4 @@
-use crate::{Data, Storage,BTreeMap};
+use crate::{BTreeMap, Data, Storage};
 use std::cmp::min;
 
 #[derive(Default)]
@@ -120,18 +120,19 @@ impl WMap {
         if len != 0 {
             let (mut insert, mut remove) = (Vec::new(), Vec::new());
             let end = start + len as u64;
-            self.map
-                .walk_mut(&start, &mut |(eend, v): &mut (u64, DataSlice)| {
+            let mut c = unsafe{ self.map.lower_bound_mut(std::ops::Bound::Included(&start)).with_mutable_key() };
+            while let Some((eend, v)) = c.next()
+            {
                     let ee = *eend;
                     let es = ee - v.len as u64; // Existing write Start.
                     if es >= end {
                         // Existing write starts after end of new write, nothing to do.
-                        return true;
+                        break;
                     } else if start <= es {
                         if end < ee {
                             // New write starts before existing write, but doesn't subsume it. Trim existing write.
                             v.trim((end - es) as usize);
-                            return true;
+                            break;
                         }
                         // New write subsumes existing write entirely, remove existing write.
                         remove.push(ee);
@@ -140,15 +141,14 @@ impl WMap {
                         // put start of existing write in insert list, trim existing write.
                         insert.push((es, v.data.clone(), v.off, (start - es) as usize));
                         v.trim((end - es) as usize);
-                        return true;
+                        break;
                     } else {
                         // New write starts in middle of existing write, ends after existing write,
                         // Trim existing write ( modifies key, but this is ok as ordering is not affected ).
                         v.len = (start - es) as usize;
                         *eend = es + v.len as u64;
                     }
-                    false
-                });
+            }
             for end in remove {
                 self.map.remove(&end);
             }
@@ -198,7 +198,8 @@ impl WMap {
         let len = data.len();
         if len != 0 {
             let mut done = 0;
-            self.map.walk(&start, &mut |(end, v): &(u64, DataSlice)| {
+            for (end, v) in self.map.range(start..)
+            {
                 let end = *end;
                 let es = end - v.len as u64; // Existing write Start.
                 let doff = start + done as u64;
@@ -208,7 +209,7 @@ impl WMap {
                     u.read(doff, &mut data[done..done + a]);
                     done += a;
                     if done == len {
-                        return true;
+                        return;
                     }
                 }
                 // Use existing write.
@@ -216,8 +217,8 @@ impl WMap {
                 let a = min(len - done, v.len - skip);
                 data[done..done + a].copy_from_slice(v.part(skip, a));
                 done += a;
-                done == len
-            });
+                if done == len { return; }
+            }
             if done < len {
                 u.read(start + done as u64, &mut data[done..]);
             }

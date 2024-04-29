@@ -89,10 +89,6 @@
 //!     assert!( tr.rp.output == b"freddy" );
 //! ```
 
-#![cfg_attr(
-    any(debug_assertions, not(feature = "unsafe-optim")),
-    forbid(unsafe_code)
-)] // see util::perf_assert! macro
 #![deny(missing_docs)]
 
 pub use crate::{
