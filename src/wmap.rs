@@ -118,11 +118,10 @@ impl WMap {
     /// Write to storage, existing writes which overlap with new write need to be trimmed or removed.
     pub fn write(&mut self, start: u64, data: Data, off: usize, len: usize) {
         if len != 0 {
-            // let (mut insert, mut remove) = (Vec::new(), Vec::new());
             let end = start + len as u64;
             let mut c = unsafe {
                 self.map
-                    .lower_bound_mut(std::ops::Bound::Included(&start))
+                    .lower_bound_mut(std::ops::Bound::Excluded(&start))
                     .with_mutable_key()
             };
             while let Some((eend, v)) = c.next() {
@@ -160,11 +159,9 @@ impl WMap {
             // Insert the new write.
             c.insert_after(start + len as u64, DataSlice { data, off, len })
                 .unwrap();
-            // self.map.insert(start + len as u64, DataSlice { data, off, len });
         }
     }
 
-    #[cfg(not(feature = "btree_experiment"))]
     /// Read from storage, taking map of existing writes into account. Unwritten ranges are read from underlying storage.
     pub fn read(&self, start: u64, data: &mut [u8], u: &dyn Storage) {
         let len = data.len();
@@ -194,38 +191,5 @@ impl WMap {
             u.read(start + done as u64, &mut data[done..]);
         }
     }
-
-    #[cfg(feature = "btree_experiment")]
-    /// Read from storage, taking map of existing writes into account. Unwritten ranges are read from underlying storage.
-    pub fn read(&self, start: u64, data: &mut [u8], u: &dyn Storage) {
-        let len = data.len();
-        if len != 0 {
-            let mut done = 0;
-            for (end, v) in self.map.range(start..) {
-                let end = *end;
-                let es = end - v.len as u64; // Existing write Start.
-                let doff = start + done as u64;
-                if es > doff {
-                    // Read from underlying storage.
-                    let a = min(len - done, (es - doff) as usize);
-                    u.read(doff, &mut data[done..done + a]);
-                    done += a;
-                    if done == len {
-                        return;
-                    }
-                }
-                // Use existing write.
-                let skip = (start + done as u64 - es) as usize;
-                let a = min(len - done, v.len - skip);
-                data[done..done + a].copy_from_slice(v.part(skip, a));
-                done += a;
-                if done == len {
-                    return;
-                }
-            }
-            if done < len {
-                u.read(start + done as u64, &mut data[done..]);
-            }
-        }
-    }
 }
+
