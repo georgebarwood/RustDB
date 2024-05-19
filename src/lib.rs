@@ -89,6 +89,10 @@
 //!     assert!( tr.rp.output == b"freddy" );
 //! ```
 
+#![cfg_attr(
+    any(debug_assertions, not(feature = "unsafe-optim")),
+    forbid(unsafe_code)
+)] // see util::perf_assert! macro
 #![deny(missing_docs)]
 
 pub use crate::{
@@ -137,10 +141,10 @@ use crate::{
     value::*,
 };
 
-#[cfg(feature = "btree_experiment")]
-pub use btree_experiment::BTreeMap;
+#[cfg(feature = "pstd")]
+pub use pstd::collections::BTreeMap;
 
-#[cfg(not(feature = "btree_experiment"))]
+#[cfg(not(feature = "pstd"))]
 pub use std::collections::BTreeMap;
 
 use std::{

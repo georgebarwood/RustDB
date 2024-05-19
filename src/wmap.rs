@@ -69,7 +69,7 @@ impl WMap {
         }
     }
 
-    #[cfg(not(feature = "btree_experiment"))]
+    #[cfg(not(feature = "pstd"))]
     /// Write to storage, existing writes which overlap with new write need to be trimmed or removed.
     pub fn write(&mut self, start: u64, data: Data, off: usize, len: usize) {
         if len != 0 {
@@ -114,16 +114,15 @@ impl WMap {
         }
     }
 
-    #[cfg(feature = "btree_experiment")]
+    #[cfg(feature = "pstd")]
     /// Write to storage, existing writes which overlap with new write need to be trimmed or removed.
     pub fn write(&mut self, start: u64, data: Data, off: usize, len: usize) {
         if len != 0 {
             let end = start + len as u64;
-            let mut c = unsafe {
-                self.map
-                    .lower_bound_mut(std::ops::Bound::Excluded(&start))
-                    .with_mutable_key()
-            };
+            let mut c = self
+                .map
+                .lower_bound_mut(std::ops::Bound::Excluded(&start))
+                .with_mutable_key();
             while let Some((eend, v)) = c.next() {
                 let ee = *eend;
                 let es = ee - v.len as u64; // Existing write Start.
@@ -146,8 +145,7 @@ impl WMap {
                     let (data, off, len) = (v.data.clone(), v.off, (start - es) as usize);
                     v.trim((end - es) as usize);
                     c.prev();
-                    c.insert_before(es + len as u64, DataSlice { data, off, len })
-                        .unwrap();
+                    c.insert_before_unchecked(es + len as u64, DataSlice { data, off, len });
                     break;
                 } else {
                     // New write starts in middle of existing write, ends after existing write,
@@ -157,8 +155,7 @@ impl WMap {
                 }
             }
             // Insert the new write.
-            c.insert_after(start + len as u64, DataSlice { data, off, len })
-                .unwrap();
+            c.insert_after_unchecked(start + len as u64, DataSlice { data, off, len });
         }
     }
 
@@ -192,4 +189,3 @@ impl WMap {
         }
     }
 }
-
