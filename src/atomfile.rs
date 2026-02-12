@@ -142,7 +142,7 @@ impl Storage for CommitFile {
 }
 
 #[test]
-pub fn test() {
+fn test() {
     use crate::stg::MemFile;
     use rand::Rng;
     /* Idea of test is to check AtomicFile and MemFile behave the same */
@@ -156,14 +156,14 @@ pub fn test() {
         let mut s2 = MemFile::new();
 
         for _ in 0..1000 * ta {
-            let off: usize = rng.gen::<usize>() % 100;
-            let mut len = 1 + rng.gen::<usize>() % 20;
-            let w: bool = rng.gen();
+            let off: usize = rng.r#gen::<usize>() % 100;
+            let mut len = 1 + rng.r#gen::<usize>() % 20;
+            let w: bool = rng.r#gen();
             if w {
                 let mut bytes = Vec::new();
                 while len > 0 {
                     len -= 1;
-                    let b: u8 = rng.gen::<u8>();
+                    let b: u8 = rng.r#gen::<u8>();
                     bytes.push(b);
                 }
                 s1.write(off as u64, &bytes);

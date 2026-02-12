@@ -3,7 +3,7 @@ use crate::{BTreeSet, Data, HashMap, Rc, RefCell};
 /// In debug mode or feature unsafe-optim not enabled, same as debug_assert! otherwise unsafe compiler hint.
 #[cfg(any(debug_assertions, not(feature = "unsafe-optim")))]
 macro_rules! unsafe_assert {
-    ( $cond: expr ) => {
+    ( $cond: expr_2021 ) => {
         debug_assert!($cond)
     };
 }
@@ -116,21 +116,21 @@ pub fn set(data: &mut [u8], off: usize, val: u64, n: usize) {
 
 /// The mask to extract $len bits at bit offset $off.
 macro_rules! bitmask {
-    ( $off: expr, $len: expr ) => {
+    ( $off: expr_2021, $len: expr_2021 ) => {
         ((1 << $len) - 1) << $off
     };
 }
 
 /// Extract $len bits from $val at bit offset $off.
 macro_rules! getbits {
-    ( $val: expr, $off: expr, $len: expr ) => {
+    ( $val: expr_2021, $off: expr_2021, $len: expr_2021 ) => {
         ($val & bitmask!($off, $len)) >> $off
     };
 }
 
 /// Update $len bits in $var at bit offset $off to $val.
 macro_rules! setbits {
-    ( $var: expr, $off: expr, $len: expr, $val: expr ) => {
+    ( $var: expr_2021, $off: expr_2021, $len: expr_2021, $val: expr_2021 ) => {
         $var = ($var & !bitmask!($off, $len)) | (($val << $off) & bitmask!($off, $len))
     };
 }
@@ -266,8 +266,8 @@ fn difftest() {
             v.push(0);
         }
         let mut v2 = v.clone();
-        for _ in 0..rng.gen::<usize>() % 50 {
-            v2[rng.gen::<usize>() % 100] = 1;
+        for _ in 0..rng.r#gen::<usize>() % 50 {
+            v2[rng.r#gen::<usize>() % 100] = 1;
         }
         let mut x = 0;
         _diff(&v, &v2, 2, |off, len| {

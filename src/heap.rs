@@ -187,7 +187,7 @@ where
 }
 
 #[test]
-pub fn test() {
+fn test() {
     let mut h = GHeap::<u64, u64, u32>::default();
     let _h5 = h.insert(5, 10);
     let _h8 = h.insert(8, 1);
@@ -201,7 +201,7 @@ pub fn test() {
 }
 
 #[test]
-pub fn test2() {
+fn test2() {
     use rand::Rng;
     let mut rng = rand::thread_rng();
 
@@ -212,7 +212,7 @@ pub fn test2() {
     for _outer in 0..100 {
         let start = std::time::Instant::now();
         for _i in 0..10000 {
-            let r = rng.gen::<u64>();
+            let r = rng.r#gen::<u64>();
             let pnum = r % 1024;
             let action = (r / 1024) % 3;
             let usage = (r / 4096) % 1024;

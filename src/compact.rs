@@ -645,7 +645,7 @@ impl PageStorageInfo for Info {
 }
 
 #[test]
-pub fn test() {
+fn test() {
     use crate::{AtomicFile, MemFile};
     use rand::Rng;
     /* Idea of test is to check two CompactFiles with different parameters behave the same */
@@ -663,16 +663,16 @@ pub fn test() {
     }
 
     for _ in 0..10000 {
-        let n: usize = rng.gen::<usize>() % 5000;
-        let p: u64 = rng.gen::<u64>() % 100;
-        let b: u8 = rng.gen::<u8>();
+        let n: usize = rng.r#gen::<usize>() % 5000;
+        let p: u64 = rng.r#gen::<u64>() % 100;
+        let b: u8 = rng.r#gen::<u8>();
 
         let d = vec![b; n];
         let d = Arc::new(d);
         cf0.set_page(p, d.clone());
         cf1.set_page(p, d.clone());
 
-        let p: u64 = rng.gen::<u64>() % 100;
+        let p: u64 = rng.r#gen::<u64>() % 100;
         let x = cf0.get_page(p);
         let y = cf1.get_page(p);
         assert!(x == y);

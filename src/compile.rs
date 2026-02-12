@@ -518,32 +518,35 @@ pub fn c_table(b: &Block, name: &ObjRef) -> Rc<Table> {
 
 /// Compile named function (if it is not already compiled ).
 pub fn c_function(db: &DB, name: &ObjRef) -> Rc<Function> {
-    if let Some(r) = db.get_function(name) {
-        let (compiled, src) = { (r.compiled.get(), r.source.clone()) };
-        if !compiled {
-            r.compiled.set(true);
-            let mut p = Parser::new(&src, db);
-            p.function_name = Some(name);
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                p.parse_function();
-            }));
-            if let Err(x) = result {
-                r.compiled.set(false);
-                std::panic::panic_any(if let Some(sqe) = x.downcast_ref::<SqlError>() {
-                    sqe.clone()
-                } else if let Some(s) = x.downcast_ref::<&str>() {
-                    p.make_error((*s).to_string())
-                } else if let Some(s) = x.downcast_ref::<String>() {
-                    p.make_error(s.to_string())
-                } else {
-                    p.make_error("unrecognised/unexpected error".to_string())
-                });
+    match db.get_function(name) {
+        Some(r) => {
+            let (compiled, src) = { (r.compiled.get(), r.source.clone()) };
+            if !compiled {
+                r.compiled.set(true);
+                let mut p = Parser::new(&src, db);
+                p.function_name = Some(name);
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    p.parse_function();
+                }));
+                if let Err(x) = result {
+                    r.compiled.set(false);
+                    std::panic::panic_any(if let Some(sqe) = x.downcast_ref::<SqlError>() {
+                        sqe.clone()
+                    } else if let Some(s) = x.downcast_ref::<&str>() {
+                        p.make_error((*s).to_string())
+                    } else if let Some(s) = x.downcast_ref::<String>() {
+                        p.make_error(s.to_string())
+                    } else {
+                        p.make_error("unrecognised/unexpected error".to_string())
+                    });
+                }
+                *r.ilist.borrow_mut() = p.b.ilist;
             }
-            *r.ilist.borrow_mut() = p.b.ilist;
+            r
         }
-        r
-    } else {
-        panic!("function {} not found", name.str())
+        _ => {
+            panic!("function {} not found", name.str())
+        }
     }
 }
 

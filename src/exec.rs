@@ -159,10 +159,11 @@ impl<'r> EvalEnv<'r> {
 
     /// Pop string from the stack.
     fn pop_string(&mut self) -> String {
-        if let Value::String(s) = self.stack.pop().unwrap() {
-            s.to_string()
-        } else {
-            panic!()
+        match self.stack.pop().unwrap() {
+            Value::String(s) => s.to_string(),
+            _ => {
+                panic!()
+            }
         }
     }
 

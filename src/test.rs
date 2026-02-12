@@ -1,11 +1,12 @@
 #[cfg(test)]
+/// Get amount of testing from environment variable TA.
 pub fn test_amount() -> usize {
     str::parse(&std::env::var("TA").unwrap_or("1".to_string())).unwrap()
 }
 
 #[test]
 /// Idea of this test is to check database saves and loads ok.
-pub fn save_test() {
+fn save_test() {
     use crate::*;
 
     let mf = MemFile::new();
@@ -41,7 +42,7 @@ INSERT INTO test.Cust(Name) VALUES ('freddy')
 }
 
 #[test]
-pub fn concurrency() {
+fn concurrency() {
     use crate::*;
 
     let stg = AtomicFile::new(MemFile::new(), MemFile::new());
@@ -82,11 +83,11 @@ pub fn concurrency() {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     while !rapd.is_empty() {
-        let r = rng.gen::<usize>() % rapd.len();
+        let r = rng.r#gen::<usize>() % rapd.len();
         let (i, rapd) = rapd.remove(r);
         let db = Database::new(rapd, "", bmap.clone());
         let mut tr = GenTransaction::default();
-        let table = rng.gen::<usize>() % nt;
+        let table = rng.r#gen::<usize>() % nt;
         let sql = format!("SELECT N FROM test.[T{}]", table);
         db.run(&sql, &mut tr);
         let expect = i / nt + if i % nt > table { 1 } else { 0 };
@@ -95,7 +96,7 @@ pub fn concurrency() {
 }
 
 #[test]
-pub fn rtest() {
+fn rtest() {
     use crate::*;
 
     const INITSQL : &str = "
@@ -238,7 +239,7 @@ GO
 }
 
 #[test]
-pub fn rollback() {
+fn rollback() {
     use crate::*;
 
     let stg = AtomicFile::new(MemFile::new(), MemFile::new());
@@ -262,7 +263,7 @@ pub fn rollback() {
 }
 
 #[test]
-pub fn insert_delete() {
+fn insert_delete() {
     use crate::*;
 
     let stg = AtomicFile::new(MemFile::new(), MemFile::new());

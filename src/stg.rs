@@ -246,10 +246,9 @@ impl MultiFileStorage {
     }
 
     fn get_file(&self) -> Box<SimpleFileStorage> {
-        if let Some(f) = self.files.lock().unwrap().pop() {
-            f
-        } else {
-            SimpleFileStorage::new(&self.filename)
+        match self.files.lock().unwrap().pop() {
+            Some(f) => f,
+            _ => SimpleFileStorage::new(&self.filename),
         }
     }
 
