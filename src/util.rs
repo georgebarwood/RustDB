@@ -29,9 +29,7 @@ macro_rules! unsafe_panic {
 /// In debug mode or feature unsafe-optim not enabled, same as debug_assert! otherwise unsafe compiler hint.
 #[cfg(all(not(debug_assertions), feature = "unsafe-optim"))]
 macro_rules! unsafe_panic {
-    () => {{
-        unsafe { std::hint::unreachable_unchecked() }
-    }};
+    () => {{ unsafe { std::hint::unreachable_unchecked() } }};
 }
 
 /// Wrap a type in Rc + RefCell.

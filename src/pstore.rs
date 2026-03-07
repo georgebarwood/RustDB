@@ -1,6 +1,6 @@
 use crate::{
-    heap::GHeap, nd, Arc, BTreeMap, Data, HashMap, HashSet, Mutex, PageStorage, PageStorageInfo,
-    RwLock, SaveOp, Storage,
+    Arc, BTreeMap, Data, HashMap, HashSet, Mutex, PageStorage, PageStorageInfo, RwLock, SaveOp,
+    Storage, heap::GHeap, nd,
 };
 
 type HX = u32; // Typical 8M cache will have 1K x 8KB pages, so 10 bits is typical, 32 should be plenty.
@@ -46,10 +46,10 @@ impl PageInfo {
     /// Reads Data from file if necessary.
     /// Result is Data and size of loaded data ( cache delta ).
     fn get_data(&mut self, lpnum: u64, a: &AccessPagedData) -> (Data, usize) {
-        if !a.writer {
-            if let Some((_k, v)) = self.history.range(a.time..).next() {
-                return (v.clone(), 0);
-            }
+        if !a.writer
+            && let Some((_k, v)) = self.history.range(a.time..).next()
+        {
+            return (v.clone(), 0);
         }
 
         if let Some(p) = &self.current {
@@ -378,7 +378,7 @@ impl AccessPagedData {
         }
 
         // Write data to underlying file.
-        if data.len() > 0 {
+        if !data.is_empty() {
             self.spd.ps.write().unwrap().set_page(lpnum, data);
         } else {
             self.spd.ps.write().unwrap().drop_page(lpnum);
@@ -431,13 +431,14 @@ impl AccessPagedData {
         let data = self.get_data(lpnum);
         self.stash().set(lpnum, data.clone(), nd());
         let lpnum2 = self.spd.ps.write().unwrap().renumber(lpnum);
-        debug_assert!(self
-            .stash()
-            .get_pinfo(lpnum2)
-            .lock()
-            .unwrap()
-            .current
-            .is_none());
+        debug_assert!(
+            self.stash()
+                .get_pinfo(lpnum2)
+                .lock()
+                .unwrap()
+                .current
+                .is_none()
+        );
         let old2 = self.get_data(lpnum2);
         self.stash().set(lpnum2, old2, data);
         lpnum2

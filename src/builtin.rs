@@ -1,6 +1,6 @@
 use crate::{
-    c_int, c_value, Block, BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, EvalEnv, Expr, Rc,
-    Value,
+    Block, BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, EvalEnv, Expr, Rc, Value, c_int,
+    c_value,
 };
 
 /// Add builtin functions to specified [BuiltinMap].

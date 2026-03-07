@@ -281,7 +281,7 @@ impl SortedFile {
             return p.clone();
         }
         let data = db.apd.get_data(pnum);
-        let level = if data.len() == 0 { 0 } else { data[0] };
+        let level = if data.is_empty() { 0 } else { data[0] };
         util::new(Page::new(
             if level != 0 {
                 self.key_size

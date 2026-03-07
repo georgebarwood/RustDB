@@ -1,11 +1,11 @@
 use crate::{
-    c_bool, compile, data_kind, panic, util, AlterCol, AssignOp, Block, ColInfo, DataType, EvalEnv,
-    Expr, ExprIs, FromExpression, IndexInfo, Instruction, ObjRef, Rc, SqlError, TableExpression,
-    Token, Transaction, Value, BINARY, BOOL, DB, DO, DOUBLE, FLOAT, INT, NONE, STRING,
+    AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
+    ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, Rc, STRING, SqlError,
+    TableExpression, Token, Transaction, Value, c_bool, compile, data_kind, panic, util,
 };
+use Instruction::{Call, Execute, Jump, JumpIfFalse, PopToLocal, Return, Select, Throw};
 use compile::{c_delete, c_for, c_function, c_select, c_set, c_table, c_te, c_update, push};
 use std::{mem, str};
-use Instruction::{Call, Execute, Jump, JumpIfFalse, PopToLocal, Return, Select, Throw};
 
 /// SQL parser.
 ///
@@ -365,12 +365,7 @@ impl<'a> Parser<'a> {
             match t {
                 BINARY | STRING => {
                     n += 1;
-                    if n > 250 {
-                        n = 250;
-                    }
-                    if n < 9 {
-                        n = 9;
-                    }
+                    n = n.clamp(9, 250);
                 }
                 INT => {
                     assert!(n >= 1, "minimum int precision is 1");
@@ -580,7 +575,7 @@ impl<'a> Parser<'a> {
             self.read_token();
         } else if self.token == Token::Hex {
             assert!(
-                self.cs.len() % 2 == 0,
+                self.cs.len().is_multiple_of(2),
                 "hex literal must have even number of characters"
             );
             let hb = &self.source[self.token_start + 2..self.source_ix - 1];

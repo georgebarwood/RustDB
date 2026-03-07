@@ -1,4 +1,4 @@
-use crate::{get_bytes, util, CExp, CExpPtr, EvalEnv, Function, Rc, Value};
+use crate::{CExp, CExpPtr, EvalEnv, Function, Rc, Value, get_bytes, util};
 
 /// Function call.
 pub(crate) struct Call {
@@ -40,11 +40,11 @@ impl CExp<Value> for Concat {
         let mut s1: Value = self.0.eval(e, d);
         let s2: Rc<String> = self.1.eval(e, d).str();
         // Append to existing string if not shared.
-        if let Value::String(s) = &mut s1 {
-            if let Some(ms) = Rc::get_mut(s) {
-                ms.push_str(&s2);
-                return s1;
-            }
+        if let Value::String(s) = &mut s1
+            && let Some(ms) = Rc::get_mut(s)
+        {
+            ms.push_str(&s2);
+            return s1;
         }
         let s1 = s1.str();
         let mut s = String::with_capacity(s1.len() + s2.len());
@@ -61,11 +61,11 @@ impl CExp<Value> for BinConcat {
         let mut b1 = self.0.eval(e, d);
         let b2 = self.1.eval(e, d).bin();
         // Append to existing bytes if not shared.
-        if let Value::RcBinary(b) = &mut b1 {
-            if let Some(mb) = Rc::get_mut(b) {
-                mb.extend_from_slice(&b2);
-                return b1;
-            }
+        if let Value::RcBinary(b) = &mut b1
+            && let Some(mb) = Rc::get_mut(b)
+        {
+            mb.extend_from_slice(&b2);
+            return b1;
         }
         let b1 = b1.bin();
         let mut b = Vec::with_capacity(b1.len() + b2.len());

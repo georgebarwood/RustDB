@@ -7,7 +7,7 @@
 //!
 //! Note that the left node is greater than the parent node.
 
-use crate::{util, Arc, Data, MData, Ordering, Rc, Record, RefCell, DB};
+use crate::{Arc, DB, Data, MData, Ordering, Rc, Record, RefCell, util};
 
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
@@ -79,7 +79,7 @@ impl Page {
     pub fn new(rec_size: usize, level: u8, mut data: Data, pnum: u64) -> Page {
         let node_size = rec_size + if level != 0 { PAGE_ID_SIZE } else { 0 } + NODE_OVERHEAD;
 
-        if data.len() == 0 {
+        if data.is_empty() {
             let data = Data::make_mut(&mut data);
             data.resize(NODE_BASE + if level != 0 { PAGE_ID_SIZE } else { 0 }, 0);
         }

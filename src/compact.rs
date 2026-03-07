@@ -1,4 +1,4 @@
-use crate::{nd, util, Arc, Data, PageStorage, PageStorageInfo, Storage};
+use crate::{Arc, Data, PageStorage, PageStorageInfo, Storage, nd, util};
 use std::cmp::min;
 use std::collections::BTreeSet;
 
@@ -25,7 +25,6 @@ use std::collections::BTreeSet;
 /// All pages ( whether allocated or not ) initially have size zero.
 ///
 /// Pages are allocated by simply incrementing lp_alloc, so sizes in the starter page section must be pre-initialised to zero when it is extended or after a renumber operation.
-
 pub struct CompactFile {
     /// Underlying storage.
     pub stg: Box<dyn Storage>,
@@ -70,11 +69,7 @@ const HSIZE: u64 = 44;
 impl PageStorage for CompactFile {
     fn size(&self, lpnum: u64) -> usize {
         let off = self.lp_off(lpnum);
-        if off != 0 {
-            self.read_u16(off)
-        } else {
-            0
-        }
+        if off != 0 { self.read_u16(off) } else { 0 }
     }
 
     fn info(&self) -> Box<dyn PageStorageInfo> {
@@ -503,7 +498,7 @@ impl CompactFile {
     fn ext_pages(sp_size: usize, ep_size: usize, size: usize) -> usize {
         let mut n = 0;
         if size > (sp_size - 2) {
-            n = ((size - (sp_size - 2)) + (ep_size - 16 - 1)) / (ep_size - 16);
+            n = (size - (sp_size - 2)).div_ceil(ep_size - 16);
         }
         debug_assert!(2 + 16 * n + size <= sp_size + n * ep_size);
         assert!(2 + n * 8 <= sp_size);
@@ -543,7 +538,7 @@ impl CompactFile {
     #[cfg(feature = "renumber")]
     fn reduce_starter_pages(&mut self, target: u64) {
         let resvd = HSIZE + target * self.sp_size as u64;
-        let resvd = (resvd + self.ep_size as u64 - 1) / self.ep_size as u64;
+        let resvd = resvd.div_ceil(self.ep_size as u64);
         while self.ep_resvd > resvd {
             self.ep_count -= 1;
             self.header_dirty = true;

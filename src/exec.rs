@@ -534,7 +534,7 @@ impl<'r> EvalEnv<'r> {
     fn alter_table(&mut self, name: &ObjRef, actions: &[AlterCol]) {
         let db = &self.db;
         if let Some(t) = sys::get_table(db, name) {
-            if t.ixlist.borrow().len() > 0 {
+            if !t.ixlist.borrow().is_empty() {
                 panic!("alter table indexes have to be dropped first");
             }
 
@@ -572,10 +572,10 @@ impl<'r> EvalEnv<'r> {
             }
 
             for act in actions {
-                if let AlterCol::Add(name, typ) = act {
-                    if nci.add(name.clone(), *typ) {
-                        panic!("duplicate column name {}", name);
-                    }
+                if let AlterCol::Add(name, typ) = act
+                    && nci.add(name.clone(), *typ)
+                {
+                    panic!("duplicate column name {}", name);
                 }
             }
             let nci = Rc::new(nci);

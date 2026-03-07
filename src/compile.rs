@@ -1,6 +1,6 @@
 use crate::*;
-use std::{mem, ops};
 use Instruction::*;
+use std::{mem, ops};
 
 /// Calculate various attributes such as data_type, is_constant etc.
 pub fn c_check(b: &Block, e: &mut Expr) {
@@ -363,7 +363,7 @@ pub fn c_update(
 ) {
     let t = c_table(b, tname);
     let from = CTableExpression::Base(t.clone());
-    let save = mem::replace(&mut b.from, Some(from));
+    let save = b.from.replace(from);
     let mut se = Vec::new();
     for (name, exp) in assigns.iter_mut() {
         if let Some(cnum) = t.info.colmap.get(name) {

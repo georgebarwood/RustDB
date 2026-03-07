@@ -1,10 +1,9 @@
-use crate::{panic, Any, Arc, BTreeMap, Data, Rc, Transaction, Value};
+use crate::{Any, Arc, BTreeMap, Data, Rc, Transaction, Value, panic};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// General Query.
-
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
 pub struct GenQuery {

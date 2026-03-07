@@ -1,9 +1,8 @@
 use crate::{
+    Arc, BTreeSet, Data, Limits, PageStorage, PageStorageInfo, Storage,
     dividedstg::{DividedStg, FD, FD_SIZE},
-    nd, util, Arc, BTreeSet, Data, Limits, PageStorage, PageStorageInfo, Storage,
+    nd, util,
 };
-
-/// Implementation of [PageStorage] using [DividedStg].
 
 /*
 
@@ -13,6 +12,7 @@ First word of allocated page is 64-bit page number ( to allow relocation ).
 
 */
 
+/// Implementation of [PageStorage] using [DividedStg].
 pub struct BlockPageStg {
     /// Underlying Divided Storage.
     pub ds: DividedStg,
@@ -153,7 +153,7 @@ impl BlockPageStg {
             (size - self.header_size) / 8
         } else {
             let ps = self.page_size(fx);
-            (size + ps - 1) / ps
+            size.div_ceil(ps)
         }
     }
 

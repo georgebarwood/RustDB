@@ -1,6 +1,7 @@
 use crate::{
+    Arc, Data, Storage,
     block::{BlockStg, RSVD_SIZE},
-    util, Arc, Data, Storage,
+    util,
 };
 use std::cmp::min;
 
@@ -90,8 +91,8 @@ impl DividedStg {
                 let mut new = reqd;
                 while level > 0 && old != new {
                     self.reduce_blocks(f, level, old, new);
-                    new = (new + self.base - 1) / self.base;
-                    old = (old + self.base - 1) / self.base;
+                    new = new.div_ceil(self.base);
+                    old = old.div_ceil(self.base);
                     level -= 1;
                 }
                 if levels < f.level {
@@ -244,7 +245,7 @@ impl DividedStg {
         if size == 0 {
             return 1;
         }
-        (size + self.blk_cap - 1) / self.blk_cap
+        size.div_ceil(self.blk_cap)
     }
 
     /// Calculate the number of extra levels needed for specified number of data blocks.

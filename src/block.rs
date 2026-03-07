@@ -1,4 +1,4 @@
-use crate::{util, Arc, BTreeSet, Data, Storage};
+use crate::{Arc, BTreeSet, Data, Storage, util};
 use std::cmp::min;
 
 /// Magic Value ( first word of file for version check).
@@ -19,7 +19,6 @@ const HSIZE: u64 = 48 + RSVD_SIZE as u64;
 /// On save, the set of free block numbers is processed and any associated blocks are freed.
 ///
 /// When a block is freed, the last block is relocated to fill it.
-
 pub struct BlockStg {
     stg: Box<dyn Storage>,
     bn_count: u64,   // Number of block numbers.
@@ -51,7 +50,7 @@ impl BlockStg {
         let nsz = (bits + 8) / 8; // Number of bytes for block number, plus an extra bit (for self.alloc_bit).
         let blk_size = blk_cap + nsz as u64;
         let alloc_bit = 1 << (nsz * 8 - 1);
-        let hblks = (HSIZE + blk_size - 1) / blk_size; // Blocks required for file header.
+        let hblks = HSIZE.div_ceil(blk_size); // Blocks required for file header.
 
         let mut x = Self {
             stg,

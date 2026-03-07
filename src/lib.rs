@@ -96,16 +96,12 @@
 #![deny(missing_docs)]
 
 pub use crate::{
-    atomfile::AtomicFile,
-    basicatomfile::BasicAtomicFile,
     blockpagestg::BlockPageStg,
     builtin::standard_builtins,
     pstore::{AccessPagedData, SharedPagedData},
-    stg::{
-        DummyFile, MemFile, MultiFileStorage, PageStorage, PageStorageInfo, SimpleFileStorage,
-        Storage,
-    },
+    stg::{PageStorage, PageStorageInfo, SimpleFileStorage},
 };
+pub use atom_file::{AtomicFile, BasicAtomicFile, DummyFile, MemFile, MultiFileStorage, Storage};
 
 #[cfg(feature = "gentrans")]
 pub use crate::gentrans::{GenQuery, GenTransaction, Part};
@@ -137,7 +133,7 @@ use crate::{
     run::*,
     sortedfile::{Asc, Id, Record, SortedFile},
     table::{ColInfo, IndexInfo, Row, SaveOp, Table},
-    util::{nd, newmap, SmallSet},
+    util::{SmallSet, nd, newmap},
     value::*,
 };
 
@@ -183,18 +179,6 @@ pub mod dividedstg;
 
 /// [BlockPageStg] - implementation of [PageStorage] trait based on [dividedstg::DividedStg].
 pub mod blockpagestg;
-
-/// Buffering: [buf::WriteBuffer] and [buf::ReadBufStg].
-pub mod buf;
-
-/// [wmap::WMap] - map of ranges written, for [AtomicFile].
-pub mod wmap;
-
-/// [AtomicFile] - buffered version of [BasicAtomicFile].
-pub mod atomfile;
-
-/// [BasicAtomicFile] - ensures updates are all or nothing.
-pub mod basicatomfile;
 
 /// Page storage and sharing, [SharedPagedData] and [AccessPagedData].
 pub mod pstore;

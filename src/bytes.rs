@@ -1,11 +1,11 @@
-use crate::{util, Cell, Ordering, Rc, Record, SaveOp, SortedFile, DB};
+use crate::{Cell, DB, Ordering, Rc, Record, SaveOp, SortedFile, util};
 
 /// Number of fragment types.
 pub const NFT: usize = 4;
 
 /// Total bytes used taking into account all overhead ( 3 + 1 + 8 = 12 bytes, per fragment ).
 fn tot(len: usize, bpf: usize) -> usize {
-    let nf = (len + bpf - 1) / bpf;
+    let nf = len.div_ceil(bpf);
     nf * (bpf + 12)
 }
 

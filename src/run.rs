@@ -1,6 +1,6 @@
 use crate::{
-    panic, Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, Rc,
-    RefCell, Table, Value,
+    Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, Rc,
+    RefCell, Table, Value, panic,
 };
 
 /// Instruction.

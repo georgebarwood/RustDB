@@ -140,19 +140,17 @@ impl Table {
         }
 
         // ToDo: check for mirror expression, AND conditions, also Id = x OR Id = y ...  Id in (....) etc.
-        if let ExprIs::Binary(op, e1, e2) = &mut we.exp {
-            if *op == Token::Equal && e2.is_constant {
-                if let ExprIs::ColName(_) = &e1.exp {
-                    if e1.col == usize::MAX
-                    // Id column.
-                    {
-                        return (
-                            None,
-                            Some(CTableExpression::IdGet(self.clone(), c_int(b, e2))),
-                        );
-                    }
-                }
-            }
+        if let ExprIs::Binary(op, e1, e2) = &mut we.exp
+            && *op == Token::Equal
+            && e2.is_constant
+            && let ExprIs::ColName(_) = &e1.exp
+            && e1.col == usize::MAX
+        // Id column.
+        {
+            return (
+                None,
+                Some(CTableExpression::IdGet(self.clone(), c_int(b, e2))),
+            );
         }
         (Some(c_bool(b, we)), None)
     }
@@ -816,10 +814,10 @@ fn get_known_cols(we: &Expr, kc: &mut SmallSet) {
                 if let ExprIs::ColName(_) = &e1.exp {
                     kc.insert(e1.col);
                 }
-            } else if e1.is_constant {
-                if let ExprIs::ColName(_) = &e2.exp {
-                    kc.insert(e2.col);
-                }
+            } else if e1.is_constant
+                && let ExprIs::ColName(_) = &e2.exp
+            {
+                kc.insert(e2.col);
             }
         }
         ExprIs::Binary(Token::And, e1, e2) => {
@@ -851,20 +849,18 @@ fn get_keys(
 ) -> Option<CExpPtr<bool>> {
     match &mut we.exp {
         ExprIs::Binary(Token::Equal, e1, e2) => {
-            if e2.is_constant {
-                if let ExprIs::ColName(_) = &e1.exp {
-                    if cols.remove(e1.col) {
-                        keys.insert(e1.col, c_value(b, e2));
-                        return None;
-                    }
-                }
-            } else if e1.is_constant {
-                if let ExprIs::ColName(_) = &e2.exp {
-                    if cols.remove(e2.col) {
-                        keys.insert(e2.col, c_value(b, e1));
-                        return None;
-                    }
-                }
+            if e2.is_constant
+                && let ExprIs::ColName(_) = &e1.exp
+                && cols.remove(e1.col)
+            {
+                keys.insert(e1.col, c_value(b, e2));
+                return None;
+            } else if e1.is_constant
+                && let ExprIs::ColName(_) = &e2.exp
+                && cols.remove(e2.col)
+            {
+                keys.insert(e2.col, c_value(b, e1));
+                return None;
             }
         }
         ExprIs::Binary(Token::And, e1, e2) => {
