@@ -19,7 +19,7 @@
 //! It is also possible to access the table data directly, see email_loop in example program.   
 //!
 //!# Example
-//! [See here](https://github.com/georgebarwood/rustweb2) for an example program -
+//! [See here](https://crates.io/crates/rustweb2) for an example program -
 //! a webserver, with timed jobs, password hashing, data compression, email transmission and database replication.
 //! Also has a Manual for the SQL-like language, user interface for database browsing/editing etc.
 //!
@@ -38,7 +38,7 @@
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
 //! - `compact` : Default page storage is CompactFile rather than [BlockPageStg] (can be set explicitly using [pstore::SharedPagedData::new_from_ps] ).
 //!
-//! By default, all features except serde, unsafe-optim and log are enabled.
+//! By default, all features except serde, unsafe-optim, log and compact are enabled.
 //!
 //!# General Design of Database
 //!
@@ -66,7 +66,7 @@
 //! ```
 //!     use rustdb::*;
 //!     use std::sync::Arc;
-//!     let stg = AtomicFile::new(MemFile::new(), MemFile::new());
+//!     let stg = MemFile::new();
 //!
 //!     let spd = SharedPagedData::new(stg);
 //!     let wapd = AccessPagedData::new_writer(spd);
@@ -836,17 +836,11 @@ impl Transaction for DummyTransaction {
 /// Memory limits.
 #[non_exhaustive]
 pub struct Limits {
-    /// Limit on size of commit write map
-    pub map_lim: usize,
-    /// Memory for buffering small reads
-    pub rbuf_mem: usize,
-    /// Memory for buffering writes to main storage
-    pub swbuf: usize,
-    /// Memory for buffering writes to temporary storage
-    pub uwbuf: usize,
+    /// Atomic file limits
+    pub af_lim: atom_file::Limits,
     /// Block capacity
     pub blk_cap: u64,
-    /// Number of page sizes
+    /// Page sizes
     pub page_sizes: usize,
     /// Largest division of page
     pub max_div: usize,
@@ -855,10 +849,7 @@ pub struct Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            map_lim: 5000,
-            rbuf_mem: 0x200000,
-            swbuf: 0x100000,
-            uwbuf: 0x100000,
+            af_lim: atom_file::Limits::default(),
             blk_cap: 27720,
             page_sizes: 7,
             max_div: 12,
