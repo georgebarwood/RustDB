@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "6.0.1"
+version = "6.0.3"
 edition = "2024"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -12,7 +12,7 @@ include = ["/src"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-atom-file = { version ="0.1.0" }
+atom-file = { version ="1.0.0" }
 rustc-hash = "1.1.0"
 serde = { version = "1.0.131", features = ["derive","rc"], optional=true }
 pstd = { version = "0.1.0", optional=true }
