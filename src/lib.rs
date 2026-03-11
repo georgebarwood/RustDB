@@ -94,14 +94,12 @@
 )] // see util::perf_assert! macro
 #![deny(missing_docs)]
 
-pub use page_store::{
-    AccessPagedData, BlockPageStg, Limits, PageStorage, PageStorageInfo, SaveOp, SharedPagedData,
+pub use page_store::{AccessPagedData, SharedPagedData,BlockPageStg,SaveOp,PageStorage, PageStorageInfo, Limits, HashMap, HashSet};
+  
+pub use crate::{
+    builtin::standard_builtins,
 };
-
-pub use crate::builtin::standard_builtins;
-pub use atom_file::{
-    AtomicFile, BasicAtomicFile, DummyFile, MemFile, MultiFileStorage, SimpleFileStorage, Storage,
-};
+pub use atom_file::{AtomicFile, BasicAtomicFile, DummyFile, MemFile, SimpleFileStorage, MultiFileStorage, Storage};
 
 #[cfg(feature = "gentrans")]
 pub use crate::gentrans::{GenQuery, GenTransaction, Part};
@@ -152,9 +150,6 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
-
-// use std::collections::{HashMap,HashSet};
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 /// Utility functions and macros, [SmallSet].
 #[cfg(feature = "max")]
