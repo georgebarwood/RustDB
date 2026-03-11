@@ -94,12 +94,14 @@
 )] // see util::perf_assert! macro
 #![deny(missing_docs)]
 
-pub use page_store::{AccessPagedData, SharedPagedData,BlockPageStg,SaveOp,PageStorage, PageStorageInfo, Limits};
-  
-pub use crate::{
-    builtin::standard_builtins,
+pub use page_store::{
+    AccessPagedData, BlockPageStg, Limits, PageStorage, PageStorageInfo, SaveOp, SharedPagedData,
 };
-pub use atom_file::{AtomicFile, BasicAtomicFile, DummyFile, MemFile, SimpleFileStorage, MultiFileStorage, Storage};
+
+pub use crate::builtin::standard_builtins;
+pub use atom_file::{
+    AtomicFile, BasicAtomicFile, DummyFile, MemFile, MultiFileStorage, SimpleFileStorage, Storage,
+};
 
 #[cfg(feature = "gentrans")]
 pub use crate::gentrans::{GenQuery, GenTransaction, Part};
@@ -165,23 +167,6 @@ mod util;
 #[cfg(feature = "gentrans")]
 /// [GenTransaction] ( implementation of [Transaction] ).
 pub mod gentrans;
-
-/// Backing [Storage] for database. See also [AtomicFile].
-pub mod stg;
-
-/*
-/// [block::BlockStg] - divides [Storage] into relocatable fixed size blocks, basis for [dividedstg::DividedStg].
-pub mod block;
-
-/// [dividedstg::DividedStg] divides [Storage] into multiple sub-files of arbitrary size.
-pub mod dividedstg;
-
-/// [BlockPageStg] - implementation of [PageStorage] trait based on [dividedstg::DividedStg].
-pub mod blockpagestg;
-
-/// Page storage and sharing, [SharedPagedData] and [AccessPagedData].
-pub mod pstore;
-*/
 
 /// Test module.
 pub mod test;
@@ -270,12 +255,6 @@ mod run;
 pub mod cexp;
 #[cfg(not(feature = "max"))]
 mod cexp;
-
-#[cfg(feature = "max")]
-/// Heap with keys that can be modified for tracking least used page.
-pub mod heap;
-#[cfg(not(feature = "max"))]
-mod heap;
 
 #[cfg(feature = "max")]
 /// Storage of variable length values : [ByteStorage].
@@ -832,29 +811,3 @@ impl Transaction for DummyTransaction {
         println!("Error: {}", err);
     }
 }
-
-/*
-/// Memory limits.
-#[non_exhaustive]
-pub struct Limits {
-    /// Atomic file limits
-    pub af_lim: atom_file::Limits,
-    /// Block capacity
-    pub blk_cap: u64,
-    /// Page sizes
-    pub page_sizes: usize,
-    /// Largest division of page
-    pub max_div: usize,
-}
-
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            af_lim: atom_file::Limits::default(),
-            blk_cap: 27720,
-            page_sizes: 7,
-            max_div: 12,
-        }
-    }
-}
-*/
