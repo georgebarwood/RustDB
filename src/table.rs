@@ -13,15 +13,6 @@ pub struct Index {
 /// List of indexes. Each index has a file and a list of column numbers.
 pub type IxList = Vec<Index>;
 
-/// Save or Rollback.
-#[derive(PartialEq, Eq, PartialOrd, Clone, Copy)]
-pub enum SaveOp {
-    /// Save.
-    Save,
-    /// Rollback.
-    RollBack,
-}
-
 /// Database base table. Underlying file, type information about the columns and id allocation.
 pub struct Table {
     /// Underlying SortedFile.

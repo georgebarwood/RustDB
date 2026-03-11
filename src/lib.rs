@@ -36,7 +36,6 @@
 //! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
 //! - `unsafe-optim` : Enable unsafe optimisations in release mode.
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
-//! - `compact` : Default page storage is CompactFile rather than [BlockPageStg] (can be set explicitly using [pstore::SharedPagedData::new_from_ps] ).
 //!
 //! By default, all features except serde, unsafe-optim, log and compact are enabled.
 //!
@@ -69,7 +68,7 @@
 //!     let stg = MemFile::new();
 //!
 //!     let spd = SharedPagedData::new(stg);
-//!     let wapd = AccessPagedData::new_writer(spd);
+//!     let wapd = spd.new_writer();
 //!
 //!     let mut bmap = BuiltinMap::default();
 //!     standard_builtins(&mut bmap);
@@ -95,13 +94,12 @@
 )] // see util::perf_assert! macro
 #![deny(missing_docs)]
 
+pub use page_store::{AccessPagedData, SharedPagedData,BlockPageStg,SaveOp,PageStorage, PageStorageInfo, Limits};
+  
 pub use crate::{
-    blockpagestg::BlockPageStg,
     builtin::standard_builtins,
-    pstore::{AccessPagedData, SharedPagedData},
-    stg::{PageStorage, PageStorageInfo, SimpleFileStorage},
 };
-pub use atom_file::{AtomicFile, BasicAtomicFile, DummyFile, MemFile, MultiFileStorage, Storage};
+pub use atom_file::{AtomicFile, BasicAtomicFile, DummyFile, MemFile, SimpleFileStorage, MultiFileStorage, Storage};
 
 #[cfg(feature = "gentrans")]
 pub use crate::gentrans::{GenQuery, GenTransaction, Part};
@@ -132,7 +130,7 @@ use crate::{
     parse::Parser,
     run::*,
     sortedfile::{Asc, Id, Record, SortedFile},
-    table::{ColInfo, IndexInfo, Row, SaveOp, Table},
+    table::{ColInfo, IndexInfo, Row, Table},
     util::{SmallSet, nd, newmap},
     value::*,
 };
@@ -150,7 +148,7 @@ use std::{
     collections::BTreeSet,
     panic,
     rc::Rc,
-    sync::{Arc, Mutex, RwLock},
+    sync::Arc,
 };
 
 // use std::collections::{HashMap,HashSet};
@@ -171,6 +169,7 @@ pub mod gentrans;
 /// Backing [Storage] for database. See also [AtomicFile].
 pub mod stg;
 
+/*
 /// [block::BlockStg] - divides [Storage] into relocatable fixed size blocks, basis for [dividedstg::DividedStg].
 pub mod block;
 
@@ -182,6 +181,7 @@ pub mod blockpagestg;
 
 /// Page storage and sharing, [SharedPagedData] and [AccessPagedData].
 pub mod pstore;
+*/
 
 /// Test module.
 pub mod test;
@@ -833,6 +833,7 @@ impl Transaction for DummyTransaction {
     }
 }
 
+/*
 /// Memory limits.
 #[non_exhaustive]
 pub struct Limits {
@@ -856,3 +857,4 @@ impl Default for Limits {
         }
     }
 }
+*/
