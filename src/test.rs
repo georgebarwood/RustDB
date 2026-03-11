@@ -18,7 +18,7 @@ fn save_test() {
 
         let af = AtomicFile::new(mf.clone(), MemFile::new());
         let spd = SharedPagedData::new(af);
-        let wapd = AccessPagedData::new_writer(spd.clone());
+        let wapd = spd.new_writer();
 
         let db = Database::new(wapd, "CREATE SCHEMA test", bmap.clone());
 
@@ -52,7 +52,7 @@ fn concurrency() {
     let bmap = Arc::new(bmap);
 
     let spd = SharedPagedData::new(stg);
-    let wapd = AccessPagedData::new_writer(spd.clone());
+    let wapd = spd.new_writer();
     let db = Database::new(wapd, "CREATE SCHEMA test", bmap.clone());
 
     let nt = 100;
@@ -71,7 +71,7 @@ fn concurrency() {
     // Create readers at different update times.
     let mut rapd = Vec::new();
     for i in 0..1000 * test_amount() {
-        rapd.push((i, AccessPagedData::new_reader(spd.clone())));
+        rapd.push((i, spd.new_reader()));
         let mut tr = GenTransaction::default();
         let table = i % nt;
         let sql = format!("UPDATE test.[T{}] SET N = N + 1 WHERE 1=1", table);
@@ -215,7 +215,7 @@ GO
     let bmap = Arc::new(bmap);
 
     let spd = SharedPagedData::new(stg);
-    let wapd = AccessPagedData::new_writer(spd.clone());
+    let wapd = spd.new_writer();
     let db = Database::new(wapd, INITSQL, bmap.clone());
 
     // To check things work with low mem_limit.
@@ -250,7 +250,7 @@ fn rollback() {
 
     let spd = SharedPagedData::new(stg);
 
-    let wapd = AccessPagedData::new_writer(spd.clone());
+    let wapd = spd.new_writer();
     let db = Database::new(wapd, "", bmap.clone());
 
     let mut tr = GenTransaction::default();
@@ -273,7 +273,7 @@ fn insert_delete() {
     let bmap = Arc::new(bmap);
 
     let spd = SharedPagedData::new(stg);
-    let wapd = AccessPagedData::new_writer(spd.clone());
+    let wapd = spd.new_writer();
     let db = Database::new(wapd, "", bmap.clone());
 
     let mut tr = GenTransaction::default();
@@ -391,7 +391,7 @@ END
     let bmap = Arc::new(bmap);
 
     let spd = SharedPagedData::new(stg);
-    let wapd = AccessPagedData::new_writer(spd.clone());
+    let wapd = spd.new_writer();
     let db = Database::new(wapd, INITSQL, bmap.clone());
 
     // To check things work with low mem_limit.

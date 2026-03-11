@@ -42,7 +42,7 @@ fn rustdb_test() {
     let bmap = Arc::new(bmap);
 
     let spd = SharedPagedData::new(stg);
-    let wapd = AccessPagedData::new_writer(spd.clone());
+    let wapd = spd.new_writer();
     let db = Database::new(wapd, "", bmap.clone());
 
     let mut tr = GenTransaction::default();
@@ -91,7 +91,7 @@ fn rustdb_direct_test() {
     let bmap = Arc::new(bmap);
 
     let spd = SharedPagedData::new(stg);
-    let wapd = AccessPagedData::new_writer(spd.clone());
+    let wapd = spd.new_writer();
 
     let db = Database::new(wapd, "", bmap.clone());
 
