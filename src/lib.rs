@@ -99,7 +99,7 @@ pub use page_store::{AccessPagedData, SharedPagedData,BlockPageStg,SaveOp,PageSt
 pub use crate::{
     builtin::standard_builtins,
 };
-pub use atom_file::{AtomicFile, BasicAtomicFile, DummyFile, MemFile, SimpleFileStorage, MultiFileStorage, Storage};
+pub use atom_file::{AtomicFile, BasicAtomicFile, DummyFile, MemFile, SimpleFileStorage, MultiFileStorage, Storage, BasicStorage, FastFileStorage};
 
 #[cfg(feature = "gentrans")]
 pub use crate::gentrans::{GenQuery, GenTransaction, Part};
