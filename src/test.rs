@@ -8,7 +8,6 @@ pub fn test_amount() -> usize {
 /// Idea of this test is to check database saves and loads ok.
 fn save_test() {
     use crate::*;
-    use atom_file::BasicStorage;
 
     let mf = MemFile::new();
 
