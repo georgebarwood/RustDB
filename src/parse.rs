@@ -1,3 +1,4 @@
+use crate::alloc::{LVec, lbox, lvec, tbox, tvec};
 use crate::{
     AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
     ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, Rc, STRING, SqlError,
@@ -494,7 +495,7 @@ impl<'a> Parser<'a> {
         let name = self.id_ref();
         if self.test(Token::Dot) {
             let fname = self.id_ref();
-            let mut parms = Vec::new();
+            let mut parms = tvec();
             self.read(Token::LBra);
             if self.token != Token::RBra {
                 loop {
@@ -511,7 +512,7 @@ impl<'a> Parser<'a> {
             };
             Expr::new(ExprIs::FuncCall(name, parms))
         } else if self.test(Token::LBra) {
-            let mut parms = Vec::new();
+            let mut parms = tvec();
             if self.token != Token::RBra {
                 loop {
                     parms.push(self.exp());
@@ -541,7 +542,7 @@ impl<'a> Parser<'a> {
                 self.exp_case()
             } else if self.test_id(b"NOT") {
                 let e = self.exp_p(10); // Not sure about precedence here.
-                Expr::new(ExprIs::Not(Box::new(e)))
+                Expr::new(ExprIs::Not(tbox(e)))
             } else {
                 self.exp_id()
             };
@@ -553,7 +554,8 @@ impl<'a> Parser<'a> {
                 if self.test(Token::Comma)
                 // Operand of IN e.g. X IN ( 1,2,3 )
                 {
-                    let mut list = vec![exp];
+                    let mut list = tvec();
+                    list.push(exp);
                     loop {
                         list.push(self.exp());
                         if !self.test(Token::Comma) {
@@ -582,7 +584,7 @@ impl<'a> Parser<'a> {
             result = Expr::new(ExprIs::Const(Value::RcBinary(Rc::new(util::parse_hex(hb)))));
             self.read_token();
         } else if self.test(Token::Minus) {
-            result = Expr::new(ExprIs::Minus(Box::new(self.exp_p(30))));
+            result = Expr::new(ExprIs::Minus(tbox(self.exp_p(30))));
         } else {
             panic!("expression expected")
         }
@@ -619,14 +621,14 @@ impl<'a> Parser<'a> {
                 rhs = self.exp_lp(rhs, t.1);
                 t = self.operator();
             }
-            lhs = Expr::new(ExprIs::Binary(op.0, Box::new(lhs), Box::new(rhs)));
+            lhs = Expr::new(ExprIs::Binary(op.0, tbox(lhs), tbox(rhs)));
         }
         lhs
     }
 
     /// Parse a CASE expression.
     fn exp_case(&mut self) -> Expr {
-        let mut list = Vec::new();
+        let mut list = tvec();
         while self.test_id(b"WHEN") {
             let test = self.exp();
             self.read_id(b"THEN");
@@ -635,7 +637,7 @@ impl<'a> Parser<'a> {
         }
         assert!(!list.is_empty(), "empty CASE expression");
         self.read_id(b"ELSE");
-        let els = Box::new(self.exp());
+        let els = tbox(self.exp());
         self.read_id(b"END");
         Expr::new(ExprIs::Case(list, els))
     }
@@ -643,7 +645,7 @@ impl<'a> Parser<'a> {
     fn exp_scalar_select(&mut self) -> Expr {
         let te = self.select_expression(false);
         // if ( te.ColumnCount != 1 ) Error ( "Scalar select must have one column" );
-        Expr::new(ExprIs::ScalarSelect(Box::new(te)))
+        Expr::new(ExprIs::ScalarSelect(tbox(te)))
     }
 
     // End Expression parsing
@@ -652,9 +654,9 @@ impl<'a> Parser<'a> {
 
     fn insert_expression(&mut self, expect: usize) -> TableExpression {
         self.read_id(b"VALUES");
-        let mut values = Vec::new();
+        let mut values = tvec();
         while self.test(Token::LBra) {
-            let mut v = Vec::new();
+            let mut v = tvec();
             loop {
                 v.push(self.exp());
                 if self.test(Token::RBra) {
@@ -698,9 +700,9 @@ impl<'a> Parser<'a> {
 
     /// Parse a SELECT / SET / FOR expression.
     fn select_expression(&mut self, set_or_for: bool) -> FromExpression {
-        let mut exps = Vec::new();
-        let mut colnames = Vec::new();
-        let mut assigns = Vec::new();
+        let mut exps = tvec();
+        let mut colnames = lvec();
+        let mut assigns = lvec();
         loop {
             if set_or_for {
                 let local = self.local();
@@ -726,7 +728,7 @@ impl<'a> Parser<'a> {
             }
         }
         let from = if self.test_id(b"FROM") {
-            Some(Box::new(self.primary_table_exp()))
+            Some(tbox(self.primary_table_exp()))
         } else {
             None
         };
@@ -735,7 +737,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let mut orderby = Vec::new();
+        let mut orderby = tvec();
         if self.test_id(b"ORDER") {
             self.read_id(b"BY");
             loop {
@@ -768,7 +770,7 @@ impl<'a> Parser<'a> {
         let se = self.select_expression(false);
         if !self.b.parse_only {
             let cte = c_select(&mut self.b, se);
-            self.b.add(Select(Box::new(cte)));
+            self.b.add(Select(lbox(cte)));
         }
     }
 
@@ -796,7 +798,7 @@ impl<'a> Parser<'a> {
         let mut src = self.insert_expression(cnames.len());
         if !self.b.parse_only {
             let t = c_table(&self.b, &tr);
-            let mut cnums: Vec<usize> = Vec::new();
+            let mut cnums: LVec<usize> = lvec();
             {
                 for cname in &cnames {
                     if let Some(cnum) = t.info.get(tos(cname)) {
@@ -1024,7 +1026,7 @@ impl<'a> Parser<'a> {
 
     fn s_alter_table(&mut self) {
         let tr = self.obj_ref();
-        let mut list = Vec::new();
+        let mut list = lvec();
         loop {
             if self.test_id(b"ADD") {
                 let col = self.id();

@@ -1,3 +1,4 @@
+use crate::alloc::{LBox, LVec};
 use crate::{
     Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, Rc,
     RefCell, Table, Value, panic,
@@ -27,19 +28,19 @@ pub enum Instruction {
     /// Execute string.
     Execute,
     /// Initialise FOR statement.
-    ForInit(usize, Box<CTableExpression>),
+    ForInit(usize, LBox<CTableExpression>),
     /// Next iteration of FOR statement.
-    ForNext(usize, Box<ForNextInfo>),
+    ForNext(usize, LBox<ForNextInfo>),
     /// Initialise FOR statement ( sorted case ).
-    ForSortInit(usize, Box<CFromExpression>),
+    ForSortInit(usize, LBox<CFromExpression>),
     /// Next iteration of FOR statement ( sorted case ).
-    ForSortNext(usize, Box<(usize, usize, Assigns)>),
+    ForSortNext(usize, LBox<(usize, usize, Assigns)>),
     /// Data operation.
-    DataOp(Box<DO>),
+    DataOp(LBox<DO>),
     /// SELECT expression.
-    Select(Box<CFromExpression>),
+    Select(LBox<CFromExpression>),
     /// Set local variables from table.
-    Set(Box<CFromExpression>),
+    Set(LBox<CFromExpression>),
     // Special push instructions ( optimisations )
     /// Push Integer expression.
     PushInt(CExpPtr<i64>),
@@ -66,11 +67,11 @@ pub struct Function {
     /// Function return type.
     pub return_type: DataType,
     /// Types of local parameters/variables.
-    pub local_typ: Vec<DataType>,
+    pub local_typ: LVec<DataType>,
     /// Source SQL.
     pub source: Rc<String>,
     /// List of instructions.
-    pub ilist: RefCell<Vec<Instruction>>, // Valid when compiled is true.
+    pub ilist: RefCell<LVec<Instruction>>, // Valid when compiled is true.
     /// Has function been compiled.
     pub compiled: Cell<bool>,
 }
@@ -133,7 +134,7 @@ pub struct ForNextInfo {
     /// Assigns.
     pub assigns: Assigns,
     /// Expressions.
-    pub exps: Vec<CExpPtr<Value>>,
+    pub exps: LVec<CExpPtr<Value>>,
     /// WHERE expression.
     pub wher: Option<CExpPtr<bool>>,
 }
@@ -146,9 +147,9 @@ pub enum CTableExpression {
     /// Row identified by Id.
     IdGet(Rc<Table>, CExpPtr<i64>),
     /// Indexed rows.
-    IxGet(Rc<Table>, Vec<CExpPtr<Value>>, usize),
+    IxGet(Rc<Table>, LVec<CExpPtr<Value>>, usize),
     /// VALUE expressions.
-    Values(Vec<Vec<CExpPtr<Value>>>),
+    Values(LVec<LVec<CExpPtr<Value>>>),
 }
 
 impl CTableExpression {
@@ -167,19 +168,19 @@ impl CTableExpression {
 #[non_exhaustive]
 pub struct CFromExpression {
     /// Column names.
-    pub colnames: Vec<String>,
+    pub colnames: LVec<String>,
     /// Assignments ( left hand side ).
     pub assigns: Assigns,
     /// Expressions.
-    pub exps: Vec<CExpPtr<Value>>,
+    pub exps: LVec<CExpPtr<Value>>,
     /// FROM expression.
     pub from: Option<CTableExpression>,
     /// WHERE expression.
     pub wher: Option<CExpPtr<bool>>,
     /// ORDER BY expressions.
-    pub orderby: Vec<CExpPtr<Value>>,
+    pub orderby: LVec<CExpPtr<Value>>,
     /// DESC bits.
-    pub desc: Vec<bool>,
+    pub desc: LVec<bool>,
 }
 
 /// Database Operation
@@ -194,7 +195,7 @@ pub enum DO {
     /// Create Function.
     CreateFunction(ObjRef, Rc<String>, bool),
     /// Alter Table.
-    AlterTable(ObjRef, Vec<AlterCol>),
+    AlterTable(ObjRef, LVec<AlterCol>),
     /// Drop Schema.
     DropSchema(String),
     /// Drop Table.
@@ -204,10 +205,10 @@ pub enum DO {
     /// Drop Function.
     DropFunction(ObjRef),
     /// Insert into Table.
-    Insert(Rc<Table>, Vec<usize>, CTableExpression),
+    Insert(Rc<Table>, LVec<usize>, CTableExpression),
     /// Update Table rows.
     Update(
-        Vec<(usize, CExpPtr<Value>)>,
+        LVec<(usize, CExpPtr<Value>)>,
         CTableExpression,
         Option<CExpPtr<bool>>,
     ),

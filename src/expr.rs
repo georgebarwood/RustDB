@@ -1,3 +1,4 @@
+use crate::alloc::{LVec, TBox, TVec, lbox, lvec};
 use crate::*;
 use Instruction::{DataOp, ForNext, ForSortNext, Jump, JumpIfFalse};
 
@@ -14,7 +15,7 @@ pub enum TableExpression {
     /// Base table.
     Base(ObjRef),
     /// VALUEs.
-    Values(Vec<Vec<Expr>>),
+    Values(TVec<TVec<Expr>>),
 }
 /// Assign operation.
 #[derive(Clone, Copy)]
@@ -30,23 +31,23 @@ pub enum AssignOp {
     Dec,
 }
 /// Vector of local variable numbers and AssignOp.
-pub type Assigns = Vec<(usize, AssignOp)>;
+pub type Assigns = LVec<(usize, AssignOp)>;
 
 /// From Expression ( not yet compiled ).
 #[non_exhaustive]
 pub struct FromExpression {
     /// Column names.
-    pub colnames: Vec<String>,
+    pub colnames: LVec<String>,
     /// Assigns.
     pub assigns: Assigns,
     /// Expressions.
-    pub exps: Vec<Expr>,
+    pub exps: TVec<Expr>,
     /// FROM clause.
-    pub from: Option<Box<TableExpression>>,
+    pub from: Option<TBox<TableExpression>>,
     /// WHERE expression.
     pub wher: Option<Expr>,
     /// ORDER BY clause.
-    pub orderby: Vec<(Expr, bool)>,
+    pub orderby: TVec<(Expr, bool)>,
 }
 
 /// Parsing token.
@@ -161,21 +162,21 @@ pub enum ExprIs {
     /// Column.
     ColName(String),
     /// Binary operator expression.
-    Binary(Token, Box<Expr>, Box<Expr>),
+    Binary(Token, TBox<Expr>, TBox<Expr>),
     /// Not expression.
-    Not(Box<Expr>),
+    Not(TBox<Expr>),
     /// Unary minus.
-    Minus(Box<Expr>),
+    Minus(TBox<Expr>),
     /// Case expression.
-    Case(Vec<(Expr, Expr)>, Box<Expr>),
+    Case(TVec<(Expr, Expr)>, TBox<Expr>),
     /// Function call.
-    FuncCall(ObjRef, Vec<Expr>),
+    FuncCall(ObjRef, TVec<Expr>),
     /// Builtin function call.
-    BuiltinCall(String, Vec<Expr>),
+    BuiltinCall(String, TVec<Expr>),
     /// Scalar select.
-    ScalarSelect(Box<FromExpression>),
+    ScalarSelect(TBox<FromExpression>),
     /// List of expressions.
-    List(Vec<Expr>),
+    List(TVec<Expr>),
 }
 
 /// Object reference ( Schema.Name ).
@@ -260,9 +261,9 @@ pub struct Block<'a> {
     /// Function return type.
     pub return_type: DataType,
     /// Datatypes of paramaters and local variables.
-    pub local_typ: Vec<DataType>,
+    pub local_typ: LVec<DataType>,
     /// List of instructions.
-    pub ilist: Vec<Instruction>,
+    pub ilist: LVec<Instruction>,
     /// Id of break.
     pub break_id: usize,
     /// Database.
@@ -272,25 +273,25 @@ pub struct Block<'a> {
     /// Only parse, no type checking or compilation.
     pub parse_only: bool,
     /// List of jumps.
-    jumps: Vec<usize>,
+    jumps: LVec<usize>,
     /// Lookup jump label by name.   
     labels: HashMap<&'a [u8], usize>,
     /// Lookup local variable by name.
     local_map: HashMap<&'a [u8], usize>,
     /// Names of local variables.
-    locals: Vec<&'a [u8]>,
+    locals: LVec<&'a [u8]>,
 }
 
 impl<'a> Block<'a> {
     /// Construct a new block.
     pub fn new(db: DB) -> Self {
         Block {
-            ilist: Vec::new(),
-            jumps: Vec::new(),
+            ilist: lvec(),
+            jumps: lvec(),
             labels: HashMap::default(),
             local_map: HashMap::default(),
-            locals: Vec::new(),
-            local_typ: Vec::new(),
+            locals: lvec(),
+            local_typ: lvec(),
             break_id: 0,
             param_count: 0,
             return_type: NONE,
@@ -327,7 +328,7 @@ impl<'a> Block<'a> {
     /// Add a Data Operation (DO) to the instruction list.
     pub fn dop(&mut self, dop: DO) {
         if !self.parse_only {
-            self.add(DataOp(Box::new(dop)));
+            self.add(DataOp(lbox(dop)));
         }
     }
 

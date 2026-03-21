@@ -1,4 +1,5 @@
 use crate::*;
+use alloc::lvec;
 
 /// Create a schema in the database by writing to the system Schema table.
 pub fn create_schema(db: &DB, name: &str) {
@@ -270,12 +271,13 @@ pub fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64> {
 
 /// Parse a function definition.
 fn parse_function(db: &DB, source: Rc<String>) -> Rc<Function> {
-    let mut p = Parser::new(&source, db);
+    let source1 = source.clone();
+    let mut p = Parser::new(&source1, db);
     p.b.parse_only = true;
     p.parse_function();
     Rc::new(Function {
         compiled: Cell::new(false),
-        ilist: RefCell::new(Vec::new()),
+        ilist: RefCell::new(lvec()),
         local_typ: p.b.local_typ,
         return_type: p.b.return_type,
         param_count: p.b.param_count,

@@ -1,4 +1,5 @@
 use crate::*;
+use alloc::lvec;
 
 /// Table Index.
 pub struct Index {
@@ -119,11 +120,13 @@ impl Table {
             }
             let mut kmap = BTreeMap::new();
             let cwe = get_keys(b, we, &mut cols, &mut kmap);
-            let keys = clist
-                .iter()
-                .take(best_match)
-                .map(|col| kmap.remove(col).unwrap())
-                .collect();
+            let mut keys = lvec();
+            keys.extend(
+                clist
+                    .iter()
+                    .take(best_match)
+                    .map(|col| kmap.remove(col).unwrap()),
+            );
             return (
                 cwe,
                 Some(CTableExpression::IxGet(self.clone(), keys, best_index)),

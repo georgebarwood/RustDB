@@ -1,5 +1,6 @@
 use crate::*;
 use Instruction::*;
+use alloc::LVec;
 
 /// Evaluation environment - stack of Values, references to DB and Transaction.
 #[non_exhaustive]
@@ -436,7 +437,7 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Insert evaluated values into a table.
-    fn insert_values(&mut self, table: Rc<Table>, ci: &[usize], vals: &[Vec<CExpPtr<Value>>]) {
+    fn insert_values(&mut self, table: Rc<Table>, ci: &[usize], vals: &[LVec<CExpPtr<Value>>]) {
         let mut row = Row::new(table.info.clone());
         for r in vals {
             row.id = 0;

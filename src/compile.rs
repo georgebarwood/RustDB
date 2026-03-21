@@ -1,5 +1,6 @@
 use crate::*;
 use Instruction::*;
+use alloc::{TVec, lbox, lvec};
 use std::{mem, ops};
 
 /// Calculate various attributes such as data_type, is_constant etc.
@@ -364,7 +365,7 @@ pub fn c_update(
     let t = c_table(b, tname);
     let from = CTableExpression::Base(t.clone());
     let save = b.from.replace(from);
-    let mut se = Vec::new();
+    let mut se = lvec();
     for (name, exp) in assigns.iter_mut() {
         if let Some(cnum) = t.info.colmap.get(name) {
             let exp = c_value(b, exp);
@@ -416,7 +417,7 @@ pub fn c_set(b: &mut Block, mut se: FromExpression) {
         }
     } else {
         let cte = c_select(b, se);
-        b.add(Set(Box::new(cte)));
+        b.add(Set(lbox(cte)));
     }
 }
 
@@ -429,7 +430,7 @@ pub fn c_select(b: &mut Block, mut x: FromExpression) -> CFromExpression {
     };
     // Is the save necessary?
     let save = mem::replace(&mut b.from, from);
-    let mut exps = Vec::new();
+    let mut exps = lvec();
     for (i, e) in x.exps.iter_mut().enumerate() {
         exps.push(c_value(b, e));
         if !x.assigns.is_empty() {
@@ -443,8 +444,8 @@ pub fn c_select(b: &mut Block, mut x: FromExpression) -> CFromExpression {
         }
     }
     let (wher, index_from) = c_where(b, table, &mut x.wher);
-    let mut orderby = Vec::new();
-    let mut desc = Vec::new();
+    let mut orderby = lvec();
+    let mut desc = lvec();
     for (e, a) in &mut x.orderby {
         let e = c_value(b, e);
         orderby.push(e);
@@ -489,9 +490,9 @@ pub fn c_where(
 pub fn c_te(b: &Block, te: &mut TableExpression) -> CTableExpression {
     match te {
         TableExpression::Values(x) => {
-            let mut cm = Vec::new();
+            let mut cm = lvec();
             for r in x {
-                let mut cr = Vec::new();
+                let mut cr = lvec();
                 for e in r {
                     let ce = c_value(b, e);
                     cr.push(ce);
@@ -581,7 +582,7 @@ pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
 }
 
 /// Compile ExprCall to `CExpPtr<Value>`, checking parameter types.
-pub fn c_call(b: &Block, name: &ObjRef, parms: &mut Vec<Expr>) -> CExpPtr<Value> {
+pub fn c_call(b: &Block, name: &ObjRef, parms: &mut TVec<Expr>) -> CExpPtr<Value> {
     let fp = c_function(&b.db, name);
     let mut pv = Vec::new();
     let mut pk = Vec::new();
@@ -650,9 +651,9 @@ pub fn c_for(b: &mut Block, se: FromExpression, start_id: usize, break_id: usize
     let mut cse = c_select(b, se);
     let orderbylen = cse.orderby.len();
     if orderbylen == 0 {
-        b.add(ForInit(for_id, Box::new(cse.from.unwrap())));
+        b.add(ForInit(for_id, lbox(cse.from.unwrap())));
         b.set_jump(start_id);
-        let info = Box::new(ForNextInfo {
+        let info = lbox(ForNextInfo {
             for_id,
             assigns: cse.assigns,
             exps: cse.exps,
@@ -660,10 +661,10 @@ pub fn c_for(b: &mut Block, se: FromExpression, start_id: usize, break_id: usize
         });
         b.add(ForNext(break_id, info));
     } else {
-        let assigns = mem::take(&mut cse.assigns);
-        b.add(ForSortInit(for_id, Box::new(cse)));
+        let assigns = mem::replace(&mut cse.assigns, lvec());
+        b.add(ForSortInit(for_id, lbox(cse)));
         b.set_jump(start_id);
-        let info = Box::new((for_id, orderbylen, assigns));
+        let info = lbox((for_id, orderbylen, assigns));
         b.add(ForSortNext(break_id, info));
     }
 }

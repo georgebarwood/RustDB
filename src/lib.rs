@@ -88,18 +88,25 @@
 //!     assert!( tr.rp.output == b"freddy" );
 //! ```
 
+/*
 #![cfg_attr(
     any(debug_assertions, not(feature = "unsafe-optim")),
     forbid(unsafe_code)
 )] // see util::perf_assert! macro
+*/
+
 #![deny(missing_docs)]
 
-pub use page_store::{AccessPagedData, SharedPagedData,BlockPageStg,SaveOp,PageStorage, PageStorageInfo, Limits, HashMap, HashSet};
-  
-pub use crate::{
-    builtin::standard_builtins,
+pub use page_store::{
+    AccessPagedData, BlockPageStg, HashMap, HashSet, Limits, PageStorage, PageStorageInfo, SaveOp,
+    SharedPagedData,
 };
-pub use atom_file::{AtomicFile, BasicAtomicFile, DummyFile, MemFile, SimpleFileStorage, MultiFileStorage, Storage, BasicStorage, FastFileStorage};
+
+pub use crate::builtin::standard_builtins;
+pub use atom_file::{
+    AtomicFile, BasicAtomicFile, BasicStorage, DummyFile, FastFileStorage, MemFile,
+    MultiFileStorage, SimpleFileStorage, Storage,
+};
 
 #[cfg(feature = "gentrans")]
 pub use crate::gentrans::{GenQuery, GenTransaction, Part};
@@ -168,6 +175,9 @@ pub mod test;
 
 /// Benchmark - compare RustDb with competitors!
 pub mod bench;
+
+/// Temp and Local allocators.
+pub mod alloc;
 
 // Conditional modules.
 

@@ -216,6 +216,7 @@ GO
 
     let spd = SharedPagedData::new(stg);
     let wapd = spd.new_writer();
+
     let db = Database::new(wapd, INITSQL, bmap.clone());
 
     // To check things work with low mem_limit.
@@ -235,7 +236,6 @@ GO
         }
         assert_eq!(tr.get_error(), "");
     }
-    // assert!(false);
 }
 
 #[test]
