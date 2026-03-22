@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "6.0.12"
+version = "7.0.0"
 edition = "2024"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -35,6 +35,8 @@ log = ["page-store/log"]
 log-execute= []
 #pstd = ["dep:pstd","atom-file/pstd","page-store/pstd"]
 pstd = ["atom-file/pstd","page-store/pstd"]
+dynbox = ["pstd/dynbox"]
+#dynbox = []
 
 [dev-dependencies]
 rand = "0.8.4"
