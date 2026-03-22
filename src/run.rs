@@ -82,6 +82,11 @@ pub trait CExp<T> {
     fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> T;
 }
 
+#[cfg(feature = "dynbox")]
+/// Pointer to [CExp].
+pub type CExpPtr<T> = LBox<dyn CExp<T>>;
+
+#[cfg(not(feature = "dynbox"))]
 /// Pointer to [CExp].
 pub type CExpPtr<T> = Box<dyn CExp<T>>;
 

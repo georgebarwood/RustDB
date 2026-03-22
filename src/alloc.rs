@@ -34,6 +34,18 @@ pub fn lbox<T>(t: T) -> LBox<T> {
     LBox::new_in(t, Local)
 }
 
+/// Allocate a Box or LBox.
+#[cfg(feature = "dynbox")]
+pub fn dbox<T>(t: T) -> LBox<T> {
+    LBox::new_in(t,Local)
+}
+
+/// Allocate a Box or LBox.
+#[cfg(not(feature = "dynbox"))]
+pub fn dbox<T>(t: T) -> Box<T> {
+    Box::new(t)
+}
+
 /// LVec.
 pub type LVec<T> = pstd::Vec<T, Local>;
 
@@ -48,10 +60,11 @@ thread_local! {
 }
 
 const USE_BUMP: bool = !cfg!(miri);
+const MAX_BUMP: usize = 1024;
 
 unsafe impl pstd::alloc::Allocator for Temp {
     fn allocate(&self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
-        if let Some(mut a) = TA.take() {
+        if lay.size() <= MAX_BUMP && let Some(mut a) = TA.take() {
             let result = a.allocate(lay);
             TA.set(Some(a));
             result
@@ -61,7 +74,7 @@ unsafe impl pstd::alloc::Allocator for Temp {
     }
 
     unsafe fn deallocate(&self, p: NonNull<u8>, lay: Layout) {
-        if let Some(mut a) = TA.take() {
+        if lay.size() <= MAX_BUMP && let Some(mut a) = TA.take() {
             a.deallocate(p, lay);
             TA.set(Some(a));
         } else {
@@ -87,7 +100,7 @@ impl Local {
 
 unsafe impl pstd::alloc::Allocator for Local {
     fn allocate(&self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
-        if let Some(mut a) = LA.take() {
+        if lay.size() <= MAX_BUMP && let Some(mut a) = LA.take() {
             let result = a.allocate(lay);
             LA.set(Some(a));
             result
@@ -97,7 +110,7 @@ unsafe impl pstd::alloc::Allocator for Local {
     }
 
     unsafe fn deallocate(&self, p: NonNull<u8>, lay: Layout) {
-        if let Some(mut a) = LA.take() {
+        if lay.size() <= MAX_BUMP && let Some(mut a) = LA.take() {
             a.deallocate(p, lay);
             LA.set(Some(a));
         } else {
@@ -185,7 +198,11 @@ impl BumpAllocator {
 
 impl Drop for BumpAllocator {
     fn drop(&mut self) {
-        assert!(self.alloc_count == 0);
+        if self.alloc_count != 0
+        {
+            println!("BumpAllocator has outstanding allocations, aborting");
+            std::process::abort();
+        }
         /*
         println!(
             "Bump Allocator Dropped total_count={} total_alloc={} big_alloc={} reset_count={}",

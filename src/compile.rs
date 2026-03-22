@@ -1,6 +1,6 @@
 use crate::*;
 use Instruction::*;
-use alloc::{TVec, lbox, lvec};
+use alloc::{TVec, lbox, lvec, dbox};
 use std::{mem, ops};
 
 /// Calculate various attributes such as data_type, is_constant etc.
@@ -143,30 +143,30 @@ fn c_builtin_value(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<Value> {
 /// Compile an expression.
 pub fn c_value(b: &Block, e: &mut Expr) -> CExpPtr<Value> {
     match b.kind(e) {
-        DataKind::Bool => Box::new(cexp::BoolToVal(c_bool(b, e))),
-        DataKind::Int => Box::new(cexp::IntToVal(c_int(b, e))),
-        DataKind::Float => Box::new(cexp::FloatToVal(c_float(b, e))),
+        DataKind::Bool => dbox(cexp::BoolToVal(c_bool(b, e))),
+        DataKind::Int => dbox(cexp::IntToVal(c_int(b, e))),
+        DataKind::Float => dbox(cexp::FloatToVal(c_float(b, e))),
         _ => match &mut e.exp {
             ExprIs::ColName(x) => {
                 let (off, typ) = name_to_col(b, x);
                 let size = data_size(typ);
                 match data_kind(typ) {
-                    DataKind::String => Box::new(cexp::ColumnString { off, size }),
-                    DataKind::Binary => Box::new(cexp::ColumnBinary { off, size }),
+                    DataKind::String => dbox(cexp::ColumnString { off, size }),
+                    DataKind::Binary => dbox(cexp::ColumnBinary { off, size }),
                     _ => panic!(),
                 }
             }
-            ExprIs::Const(x) => Box::new(cexp::Const((*x).clone())),
-            ExprIs::Local(x) => Box::new(cexp::Local(*x)),
+            ExprIs::Const(x) => dbox(cexp::Const((*x).clone())),
+            ExprIs::Local(x) => dbox(cexp::Local(*x)),
             ExprIs::Binary(op, b1, b2) => {
                 let c1 = c_value(b, b1);
                 let c2 = c_value(b, b2);
                 match op {
                     Token::VBar => {
                         if data_kind(b1.data_type) == DataKind::Binary {
-                            Box::new(cexp::BinConcat(c1, c2))
+                            dbox(cexp::BinConcat(c1, c2))
                         } else {
-                            Box::new(cexp::Concat(c1, c2))
+                            dbox(cexp::Concat(c1, c2))
                         }
                     }
                     _ => panic!("invalid operator {:?}", op),
@@ -190,17 +190,17 @@ pub fn c_int(b: &Block, e: &mut Expr) -> CExpPtr<i64> {
             let (off, typ) = name_to_col(b, x);
             let size = data_size(typ);
             match size {
-                8 => Box::new(cexp::ColumnI64 { off }),
-                1 => Box::new(cexp::ColumnI8 { off }),
-                _ => Box::new(cexp::ColumnI { off, size }),
+                8 => dbox(cexp::ColumnI64 { off }),
+                1 => dbox(cexp::ColumnI8 { off }),
+                _ => dbox(cexp::ColumnI { off, size }),
             }
         }
-        ExprIs::Const(Value::Int(b)) => Box::new(cexp::Const::<i64>(*b)),
-        ExprIs::Local(num) => Box::new(cexp::Local(*num)),
+        ExprIs::Const(Value::Int(b)) => dbox(cexp::Const::<i64>(*b)),
+        ExprIs::Local(num) => dbox(cexp::Local(*num)),
         ExprIs::Binary(op, b1, b2) => c_arithmetic(b, *op, b1, b2, c_int),
-        ExprIs::Minus(x) => Box::new(cexp::Minus::<i64>(c_int(b, x))),
+        ExprIs::Minus(x) => dbox(cexp::Minus::<i64>(c_int(b, x))),
         ExprIs::Case(w, e) => c_case(b, w, e, c_int),
-        ExprIs::FuncCall(n, a) => Box::new(cexp::ValToInt(c_call(b, n, a))),
+        ExprIs::FuncCall(n, a) => dbox(cexp::ValToInt(c_call(b, n, a))),
         ExprIs::BuiltinCall(n, a) => c_builtin_int(b, n, a),
         _ => panic!(),
     }
@@ -215,16 +215,16 @@ pub fn c_float(b: &Block, e: &mut Expr) -> CExpPtr<f64> {
         ExprIs::ColName(x) => {
             let (off, typ) = name_to_col(b, x);
             match data_size(typ) {
-                8 => Box::new(cexp::ColumnF64 { off }),
-                4 => Box::new(cexp::ColumnF32 { off }),
+                8 => dbox(cexp::ColumnF64 { off }),
+                4 => dbox(cexp::ColumnF32 { off }),
                 _ => panic!(),
             }
         }
-        ExprIs::Local(num) => Box::new(cexp::Local(*num)),
+        ExprIs::Local(num) => dbox(cexp::Local(*num)),
         ExprIs::Binary(op, b1, b2) => c_arithmetic(b, *op, b1, b2, c_float),
-        ExprIs::Minus(x) => Box::new(cexp::Minus::<f64>(c_float(b, x))),
+        ExprIs::Minus(x) => dbox(cexp::Minus::<f64>(c_float(b, x))),
         ExprIs::Case(w, e) => c_case(b, w, e, c_float),
-        ExprIs::FuncCall(n, a) => Box::new(cexp::ValToFloat(c_call(b, n, a))),
+        ExprIs::FuncCall(n, a) => dbox(cexp::ValToFloat(c_call(b, n, a))),
         ExprIs::BuiltinCall(n, a) => c_builtin_float(b, n, a),
         _ => panic!(),
     }
@@ -238,17 +238,17 @@ pub fn c_bool(b: &Block, e: &mut Expr) -> CExpPtr<bool> {
     match &mut e.exp {
         ExprIs::ColName(x) => {
             let (off, _typ) = name_to_col(b, x);
-            Box::new(cexp::ColumnBool { off })
+            dbox(cexp::ColumnBool { off })
         }
-        ExprIs::Const(Value::Bool(b)) => Box::new(cexp::Const::<bool>(*b)),
-        ExprIs::Local(x) => Box::new(cexp::Local(*x)),
+        ExprIs::Const(Value::Bool(b)) => dbox(cexp::Const::<bool>(*b)),
+        ExprIs::Local(x) => dbox(cexp::Local(*x)),
         ExprIs::Binary(op, b1, b2) => {
             if *op == Token::Or || *op == Token::And {
                 let c1 = c_bool(b, b1);
                 let c2 = c_bool(b, b2);
                 match op {
-                    Token::Or => Box::new(cexp::Or(c1, c2)),
-                    Token::And => Box::new(cexp::And(c1, c2)),
+                    Token::Or => dbox(cexp::Or(c1, c2)),
+                    Token::And => dbox(cexp::And(c1, c2)),
                     _ => panic!(),
                 }
             } else {
@@ -260,8 +260,8 @@ pub fn c_bool(b: &Block, e: &mut Expr) -> CExpPtr<bool> {
                 }
             }
         }
-        ExprIs::Not(x) => Box::new(cexp::Not(c_bool(b, x))),
-        ExprIs::FuncCall(name, parms) => Box::new(cexp::ValToBool(c_call(b, name, parms))),
+        ExprIs::Not(x) => dbox(cexp::Not(c_bool(b, x))),
+        ExprIs::FuncCall(name, parms) => dbox(cexp::ValToBool(c_call(b, name, parms))),
         ExprIs::Case(list, els) => c_case(b, list, els, c_bool),
         _ => panic!(),
     }
@@ -286,11 +286,11 @@ where
     let c1 = cexp(b, e1);
     let c2 = cexp(b, e2);
     match op {
-        Token::Plus => Box::new(cexp::Add::<T>(c1, c2)),
-        Token::Minus => Box::new(cexp::Sub::<T>(c1, c2)),
-        Token::Times => Box::new(cexp::Mul::<T>(c1, c2)),
-        Token::Divide => Box::new(cexp::Div::<T>(c1, c2)),
-        Token::Percent => Box::new(cexp::Rem::<T>(c1, c2)),
+        Token::Plus => dbox(cexp::Add::<T>(c1, c2)),
+        Token::Minus => dbox(cexp::Sub::<T>(c1, c2)),
+        Token::Times => dbox(cexp::Mul::<T>(c1, c2)),
+        Token::Divide => dbox(cexp::Div::<T>(c1, c2)),
+        Token::Percent => dbox(cexp::Rem::<T>(c1, c2)),
         _ => panic!(),
     }
 }
@@ -309,12 +309,12 @@ where
     let c1 = cexp(b, e1);
     let c2 = cexp(b, e2);
     match op {
-        Token::Equal => Box::new(cexp::Equal::<T>(c1, c2)),
-        Token::NotEqual => Box::new(cexp::NotEqual::<T>(c1, c2)),
-        Token::Less => Box::new(cexp::Less::<T>(c1, c2)),
-        Token::Greater => Box::new(cexp::Greater::<T>(c1, c2)),
-        Token::LessEqual => Box::new(cexp::LessEqual::<T>(c1, c2)),
-        Token::GreaterEqual => Box::new(cexp::GreaterEqual::<T>(c1, c2)),
+        Token::Equal => dbox(cexp::Equal::<T>(c1, c2)),
+        Token::NotEqual => dbox(cexp::NotEqual::<T>(c1, c2)),
+        Token::Less => dbox(cexp::Less::<T>(c1, c2)),
+        Token::Greater => dbox(cexp::Greater::<T>(c1, c2)),
+        Token::LessEqual => dbox(cexp::LessEqual::<T>(c1, c2)),
+        Token::GreaterEqual => dbox(cexp::GreaterEqual::<T>(c1, c2)),
         _ => panic!(),
     }
 }
@@ -336,7 +336,7 @@ where
         whens.push((cb, v));
     }
     let els = cexp(b, els);
-    Box::new(cexp::Case::<T> { whens, els })
+    dbox(cexp::Case::<T> { whens, els })
 }
 
 /// Compile a call to a builtin function that returns an integer.
@@ -595,7 +595,7 @@ pub fn c_call(b: &Block, name: &ObjRef, parms: &mut TVec<Expr>) -> CExpPtr<Value
         panic!("function with no RETURN type cannot be used in expression");
     }
     b.check_types(&fp, &pk);
-    Box::new(cexp::Call { fp, pv })
+    dbox(cexp::Call { fp, pv })
 }
 
 /// Generate code to evaluate expression and push the value onto the stack.
