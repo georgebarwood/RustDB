@@ -1,8 +1,8 @@
-use pstd::alloc::Global;
-use std::alloc::Layout;
-use std::cell::Cell;
-use std::mem::MaybeUninit;
-use std::ptr::NonNull;
+//!
+//! Values allocated from Temp and Local Allocators must be freed by the same thread that allocated them, or the program will abort.
+
+use pstd::alloc::{Allocator, Global};
+use std::{alloc::Layout, cell::Cell, ptr::NonNull};
 
 /// Temp Allocator.
 pub struct Temp;
@@ -34,13 +34,13 @@ pub fn lbox<T>(t: T) -> LBox<T> {
     LBox::new_in(t, Local)
 }
 
-/// Allocate a Box or LBox.
+/// Allocate a Box or LBox depending on whether dynbox feature is selected.
 #[cfg(feature = "dynbox")]
 pub fn dbox<T>(t: T) -> LBox<T> {
     LBox::new_in(t, Local)
 }
 
-/// Allocate a Box or LBox.
+/// Allocate a Box or LBox depending on whether dynbox feature is selected.
 #[cfg(not(feature = "dynbox"))]
 pub fn dbox<T>(t: T) -> Box<T> {
     Box::new(t)
@@ -55,7 +55,7 @@ pub fn lvec<T>() -> LVec<T> {
 }
 
 thread_local! {
-    static TA: Cell<Option<Box<BumpAllocator>>> = Cell::new(BumpAllocator::new(true));
+    static TA: Cell<Option<Box<BumpAllocator>>> = Cell::new(BumpAllocator::new(true,1024*256));
     static LA: Cell<Option<Box<BumpAllocator>>> = const { Cell::new(None) };
 }
 
@@ -90,12 +90,17 @@ unsafe impl pstd::alloc::Allocator for Temp {
 }
 
 impl Local {
-    /// Enable Local bump allocation for current thread.
+    /// Enable Local bump allocation for current thread with default size (256KB).
     pub fn enable_bump() {
+        Self::enable_bump_with(256 * 1024);
+    }
+
+    /// Enable Local bump allocation for current thread with specified size.
+    pub fn enable_bump_with(size: usize) {
         if USE_BUMP {
             let mut a = LA.take();
             if a.is_none() {
-                a = BumpAllocator::new(false);
+                a = BumpAllocator::new(false, size);
             }
             LA.set(a);
         }
@@ -129,22 +134,30 @@ unsafe impl pstd::alloc::Allocator for Local {
     }
 }
 
-const N: usize = 1024 * 16;
+//const N: usize = 1024 * 256;
 
 #[repr(align(128))]
-struct Block([MaybeUninit<u8>; N]);
+struct Block(NonNull<[u8]>);
 
 impl Block {
-    fn new() -> Box<Self> {
-        Box::new(Self([MaybeUninit::uninit(); N]))
+    fn new(bsize: usize) -> Self {
+        let lay = Layout::array::<u8>(bsize).unwrap();
+        let p = Global::allocate(&Global, lay).unwrap();
+        Self(p)
+    }
+    fn contains(&self, addr: * mut u8) -> bool {
+        let n = self.0.len();
+        let start : *mut u8 = self.0.as_ptr() as * mut u8;
+        let end : *mut u8 = unsafe{ start.add(n) };
+        addr >= start && addr < end
     }
 }
 
 struct BumpAllocator {
     alloc_count: u64,
     idx: usize,
-    cur: Box<Block>,
-    overflow: Vec<Box<Block>>,
+    cur: Block,
+    overflow: Vec<Block>,
     _alloc_bytes: usize, // Only for diagnostic purposes.
     _max_alloc: usize,
     _reset_count: usize,
@@ -154,12 +167,12 @@ struct BumpAllocator {
 }
 
 impl BumpAllocator {
-    fn new(_temp: bool) -> Option<Box<Self>> {
+    fn new(_temp: bool, bsize: usize) -> Option<Box<Self>> {
         if USE_BUMP {
             Some(Box::new(Self {
                 alloc_count: 0,
                 idx: 0,
-                cur: Block::new(),
+                cur: Block::new(bsize),
                 overflow: Vec::new(),
                 _alloc_bytes: 0,
                 _max_alloc: 0,
@@ -173,18 +186,30 @@ impl BumpAllocator {
         }
     }
 
+    fn overflow_contains(&self, a: * mut u8) -> bool {
+        for b in &self.overflow {
+            if b.contains(a) {
+                return true;
+            }
+        }
+        false
+    }
+
     fn allocate(&mut self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
         let m = lay.align();
         self.idx = self.idx.checked_next_multiple_of(m).unwrap();
         let n = lay.size();
-        if self.idx + n > N {
-            let old = std::mem::replace(&mut self.cur, Block::new());
+        let bsize = self.cur.0.len();
+        let avail = bsize - self.idx;
+        if n > avail || avail == 0 {
+            let old = std::mem::replace(&mut self.cur, Block::new(bsize));
             self.overflow.push(old);
             self.idx = 0;
-            assert!(self.idx + n <= N);
         }
+        
+        let p = self.cur.0.as_ptr();
+        let p = unsafe { &raw mut (&mut (*p))[self.idx..self.idx + n] };
 
-        let p = &raw mut self.cur.0[self.idx..self.idx + n] as *mut [u8];
         self.idx += n;
         self.alloc_count += 1;
         #[cfg(feature = "log-bump")]
@@ -193,10 +218,17 @@ impl BumpAllocator {
             self._total_count += 1;
             self._total_alloc += n;
         }
+
         unsafe { Ok(NonNull::new_unchecked(p)) }
     }
 
-    fn deallocate(&mut self, _p: NonNull<u8>, _lay: Layout) {
+    fn deallocate(&mut self, p: NonNull<u8>, _lay: Layout) {
+        let a : * mut u8 = p.as_ptr();
+        if !self.cur.contains(a) && !self.overflow_contains(a) {
+            println!("Bad deallocate, aborting");
+            std::process::abort();
+        }
+
         self.alloc_count -= 1;
         if self.alloc_count == 0 {
             // println!("reset alloc max={}", self.max_alloc);
@@ -207,7 +239,7 @@ impl BumpAllocator {
                 self._alloc_bytes = 0;
             }
             self.idx = 0;
-            self.overflow = Vec::new();
+            self.overflow.clear();
         }
     }
 }

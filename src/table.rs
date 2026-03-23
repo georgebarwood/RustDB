@@ -458,18 +458,14 @@ impl ColInfo {
         let mut typ = ci.typ[cnum];
         for act in actions {
             match act {
-                AlterCol::Drop(name) => {
-                    if name == cname {
-                        return false;
-                    }
+                AlterCol::Drop(name) if name == cname => {
+                    return false;
                 }
-                AlterCol::Modify(name, dt) => {
-                    if name == cname {
-                        if data_kind(typ) != data_kind(*dt) {
-                            panic!("Cannot change column data kind");
-                        }
-                        typ = *dt;
+                AlterCol::Modify(name, dt) if name == cname => {
+                    if data_kind(typ) != data_kind(*dt) {
+                        panic!("Cannot change column data kind");
                     }
+                    typ = *dt;
                 }
                 _ => {}
             }
