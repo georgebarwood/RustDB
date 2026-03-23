@@ -1,5 +1,5 @@
 use crate::*;
-use alloc::{lvec,dbox};
+use alloc::{dbox, lvec};
 
 /// Table Index.
 pub struct Index {

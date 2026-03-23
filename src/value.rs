@@ -76,7 +76,7 @@ impl Value {
                 };
                 Value::Float(f)
             }
-            _ => Value::Int(util::iget(data, off, size) as i64),
+            _ => Value::Int(util::iget(data, off, size)),
         };
         (val, code)
     }

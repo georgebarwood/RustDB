@@ -1,6 +1,6 @@
 use crate::*;
 use Instruction::*;
-use alloc::{TVec, lbox, lvec, dbox};
+use alloc::{TVec, dbox, lbox, lvec};
 use std::{mem, ops};
 
 /// Calculate various attributes such as data_type, is_constant etc.

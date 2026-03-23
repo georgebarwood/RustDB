@@ -1,8 +1,8 @@
+use crate::alloc::dbox;
 use crate::{
     Block, BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, EvalEnv, Expr, Rc, Value, c_int,
     c_value,
 };
-use crate::alloc::{dbox};
 
 /// Add builtin functions to specified [BuiltinMap].
 pub fn standard_builtins(map: &mut BuiltinMap) {
@@ -77,7 +77,7 @@ pub fn check_types(b: &Block, args: &mut [Expr], dk: &[DataKind]) {
 /// Compile call to EXCEPTION().
 fn c_exception(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[]);
-    dbox(Exception{})
+    dbox(Exception {})
 }
 struct Exception {}
 impl CExp<Value> for Exception {

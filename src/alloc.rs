@@ -37,7 +37,7 @@ pub fn lbox<T>(t: T) -> LBox<T> {
 /// Allocate a Box or LBox.
 #[cfg(feature = "dynbox")]
 pub fn dbox<T>(t: T) -> LBox<T> {
-    LBox::new_in(t,Local)
+    LBox::new_in(t, Local)
 }
 
 /// Allocate a Box or LBox.
@@ -55,7 +55,7 @@ pub fn lvec<T>() -> LVec<T> {
 }
 
 thread_local! {
-    static TA: Cell<Option<Box<BumpAllocator>>> = Cell::new(BumpAllocator::new());
+    static TA: Cell<Option<Box<BumpAllocator>>> = Cell::new(BumpAllocator::new(true));
     static LA: Cell<Option<Box<BumpAllocator>>> = const { Cell::new(None) };
 }
 
@@ -64,7 +64,9 @@ const MAX_BUMP: usize = 1024;
 
 unsafe impl pstd::alloc::Allocator for Temp {
     fn allocate(&self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
-        if lay.size() <= MAX_BUMP && let Some(mut a) = TA.take() {
+        if lay.size() <= MAX_BUMP
+            && let Some(mut a) = TA.take()
+        {
             let result = a.allocate(lay);
             TA.set(Some(a));
             result
@@ -74,7 +76,9 @@ unsafe impl pstd::alloc::Allocator for Temp {
     }
 
     unsafe fn deallocate(&self, p: NonNull<u8>, lay: Layout) {
-        if lay.size() <= MAX_BUMP && let Some(mut a) = TA.take() {
+        if lay.size() <= MAX_BUMP
+            && let Some(mut a) = TA.take()
+        {
             a.deallocate(p, lay);
             TA.set(Some(a));
         } else {
@@ -91,7 +95,7 @@ impl Local {
         if USE_BUMP {
             let mut a = LA.take();
             if a.is_none() {
-                a = BumpAllocator::new();
+                a = BumpAllocator::new(false);
             }
             LA.set(a);
         }
@@ -100,7 +104,9 @@ impl Local {
 
 unsafe impl pstd::alloc::Allocator for Local {
     fn allocate(&self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
-        if lay.size() <= MAX_BUMP && let Some(mut a) = LA.take() {
+        if lay.size() <= MAX_BUMP
+            && let Some(mut a) = LA.take()
+        {
             let result = a.allocate(lay);
             LA.set(Some(a));
             result
@@ -110,7 +116,9 @@ unsafe impl pstd::alloc::Allocator for Local {
     }
 
     unsafe fn deallocate(&self, p: NonNull<u8>, lay: Layout) {
-        if lay.size() <= MAX_BUMP && let Some(mut a) = LA.take() {
+        if lay.size() <= MAX_BUMP
+            && let Some(mut a) = LA.take()
+        {
             a.deallocate(p, lay);
             LA.set(Some(a));
         } else {
@@ -137,26 +145,28 @@ struct BumpAllocator {
     idx: usize,
     cur: Box<Block>,
     overflow: Vec<Box<Block>>,
-    max_alloc: usize, // Only for diagnostic purposes.
-    big_alloc: usize,
-    reset_count: usize,
-    total_count: usize,
-    total_alloc: usize,
+    _alloc_bytes: usize, // Only for diagnostic purposes.
+    _max_alloc: usize,
+    _reset_count: usize,
+    _total_count: usize,
+    _total_alloc: usize,
+    _temp: bool,
 }
 
 impl BumpAllocator {
-    fn new() -> Option<Box<Self>> {
+    fn new(_temp: bool) -> Option<Box<Self>> {
         if USE_BUMP {
             Some(Box::new(Self {
                 alloc_count: 0,
                 idx: 0,
                 cur: Block::new(),
                 overflow: Vec::new(),
-                max_alloc: 0,
-                big_alloc: 0,
-                reset_count: 0,
-                total_count: 0,
-                total_alloc: 0,
+                _alloc_bytes: 0,
+                _max_alloc: 0,
+                _reset_count: 0,
+                _total_count: 0,
+                _total_alloc: 0,
+                _temp,
             }))
         } else {
             None
@@ -177,9 +187,12 @@ impl BumpAllocator {
         let p = &raw mut self.cur.0[self.idx..self.idx + n] as *mut [u8];
         self.idx += n;
         self.alloc_count += 1;
-        self.max_alloc += n;
-        self.total_count += 1;
-        self.total_alloc += n;
+        #[cfg(feature = "log-bump")]
+        {
+            self._alloc_bytes += n;
+            self._total_count += 1;
+            self._total_alloc += n;
+        }
         unsafe { Ok(NonNull::new_unchecked(p)) }
     }
 
@@ -187,9 +200,12 @@ impl BumpAllocator {
         self.alloc_count -= 1;
         if self.alloc_count == 0 {
             // println!("reset alloc max={}", self.max_alloc);
-            self.reset_count += 1;
-            self.big_alloc = std::cmp::max(self.big_alloc, self.max_alloc);
-            self.max_alloc = 0;
+            #[cfg(feature = "log-bump")]
+            {
+                self._reset_count += 1;
+                self._max_alloc = std::cmp::max(self._max_alloc, self._alloc_bytes);
+                self._alloc_bytes = 0;
+            }
             self.idx = 0;
             self.overflow = Vec::new();
         }
@@ -198,17 +214,16 @@ impl BumpAllocator {
 
 impl Drop for BumpAllocator {
     fn drop(&mut self) {
-        if self.alloc_count != 0
-        {
+        if self.alloc_count != 0 {
             println!("BumpAllocator has outstanding allocations, aborting");
             std::process::abort();
         }
-        /*
+
+        #[cfg(feature = "log-bump")]
         println!(
-            "Bump Allocator Dropped total_count={} total_alloc={} big_alloc={} reset_count={}",
-            self.total_count, self.total_alloc, self.big_alloc, self.reset_count
+            "Bump Allocator Dropped temp={} total_count={} total_alloc={} max_alloc={} reset_count={}",
+            self._temp, self._total_count, self._total_alloc, self._max_alloc, self._reset_count
         );
-        */
     }
 }
 
