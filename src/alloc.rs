@@ -10,7 +10,7 @@ pub struct Temp;
 /// Local Allocator.
 pub struct Local;
 
-/// TBox.
+/// TBox = pstd::Box<T, Temp>
 pub type TBox<T> = pstd::Box<T, Temp>;
 
 /// Allocate a TBox.
@@ -18,7 +18,7 @@ pub fn tbox<T>(t: T) -> TBox<T> {
     TBox::new_in(t, Temp)
 }
 
-/// TVec.
+/// TVec = pstd::Vec<T, Temp>
 pub type TVec<T> = pstd::Vec<T, Temp>;
 
 /// Allocate a TVec.
@@ -26,7 +26,7 @@ pub fn tvec<T>() -> TVec<T> {
     TVec::new_in(Temp)
 }
 
-/// LBox.
+/// LBox = pstd::Box<T, Local>
 pub type LBox<T> = pstd::Box<T, Local>;
 
 /// Allocate a LBox.
@@ -46,7 +46,7 @@ pub fn dbox<T>(t: T) -> Box<T> {
     Box::new(t)
 }
 
-/// LVec.
+/// LVec = pstd::Vec<T, Local>
 pub type LVec<T> = pstd::Vec<T, Local>;
 
 /// Allocate a LVec.
@@ -61,6 +61,7 @@ thread_local! {
 
 const USE_BUMP: bool = !cfg!(miri);
 const MAX_BUMP: usize = 1024;
+const MAX_ALIGN: usize = 128;
 
 unsafe impl pstd::alloc::Allocator for Temp {
     fn allocate(&self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
@@ -92,12 +93,15 @@ unsafe impl pstd::alloc::Allocator for Temp {
 impl Local {
     /// Enable Local bump allocation for current thread with default size (256KB).
     pub fn enable_bump() {
-        Self::enable_bump_with(256 * 1024);
+        Self::enable_bump_with(256 * MAX_BUMP);
     }
 
     /// Enable Local bump allocation for current thread with specified size.
-    pub fn enable_bump_with(size: usize) {
+    pub fn enable_bump_with(mut size: usize) {
         if USE_BUMP {
+            if size < 16 * MAX_BUMP {
+                size = 16 * MAX_BUMP;
+            }
             let mut a = LA.take();
             if a.is_none() {
                 a = BumpAllocator::new(false, size);
@@ -134,22 +138,15 @@ unsafe impl pstd::alloc::Allocator for Local {
     }
 }
 
-//const N: usize = 1024 * 256;
-
-#[repr(align(128))]
 struct Block(NonNull<[u8]>);
 
 impl Block {
-    fn new(bsize: usize) -> Self {
-        let lay = Layout::array::<u8>(bsize).unwrap();
-        let p = Global::allocate(&Global, lay).unwrap();
-        Self(p)
+    fn new(size: usize) -> Self {
+        let lay = Layout::from_size_align(size,MAX_ALIGN).unwrap();
+        Self(Global::allocate(&Global, lay).unwrap())
     }
-    fn contains(&self, addr: * mut u8) -> bool {
-        let n = self.0.len();
-        let start : *mut u8 = self.0.as_ptr() as * mut u8;
-        let end : *mut u8 = unsafe{ start.add(n) };
-        addr >= start && addr < end
+    fn contains(&self, addr: *const u8) -> bool {
+        unsafe { (*self.0.as_ptr()).as_ptr_range().contains(&addr) }
     }
 }
 
@@ -186,7 +183,7 @@ impl BumpAllocator {
         }
     }
 
-    fn overflow_contains(&self, a: * mut u8) -> bool {
+    fn overflow_contains(&self, a: *const u8) -> bool {
         for b in &self.overflow {
             if b.contains(a) {
                 return true;
@@ -206,7 +203,7 @@ impl BumpAllocator {
             self.overflow.push(old);
             self.idx = 0;
         }
-        
+
         let p = self.cur.0.as_ptr();
         let p = unsafe { &raw mut (&mut (*p))[self.idx..self.idx + n] };
 
@@ -223,8 +220,8 @@ impl BumpAllocator {
     }
 
     fn deallocate(&mut self, p: NonNull<u8>, _lay: Layout) {
-        let a : * mut u8 = p.as_ptr();
-        if !self.cur.contains(a) && !self.overflow_contains(a) {
+        let p = p.as_ptr();
+        if !self.cur.contains(p) && !self.overflow_contains(p) {
             println!("Bad deallocate, aborting");
             std::process::abort();
         }
