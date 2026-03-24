@@ -194,21 +194,22 @@ impl BumpAllocator {
 
     fn allocate(&mut self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
         let m = lay.align();
-        self.idx = self.idx.checked_next_multiple_of(m).unwrap();
+        let mut idx = self.idx.checked_next_multiple_of(m).unwrap();
         let n = lay.size();
         let bsize = self.cur.0.len();
-        let end = self.idx + n;
+        let mut end = idx + n;
         if end >= bsize && ( end > bsize || n == 0 )
         {
             let old = std::mem::replace(&mut self.cur, Block::new(bsize));
             self.overflow.push(old);
-            self.idx = 0;
+            idx = 0;
+            end = n;
         }
 
         let p = self.cur.0.as_ptr();
-        let p = unsafe { &raw mut (&mut (*p))[self.idx..self.idx + n] };
+        let p = unsafe { &raw mut (&mut (*p))[idx..end] };
 
-        self.idx += n;
+        self.idx = end;
         self.alloc_count += 1;
         #[cfg(feature = "log-bump")]
         {
