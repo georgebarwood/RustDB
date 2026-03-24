@@ -213,10 +213,10 @@ impl BumpAllocator {
             i = 0;
             e = n;
         }
-        let p = self.cur.0.as_ptr();
-        let p = unsafe { &raw mut (&mut (*p))[i..e] };
         self.idx = e;
         self.alloc_count += 1;
+        let p = self.cur.0.as_ptr();
+        let p = unsafe { &raw mut (&mut (*p))[i..e] };
         #[cfg(feature = "log-bump")]
         {
             self._alloc_bytes += n;
