@@ -142,7 +142,7 @@ struct Block(NonNull<[u8]>);
 
 impl Block {
     fn new(size: usize) -> Self {
-        let lay = Layout::from_size_align(size,MAX_ALIGN).unwrap();
+        let lay = Layout::from_size_align(size, MAX_ALIGN).unwrap();
         Self(Global::allocate(&Global, lay).unwrap())
     }
     fn contains(&self, addr: *const u8) -> bool {
@@ -150,12 +150,10 @@ impl Block {
     }
 }
 
-impl Drop for Block
-{
-    fn drop(&mut self)
-    {
+impl Drop for Block {
+    fn drop(&mut self) {
         let size = self.0.len();
-        let lay = Layout::from_size_align(size,MAX_ALIGN).unwrap();
+        let lay = Layout::from_size_align(size, MAX_ALIGN).unwrap();
         let p = NonNull::new(self.0.as_ptr().cast::<u8>()).unwrap();
         unsafe { Global::deallocate(&Global, p, lay) }
     }
@@ -204,22 +202,19 @@ impl BumpAllocator {
     }
 
     fn allocate(&mut self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
-        let m = lay.align();
+        let (n, m) = (lay.size(), lay.align());
         let mut i = self.idx.checked_next_multiple_of(m).unwrap();
-        let n = lay.size();
-        let bsize = self.cur.0.len();
         let mut e = i + n;
-        if e >= bsize && ( e > bsize || n == 0 )
-        {
+        let bsize = self.cur.0.len();
+        // Make a new block if necessary.
+        if e >= bsize && (e > bsize || n == 0) {
             let old = std::mem::replace(&mut self.cur, Block::new(bsize));
             self.overflow.push(old);
             i = 0;
             e = n;
         }
-
         let p = self.cur.0.as_ptr();
         let p = unsafe { &raw mut (&mut (*p))[i..e] };
-
         self.idx = e;
         self.alloc_count += 1;
         #[cfg(feature = "log-bump")]
@@ -228,7 +223,6 @@ impl BumpAllocator {
             self._total_count += 1;
             self._total_alloc += n;
         }
-
         unsafe { Ok(NonNull::new_unchecked(p)) }
     }
 
@@ -241,7 +235,6 @@ impl BumpAllocator {
 
         self.alloc_count -= 1;
         if self.alloc_count == 0 {
-            // println!("reset alloc max={}", self.max_alloc);
             #[cfg(feature = "log-bump")]
             {
                 self._reset_count += 1;
@@ -275,18 +268,10 @@ fn alloc_test() {
         let b = TBox::new_in(99, Temp);
         assert_eq!(*b, 99);
     }
-
-    let start = std::time::Instant::now();
-
     for _i in 0..50 {
         let b = TBox::new_in(99, Temp);
         assert_eq!(*b, 99);
         let b = TBox::new_in(99, Temp);
         assert_eq!(*b, 99);
     }
-
-    println!(
-        "alloc_test time elapsed = {}",
-        start.elapsed().as_nanos() as u64
-    );
 }
