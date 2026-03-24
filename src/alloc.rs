@@ -150,6 +150,17 @@ impl Block {
     }
 }
 
+impl Drop for Block
+{
+    fn drop(&mut self)
+    {
+        let size = self.0.len();
+        let lay = Layout::from_size_align(size,MAX_ALIGN).unwrap();
+        let p = NonNull::new(self.0.as_ptr().cast::<u8>()).unwrap();
+        unsafe { Global::deallocate(&Global, p, lay) }
+    }
+}
+
 struct BumpAllocator {
     alloc_count: u64,
     idx: usize,
