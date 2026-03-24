@@ -197,7 +197,8 @@ impl BumpAllocator {
         self.idx = self.idx.checked_next_multiple_of(m).unwrap();
         let n = lay.size();
         let bsize = self.cur.0.len();
-        if self.idx >= bsize && ( self.idx > bsize || n == 0 )
+        let end = self.idx + n;
+        if end >= bsize && ( end > bsize || n == 0 )
         {
             let old = std::mem::replace(&mut self.cur, Block::new(bsize));
             self.overflow.push(old);
