@@ -21,7 +21,7 @@ pub fn tbox<T>(t: T) -> TBox<T> {
 /// TVec = pstd::Vec<T, Temp>
 pub type TVec<T> = pstd::Vec<T, Temp>;
 
-/// Allocate a TVec.
+/// Create a TVec.
 pub fn tvec<T>() -> TVec<T> {
     TVec::new_in(Temp)
 }
@@ -34,6 +34,14 @@ pub fn lbox<T>(t: T) -> LBox<T> {
     LBox::new_in(t, Local)
 }
 
+/// LVec = pstd::Vec<T, Local>
+pub type LVec<T> = pstd::Vec<T, Local>;
+
+/// Create a LVec.
+pub fn lvec<T>() -> LVec<T> {
+    LVec::new_in(Local)
+}
+
 /// Allocate a Box or LBox depending on whether dynbox feature is selected.
 #[cfg(feature = "dynbox")]
 pub fn dbox<T>(t: T) -> LBox<T> {
@@ -44,14 +52,6 @@ pub fn dbox<T>(t: T) -> LBox<T> {
 #[cfg(not(feature = "dynbox"))]
 pub fn dbox<T>(t: T) -> Box<T> {
     Box::new(t)
-}
-
-/// LVec = pstd::Vec<T, Local>
-pub type LVec<T> = pstd::Vec<T, Local>;
-
-/// Allocate a LVec.
-pub fn lvec<T>() -> LVec<T> {
-    LVec::new_in(Local)
 }
 
 thread_local! {
@@ -197,8 +197,8 @@ impl BumpAllocator {
         self.idx = self.idx.checked_next_multiple_of(m).unwrap();
         let n = lay.size();
         let bsize = self.cur.0.len();
-        let avail = bsize - self.idx;
-        if n > avail || avail == 0 {
+        if self.idx >= bsize && ( self.idx > bsize || n == 0 )
+        {
             let old = std::mem::replace(&mut self.cur, Block::new(bsize));
             self.overflow.push(old);
             self.idx = 0;
