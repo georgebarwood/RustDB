@@ -1,4 +1,4 @@
-use crate::alloc::{LVec, TBox, TVec, lbox, lvec};
+use crate::alloc::{LVec, TBox, TVec, lbox, lvec, LHashMap, lhashmap};
 use crate::*;
 use Instruction::{DataOp, ForNext, ForSortNext, Jump, JumpIfFalse};
 
@@ -275,9 +275,9 @@ pub struct Block<'a> {
     /// List of jumps.
     jumps: LVec<usize>,
     /// Lookup jump label by name.   
-    labels: HashMap<&'a [u8], usize>,
+    labels: LHashMap<&'a [u8], usize>,
     /// Lookup local variable by name.
-    local_map: HashMap<&'a [u8], usize>,
+    local_map: LHashMap<&'a [u8], usize>,
     /// Names of local variables.
     locals: LVec<&'a [u8]>,
 }
@@ -288,8 +288,8 @@ impl<'a> Block<'a> {
         Block {
             ilist: lvec(),
             jumps: lvec(),
-            labels: HashMap::default(),
-            local_map: HashMap::default(),
+            labels: lhashmap(),
+            local_map: lhashmap(),
             locals: lvec(),
             local_typ: lvec(),
             break_id: 0,

@@ -785,7 +785,7 @@ impl<'a> Parser<'a> {
         self.read_id(b"INTO");
         let tr = self.obj_ref();
         self.read(Token::LBra);
-        let mut cnames = Vec::new();
+        let mut cnames = lvec();
         loop {
             let cname = self.id_ref();
             assert!(!cnames.contains(&cname), "duplicate column name");

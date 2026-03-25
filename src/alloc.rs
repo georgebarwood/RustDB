@@ -2,6 +2,8 @@
 //! Values allocated from Temp and Local Allocators must be freed by the same thread that allocated them, or the program will abort.
 
 use pstd::alloc::{Allocator, Global};
+use pstd::collections::DefaultHashBuilder;
+
 use std::{alloc::Layout, cell::Cell, ptr::NonNull};
 
 /// Temp Allocator.
@@ -30,17 +32,19 @@ pub fn tvec<T>() -> TVec<T> {
 pub type LBox<T> = pstd::Box<T, Local>;
 
 /// Allocate a LBox.
-pub fn lbox<T>(t: T) -> LBox<T> {
-    LBox::new_in(t, Local)
-}
+pub fn lbox<T>(t: T) -> LBox<T> { LBox::new_in(t, Local) }
 
 /// LVec = pstd::Vec<T, Local>
 pub type LVec<T> = pstd::Vec<T, Local>;
 
 /// Create a LVec.
-pub fn lvec<T>() -> LVec<T> {
-    LVec::new_in(Local)
-}
+pub fn lvec<T>() -> LVec<T> { LVec::new_in(Local) }
+
+/// LHashMap = pstd::collections::HashMap
+pub type LHashMap<K,V> = pstd::collections::HashMap<K, V, DefaultHashBuilder, Local>;
+
+/// Create a LHashMap.
+pub fn lhashmap<K,V>() -> LHashMap<K,V> { LHashMap::new_in(Local) }
 
 /// Allocate a Box or LBox depending on whether dynbox feature is selected.
 #[cfg(feature = "dynbox")]
