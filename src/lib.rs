@@ -132,7 +132,7 @@ use crate::{
 };
 
 use crate::{
-    alloc::{LHashMap,lhashmap},
+    alloc::{LHashMap, lhashmap},
     bytes::ByteStorage,
     expr::*,
     page::{Page, PagePtr},

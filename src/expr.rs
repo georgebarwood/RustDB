@@ -1,4 +1,4 @@
-use crate::alloc::{LVec, TBox, TVec, lbox, lvec, LHashMap, lhashmap};
+use crate::alloc::{LHashMap, LVec, TBox, TVec, lbox, lhashmap, lvec};
 use crate::*;
 use Instruction::{DataOp, ForNext, ForSortNext, Jump, JumpIfFalse};
 

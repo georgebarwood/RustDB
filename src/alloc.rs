@@ -4,12 +4,16 @@
 use pstd::alloc::{Allocator, Global};
 use pstd::collections::DefaultHashBuilder;
 
-use std::{alloc::Layout, cell::Cell, ptr::NonNull};
+use crate::RefCell;
+use std::ptr::slice_from_raw_parts_mut;
+use std::{alloc::Layout, ptr::NonNull};
 
 /// Temp Allocator.
+#[derive(Default, Clone)]
 pub struct Temp;
 
 /// Local Allocator.
+#[derive(Default, Clone)]
 pub struct Local;
 
 /// TBox = pstd::Box<T, Temp>
@@ -32,19 +36,35 @@ pub fn tvec<T>() -> TVec<T> {
 pub type LBox<T> = pstd::Box<T, Local>;
 
 /// Allocate a LBox.
-pub fn lbox<T>(t: T) -> LBox<T> { LBox::new_in(t, Local) }
+pub fn lbox<T>(t: T) -> LBox<T> {
+    LBox::new_in(t, Local)
+}
 
 /// LVec = pstd::Vec<T, Local>
 pub type LVec<T> = pstd::Vec<T, Local>;
 
 /// Create a LVec.
-pub fn lvec<T>() -> LVec<T> { LVec::new_in(Local) }
+pub fn lvec<T>() -> LVec<T> {
+    LVec::new_in(Local)
+}
+
+use pstd::collections::{BTreeMap, btree_map::CustomTuning};
+
+/// LBTreeMap = pstd::collections::BTreeMap
+pub type LBTreeMap<K, V> = BTreeMap<K, V, CustomTuning<Local>>;
+
+/// Create a LBTreeMap .
+pub fn lbtreemap<K, V>() -> LBTreeMap<K, V> {
+    LBTreeMap::with_tuning(CustomTuning::default())
+}
 
 /// LHashMap = pstd::collections::HashMap
-pub type LHashMap<K,V> = pstd::collections::HashMap<K, V, DefaultHashBuilder, Local>;
+pub type LHashMap<K, V> = pstd::collections::HashMap<K, V, DefaultHashBuilder, Local>;
 
 /// Create a LHashMap.
-pub fn lhashmap<K,V>() -> LHashMap<K,V> { LHashMap::new_in(Local) }
+pub fn lhashmap<K, V>() -> LHashMap<K, V> {
+    LHashMap::new_in(Local)
+}
 
 /// Allocate a Box or LBox depending on whether dynbox feature is selected.
 #[cfg(feature = "dynbox")]
@@ -59,111 +79,90 @@ pub fn dbox<T>(t: T) -> Box<T> {
 }
 
 thread_local! {
-    static TA: Cell<Option<Box<BumpAllocator>>> = Cell::new(BumpAllocator::new(true,1024*256));
-    static LA: Cell<Option<Box<BumpAllocator>>> = const { Cell::new(None) };
+    static TA: RefCell<BumpAllocator> = RefCell::new(BumpAllocator::new(true,256*K));
+    static LA: RefCell<BumpAllocator> = RefCell::new(BumpAllocator::new(false,0));
 }
 
 const USE_BUMP: bool = !cfg!(miri);
-const MAX_BUMP: usize = 1024;
+const K: usize = 1024;
 const MAX_ALIGN: usize = 128;
 
 unsafe impl pstd::alloc::Allocator for Temp {
     fn allocate(&self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
-        if lay.size() <= MAX_BUMP
-            && let Some(mut a) = TA.take()
-        {
-            let result = a.allocate(lay);
-            TA.set(Some(a));
-            result
-        } else {
-            pstd::alloc::Global::allocate(&Global, lay)
-        }
+        TA.with_borrow_mut(|a| a.allocate(lay))
     }
 
     unsafe fn deallocate(&self, p: NonNull<u8>, lay: Layout) {
-        if lay.size() <= MAX_BUMP
-            && let Some(mut a) = TA.take()
-        {
-            a.deallocate(p, lay);
-            TA.set(Some(a));
-        } else {
-            unsafe {
-                pstd::alloc::Global::deallocate(&Global, p, lay);
-            }
-        }
+        TA.with_borrow_mut(|a| a.deallocate(p, lay));
     }
 }
 
 impl Local {
     /// Enable Local bump allocation for current thread with default size (256KB).
     pub fn enable_bump() {
-        Self::enable_bump_with(256 * MAX_BUMP);
+        Self::enable_bump_with(256 * K);
     }
 
     /// Enable Local bump allocation for current thread with specified size.
     pub fn enable_bump_with(mut size: usize) {
         if USE_BUMP {
-            if size < 16 * MAX_BUMP {
-                size = 16 * MAX_BUMP;
+            if size < 16 * K {
+                size = 16 * K;
             }
-            let mut a = LA.take();
-            if a.is_none() {
-                a = BumpAllocator::new(false, size);
-            }
-            LA.set(a);
+            LA.with_borrow_mut(|a| a.enable_with(size));
         }
     }
 }
 
 unsafe impl pstd::alloc::Allocator for Local {
     fn allocate(&self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
-        if lay.size() <= MAX_BUMP
-            && let Some(mut a) = LA.take()
-        {
-            let result = a.allocate(lay);
-            LA.set(Some(a));
-            result
-        } else {
-            pstd::alloc::Global::allocate(&Global, lay)
-        }
+        LA.with_borrow_mut(|a| a.allocate(lay))
     }
 
     unsafe fn deallocate(&self, p: NonNull<u8>, lay: Layout) {
-        if lay.size() <= MAX_BUMP
-            && let Some(mut a) = LA.take()
-        {
-            a.deallocate(p, lay);
-            LA.set(Some(a));
-        } else {
-            unsafe {
-                pstd::alloc::Global::deallocate(&Global, p, lay);
-            }
-        }
+        LA.with_borrow_mut(|a| a.deallocate(p, lay));
     }
 }
 
-struct Block(NonNull<[u8]>);
+struct Block(NonNull<u8>);
 
 impl Block {
     fn new(size: usize) -> Self {
-        let lay = Layout::from_size_align(size, MAX_ALIGN).unwrap();
-        Self(Global::allocate(&Global, lay).unwrap())
+        let p = if size > 0 {
+            let lay = Layout::from_size_align(size, MAX_ALIGN).unwrap();
+            let p = Global::allocate(&Global, lay).unwrap();
+            let p = p.as_ptr().cast::<u8>();
+            unsafe { NonNull::new_unchecked(p) }
+        } else {
+            NonNull::dangling()
+        };
+        Self(p)
     }
-    fn contains(&self, addr: *const u8) -> bool {
-        unsafe { (*self.0.as_ptr()).as_ptr_range().contains(&addr) }
-    }
-}
 
-impl Drop for Block {
-    fn drop(&mut self) {
-        let size = self.0.len();
-        let lay = Layout::from_size_align(size, MAX_ALIGN).unwrap();
-        let p = NonNull::new(self.0.as_ptr().cast::<u8>()).unwrap();
-        unsafe { Global::deallocate(&Global, p, lay) }
+    fn alloc(&self, i: usize, n: usize) -> NonNull<[u8]> {
+        let p = unsafe { self.0.as_ptr().add(i) };
+        let p = slice_from_raw_parts_mut(p, n);
+        unsafe { NonNull::new_unchecked(p) }
+    }
+
+    fn contains(&self, a: *mut u8, bsize: usize) -> bool {
+        let start = self.0.as_ptr();
+        let end = unsafe { start.add(bsize) };
+        start <= a && a < end
+    }
+
+    fn drop(&mut self, bsize: usize) {
+        if self.0 != NonNull::dangling() {
+            let lay = Layout::from_size_align(bsize, MAX_ALIGN).unwrap();
+            unsafe { Global::deallocate(&Global, self.0, lay) }
+            self.0 = NonNull::dangling();
+        }
     }
 }
 
 struct BumpAllocator {
+    bsize: usize,
+    max_size: usize,
     alloc_count: u64,
     idx: usize,
     cur: Block,
@@ -177,28 +176,37 @@ struct BumpAllocator {
 }
 
 impl BumpAllocator {
-    fn new(_temp: bool, bsize: usize) -> Option<Box<Self>> {
-        if USE_BUMP {
-            Some(Box::new(Self {
-                alloc_count: 0,
-                idx: 0,
-                cur: Block::new(bsize),
-                overflow: Vec::new(),
-                _alloc_bytes: 0,
-                _max_alloc: 0,
-                _reset_count: 0,
-                _total_count: 0,
-                _total_alloc: 0,
-                _temp,
-            }))
-        } else {
-            None
+    fn new(_temp: bool, bsize: usize) -> Self {
+        Self {
+            bsize,
+            max_size: bsize / 4,
+            alloc_count: 0,
+            idx: 0,
+            cur: Block::new(bsize),
+            overflow: Vec::new(),
+            _alloc_bytes: 0,
+            _max_alloc: 0,
+            _reset_count: 0,
+            _total_count: 0,
+            _total_alloc: 0,
+            _temp,
         }
     }
 
-    fn overflow_contains(&self, a: *const u8) -> bool {
+    fn enable_with(&mut self, bsize: usize) {
+        if self.bsize == 0 {
+            self.bsize = bsize;
+            self.max_size = bsize / 4;
+            self.cur = Block::new(bsize);
+        }
+    }
+
+    fn contains(&self, a: *mut u8) -> bool {
+        if self.cur.contains(a, self.bsize) {
+            return true;
+        }
         for b in &self.overflow {
-            if b.contains(a) {
+            if b.contains(a, self.bsize) {
                 return true;
             }
         }
@@ -207,46 +215,59 @@ impl BumpAllocator {
 
     fn allocate(&mut self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
         let (n, m) = (lay.size(), lay.align());
-        let mut i = self.idx.checked_next_multiple_of(m).unwrap();
-        let mut e = i + n;
-        let bsize = self.cur.0.len();
-        // Make a new block if necessary.
-        if e >= bsize && (e > bsize || n == 0) {
-            let old = std::mem::replace(&mut self.cur, Block::new(bsize));
-            self.overflow.push(old);
-            i = 0;
-            e = n;
-        }
-        self.idx = e;
-        self.alloc_count += 1;
-        let p = self.cur.0.as_ptr();
-        let p = unsafe { &raw mut (&mut (*p))[i..e] };
-        #[cfg(feature = "log-bump")]
-        {
-            self._alloc_bytes += n;
-            self._total_count += 1;
-            self._total_alloc += n;
-        }
-        unsafe { Ok(NonNull::new_unchecked(p)) }
-    }
-
-    fn deallocate(&mut self, p: NonNull<u8>, _lay: Layout) {
-        let p = p.as_ptr();
-        if !self.cur.contains(p) && !self.overflow_contains(p) {
-            println!("Bad deallocate, aborting");
-            std::process::abort();
-        }
-
-        self.alloc_count -= 1;
-        if self.alloc_count == 0 {
+        if USE_BUMP && n < self.max_size {
             #[cfg(feature = "log-bump")]
             {
-                self._reset_count += 1;
-                self._max_alloc = std::cmp::max(self._max_alloc, self._alloc_bytes);
-                self._alloc_bytes = 0;
+                self._alloc_bytes += n;
+                self._total_count += 1;
+                self._total_alloc += n;
             }
-            self.idx = 0;
-            self.overflow.clear();
+            self.alloc_count += 1;
+            let mut i = self.idx.checked_next_multiple_of(m).unwrap();
+            let e = i + n;
+            // Make a new block if necessary.
+            let bsize = self.bsize;
+            if e >= bsize && (e > bsize || n == 0) {
+                let old = std::mem::replace(&mut self.cur, Block::new(bsize));
+                self.overflow.push(old);
+                i = 0;
+            }
+            self.idx = i + n;
+            Ok(self.cur.alloc(i, n))
+        } else {
+            Global::allocate(&Global, lay)
+        }
+    }
+
+    fn deallocate(&mut self, p: NonNull<u8>, lay: Layout) {
+        if USE_BUMP && lay.size() < self.max_size {
+            let p = p.as_ptr();
+            if !self.contains(p) {
+                println!("Bad deallocate, aborting");
+                std::process::abort();
+            }
+
+            self.alloc_count -= 1;
+            if self.alloc_count == 0 {
+                #[cfg(feature = "log-bump")]
+                {
+                    self._reset_count += 1;
+                    self._max_alloc = std::cmp::max(self._max_alloc, self._alloc_bytes);
+                    self._alloc_bytes = 0;
+                }
+                self.idx = 0;
+                self.reset_overflow();
+            }
+        } else {
+            unsafe {
+                Global::deallocate(&Global, p, lay);
+            }
+        }
+    }
+
+    fn reset_overflow(&mut self) {
+        while let Some(mut b) = self.overflow.pop() {
+            b.drop(self.bsize);
         }
     }
 }
@@ -263,6 +284,9 @@ impl Drop for BumpAllocator {
             "Bump Allocator Dropped temp={} total_count={} total_alloc={} max_alloc={} reset_count={}",
             self._temp, self._total_count, self._total_alloc, self._max_alloc, self._reset_count
         );
+
+        self.cur.drop(self.bsize);
+        self.reset_overflow();
     }
 }
 

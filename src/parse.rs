@@ -816,7 +816,7 @@ impl<'a> Parser<'a> {
     fn s_update(&mut self) {
         let tname = self.obj_ref();
         self.read_id(b"SET");
-        let mut assigns = Vec::new();
+        let mut assigns = tvec();
         loop {
             let name = self.id();
             self.read(Token::Equal);
@@ -872,7 +872,7 @@ impl<'a> Parser<'a> {
             name: pname,
         };
         self.read(Token::LBra);
-        let mut pkinds = Vec::new();
+        let mut pkinds = tvec();
         if !self.test(Token::RBra) {
             let mut e = self.exp();
             pkinds.push(push(&mut self.b, &mut e));
@@ -934,7 +934,7 @@ impl<'a> Parser<'a> {
         self.read_id(b"ON");
         let tname = self.obj_ref();
         self.read(Token::LBra);
-        let mut cnames = Vec::new();
+        let mut cnames = tvec();
         loop {
             cnames.push(self.id());
             if self.test(Token::RBra) {

@@ -1,5 +1,5 @@
 use crate::*;
-use alloc::{dbox, lvec};
+use alloc::{LBTreeMap, LVec, dbox, lbtreemap, lvec};
 
 /// Table Index.
 pub struct Index {
@@ -405,13 +405,13 @@ pub struct ColInfo {
     /// Table name.
     pub name: ObjRef,
     /// Map from column name to column number.
-    pub colmap: BTreeMap<String, usize>,
+    pub colmap: LBTreeMap<String, usize>,
     /// Column names.
-    pub colnames: Vec<String>,
+    pub colnames: LVec<String>,
     /// Column types.
-    pub typ: Vec<DataType>,
+    pub typ: LVec<DataType>,
     /// Column offsets.
-    pub off: Vec<usize>,
+    pub off: LVec<usize>,
     /// Total data size, including Id.
     pub total: usize,
 }
@@ -421,10 +421,10 @@ impl ColInfo {
     pub fn empty(name: ObjRef) -> Self {
         ColInfo {
             name,
-            colmap: BTreeMap::new(),
-            typ: Vec::new(),
-            colnames: Vec::new(),
-            off: Vec::new(),
+            colmap: lbtreemap(),
+            typ: lvec(),
+            colnames: lvec(),
+            off: lvec(),
             total: 8,
         }
     }
