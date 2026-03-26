@@ -1,4 +1,4 @@
-use crate::alloc::{LVec, lbox, lvec, tbox, tvec};
+use crate::alloc::{LVec, lbox, lvec, tbox, tvec, lstring, LString};
 use crate::{
     AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
     ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, Rc, STRING, SqlError,
@@ -398,8 +398,8 @@ impl<'a> Parser<'a> {
         (t, t.precedence())
     }
 
-    fn id(&mut self) -> String {
-        to_s(self.id_ref())
+    fn id(&mut self) -> LString {
+        lstring(tos(self.id_ref()))
     }
 
     fn id_ref(&mut self) -> &'a [u8] {
@@ -507,8 +507,8 @@ impl<'a> Parser<'a> {
             }
             self.read(Token::RBra);
             let name = ObjRef {
-                schema: to_s(name),
-                name: to_s(fname),
+                schema: lstring(tos(name)),
+                name: lstring(tos(fname)),
             };
             Expr::new(ExprIs::FuncCall(name, parms))
         } else if self.test(Token::LBra) {
@@ -530,7 +530,7 @@ impl<'a> Parser<'a> {
         } else if let Some(lnum) = self.b.get_local(name) {
             Expr::new(ExprIs::Local(*lnum))
         } else {
-            Expr::new(ExprIs::ColName(to_s(name)))
+            Expr::new(ExprIs::ColName(lstring(tos(name))))
         }
     }
 
@@ -690,18 +690,18 @@ impl<'a> Parser<'a> {
         self.te_named_table()
     }
 
-    fn exp_name(&self, exp: &Expr) -> String {
+    fn exp_name(&self, exp: &Expr) -> LString {
         match &exp.exp {
-            ExprIs::Local(num) => to_s(self.b.local_name(*num)),
-            ExprIs::ColName(name) => name.to_string(),
-            _ => "".to_string(),
+            ExprIs::Local(num) => lstring(tos(self.b.local_name(*num))),
+            ExprIs::ColName(name) => lstring(name),
+            _ => lstring(""),
         }
     }
 
     /// Parse a SELECT / SET / FOR expression.
     fn select_expression(&mut self, set_or_for: bool) -> FromExpression {
         let mut exps = tvec();
-        let mut colnames = lvec();
+        let mut colnames : LVec<LString> = lvec();
         let mut assigns = lvec();
         loop {
             if set_or_for {
@@ -862,7 +862,7 @@ impl<'a> Parser<'a> {
 
     fn s_exec(&mut self) {
         let mut pname = self.id();
-        let mut sname = "".to_string();
+        let mut sname = lstring("");
         if self.test(Token::Dot) {
             sname = pname;
             pname = self.id();
@@ -918,7 +918,7 @@ impl<'a> Parser<'a> {
         self.read(Token::LBra);
         let mut ti = ColInfo::empty(name);
         while !self.test(Token::RBra) {
-            let cname = self.id();
+            let cname = to_s(self.id_ref());
             let typ = self.read_data_type();
             assert!(!ti.add(cname, typ), "duplicate column name");
             self.test(Token::Comma);
@@ -936,7 +936,7 @@ impl<'a> Parser<'a> {
         self.read(Token::LBra);
         let mut cnames = tvec();
         loop {
-            cnames.push(self.id());
+            cnames.push(to_s(self.id_ref()));
             if self.test(Token::RBra) {
                 break;
             }

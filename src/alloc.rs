@@ -78,6 +78,15 @@ pub fn dbox<T>(t: T) -> Box<T> {
     Box::new(t)
 }
 
+/// LString = pstd::String
+pub type LString = pstd::String<Local>;
+
+/// Convert byte ref to LString.
+pub fn lstring(s: &str) -> LString {
+    // println!("lstring {}",s);
+    pstd::String::from_str_in( s, Local )
+}
+
 thread_local! {
     static TA: RefCell<BumpAllocator> = RefCell::new(BumpAllocator::new(true,256*K));
     static LA: RefCell<BumpAllocator> = RefCell::new(BumpAllocator::new(false,0));

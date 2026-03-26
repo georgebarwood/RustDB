@@ -541,12 +541,14 @@ impl<'r> EvalEnv<'r> {
 
             for act in actions {
                 match act {
-                    AlterCol::Modify(name, _) | AlterCol::Drop(name)
-                        if !t.info.colmap.contains_key(name) =>
+                    AlterCol::Modify(name, _) | AlterCol::Drop(name) =>
                     {
-                        panic!("column not found {}", name);
+                        let name = name.as_str();
+                        if !t.info.colmap.contains_key(name)
+                        {
+                            panic!("column not found {}", name);
+                        }
                     }
-
                     _ => {}
                 }
                 let sql = match act {
@@ -575,7 +577,7 @@ impl<'r> EvalEnv<'r> {
 
             for act in actions {
                 if let AlterCol::Add(name, typ) = act
-                    && nci.add(name.clone(), *typ)
+                    && nci.add(name.to_string(), *typ)
                 {
                     panic!("duplicate column name {}", name);
                 }

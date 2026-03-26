@@ -1,4 +1,4 @@
-use crate::alloc::{LHashMap, LVec, TBox, TVec, lbox, lhashmap, lvec};
+use crate::alloc::{LHashMap, LVec, TBox, TVec, lbox, lhashmap, lvec, LString, lstring};
 use crate::*;
 use Instruction::{DataOp, ForNext, ForSortNext, Jump, JumpIfFalse};
 
@@ -37,7 +37,7 @@ pub type Assigns = LVec<(usize, AssignOp)>;
 #[non_exhaustive]
 pub struct FromExpression {
     /// Column names.
-    pub colnames: LVec<String>,
+    pub colnames: LVec<LString>,
     /// Assigns.
     pub assigns: Assigns,
     /// Expressions.
@@ -160,7 +160,7 @@ pub enum ExprIs {
     /// Local variable.
     Local(usize),
     /// Column.
-    ColName(String),
+    ColName(LString),
     /// Binary operator expression.
     Binary(Token, TBox<Expr>, TBox<Expr>),
     /// Not expression.
@@ -184,17 +184,17 @@ pub enum ExprIs {
 #[non_exhaustive]
 pub struct ObjRef {
     /// Schema.
-    pub schema: String,
+    pub schema: LString,
     /// Name within Schema.
-    pub name: String,
+    pub name: LString,
 }
 
 impl ObjRef {
     /// Construct from string references.
     pub fn new(s: &str, n: &str) -> Self {
         Self {
-            schema: s.to_string(),
-            name: n.to_string(),
+            schema: lstring(s),
+            name: lstring(n),
         }
     }
     /// Used for error messages.

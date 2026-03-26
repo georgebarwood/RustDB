@@ -28,7 +28,7 @@ pub fn create_table(db: &DB, info: &ColInfo) {
             row.id = t.alloc_id(db);
             row.values[0] = Value::Int(root as i64);
             row.values[1] = Value::Int(schema_id);
-            row.values[2] = Value::String(Rc::new(info.name.name.clone()));
+            row.values[2] = Value::String(Rc::new(info.name.name.to_string()));
             row.values[3] = Value::Int(1);
             t.insert(db, &mut row);
             row.id
@@ -62,7 +62,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
             row.id = t.alloc_id(db);
             row.values[0] = Value::Int(root as i64);
             row.values[1] = Value::Int(table.id);
-            row.values[2] = Value::String(Rc::new(info.iname.clone()));
+            row.values[2] = Value::String(Rc::new(info.iname.to_string()));
             t.insert(db, &mut row);
             row.id
         };
@@ -120,7 +120,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool) 
             // Columns are Schema, Name, Definition
             row.id = t.alloc_id(db);
             row.values[0] = Value::Int(schema_id);
-            row.values[1] = Value::String(Rc::new(name.name.clone()));
+            row.values[1] = Value::String(Rc::new(name.name.to_string()));
             row.values[2] = Value::String(source);
             t.insert(db, &mut row);
         }

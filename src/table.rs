@@ -1,5 +1,5 @@
 use crate::*;
-use alloc::{LBTreeMap, LVec, dbox, lbtreemap, lvec};
+use alloc::{LBTreeMap, LVec, dbox, lbtreemap, lvec, LString};
 
 /// Table Index.
 pub struct Index {
@@ -458,10 +458,10 @@ impl ColInfo {
         let mut typ = ci.typ[cnum];
         for act in actions {
             match act {
-                AlterCol::Drop(name) if name == cname => {
+                AlterCol::Drop(name) if **name == **cname => {
                     return false;
                 }
-                AlterCol::Modify(name, dt) if name == cname => {
+                AlterCol::Modify(name, dt) if **name == **cname => {
                     if data_kind(typ) != data_kind(*dt) {
                         panic!("Cannot change column data kind");
                     }
@@ -501,7 +501,7 @@ pub struct IndexInfo {
     /// Table name.
     pub tname: ObjRef,
     /// Index name.
-    pub iname: String,
+    pub iname: LString,
     /// Index columns.
     pub cols: Vec<usize>,
 }
