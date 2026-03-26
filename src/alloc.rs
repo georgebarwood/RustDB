@@ -7,21 +7,43 @@ use pstd::collections::DefaultHashBuilder;
 use crate::RefCell;
 use std::ptr::slice_from_raw_parts_mut;
 use std::{alloc::Layout, ptr::NonNull};
+use std::marker::PhantomData;
 
 /// Temp Allocator.
 #[derive(Default, Clone)]
-pub struct Temp;
+pub struct Temp
+{
+    _x : PhantomData<NonNull<()>> // To make Temp !Send
+}
+
+impl Temp
+{
+    fn new() -> Self
+    {
+        Self{ _x: PhantomData }
+    }
+}
 
 /// Local Allocator.
 #[derive(Default, Clone)]
-pub struct Local;
+pub struct Local
+{
+    _x : PhantomData<NonNull<()>> // To make Local !Send
+}
+impl Local
+{
+    fn new() -> Self
+    {
+        Self{ _x: PhantomData }
+    }
+}
 
 /// TBox = pstd::Box<T, Temp>
 pub type TBox<T> = pstd::Box<T, Temp>;
 
 /// Allocate a TBox.
 pub fn tbox<T>(t: T) -> TBox<T> {
-    TBox::new_in(t, Temp)
+    TBox::new_in(t, Temp::new())
 }
 
 /// TVec = pstd::Vec<T, Temp>
@@ -29,7 +51,7 @@ pub type TVec<T> = pstd::Vec<T, Temp>;
 
 /// Create a TVec.
 pub fn tvec<T>() -> TVec<T> {
-    TVec::new_in(Temp)
+    TVec::new_in(Temp::new())
 }
 
 /// LBox = pstd::Box<T, Local>
@@ -37,7 +59,7 @@ pub type LBox<T> = pstd::Box<T, Local>;
 
 /// Allocate a LBox.
 pub fn lbox<T>(t: T) -> LBox<T> {
-    LBox::new_in(t, Local)
+    LBox::new_in(t, Local::new())
 }
 
 /// LVec = pstd::Vec<T, Local>
@@ -45,7 +67,7 @@ pub type LVec<T> = pstd::Vec<T, Local>;
 
 /// Create a LVec.
 pub fn lvec<T>() -> LVec<T> {
-    LVec::new_in(Local)
+    LVec::new_in(Local::new())
 }
 
 use pstd::collections::{BTreeMap, btree_map::CustomTuning};
@@ -63,13 +85,13 @@ pub type LHashMap<K, V> = pstd::collections::HashMap<K, V, DefaultHashBuilder, L
 
 /// Create a LHashMap.
 pub fn lhashmap<K, V>() -> LHashMap<K, V> {
-    LHashMap::new_in(Local)
+    LHashMap::new_in(Local::new())
 }
 
 /// Allocate a Box or LBox depending on whether dynbox feature is selected.
 #[cfg(feature = "dynbox")]
 pub fn dbox<T>(t: T) -> LBox<T> {
-    LBox::new_in(t, Local)
+    LBox::new_in(t, Local::new())
 }
 
 /// Allocate a Box or LBox depending on whether dynbox feature is selected.
@@ -83,7 +105,7 @@ pub type LString = pstd::String<Local>;
 
 /// Convert str to LString.
 pub fn lstring(s: &str) -> LString {
-    pstd::String::from_str_in( s, Local )
+    pstd::String::from_str_in( s, Local::new() )
 }
 
 thread_local! {
@@ -153,11 +175,13 @@ impl Block {
         unsafe { NonNull::new_unchecked(p) }
     }
 
+    /*
     fn contains(&self, a: *mut u8, bsize: usize) -> bool {
         let start = self.0.as_ptr();
         let end = unsafe { start.add(bsize) };
         start <= a && a < end
     }
+    */
 
     fn drop(&mut self, bsize: usize) {
         if self.0 != NonNull::dangling() {
@@ -169,12 +193,12 @@ impl Block {
 }
 
 struct BumpAllocator {
-    bsize: usize,
-    max_size: usize,
-    alloc_count: u64,
-    idx: usize,
-    cur: Block,
-    overflow: Vec<Block>,
+    bsize: usize, // Block size
+    max_size: usize, // Limit on sizes that can be bump allocated
+    alloc_count: u64, // Number of current allocations
+    idx: usize, // Current bytes allocated from cur
+    cur: Block, // Current block for allocation
+    overflow: Vec<Block>, // List of used up blocks
     _alloc_bytes: usize, // Only for diagnostic purposes.
     _max_alloc: usize,
     _reset_count: usize,
@@ -209,6 +233,7 @@ impl BumpAllocator {
         }
     }
 
+    /*
     fn contains(&self, a: *mut u8) -> bool {
         if self.cur.contains(a, self.bsize) {
             return true;
@@ -220,6 +245,7 @@ impl BumpAllocator {
         }
         false
     }
+    */
 
     fn allocate(&mut self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
         let (n, m) = (lay.size(), lay.align());
@@ -249,11 +275,13 @@ impl BumpAllocator {
 
     fn deallocate(&mut self, p: NonNull<u8>, lay: Layout) {
         if USE_BUMP && lay.size() < self.max_size {
+            /*
             let p = p.as_ptr();
             if !self.contains(p) {
                 println!("Bad deallocate, aborting");
                 std::process::abort();
             }
+            */
 
             self.alloc_count -= 1;
             if self.alloc_count == 0 {
@@ -301,13 +329,13 @@ impl Drop for BumpAllocator {
 #[test]
 fn alloc_test() {
     {
-        let b = TBox::new_in(99, Temp);
+        let b = tbox(99);
         assert_eq!(*b, 99);
     }
     for _i in 0..50 {
-        let b = TBox::new_in(99, Temp);
+        let b = tbox(99);
         assert_eq!(*b, 99);
-        let b = TBox::new_in(99, Temp);
+        let b = tbox(99);
         assert_eq!(*b, 99);
     }
 }
