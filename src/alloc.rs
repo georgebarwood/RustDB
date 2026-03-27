@@ -10,35 +10,6 @@ use std::ptr::slice_from_raw_parts_mut;
 use std::{alloc::Layout, ptr::NonNull};
 use std::marker::PhantomData;
 
-/// Temp Allocator.
-#[derive(Default, Clone)]
-pub struct Temp
-{
-    _x : PhantomData<NonNull<()>> // To make Temp !Send
-}
-
-impl Temp
-{
-    fn new() -> Self
-    {
-        Self{ _x: PhantomData }
-    }
-}
-
-/// Local Allocator.
-#[derive(Default, Clone)]
-pub struct Local
-{
-    _x : PhantomData<NonNull<()>> // To make Local !Send
-}
-impl Local
-{
-    fn new() -> Self
-    {
-        Self{ _x: PhantomData }
-    }
-}
-
 /// Box allocated from Temp
 pub type TBox<T> = pstd::Box<T, Temp>;
 
@@ -116,6 +87,22 @@ const USE_BUMP: bool = !cfg!(miri);
 const K: usize = 1024;
 const MAX_ALIGN: usize = 128;
 
+/// Temp Allocator.
+#[derive(Default, Clone)]
+pub struct Temp
+{
+    pd : PhantomData<NonNull<()>> // To make Temp !Send and !Sync
+}
+
+impl Temp
+{
+    /// Create a Temp allocator
+    pub fn new() -> Self
+    {
+        Self{ pd: PhantomData }
+    }
+}
+
 unsafe impl pstd::alloc::Allocator for Temp {
     fn allocate(&self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
         TA.with_borrow_mut(|a| a.allocate(lay))
@@ -126,7 +113,20 @@ unsafe impl pstd::alloc::Allocator for Temp {
     }
 }
 
+/// Local Allocator.
+#[derive(Default, Clone)]
+pub struct Local
+{
+    pd : PhantomData<NonNull<()>> // To make Local !Send and !Sync
+}
+
 impl Local {
+    /// Create a Local allocator
+    pub fn new() -> Self
+    {
+        Self{ pd: PhantomData }
+    }
+    
     /// Enable Local bump allocation for current thread with default size (256KB).
     pub fn enable_bump() {
         Self::enable_bump_with(256 * K);
