@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "7.0.16"
+version = "7.0.20"
 edition = "2024"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -32,11 +32,9 @@ verify = ["page-store/verify"]
 unsafe-optim = ["pstd/unsafe-optim","atom-file/unsafe-optim"]
 log = ["page-store/log"]
 log-execute= []
-log-bump = []
-#pstd = ["dep:pstd","atom-file/pstd","page-store/pstd"]
+log-bump = ["pstd/log-bump"]
 pstd = ["atom-file/pstd","page-store/pstd"]
 dynbox = ["pstd/dynbox"]
-#dynbox = []
 
 [dev-dependencies]
 rand = "0.8.4"
