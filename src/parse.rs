@@ -1,4 +1,4 @@
-use crate::alloc::{LVec, lbox, lvec, tbox, tvec, lstring, LString};
+use crate::alloc::{LString, LVec, lbox, lstring, lvec, tbox, tvec};
 use crate::{
     AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
     ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, Rc, STRING, SqlError,
@@ -701,7 +701,7 @@ impl<'a> Parser<'a> {
     /// Parse a SELECT / SET / FOR expression.
     fn select_expression(&mut self, set_or_for: bool) -> FromExpression {
         let mut exps = tvec();
-        let mut colnames : LVec<LString> = lvec();
+        let mut colnames: LVec<LString> = lvec();
         let mut assigns = lvec();
         loop {
             if set_or_for {

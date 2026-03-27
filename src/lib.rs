@@ -89,12 +89,10 @@
 //!     assert!( tr.rp.output == b"freddy" );
 //! ```
 
-/*
 #![cfg_attr(
     any(debug_assertions, not(feature = "unsafe-optim")),
     forbid(unsafe_code)
-)] // see util::perf_assert! macro
-*/
+)]
 
 #![deny(missing_docs)]
 
@@ -179,7 +177,9 @@ pub mod test;
 pub mod bench;
 
 /// Temp and Local allocators.
-pub mod alloc;
+pub mod alloc {
+    pub use pstd::localalloc::*;
+}
 
 // Conditional modules.
 

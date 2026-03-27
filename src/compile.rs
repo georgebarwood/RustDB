@@ -1,6 +1,6 @@
 use crate::*;
 use Instruction::*;
-use alloc::{TVec, dbox, lbox, lvec, LString};
+use alloc::{LString, TVec, dbox, lbox, lvec};
 use std::{mem, ops};
 
 /// Calculate various attributes such as data_type, is_constant etc.
@@ -367,7 +367,7 @@ pub fn c_update(
     let save = b.from.replace(from);
     let mut se = lvec();
     for (name, exp) in assigns.iter_mut() {
-        let name : &str = name;
+        let name: &str = name;
         if let Some(cnum) = t.info.colmap.get(name) {
             let exp = c_value(b, exp);
             se.push((*cnum, exp));

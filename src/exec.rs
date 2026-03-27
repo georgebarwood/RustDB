@@ -541,11 +541,9 @@ impl<'r> EvalEnv<'r> {
 
             for act in actions {
                 match act {
-                    AlterCol::Modify(name, _) | AlterCol::Drop(name) =>
-                    {
+                    AlterCol::Modify(name, _) | AlterCol::Drop(name) => {
                         let name = name.as_str();
-                        if !t.info.colmap.contains_key(name)
-                        {
+                        if !t.info.colmap.contains_key(name) {
                             panic!("column not found {}", name);
                         }
                     }
