@@ -2,7 +2,8 @@
 //! Values allocated from Temp and Local Allocators must be freed by the same thread that allocated them, or the program will abort.
 
 use pstd::alloc::{Allocator, Global};
-use pstd::collections::DefaultHashBuilder;
+use pstd::collections::{HashMap, DefaultHashBuilder};
+use pstd::collections::{BTreeMap, btree_map::CustomTuning};
 
 use crate::RefCell;
 use std::ptr::slice_from_raw_parts_mut;
@@ -38,7 +39,7 @@ impl Local
     }
 }
 
-/// TBox = pstd::Box<T, Temp>
+/// Box allocated from Temp
 pub type TBox<T> = pstd::Box<T, Temp>;
 
 /// Allocate a TBox.
@@ -46,7 +47,7 @@ pub fn tbox<T>(t: T) -> TBox<T> {
     TBox::new_in(t, Temp::new())
 }
 
-/// TVec = pstd::Vec<T, Temp>
+/// Vec allocated from Temp
 pub type TVec<T> = pstd::Vec<T, Temp>;
 
 /// Create a TVec.
@@ -54,7 +55,7 @@ pub fn tvec<T>() -> TVec<T> {
     TVec::new_in(Temp::new())
 }
 
-/// LBox = pstd::Box<T, Local>
+/// Box allocated from Local
 pub type LBox<T> = pstd::Box<T, Local>;
 
 /// Allocate a LBox.
@@ -62,7 +63,7 @@ pub fn lbox<T>(t: T) -> LBox<T> {
     LBox::new_in(t, Local::new())
 }
 
-/// LVec = pstd::Vec<T, Local>
+/// Vec allocated from Local
 pub type LVec<T> = pstd::Vec<T, Local>;
 
 /// Create a LVec.
@@ -70,9 +71,7 @@ pub fn lvec<T>() -> LVec<T> {
     LVec::new_in(Local::new())
 }
 
-use pstd::collections::{BTreeMap, btree_map::CustomTuning};
-
-/// LBTreeMap = pstd::collections::BTreeMap
+/// BTreeMap allocated from Local
 pub type LBTreeMap<K, V> = BTreeMap<K, V, CustomTuning<Local>>;
 
 /// Create a LBTreeMap .
@@ -80,8 +79,8 @@ pub fn lbtreemap<K, V>() -> LBTreeMap<K, V> {
     LBTreeMap::with_tuning(CustomTuning::default())
 }
 
-/// LHashMap = pstd::collections::HashMap
-pub type LHashMap<K, V> = pstd::collections::HashMap<K, V, DefaultHashBuilder, Local>;
+/// HashMap allocated from Local
+pub type LHashMap<K, V> = HashMap<K, V, DefaultHashBuilder, Local>;
 
 /// Create a LHashMap.
 pub fn lhashmap<K, V>() -> LHashMap<K, V> {
@@ -100,7 +99,7 @@ pub fn dbox<T>(t: T) -> Box<T> {
     Box::new(t)
 }
 
-/// LString = pstd::String
+/// String allocated from Local
 pub type LString = pstd::String<Local>;
 
 /// Convert str to LString.
@@ -226,6 +225,11 @@ impl BumpAllocator {
     }
 
     fn enable_with(&mut self, bsize: usize) {
+        if self.alloc_count != 0
+        {
+            println!("enable_with alloc_count not zero, aborting");
+            std::process::abort();
+        }
         if self.bsize == 0 {
             self.bsize = bsize;
             self.max_size = bsize / 4;
@@ -248,6 +252,7 @@ impl BumpAllocator {
     */
 
     fn allocate(&mut self, lay: Layout) -> Result<NonNull<[u8]>, pstd::alloc::AllocError> {
+        self.alloc_count += 1;
         let (n, m) = (lay.size(), lay.align());
         if USE_BUMP && n < self.max_size {
             #[cfg(feature = "log-bump")]
@@ -256,7 +261,6 @@ impl BumpAllocator {
                 self._total_count += 1;
                 self._total_alloc += n;
             }
-            self.alloc_count += 1;
             let mut i = self.idx.checked_next_multiple_of(m).unwrap();
             let e = i + n;
             // Make a new block if necessary.
@@ -274,6 +278,7 @@ impl BumpAllocator {
     }
 
     fn deallocate(&mut self, p: NonNull<u8>, lay: Layout) {
+        self.alloc_count -= 1;
         if USE_BUMP && lay.size() < self.max_size {
             /*
             let p = p.as_ptr();
@@ -282,8 +287,6 @@ impl BumpAllocator {
                 std::process::abort();
             }
             */
-
-            self.alloc_count -= 1;
             if self.alloc_count == 0 {
                 #[cfg(feature = "log-bump")]
                 {
