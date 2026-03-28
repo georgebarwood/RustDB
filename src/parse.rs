@@ -919,7 +919,7 @@ impl<'a> Parser<'a> {
         self.read(Token::LBra);
         let mut ti = ColInfo::empty(name);
         while !self.test(Token::RBra) {
-            let cname = to_s(self.id_ref());
+            let cname = tos(self.id_ref());
             let typ = self.read_data_type();
             assert!(!ti.add(cname, typ), "duplicate column name");
             self.test(Token::Comma);
@@ -937,7 +937,7 @@ impl<'a> Parser<'a> {
         self.read(Token::LBra);
         let mut cnames = tvec();
         loop {
-            cnames.push(to_s(self.id_ref()));
+            cnames.push(tos(self.id_ref()));
             if self.test(Token::RBra) {
                 break;
             }
@@ -951,7 +951,7 @@ impl<'a> Parser<'a> {
             let mut cols = Vec::new();
             let table = c_table(&self.b, &tname);
             for cname in &cnames {
-                if let Some(cnum) = table.info.colmap.get(cname) {
+                if let Some(cnum) = table.info.colmap.get(*cname) {
                     cols.push(*cnum);
                 } else {
                     panic!("index column name not found {}", cname);
@@ -983,7 +983,7 @@ impl<'a> Parser<'a> {
             b"FN" => self.create_function(false),
             b"TABLE" => self.create_table(),
             b"SCHEMA" => {
-                let name = self.id();
+                let name = self.idb();
                 self.b.dop(DO::CreateSchema(name));
             }
             b"INDEX" => self.create_index(),
@@ -1006,7 +1006,7 @@ impl<'a> Parser<'a> {
                 self.b.dop(DO::DropTable(tr));
             }
             b"INDEX" => {
-                let ix = self.id();
+                let ix = self.idb();
                 self.read_id(b"ON");
                 let tr = self.obj_ref();
                 self.b.dop(DO::DropIndex(tr, ix));
@@ -1016,7 +1016,7 @@ impl<'a> Parser<'a> {
                 self.b.dop(DO::DropFunction(fr));
             }
             b"SCHEMA" => {
-                let s = self.id();
+                let s = self.idb();
                 self.b.dop(DO::DropSchema(s));
             }
             _ => {

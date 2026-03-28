@@ -575,7 +575,7 @@ impl<'r> EvalEnv<'r> {
 
             for act in actions {
                 if let AlterCol::Add(name, typ) = act
-                    && nci.add(name.to_string(), *typ)
+                    && nci.add(name, *typ)
                 {
                     panic!("duplicate column name {}", name);
                 }

@@ -198,7 +198,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<Rc<Table>> {
             debug_assert!(a.int(0) == table_id);
             let cname = a.str(db, 1);
             let ctype = a.int(2) as DataType;
-            info.add(cname, ctype);
+            info.add(&cname, ctype);
         }
         let table = Table::new(table_id, root as u64, id_gen, Rc::new(info));
         // Get indexes. Columns are Root, Table, Name.

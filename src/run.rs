@@ -192,7 +192,7 @@ pub struct CFromExpression {
 #[non_exhaustive]
 pub enum DO {
     /// Create Schema.
-    CreateSchema(LString),
+    CreateSchema(LBox<str>),
     /// Create Table.
     CreateTable(ColInfo),
     /// Create Index.
@@ -202,11 +202,11 @@ pub enum DO {
     /// Alter Table.
     AlterTable(ObjRef, LVec<AlterCol>),
     /// Drop Schema.
-    DropSchema(LString),
+    DropSchema(LBox<str>),
     /// Drop Table.
     DropTable(ObjRef),
     /// Drop Index.
-    DropIndex(ObjRef, LString),
+    DropIndex(ObjRef, LBox<str>),
     /// Drop Function.
     DropFunction(ObjRef),
     /// Insert into Table.

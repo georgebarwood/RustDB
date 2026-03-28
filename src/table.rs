@@ -1,5 +1,5 @@
 use crate::*;
-use alloc::{LBTreeMap, LString, LVec, dbox, lbtreemap, lvec};
+use alloc::{LBTreeMap, LString, LVec, dbox, lbtreemap, lvec, LBox, lboxstr};
 
 /// Table Index.
 pub struct Index {
@@ -405,9 +405,9 @@ pub struct ColInfo {
     /// Table name.
     pub name: ObjRef,
     /// Map from column name to column number.
-    pub colmap: LBTreeMap<String, usize>,
+    pub colmap: LBTreeMap<LBox<str>, usize>,
     /// Column names.
-    pub colnames: LVec<String>,
+    pub colnames: LVec<LBox<str>>,
     /// Column types.
     pub typ: LVec<DataType>,
     /// Column offsets.
@@ -433,16 +433,17 @@ impl ColInfo {
     pub fn new(name: ObjRef, ct: &[(&str, DataType)]) -> Self {
         let mut result = Self::empty(name);
         for (n, t) in ct {
-            result.add((*n).to_string(), *t);
+            result.add(n, *t);
         }
         result
     }
 
     /// Add a column. If the column already exists ( an error ) the result is true.
-    pub fn add(&mut self, name: String, typ: DataType) -> bool {
-        if self.colmap.contains_key(&name) {
+    pub fn add(&mut self, name: &str, typ: DataType) -> bool {
+        if self.colmap.contains_key(name) {
             return true;
         }
+        let name = lboxstr(name);
         let cn = self.typ.len();
         self.typ.push(typ);
         let size = data_size(typ);
@@ -470,7 +471,7 @@ impl ColInfo {
                 _ => {}
             }
         }
-        self.add(cname.clone(), typ);
+        self.add(cname, typ);
         true
     }
 

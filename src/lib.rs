@@ -129,7 +129,7 @@ use crate::{
 };
 
 use crate::{
-    alloc::{LHashMap, lhashmap},
+    alloc::{LHashMap, lhashmap,TVec,tvec},
     bytes::ByteStorage,
     expr::*,
     page::{Page, PagePtr},
@@ -734,13 +734,13 @@ impl Drop for Database {
 /// For creating system tables.
 struct TableBuilder {
     alloc: usize,
-    list: Vec<Rc<Table>>,
+    list: TVec<Rc<Table>>,
 }
 impl TableBuilder {
     fn new() -> Self {
         Self {
             alloc: bytes::NFT,
-            list: Vec::new(),
+            list: tvec(),
         }
     }
 
