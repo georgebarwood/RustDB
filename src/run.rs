@@ -1,4 +1,4 @@
-use crate::alloc::{LBox, LString, LVec};
+use crate::alloc::{LBox, LVec};
 use crate::{
     Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, Rc,
     RefCell, Table, Value, panic,
@@ -173,7 +173,7 @@ impl CTableExpression {
 #[non_exhaustive]
 pub struct CFromExpression {
     /// Column names.
-    pub colnames: LVec<LString>,
+    pub colnames: LVec<LBox<str>>,
     /// Assignments ( left hand side ).
     pub assigns: Assigns,
     /// Expressions.
@@ -225,9 +225,9 @@ pub enum DO {
 #[non_exhaustive]
 pub enum AlterCol {
     /// Add column.
-    Add(LString, DataType),
+    Add(LBox<str>, DataType),
     /// Drop column.
-    Drop(LString),
+    Drop(LBox<str>),
     /// Modify column.
-    Modify(LString, DataType),
+    Modify(LBox<str>, DataType),
 }

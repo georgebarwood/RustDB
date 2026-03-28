@@ -1,4 +1,4 @@
-use crate::alloc::{LBox, LString, LVec, lbox, lboxstr, lstring, lvec, tbox, tvec};
+use crate::alloc::{LBox, LVec, lbox, lboxstr, lstring, lvec, tbox, tvec};
 use crate::{
     AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
     ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, Rc, STRING, SqlError,
@@ -398,10 +398,6 @@ impl<'a> Parser<'a> {
         (t, t.precedence())
     }
 
-    fn id(&mut self) -> LString {
-        lstring(tos(self.id_ref()))
-    }
-
     fn idb(&mut self) -> LBox<str> {
         lboxstr(tos(self.id_ref()))
     }
@@ -691,18 +687,18 @@ impl<'a> Parser<'a> {
         self.te_named_table()
     }
 
-    fn exp_name(&self, exp: &Expr) -> LString {
+    fn exp_name(&self, exp: &Expr) -> LBox<str> {
         match &exp.exp {
-            ExprIs::Local(num) => lstring(tos(self.b.local_name(*num))),
-            ExprIs::ColName(name) => lstring(name),
-            _ => lstring(""),
+            ExprIs::Local(num) => lboxstr(tos(self.b.local_name(*num))),
+            ExprIs::ColName(name) => lboxstr(name),
+            _ => lboxstr(""),
         }
     }
 
     /// Parse a SELECT / SET / FOR expression.
     fn select_expression(&mut self, set_or_for: bool) -> FromExpression {
         let mut exps = tvec();
-        let mut colnames: LVec<LString> = lvec();
+        let mut colnames: LVec<LBox<str>> = lvec();
         let mut assigns = lvec();
         loop {
             if set_or_for {
@@ -719,7 +715,7 @@ impl<'a> Parser<'a> {
             }
             let exp = self.exp_or_agg();
             if self.test_id(b"AS") {
-                colnames.push(self.id());
+                colnames.push(self.idb());
             } else {
                 colnames.push(self.exp_name(&exp));
             }
@@ -819,7 +815,7 @@ impl<'a> Parser<'a> {
         self.read_id(b"SET");
         let mut assigns = tvec();
         loop {
-            let name = self.id();
+            let name = self.idb();
             self.read(Token::Equal);
             let exp = self.exp();
             assigns.push((name, exp));
@@ -931,7 +927,7 @@ impl<'a> Parser<'a> {
     }
 
     fn create_index(&mut self) {
-        let iname = self.id();
+        let iname = self.idb();
         self.read_id(b"ON");
         let tname = self.obj_ref();
         self.read(Token::LBra);
@@ -1030,14 +1026,14 @@ impl<'a> Parser<'a> {
         let mut list = lvec();
         loop {
             if self.test_id(b"ADD") {
-                let col = self.id();
+                let col = self.idb();
                 let datatype = self.read_data_type();
                 list.push(AlterCol::Add(col, datatype));
             } else if self.test_id(b"DROP") {
-                let col = self.id();
+                let col = self.idb();
                 list.push(AlterCol::Drop(col));
             } else if self.test_id(b"MODIFY") {
-                let col = self.id();
+                let col = self.idb();
                 let datatype = self.read_data_type();
                 list.push(AlterCol::Modify(col, datatype));
             } else {

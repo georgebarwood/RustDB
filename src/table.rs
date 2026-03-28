@@ -1,5 +1,5 @@
 use crate::*;
-use alloc::{LBTreeMap, LString, LVec, dbox, lbtreemap, lvec, LBox, lboxstr};
+use alloc::{LBTreeMap, LBox, LVec, dbox, lboxstr, lbtreemap, lvec};
 
 /// Table Index.
 pub struct Index {
@@ -502,7 +502,7 @@ pub struct IndexInfo {
     /// Table name.
     pub tname: ObjRef,
     /// Index name.
-    pub iname: LString,
+    pub iname: LBox<str>,
     /// Index columns.
     pub cols: Vec<usize>,
 }

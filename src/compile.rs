@@ -1,6 +1,6 @@
 use crate::*;
 use Instruction::*;
-use alloc::{LString, TVec, dbox, lbox, lvec};
+use alloc::{LBox, TVec, dbox, lbox, lvec};
 use std::{mem, ops};
 
 /// Calculate various attributes such as data_type, is_constant etc.
@@ -359,7 +359,7 @@ fn c_builtin_float(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<f64> {
 pub fn c_update(
     b: &mut Block,
     tname: &ObjRef,
-    assigns: &mut [(LString, Expr)],
+    assigns: &mut [(LBox<str>, Expr)],
     wher: &mut Option<Expr>,
 ) {
     let t = c_table(b, tname);

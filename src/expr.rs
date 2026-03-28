@@ -37,7 +37,7 @@ pub type Assigns = LVec<(usize, AssignOp)>;
 #[non_exhaustive]
 pub struct FromExpression {
     /// Column names.
-    pub colnames: LVec<LString>,
+    pub colnames: LVec<LBox<str>>,
     /// Assigns.
     pub assigns: Assigns,
     /// Expressions.
