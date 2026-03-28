@@ -1,4 +1,4 @@
-use crate::alloc::{LBox, LHashMap, LString, LVec, TBox, TVec, lbox, lboxstr, lhashmap, lvec};
+use crate::alloc::{LBox, LHashMap, LVec, TBox, TVec, lbox, lboxstr, lhashmap, lvec};
 use crate::*;
 use Instruction::{DataOp, ForNext, ForSortNext, Jump, JumpIfFalse};
 
@@ -160,7 +160,7 @@ pub enum ExprIs {
     /// Local variable.
     Local(usize),
     /// Column.
-    ColName(LString),
+    ColName(LBox<str>),
     /// Binary operator expression.
     Binary(Token, TBox<Expr>, TBox<Expr>),
     /// Not expression.

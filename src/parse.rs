@@ -1,4 +1,4 @@
-use crate::alloc::{LBox, LVec, lbox, lboxstr, lstring, lvec, tbox, tvec};
+use crate::alloc::{LBox, LVec, lbox, lboxstr, lvec, tbox, tvec};
 use crate::{
     AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
     ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, Rc, STRING, SqlError,
@@ -527,7 +527,7 @@ impl<'a> Parser<'a> {
         } else if let Some(lnum) = self.b.get_local(name) {
             Expr::new(ExprIs::Local(*lnum))
         } else {
-            Expr::new(ExprIs::ColName(lstring(tos(name))))
+            Expr::new(ExprIs::ColName(lboxstr(tos(name))))
         }
     }
 
