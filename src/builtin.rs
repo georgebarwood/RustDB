@@ -53,7 +53,7 @@ pub fn standard_builtins(map: &mut BuiltinMap) {
         ("BINTOSTR", DataKind::String, CompileFunc::Value(c_bintostr)),
     ];
     for (name, typ, cf) in list {
-        map.insert(name.to_string(), (typ, cf));
+        map.insert(Box::from(name), (typ, cf));
     }
 }
 /// Check number and kinds of arguments.

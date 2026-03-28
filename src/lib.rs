@@ -129,7 +129,7 @@ use crate::{
 };
 
 use crate::{
-    alloc::{LHashMap, TVec, lhashmap, tvec},
+    alloc::{LHashMap, TVec, lhashmap, tvec, LVec, lvec},
     bytes::ByteStorage,
     expr::*,
     page::{Page, PagePtr},
@@ -304,7 +304,7 @@ impl std::ops::DerefMut for MData {
 pub type DB = Rc<Database>;
 
 /// Map that defines SQL pre-defined functions.
-pub type BuiltinMap = HashMap<String, (DataKind, CompileFunc)>;
+pub type BuiltinMap = HashMap<Box<str>, (DataKind, CompileFunc)>;
 
 /// Database with SQL-like interface.
 pub struct Database {
@@ -343,7 +343,7 @@ pub struct Database {
     pub is_new: bool,
 
     /// Storage of variable length data.
-    bs: Vec<ByteStorage>,
+    bs: LVec<ByteStorage>,
     /// Flag to reset the functions cache after save.
     pub function_reset: Cell<bool>,
     /// Maximum size of logical page.
@@ -390,7 +390,7 @@ impl Database {
 
         let bpf = bytes::bpf(apd.spd.psi.half_size_page());
 
-        let mut bs = Vec::new();
+        let mut bs = lvec();
         for (ft, bpf) in bpf.iter().enumerate() {
             bs.push(ByteStorage::new(ft as u64, *bpf));
         }

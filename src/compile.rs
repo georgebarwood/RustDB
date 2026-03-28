@@ -329,7 +329,7 @@ fn c_case<T>(
 where
     T: 'static,
 {
-    let mut whens = Vec::new();
+    let mut whens = lvec();
     for (be, ve) in wes {
         let cb = c_bool(b, be);
         let v = cexp(b, ve);
@@ -585,7 +585,7 @@ pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
 /// Compile ExprCall to `CExpPtr<Value>`, checking parameter types.
 pub fn c_call(b: &Block, name: &ObjRef, parms: &mut TVec<Expr>) -> CExpPtr<Value> {
     let fp = c_function(&b.db, name);
-    let mut pv = Vec::new();
+    let mut pv = lvec();
     let mut pk = Vec::new();
     for e in parms {
         pk.push(b.kind(e));

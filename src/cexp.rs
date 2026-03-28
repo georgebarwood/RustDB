@@ -1,9 +1,10 @@
+use crate::alloc::{LVec};
 use crate::{CExp, CExpPtr, EvalEnv, Function, Rc, Value, get_bytes, util};
 
 /// Function call.
 pub(crate) struct Call {
     pub fp: Rc<Function>,
-    pub pv: Vec<CExpPtr<Value>>,
+    pub pv: LVec<CExpPtr<Value>>,
 }
 
 impl CExp<Value> for Call {
@@ -18,7 +19,7 @@ impl CExp<Value> for Call {
 }
 
 pub(crate) struct Case<T> {
-    pub whens: Vec<(CExpPtr<bool>, CExpPtr<T>)>,
+    pub whens: LVec<(CExpPtr<bool>, CExpPtr<T>)>,
     pub els: CExpPtr<T>,
 }
 

@@ -519,7 +519,7 @@ impl<'a> Parser<'a> {
                 }
             }
             self.read(Token::RBra);
-            Expr::new(ExprIs::BuiltinCall(to_s(name), parms))
+            Expr::new(ExprIs::BuiltinCall(Box::from(tos(name)), parms))
         } else if name == b"true" {
             Expr::new(ExprIs::Const(Value::Bool(true)))
         } else if name == b"false" {
