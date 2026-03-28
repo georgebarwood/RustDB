@@ -1,4 +1,4 @@
-use crate::alloc::{LString, LVec, lbox, lstring, lvec, tbox, tvec};
+use crate::alloc::{LBox, LString, LVec, lbox, lboxstr, lstring, lvec, tbox, tvec};
 use crate::{
     AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
     ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, Rc, STRING, SqlError,
@@ -402,6 +402,10 @@ impl<'a> Parser<'a> {
         lstring(tos(self.id_ref()))
     }
 
+    fn idb(&mut self) -> LBox<str> {
+        lboxstr(tos(self.id_ref()))
+    }
+
     fn id_ref(&mut self) -> &'a [u8] {
         assert!(self.token == Token::Id, "name expected");
         let result = self.cs;
@@ -460,9 +464,9 @@ impl<'a> Parser<'a> {
 
     /// Reads an ObjRef ( schema.name pair ).
     fn obj_ref(&mut self) -> ObjRef {
-        let schema = self.id();
+        let schema = self.idb();
         self.read(Token::Dot);
-        let name = self.id();
+        let name = self.idb();
         ObjRef { schema, name }
     }
 
@@ -506,10 +510,7 @@ impl<'a> Parser<'a> {
                 }
             }
             self.read(Token::RBra);
-            let name = ObjRef {
-                schema: lstring(tos(name)),
-                name: lstring(tos(fname)),
-            };
+            let name = ObjRef::new(tos(name), tos(fname));
             Expr::new(ExprIs::FuncCall(name, parms))
         } else if self.test(Token::LBra) {
             let mut parms = tvec();
@@ -678,9 +679,9 @@ impl<'a> Parser<'a> {
     }
 
     fn te_named_table(&mut self) -> TableExpression {
-        let schema = self.id();
+        let schema = self.idb();
         self.read(Token::Dot);
-        let name = self.id();
+        let name = self.idb();
         let name = ObjRef { schema, name };
         TableExpression::Base(name)
     }
@@ -861,11 +862,11 @@ impl<'a> Parser<'a> {
     }
 
     fn s_exec(&mut self) {
-        let mut pname = self.id();
-        let mut sname = lstring("");
+        let mut pname = self.idb();
+        let mut sname = lboxstr("");
         if self.test(Token::Dot) {
             sname = pname;
-            pname = self.id();
+            pname = self.idb();
         }
         let name = ObjRef {
             schema: sname,

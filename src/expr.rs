@@ -1,4 +1,4 @@
-use crate::alloc::{LHashMap, LString, LVec, TBox, TVec, lbox, lhashmap, lstring, lvec};
+use crate::alloc::{LBox, LHashMap, LString, LVec, TBox, TVec, lbox, lboxstr, lhashmap, lvec};
 use crate::*;
 use Instruction::{DataOp, ForNext, ForSortNext, Jump, JumpIfFalse};
 
@@ -184,17 +184,17 @@ pub enum ExprIs {
 #[non_exhaustive]
 pub struct ObjRef {
     /// Schema.
-    pub schema: LString,
+    pub schema: LBox<str>,
     /// Name within Schema.
-    pub name: LString,
+    pub name: LBox<str>,
 }
 
 impl ObjRef {
     /// Construct from string references.
     pub fn new(s: &str, n: &str) -> Self {
         Self {
-            schema: lstring(s),
-            name: lstring(n),
+            schema: lboxstr(s),
+            name: lboxstr(n),
         }
     }
     /// Used for error messages.

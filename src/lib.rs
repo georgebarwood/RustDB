@@ -93,7 +93,6 @@
     any(debug_assertions, not(feature = "unsafe-optim")),
     forbid(unsafe_code)
 )]
-
 #![deny(missing_docs)]
 
 pub use page_store::{
@@ -725,6 +724,7 @@ GO
 impl Drop for Database {
     /// Clear function instructions to avoid leaking memory.
     fn drop(&mut self) {
+        // println!("Dropping Database");
         for function in self.functions.borrow().values() {
             function.ilist.borrow_mut().clear();
         }
