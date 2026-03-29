@@ -11,7 +11,7 @@ pub fn c_check(b: &Block, e: &mut Expr) {
     e.is_constant = true;
     match &mut e.exp {
         ExprIs::BuiltinCall(name, args) => {
-            if let Some((dk, _cf)) = b.db.builtins.get(name) {
+            if let Some((dk, _cf)) = b.db.builtins.get(&**name) {
                 e.data_type = *dk as DataType;
                 for pe in args {
                     c_check(b, pe);

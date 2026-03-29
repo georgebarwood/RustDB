@@ -172,7 +172,7 @@ pub enum ExprIs {
     /// Function call.
     FuncCall(ObjRef, TVec<Expr>),
     /// Builtin function call.
-    BuiltinCall(Box<str>, TVec<Expr>), // Note: Builtin map is shared between threads so cannot use LBox<str>.
+    BuiltinCall(TBox<str>, TVec<Expr>), // Note: Builtin map is shared between threads so cannot use LBox<str>.
     /// Scalar select.
     ScalarSelect(TBox<FromExpression>),
     /// List of expressions.

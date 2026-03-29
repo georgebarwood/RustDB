@@ -1,4 +1,4 @@
-use crate::alloc::{LBox, LVec, lbox, lboxstr, lvec, tbox, tvec};
+use crate::alloc::{LBox, LVec, lbox, lboxstr, lvec, tbox, tvec, tboxstr};
 use crate::{
     AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
     ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, Rc, STRING, SqlError,
@@ -519,7 +519,7 @@ impl<'a> Parser<'a> {
                 }
             }
             self.read(Token::RBra);
-            Expr::new(ExprIs::BuiltinCall(Box::from(tos(name)), parms))
+            Expr::new(ExprIs::BuiltinCall(tboxstr(tos(name)), parms))
         } else if name == b"true" {
             Expr::new(ExprIs::Const(Value::Bool(true)))
         } else if name == b"false" {
