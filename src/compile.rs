@@ -1,6 +1,6 @@
 use crate::*;
 use Instruction::*;
-use alloc::{LBox, TVec, dbox, lbox, lvec};
+use alloc::{LBox, LRc, TVec, dbox, lbox, lvec};
 use std::{mem, ops};
 
 /// Calculate various attributes such as data_type, is_constant etc.
@@ -470,7 +470,7 @@ pub fn c_select(b: &mut Block, mut x: FromExpression) -> CFromExpression {
 /// Compile WHERE clause, using table index if possible.
 pub fn c_where(
     b: &Block,
-    table: Option<Rc<Table>>,
+    table: Option<LRc<Table>>,
     wher: &mut Option<Expr>,
 ) -> (Option<CExpPtr<bool>>, Option<CTableExpression>) {
     if let Some(we) = wher {
@@ -510,7 +510,7 @@ pub fn c_te(b: &Block, te: &mut TableExpression) -> CTableExpression {
 }
 
 /// Look for named table in database.
-pub fn c_table(b: &Block, name: &ObjRef) -> Rc<Table> {
+pub fn c_table(b: &Block, name: &ObjRef) -> LRc<Table> {
     if let Some(t) = b.db.get_table(name) {
         t
     } else {
@@ -519,7 +519,7 @@ pub fn c_table(b: &Block, name: &ObjRef) -> Rc<Table> {
 }
 
 /// Compile named function (if it is not already compiled ).
-pub fn c_function(db: &DB, name: &ObjRef) -> Rc<Function> {
+pub fn c_function(db: &DB, name: &ObjRef) -> LRc<Function> {
     match db.get_function(name) {
         Some(r) => {
             let (compiled, src) = { (r.compiled.get(), r.source.clone()) };

@@ -1,4 +1,4 @@
-use crate::alloc::{LBox, LVec};
+use crate::alloc::{LBox, LRc, LVec};
 use crate::{
     Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, Rc,
     RefCell, Table, Value, panic,
@@ -20,7 +20,7 @@ pub enum Instruction {
     /// Jump if false.
     JumpIfFalse(usize, CExpPtr<bool>),
     /// Call
-    Call(Rc<Function>),
+    Call(LRc<Function>),
     /// Return from function.
     Return,
     /// Throw error.
@@ -148,18 +148,18 @@ pub struct ForNextInfo {
 #[non_exhaustive]
 pub enum CTableExpression {
     /// Base table.
-    Base(Rc<Table>),
+    Base(LRc<Table>),
     /// Row identified by Id.
-    IdGet(Rc<Table>, CExpPtr<i64>),
+    IdGet(LRc<Table>, CExpPtr<i64>),
     /// Indexed rows.
-    IxGet(Rc<Table>, LVec<CExpPtr<Value>>, usize),
+    IxGet(LRc<Table>, LVec<CExpPtr<Value>>, usize),
     /// VALUE expressions.
     Values(LVec<LVec<CExpPtr<Value>>>),
 }
 
 impl CTableExpression {
     /// Get underlying table.
-    pub fn table(&self) -> Rc<Table> {
+    pub fn table(&self) -> LRc<Table> {
         match self {
             CTableExpression::Base(t) => t.clone(),
             CTableExpression::IdGet(t, _) => t.clone(),
@@ -210,7 +210,7 @@ pub enum DO {
     /// Drop Function.
     DropFunction(ObjRef),
     /// Insert into Table.
-    Insert(Rc<Table>, LVec<usize>, CTableExpression),
+    Insert(LRc<Table>, LVec<usize>, CTableExpression),
     /// Update Table rows.
     Update(
         LVec<(usize, CExpPtr<Value>)>,

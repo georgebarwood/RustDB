@@ -1,5 +1,5 @@
 use crate::*;
-use alloc::lvec;
+use alloc::{LRc, lrc, lvec};
 
 /// Create a schema in the database by writing to the system Schema table.
 pub fn create_schema(db: &DB, name: &str) {
@@ -166,7 +166,7 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)> {
 }
 
 /// Get information about an index from name.
-pub fn get_index(db: &DB, tname: &ObjRef, iname: &str) -> (Rc<Table>, usize, u64) {
+pub fn get_index(db: &DB, tname: &ObjRef, iname: &str) -> (LRc<Table>, usize, u64) {
     if let Some(t) = get_table(db, tname) {
         // Loop through indexes. Columns are Root, Table, Name.
         let ixt = &db.sys_index;
@@ -186,7 +186,7 @@ pub fn get_index(db: &DB, tname: &ObjRef, iname: &str) -> (Rc<Table>, usize, u64
 }
 
 /// Gets table from the database.
-pub fn get_table(db: &DB, name: &ObjRef) -> Option<Rc<Table>> {
+pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
     if let Some((table_id, root, id_gen)) = get_table0(db, name) {
         let mut info = ColInfo::empty(name.clone());
         // Get columns. Columns are Table, Name, Type
@@ -200,7 +200,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<Rc<Table>> {
             let ctype = a.int(2) as DataType;
             info.add(&cname, ctype);
         }
-        let table = Table::new(table_id, root as u64, id_gen, Rc::new(info));
+        let table = Table::new(table_id, root as u64, id_gen, lrc(info));
         // Get indexes. Columns are Root, Table, Name.
         let t = &db.sys_index;
         let key = Value::Int(table_id);
@@ -231,7 +231,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<Rc<Table>> {
 }
 
 /// Get then parse a function from the database.
-pub fn get_function(db: &DB, name: &ObjRef) -> Option<Rc<Function>> {
+pub fn get_function(db: &DB, name: &ObjRef) -> Option<LRc<Function>> {
     if let Some(schema_id) = get_schema(db, &name.schema) {
         let t = &db.sys_function;
         let keys = vec![
@@ -270,12 +270,12 @@ pub fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64> {
 }
 
 /// Parse a function definition.
-fn parse_function(db: &DB, source: Rc<String>) -> Rc<Function> {
+fn parse_function(db: &DB, source: Rc<String>) -> LRc<Function> {
     let source1 = source.clone();
     let mut p = Parser::new(&source1, db);
     p.b.parse_only = true;
     p.parse_function();
-    Rc::new(Function {
+    lrc(Function {
         compiled: Cell::new(false),
         ilist: RefCell::new(lvec()),
         local_typ: p.b.local_typ,

@@ -1,9 +1,9 @@
-use crate::alloc::{LVec};
+use crate::alloc::{LRc, LVec};
 use crate::{CExp, CExpPtr, EvalEnv, Function, Rc, Value, get_bytes, util};
 
 /// Function call.
 pub(crate) struct Call {
-    pub fp: Rc<Function>,
+    pub fp: LRc<Function>,
     pub pv: LVec<CExpPtr<Value>>,
 }
 

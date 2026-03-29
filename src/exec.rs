@@ -1,6 +1,6 @@
 use crate::*;
 use Instruction::*;
-use alloc::LVec;
+use alloc::{LVec, lrc};
 
 /// Evaluation environment - stack of Values, references to DB and Transaction.
 #[non_exhaustive]
@@ -282,7 +282,7 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Execute INSERT operation.
-    fn insert(&mut self, t: Rc<Table>, cols: &[usize], src: &CTableExpression) {
+    fn insert(&mut self, t: LRc<Table>, cols: &[usize], src: &CTableExpression) {
         if let CTableExpression::Values(x) = src {
             self.insert_values(t, cols, x);
         } else {
@@ -437,7 +437,7 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Insert evaluated values into a table.
-    fn insert_values(&mut self, table: Rc<Table>, ci: &[usize], vals: &[LVec<CExpPtr<Value>>]) {
+    fn insert_values(&mut self, table: LRc<Table>, ci: &[usize], vals: &[LVec<CExpPtr<Value>>]) {
         let mut row = Row::new(table.info.clone());
         for r in vals {
             row.id = 0;
@@ -579,7 +579,7 @@ impl<'r> EvalEnv<'r> {
                     panic!("duplicate column name {}", name);
                 }
             }
-            let nci = Rc::new(nci);
+            let nci = lrc(nci);
 
             let root = db.alloc_page();
             let nt = Table::new(t.id, root, t.get_id_gen(db), nci);

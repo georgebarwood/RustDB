@@ -1,4 +1,4 @@
-use crate::alloc::{LBox, LHashMap, LVec, TBox, TVec, lbox, lboxstr, lhashmap, lvec};
+use crate::alloc::{LBox, LHashMap, LRc, LVec, TBox, TVec, lbox, lboxstr, lhashmap, lvec};
 use crate::*;
 use Instruction::{DataOp, ForNext, ForSortNext, Jump, JumpIfFalse};
 
@@ -333,7 +333,7 @@ impl<'a> Block<'a> {
     }
 
     /// Check the parameter kinds match the function.
-    pub fn check_types(&self, r: &Rc<Function>, pkinds: &[DataKind]) {
+    pub fn check_types(&self, r: &LRc<Function>, pkinds: &[DataKind]) {
         if pkinds.len() != r.param_count {
             panic!("param count mismatch");
         }

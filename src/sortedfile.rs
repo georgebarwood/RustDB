@@ -1,3 +1,4 @@
+use crate::alloc::LRc;
 use crate::*;
 
 /// Sorted Record storage.
@@ -141,12 +142,12 @@ impl SortedFile {
     }
 
     /// For iteration in ascending order from start.
-    pub fn asc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Asc {
+    pub fn asc(self: &LRc<Self>, db: &DB, start: Box<dyn Record>) -> Asc {
         Asc::new(db, start, self)
     }
 
     /// For iteration in descending order from start.
-    pub fn dsc(self: &Rc<Self>, db: &DB, start: Box<dyn Record>) -> Dsc {
+    pub fn dsc(self: &LRc<Self>, db: &DB, start: Box<dyn Record>) -> Dsc {
         Dsc::new(db, start, self)
     }
 
@@ -605,11 +606,11 @@ impl Record for Id {
 /// Fetch records from SortedFile in ascending order. The iterator result is a PagePtr and offset of the data.
 pub struct Asc {
     stk: Stack,
-    file: Rc<SortedFile>,
+    file: LRc<SortedFile>,
 }
 
 impl Asc {
-    fn new(db: &DB, start: Box<dyn Record>, file: &Rc<SortedFile>) -> Self {
+    fn new(db: &DB, start: Box<dyn Record>, file: &LRc<SortedFile>) -> Self {
         let root_page = file.root_page.get();
         let mut result = Asc {
             stk: Stack::new(db, start),
@@ -632,11 +633,11 @@ impl Iterator for Asc {
 /// Fetch records from SortedFile in descending order.
 pub struct Dsc {
     stk: Stack,
-    file: Rc<SortedFile>,
+    file: LRc<SortedFile>,
 }
 
 impl Dsc {
-    fn new(db: &DB, start: Box<dyn Record>, file: &Rc<SortedFile>) -> Self {
+    fn new(db: &DB, start: Box<dyn Record>, file: &LRc<SortedFile>) -> Self {
         let root_page = file.root_page.get();
         let mut result = Dsc {
             stk: Stack::new(db, start),

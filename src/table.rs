@@ -1,12 +1,12 @@
 use crate::*;
-use alloc::{LBTreeMap, LBox, LVec, dbox, lboxstr, lbtreemap, lvec};
+use alloc::{LBTreeMap, LBox, LRc, LVec, dbox, lboxstr, lbtreemap, lrc, lvec};
 
 /// Table Index.
 pub struct Index {
     /// File.
-    pub file: Rc<SortedFile>,
+    pub file: LRc<SortedFile>,
     /// columns.
-    pub cols: Rc<Vec<usize>>,
+    pub cols: LRc<Vec<usize>>,
     /// Index id.
     pub id: i64,
 }
@@ -17,10 +17,10 @@ pub type IxList = Vec<Index>;
 /// Database base table. Underlying file, type information about the columns and id allocation.
 pub struct Table {
     /// Underlying SortedFile.
-    pub file: Rc<SortedFile>,
+    pub file: LRc<SortedFile>,
 
     /// Type information about the columns.
-    pub info: Rc<ColInfo>,
+    pub info: LRc<ColInfo>,
 
     /// List of indexes. ( Maybe could eliminate the RefCell )
     pub ixlist: RefCell<IxList>,
@@ -37,12 +37,12 @@ pub struct Table {
 
 impl Table {
     /// Construct a table with specified info.
-    pub fn new(id: i64, root_page: u64, id_gen: i64, info: Rc<ColInfo>) -> Rc<Table> {
+    pub fn new(id: i64, root_page: u64, id_gen: i64, info: LRc<ColInfo>) -> LRc<Table> {
         let rec_size = info.total;
         let key_size = 8;
-        let file = Rc::new(SortedFile::new(rec_size, key_size, root_page));
+        let file = lrc(SortedFile::new(rec_size, key_size, root_page));
         let ixlist = RefCell::new(Vec::new());
-        Rc::new(Table {
+        lrc(Table {
             id,
             file,
             info,
@@ -93,7 +93,7 @@ impl Table {
 
     /// Look for indexed table expression based on supplied WHERE expression (we).
     pub fn index_from(
-        self: &Rc<Table>,
+        self: &LRc<Table>,
         b: &Block,
         we: &mut Expr,
     ) -> (Option<CExpPtr<bool>>, Option<CTableExpression>) {
@@ -174,7 +174,7 @@ impl Table {
     }
 
     /// Get a single record with specified id.
-    pub fn scan_id(self: &Rc<Table>, db: &DB, id: i64) -> IdScan {
+    pub fn scan_id(self: &LRc<Table>, db: &DB, id: i64) -> IdScan {
         IdScan {
             table: self.clone(),
             db: db.clone(),
@@ -184,13 +184,13 @@ impl Table {
     }
 
     /// Get records with matching key.
-    pub fn scan_key(self: &Rc<Table>, db: &DB, key: Value, index: usize) -> IndexScan {
+    pub fn scan_key(self: &LRc<Table>, db: &DB, key: Value, index: usize) -> IndexScan {
         let keys = vec![key];
         self.scan_keys(db, keys, index)
     }
 
     /// Get records with matching keys.
-    pub fn scan_keys(self: &Rc<Table>, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan {
+    pub fn scan_keys(self: &LRc<Table>, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan {
         let ixlist = &*self.ixlist.borrow();
         let ix = &ixlist[index];
         let ikey = IndexKey::new(self, ix.cols.clone(), keys.clone(), Ordering::Less);
@@ -207,11 +207,11 @@ impl Table {
     /// Add the specified index to the table.
     pub fn add_index(&self, root: u64, cols: Vec<usize>, id: i64) {
         let key_size = self.info.index_key_size(&cols) + 8;
-        let file = Rc::new(SortedFile::new(key_size, key_size, root));
+        let file = lrc(SortedFile::new(key_size, key_size, root));
         let list = &mut self.ixlist.borrow_mut();
         list.push(Index {
             file,
-            cols: Rc::new(cols),
+            cols: lrc(cols),
             id,
         });
     }
@@ -516,14 +516,14 @@ pub struct Row {
     /// Row values.
     pub values: Vec<Value>,
     /// Type information.
-    pub info: Rc<ColInfo>,
+    pub info: LRc<ColInfo>,
     /// Codes for variable length ( binary, string ) values.
     pub codes: Vec<Code>,
 }
 
 impl Row {
     /// Construct a new row, values are initialised to defaults.
-    pub fn new(info: Rc<ColInfo>) -> Self {
+    pub fn new(info: LRc<ColInfo>) -> Self {
         let n = info.typ.len();
         let mut result = Row {
             id: 0,
@@ -590,8 +590,8 @@ impl Record for Row {
 
 /// Row for inserting into an index.
 pub struct IndexRow {
-    tinfo: Rc<ColInfo>,
-    cols: Rc<Vec<usize>>,
+    tinfo: LRc<ColInfo>,
+    cols: LRc<Vec<usize>>,
     keys: Vec<Value>,
     codes: Vec<Code>,
     rowid: i64,
@@ -599,7 +599,7 @@ pub struct IndexRow {
 
 impl IndexRow {
     // Construct IndexRow from Row.
-    fn new(table: &Table, cols: Rc<Vec<usize>>, row: &Row) -> Self {
+    fn new(table: &Table, cols: LRc<Vec<usize>>, row: &Row) -> Self {
         let n = cols.len();
         let mut keys = Vec::with_capacity(n);
         let mut codes = Vec::with_capacity(n);
@@ -695,9 +695,9 @@ impl Record for IndexRow {
 /// Key for searching index.
 struct IndexKey {
     /// Information about the indexed table.
-    tinfo: Rc<ColInfo>,
+    tinfo: LRc<ColInfo>,
     /// List of indexed columns.
-    cols: Rc<Vec<usize>>,
+    cols: LRc<Vec<usize>>,
     /// Key values.
     key: Vec<Value>,
     /// Ordering used if keys compare equal.
@@ -705,7 +705,7 @@ struct IndexKey {
 }
 
 impl IndexKey {
-    fn new(table: &Table, cols: Rc<Vec<usize>>, key: Vec<Value>, def: Ordering) -> Self {
+    fn new(table: &Table, cols: LRc<Vec<usize>>, key: Vec<Value>, def: Ordering) -> Self {
         Self {
             tinfo: table.info.clone(),
             key,
@@ -738,9 +738,9 @@ impl Record for IndexKey {
 /// State for fetching records using an index.
 pub struct IndexScan {
     ixa: Asc,
-    table: Rc<Table>,
+    table: LRc<Table>,
     db: DB,
-    cols: Rc<Vec<usize>>,
+    cols: LRc<Vec<usize>>,
     keys: Vec<Value>,
 }
 
@@ -780,7 +780,7 @@ impl Iterator for IndexScan {
 /// State for fetching record with specified id.
 pub struct IdScan {
     id: i64,
-    table: Rc<Table>,
+    table: LRc<Table>,
     db: DB,
     done: bool,
 }

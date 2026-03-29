@@ -1,4 +1,5 @@
-use crate::{Cell, DB, Ordering, Rc, Record, SaveOp, SortedFile, util};
+use crate::alloc::{LRc, lrc};
+use crate::{Cell, DB, Ordering, Record, SaveOp, SortedFile, util};
 
 /// Number of fragment types.
 pub const NFT: usize = 4;
@@ -34,7 +35,7 @@ pub fn bpf(hp: usize) -> [usize; NFT] {
 /// Storage of variable size values.
 pub struct ByteStorage {
     /// File for storing fragments.
-    pub file: Rc<SortedFile>,
+    pub file: LRc<SortedFile>,
     id_gen: Cell<u64>,
     /// Bytes per fragment.
     bpf: usize,
@@ -43,7 +44,7 @@ pub struct ByteStorage {
 impl ByteStorage {
     /// Construct new ByteStorage with specified root page and fragment type.
     pub fn new(root_page: u64, bpf: usize) -> Self {
-        let file = Rc::new(SortedFile::new(9 + bpf, 8, root_page));
+        let file = lrc(SortedFile::new(9 + bpf, 8, root_page));
         ByteStorage {
             file,
             id_gen: Cell::new(u64::MAX),
