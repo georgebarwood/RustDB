@@ -1,5 +1,5 @@
 use crate::*;
-use alloc::{LBTreeMap, LBox, LRc, LVec, dbox, lboxstr, lbtreemap, lrc, lvec};
+use alloc::{LBox, LRc, LRcStr, LVec, dbox, lrc, lrcstr, lvec};
 
 /// Table Index.
 pub struct Index {
@@ -405,9 +405,9 @@ pub struct ColInfo {
     /// Table name.
     pub name: ObjRef,
     /// Map from column name to column number.
-    pub colmap: LBTreeMap<LBox<str>, usize>,
+    pub colmap: LHashMap<LRcStr, usize>,
     /// Column names.
-    pub colnames: LVec<LBox<str>>,
+    pub colnames: LVec<LRcStr>,
     /// Column types.
     pub typ: LVec<DataType>,
     /// Column offsets.
@@ -421,7 +421,7 @@ impl ColInfo {
     pub fn empty(name: ObjRef) -> Self {
         ColInfo {
             name,
-            colmap: lbtreemap(),
+            colmap: lhashmap(),
             typ: lvec(),
             colnames: lvec(),
             off: lvec(),
@@ -443,7 +443,7 @@ impl ColInfo {
         if self.colmap.contains_key(name) {
             return true;
         }
-        let name = lboxstr(name);
+        let name = lrcstr(name);
         let cn = self.typ.len();
         self.typ.push(typ);
         let size = data_size(typ);
