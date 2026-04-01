@@ -1,18 +1,18 @@
 use crate::*;
-use alloc::{LBox, LRc, LRcStr, LVec, dbox, lrc, lrcstr, lvec};
+use alloc::{LBox, LRc, LRcStr, LVec, dbox, lrc, lrcstr, lvec, Local};
 
 /// Table Index.
 pub struct Index {
     /// File.
     pub file: LRc<SortedFile>,
     /// columns.
-    pub cols: LRc<Vec<usize>>,
+    pub cols: LRc<LVec<usize>>,
     /// Index id.
     pub id: i64,
 }
 
 /// List of indexes. Each index has a file and a list of column numbers.
-pub type IxList = Vec<Index>;
+pub type IxList = LVec<Index>;
 
 /// Database base table. Underlying file, type information about the columns and id allocation.
 pub struct Table {
@@ -41,7 +41,7 @@ impl Table {
         let rec_size = info.total;
         let key_size = 8;
         let file = lrc(SortedFile::new(rec_size, key_size, root_page));
-        let ixlist = RefCell::new(Vec::new());
+        let ixlist = RefCell::new(lvec());
         lrc(Table {
             id,
             file,
@@ -205,7 +205,14 @@ impl Table {
     }
 
     /// Add the specified index to the table.
-    pub fn add_index(&self, root: u64, cols: Vec<usize>, id: i64) {
+    pub fn add_index0(&self, root: u64, cols: &[usize], id: i64) {
+       let mut v = LVec::with_capacity_in( cols.len(), Local::new() );
+       v.extend_from_slice(cols);
+       self.add_index(root, v, id);
+    }
+
+    /// Add the specified index to the table.
+    pub fn add_index(&self, root: u64, cols: LVec<usize>, id: i64) {
         let key_size = self.info.index_key_size(&cols) + 8;
         let file = lrc(SortedFile::new(key_size, key_size, root));
         let list = &mut self.ixlist.borrow_mut();
@@ -504,7 +511,7 @@ pub struct IndexInfo {
     /// Index name.
     pub iname: LBox<str>,
     /// Index columns.
-    pub cols: Vec<usize>,
+    pub cols: LVec<usize>,
 }
 
 /// Row of Values, with type information.
@@ -591,7 +598,7 @@ impl Record for Row {
 /// Row for inserting into an index.
 pub struct IndexRow {
     tinfo: LRc<ColInfo>,
-    cols: LRc<Vec<usize>>,
+    cols: LRc<LVec<usize>>,
     keys: Vec<Value>,
     codes: Vec<Code>,
     rowid: i64,
@@ -599,7 +606,7 @@ pub struct IndexRow {
 
 impl IndexRow {
     // Construct IndexRow from Row.
-    fn new(table: &Table, cols: LRc<Vec<usize>>, row: &Row) -> Self {
+    fn new(table: &Table, cols: LRc<LVec<usize>>, row: &Row) -> Self {
         let n = cols.len();
         let mut keys = Vec::with_capacity(n);
         let mut codes = Vec::with_capacity(n);
@@ -697,7 +704,7 @@ struct IndexKey {
     /// Information about the indexed table.
     tinfo: LRc<ColInfo>,
     /// List of indexed columns.
-    cols: LRc<Vec<usize>>,
+    cols: LRc<LVec<usize>>,
     /// Key values.
     key: Vec<Value>,
     /// Ordering used if keys compare equal.
@@ -705,7 +712,7 @@ struct IndexKey {
 }
 
 impl IndexKey {
-    fn new(table: &Table, cols: LRc<Vec<usize>>, key: Vec<Value>, def: Ordering) -> Self {
+    fn new(table: &Table, cols: LRc<LVec<usize>>, key: Vec<Value>, def: Ordering) -> Self {
         Self {
             tinfo: table.info.clone(),
             key,
@@ -740,7 +747,7 @@ pub struct IndexScan {
     ixa: Asc,
     table: LRc<Table>,
     db: DB,
-    cols: LRc<Vec<usize>>,
+    cols: LRc<LVec<usize>>,
     keys: Vec<Value>,
 }
 

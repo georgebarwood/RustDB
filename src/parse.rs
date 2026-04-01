@@ -944,7 +944,7 @@ impl<'a> Parser<'a> {
             self.read_token();
         }
         if !self.b.parse_only {
-            let mut cols = Vec::new();
+            let mut cols = lvec();
             let table = c_table(&self.b, &tname);
             for cname in &cnames {
                 if let Some(cnum) = table.info.colmap.get(*cname) {

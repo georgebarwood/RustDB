@@ -210,7 +210,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
             debug_assert!(a.int(1) == table_id);
             let index_id = a.id() as i64;
             let root = a.int(0) as u64;
-            let mut cols = Vec::new();
+            let mut cols = lvec();
             let t = &db.sys_index_col;
             // Columns are Index, ColIndex
             let key = Value::Int(index_id);
