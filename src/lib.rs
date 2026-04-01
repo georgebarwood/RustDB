@@ -130,7 +130,7 @@ use crate::{
 };
 
 use crate::{
-    alloc::{LHashMap, LRc, LVec, TVec, lhashmap, lrc, lvec, tvec},
+    alloc::{LHashMap, LRc, LVec, TVec, lhashmap, lrc, lvec, Temp},
     bytes::ByteStorage,
     expr::*,
     page::{Page, PagePtr},
@@ -361,7 +361,7 @@ impl Database {
     /// builtins specifies the functions callable in SQL code such as SUBSTR, REPLACE etc.
     pub fn new(apd: AccessPagedData, initsql: &str, builtins: Arc<BuiltinMap>) -> DB {
         let is_new = apd.is_new();
-        let mut tb = TableBuilder::new();
+        let mut tb = TableBuilder::new(5);
         let sys_schema = tb.nt("Schema", &[("Name", STRING)]);
         let sys_table = tb.nt(
             "Table",
@@ -379,13 +379,13 @@ impl Database {
             "Function",
             &[("Schema", INT), ("Name", NAMESTR), ("Def", BIGSTR)],
         );
-        sys_schema.add_index(tb.rt(), vec![0], 1);
-        sys_table.add_index(tb.rt(), vec![1, 2], 2);
-        sys_column.add_index(tb.rt(), vec![0], 3);
-        sys_index.add_index(tb.rt(), vec![1], 4);
-        sys_index_col.add_index(tb.rt(), vec![0], 5);
-        sys_function.add_index(tb.rt(), vec![0, 1], 6);
-        sys_function.add_index(tb.rt(), vec![1], 7);
+        sys_schema.add_index0(tb.rt(), &[0], 1);
+        sys_table.add_index0(tb.rt(), &[1, 2], 2);
+        sys_column.add_index0(tb.rt(), &[0], 3);
+        sys_index.add_index0(tb.rt(), &[1], 4);
+        sys_index_col.add_index0(tb.rt(), &[0], 5);
+        sys_function.add_index0(tb.rt(), &[0, 1], 6);
+        sys_function.add_index0(tb.rt(), &[1], 7);
 
         let page_size_max = apd.spd.psi.max_size_page();
 
@@ -738,10 +738,10 @@ struct TableBuilder {
     list: TVec<LRc<Table>>,
 }
 impl TableBuilder {
-    fn new() -> Self {
+    fn new(n: usize) -> Self {
         Self {
             alloc: bytes::NFT,
-            list: tvec(),
+            list: TVec::with_capacity_in( n, Temp::new() ),
         }
     }
 
