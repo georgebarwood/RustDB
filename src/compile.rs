@@ -1,6 +1,6 @@
 use crate::*;
 use Instruction::*;
-use alloc::{LBox, LRc, TVec, dbox, lbox, lvec};
+use alloc::{LBox, LRc, TVec, dbox, lbox, lvec, lvec_with_capacity};
 use std::{mem, ops};
 
 /// Calculate various attributes such as data_type, is_constant etc.
@@ -329,7 +329,7 @@ fn c_case<T>(
 where
     T: 'static,
 {
-    let mut whens = lvec();
+    let mut whens = lvec_with_capacity(wes.len());
     for (be, ve) in wes {
         let cb = c_bool(b, be);
         let v = cexp(b, ve);
@@ -365,7 +365,7 @@ pub fn c_update(
     let t = c_table(b, tname);
     let from = CTableExpression::Base(t.clone());
     let save = b.from.replace(from);
-    let mut se = lvec();
+    let mut se = lvec_with_capacity(assigns.len());
     for (name, exp) in assigns.iter_mut() {
         let name: &str = name;
         if let Some(cnum) = t.info.colmap.get(name) {
@@ -431,7 +431,7 @@ pub fn c_select(b: &mut Block, mut x: FromExpression) -> CFromExpression {
     };
     // Is the save necessary?
     let save = mem::replace(&mut b.from, from);
-    let mut exps = lvec();
+    let mut exps = lvec_with_capacity(x.exps.len());
     for (i, e) in x.exps.iter_mut().enumerate() {
         exps.push(c_value(b, e));
         if !x.assigns.is_empty() {
@@ -445,8 +445,8 @@ pub fn c_select(b: &mut Block, mut x: FromExpression) -> CFromExpression {
         }
     }
     let (wher, index_from) = c_where(b, table, &mut x.wher);
-    let mut orderby = lvec();
-    let mut desc = lvec();
+    let mut orderby = lvec_with_capacity(x.orderby.len());
+    let mut desc = lvec_with_capacity(x.orderby.len());
     for (e, a) in &mut x.orderby {
         let e = c_value(b, e);
         orderby.push(e);
@@ -491,9 +491,9 @@ pub fn c_where(
 pub fn c_te(b: &Block, te: &mut TableExpression) -> CTableExpression {
     match te {
         TableExpression::Values(x) => {
-            let mut cm = lvec();
+            let mut cm = lvec_with_capacity(x.len());
             for r in x {
-                let mut cr = lvec();
+                let mut cr = lvec_with_capacity(r.len());
                 for e in r {
                     let ce = c_value(b, e);
                     cr.push(ce);
@@ -585,8 +585,8 @@ pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
 /// Compile ExprCall to `CExpPtr<Value>`, checking parameter types.
 pub fn c_call(b: &Block, name: &ObjRef, parms: &mut TVec<Expr>) -> CExpPtr<Value> {
     let fp = c_function(&b.db, name);
-    let mut pv = lvec();
-    let mut pk = Vec::new();
+    let mut pv = lvec_with_capacity(parms.len());
+    let mut pk = lvec_with_capacity(parms.len());
     for e in parms {
         pk.push(b.kind(e));
         let ce = c_value(b, e);

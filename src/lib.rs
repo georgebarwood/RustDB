@@ -130,7 +130,7 @@ use crate::{
 };
 
 use crate::{
-    alloc::{LHashMap, LRc, LVec, TVec, lhashmap, lrc, lvec, Temp},
+    alloc::{LHashMap, LRc, LVec, TVec, lhashmap, lrc, lvec_with_capacity, Temp},
     bytes::ByteStorage,
     expr::*,
     page::{Page, PagePtr},
@@ -391,7 +391,7 @@ impl Database {
 
         let bpf = bytes::bpf(apd.spd.psi.half_size_page());
 
-        let mut bs = lvec();
+        let mut bs = lvec_with_capacity(bpf.len());
         for (ft, bpf) in bpf.iter().enumerate() {
             bs.push(ByteStorage::new(ft as u64, *bpf));
         }
