@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "7.0.28"
+version = "7.0.30"
 edition = "2024"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -10,6 +10,9 @@ categories = ["database-implementations"]
 include = ["/src"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 atom-file = { version ="1.0.0" }
