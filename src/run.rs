@@ -1,4 +1,4 @@
-use crate::alloc::{LBox, LRc, LVec};
+use crate::alloc::{LBox, LRc, LVec, DBox};
 use crate::{
     Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, Rc,
     RefCell, Table, Value, panic,
@@ -82,13 +82,9 @@ pub trait CExp<T> {
     fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> T;
 }
 
-#[cfg(feature = "dynbox")]
 /// Pointer to [CExp].
-pub type CExpPtr<T> = LBox<dyn CExp<T>>;
+pub type CExpPtr<T> = DBox<dyn CExp<T>>;
 
-#[cfg(not(feature = "dynbox"))]
-/// Pointer to [CExp].
-pub type CExpPtr<T> = Box<dyn CExp<T>>;
 
 /// Function that compiles a builtin function call.
 #[derive(Clone, Copy)]
