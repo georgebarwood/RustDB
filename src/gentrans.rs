@@ -71,7 +71,7 @@ impl GenTransaction {
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .unwrap();
         let now = now.as_micros() as i64;
-        let output = Vec::with_capacity(10000);
+        let output = Vec::with_capacity(64 * 1024);
         let headers = Vec::new();
         let status_code = 200;
         Self {

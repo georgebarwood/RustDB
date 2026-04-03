@@ -130,7 +130,7 @@ use crate::{
 };
 
 use crate::{
-    alloc::{LHashMap, LRc, LVec, TVec, lhashmap, lrc, lvec_with_capacity, Temp},
+    alloc::{LHashMap, LRc, LVec, TVec, Temp, lhashmap, lrc, lvec_with_capacity},
     bytes::ByteStorage,
     expr::*,
     page::{Page, PagePtr},
@@ -177,9 +177,7 @@ pub mod test;
 pub mod bench;
 
 /// Temp and Local allocators.
-pub mod alloc {
-    pub use pstd::localalloc::*;
-}
+pub mod alloc;
 
 // Conditional modules.
 
@@ -741,7 +739,7 @@ impl TableBuilder {
     fn new(n: usize) -> Self {
         Self {
             alloc: bytes::NFT,
-            list: TVec::with_capacity_in( n, Temp::new() ),
+            list: TVec::with_capacity_in(n, Temp::new()),
         }
     }
 

@@ -1,5 +1,5 @@
 use crate::*;
-use alloc::{LBox, LRc, LRcStr, LVec, dbox, lrc, lrcstr, lvec, Local};
+use alloc::{LBox, LRc, LRcStr, LVec, Local, dbox, lrc, lrcstr, lvec};
 
 /// Table Index.
 pub struct Index {
@@ -206,9 +206,9 @@ impl Table {
 
     /// Add the specified index to the table.
     pub fn add_index0(&self, root: u64, cols: &[usize], id: i64) {
-       let mut v = LVec::with_capacity_in( cols.len(), Local::new() );
-       v.extend_from_slice(cols);
-       self.add_index(root, v, id);
+        let mut v = LVec::with_capacity_in(cols.len(), Local::new());
+        v.extend_from_slice(cols);
+        self.add_index(root, v, id);
     }
 
     /// Add the specified index to the table.

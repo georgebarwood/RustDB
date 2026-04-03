@@ -1,4 +1,4 @@
-use crate::alloc::{LBox, LRc, LVec, DBox};
+use crate::alloc::{DBox, LBox, LRc, LVec};
 use crate::{
     Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, Rc,
     RefCell, Table, Value, panic,
@@ -84,7 +84,6 @@ pub trait CExp<T> {
 
 /// Pointer to [CExp].
 pub type CExpPtr<T> = DBox<dyn CExp<T>>;
-
 
 /// Function that compiles a builtin function call.
 #[derive(Clone, Copy)]
