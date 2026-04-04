@@ -91,10 +91,9 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool) 
         let t = &db.sys_function;
         if alter {
             // Columns are Schema(0), Name(1), Definition(2).
-            let keys = vec![
-                Value::Int(schema_id),
-                Value::String(Rc::new(name.name.to_string())),
-            ];
+            let mut keys = LVec::with_capacity(2);
+            keys.push( Value::Int(schema_id) );
+            keys.push( Value::String(Rc::new(name.name.to_string())) );
             if let Some((pp, off)) = t.ix_get(db, keys, 0) {
                 let p = &mut *pp.borrow_mut();
                 let off = off + t.info.off[2];
@@ -134,7 +133,8 @@ pub fn get_schema(db: &DB, sname: &str) -> Option<i64> {
         return Some(id);
     }
     let t = &db.sys_schema;
-    let keys = vec![Value::String(Rc::new(sname.to_string()))];
+    let mut keys = LVec::with_capacity(1);
+    keys.push( Value::String(Rc::new(sname.to_string())) );
     if let Some((pp, off)) = t.ix_get(db, keys, 0) {
         let p = &pp.borrow();
         let a = t.access(p, off);
@@ -151,10 +151,9 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)> {
     if let Some(schema_id) = get_schema(db, &name.schema) {
         let t = &db.sys_table;
         // Columns are root, schema, name, id_gen
-        let keys = vec![
-            Value::Int(schema_id),
-            Value::String(Rc::new(name.name.to_string())),
-        ];
+        let mut keys = LVec::with_capacity(2);
+        keys.push( Value::Int(schema_id) );
+        keys.push( Value::String(Rc::new(name.name.to_string())) );
         if let Some((pp, off)) = t.ix_get(db, keys, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);
@@ -233,10 +232,9 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
 pub fn get_function(db: &DB, name: &ObjRef) -> Option<LRc<Function>> {
     if let Some(schema_id) = get_schema(db, &name.schema) {
         let t = &db.sys_function;
-        let keys = vec![
-            Value::Int(schema_id),
-            Value::String(Rc::new(name.name.to_string())),
-        ];
+        let mut keys = LVec::with_capacity(2);
+        keys.push( Value::Int(schema_id) );
+        keys.push( Value::String(Rc::new(name.name.to_string())) );
         if let Some((pp, off)) = t.ix_get(db, keys, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);
@@ -255,10 +253,9 @@ pub fn get_function(db: &DB, name: &ObjRef) -> Option<LRc<Function>> {
 pub fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64> {
     if let Some(schema_id) = get_schema(db, &name.schema) {
         let t = &db.sys_function;
-        let keys = vec![
-            Value::Int(schema_id),
-            Value::String(Rc::new(name.name.to_string())),
-        ];
+        let mut keys = LVec::with_capacity(2);
+        keys.push( Value::Int(schema_id) );
+        keys.push( Value::String(Rc::new(name.name.to_string())) );
         if let Some((pp, off)) = t.ix_get(db, keys, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);

@@ -267,8 +267,8 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Get list of record ids for DELETE/UPDATE.
-    fn get_id_list(&mut self, te: &CTableExpression, w: &Option<CExpPtr<bool>>) -> Vec<u64> {
-        let mut idlist = Vec::new();
+    fn get_id_list(&mut self, te: &CTableExpression, w: &Option<CExpPtr<bool>>) -> LVec<u64> {
+        let mut idlist = LVec::new();
 
         for (pp, off) in self.data_source(te) {
             let p = pp.borrow();
@@ -345,7 +345,7 @@ impl<'r> EvalEnv<'r> {
                 Box::new(table::Table::scan_id(&t, &self.db, id))
             }
             CTableExpression::IxGet(t, val, index) => {
-                let mut keys = Vec::new();
+                let mut keys = LVec::new();
                 for v in val {
                     keys.push(v.eval(self, &[]));
                 }
@@ -359,12 +359,12 @@ impl<'r> EvalEnv<'r> {
     fn select(&mut self, cse: &CFromExpression) {
         if let Some(te) = &cse.from {
             let obl = cse.orderby.len();
-            let mut temp = Vec::new(); // For sorting.
+            let mut temp = LVec::new(); // For sorting.
             for (pp, off) in self.data_source(te) {
                 let p = pp.borrow();
                 let data = &p.data[off..];
                 if self.ok(&cse.wher, data) {
-                    let mut values = Vec::new();
+                    let mut values = LVec::new();
                     if obl > 0 {
                         // Push the sort keys.
                         for ce in &cse.orderby {
@@ -393,7 +393,7 @@ impl<'r> EvalEnv<'r> {
                 }
             }
         } else {
-            let mut values = Vec::new();
+            let mut values = LVec::new();
             for ce in &cse.exps {
                 let val = ce.eval(self, &[]);
                 values.push(val);
@@ -462,14 +462,14 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Get sorted temporary table.
-    fn get_temp(&mut self, cse: &CFromExpression) -> Vec<Vec<Value>> {
+    fn get_temp(&mut self, cse: &CFromExpression) -> LVec<LVec<Value>> {
         if let Some(te) = &cse.from {
-            let mut temp = Vec::new(); // For sorting.
+            let mut temp = LVec::new(); // For sorting.
             for (pp, off) in self.data_source(te) {
                 let p = pp.borrow();
                 let data = &p.data[off..];
                 if self.ok(&cse.wher, data) {
-                    let mut values = Vec::new();
+                    let mut values = LVec::new();
                     for ce in &cse.orderby {
                         let val = ce.eval(self, data);
                         values.push(val);
@@ -564,7 +564,7 @@ impl<'r> EvalEnv<'r> {
             let mut nci = ColInfo::empty(name.clone());
             let ci = &t.info;
 
-            let mut colmap = Vec::new(); // colmap is columns that need to be copied from old to new table.
+            let mut colmap = LVec::new(); // colmap is columns that need to be copied from old to new table.
             for i in 0..ci.colnames.len() {
                 if nci.add_altered(ci, i, actions) {
                     colmap.push(i);

@@ -296,6 +296,7 @@ fn insert_delete() {
     );
     db.run(&sql, &mut tr);
     db.save();
+    spd.wait_complete();
     assert_eq!(tr.get_error(), "");
 }
 

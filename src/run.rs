@@ -118,7 +118,7 @@ pub struct ForSortState {
     /// Currrent index into rows.
     pub ix: usize,
     /// Rows.
-    pub rows: Vec<Vec<Value>>,
+    pub rows: LVec<LVec<Value>>,
 }
 impl std::fmt::Debug for ForSortState {
     fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {

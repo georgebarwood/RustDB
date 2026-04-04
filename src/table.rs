@@ -154,7 +154,7 @@ impl Table {
     }
 
     /// Get record with matching key, using specified index.
-    pub fn ix_get(&self, db: &DB, key: Vec<Value>, index: usize) -> Option<(PagePtr, usize)> {
+    pub fn ix_get(&self, db: &DB, key: LVec<Value>, index: usize) -> Option<(PagePtr, usize)> {
         let list = &*self.ixlist.borrow();
         let ix = &list[index];
         let key = IndexKey::new(self, ix.cols.clone(), key, Ordering::Equal);
@@ -184,12 +184,13 @@ impl Table {
 
     /// Get records with matching key.
     pub fn scan_key(this: &LRc<Table>, db: &DB, key: Value, index: usize) -> IndexScan {
-        let keys = vec![key];
+        let mut keys = LVec::new();
+        keys.push(key);
         Table::scan_keys(this, db, keys, index)
     }
 
     /// Get records with matching keys.
-    pub fn scan_keys(this: &LRc<Table>, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan {
+    pub fn scan_keys(this: &LRc<Table>, db: &DB, keys: LVec<Value>, index: usize) -> IndexScan {
         let ixlist = &*this.ixlist.borrow();
         let ix = &ixlist[index];
         let ikey = IndexKey::new(this, ix.cols.clone(), keys.clone(), Ordering::Less);
@@ -705,13 +706,13 @@ struct IndexKey {
     /// List of indexed columns.
     cols: LRc<LVec<usize>>,
     /// Key values.
-    key: Vec<Value>,
+    key: LVec<Value>,
     /// Ordering used if keys compare equal.
     def: Ordering,
 }
 
 impl IndexKey {
-    fn new(table: &Table, cols: LRc<LVec<usize>>, key: Vec<Value>, def: Ordering) -> Self {
+    fn new(table: &Table, cols: LRc<LVec<usize>>, key: LVec<Value>, def: Ordering) -> Self {
         Self {
             tinfo: table.info.clone(),
             key,
@@ -747,7 +748,7 @@ pub struct IndexScan {
     table: LRc<Table>,
     db: DB,
     cols: LRc<LVec<usize>>,
-    keys: Vec<Value>,
+    keys: LVec<Value>,
 }
 
 impl IndexScan {
