@@ -1,4 +1,4 @@
-use crate::alloc::{LRc, lrc};
+use crate::alloc::LRc;
 use crate::{Cell, DB, Ordering, Record, SaveOp, SortedFile, util};
 
 /// Number of fragment types.
@@ -44,7 +44,7 @@ pub struct ByteStorage {
 impl ByteStorage {
     /// Construct new ByteStorage with specified root page and fragment type.
     pub fn new(root_page: u64, bpf: usize) -> Self {
-        let file = lrc(SortedFile::new(9 + bpf, 8, root_page));
+        let file = LRc::new(SortedFile::new(9 + bpf, 8, root_page));
         ByteStorage {
             file,
             id_gen: Cell::new(u64::MAX),

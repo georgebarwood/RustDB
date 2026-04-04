@@ -578,7 +578,7 @@ impl<'r> EvalEnv<'r> {
                     panic!("duplicate column name {}", name);
                 }
             }
-            let nci = lrc(nci);
+            let nci = LRc::new(nci);
 
             let root = db.alloc_page();
             let nt = Table::new(t.id, root, t.get_id_gen(db), nci);

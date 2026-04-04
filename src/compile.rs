@@ -142,30 +142,30 @@ fn c_builtin_value(b: &Block, name: &str, args: &mut [Expr]) -> CExpPtr<Value> {
 /// Compile an expression.
 pub fn c_value(b: &Block, e: &mut Expr) -> CExpPtr<Value> {
     match b.kind(e) {
-        DataKind::Bool => dbox(cexp::BoolToVal(c_bool(b, e))),
-        DataKind::Int => dbox(cexp::IntToVal(c_int(b, e))),
-        DataKind::Float => dbox(cexp::FloatToVal(c_float(b, e))),
+        DataKind::Bool => DBox::new(cexp::BoolToVal(c_bool(b, e))),
+        DataKind::Int => DBox::new(cexp::IntToVal(c_int(b, e))),
+        DataKind::Float => DBox::new(cexp::FloatToVal(c_float(b, e))),
         _ => match &mut e.exp {
             ExprIs::ColName(x) => {
                 let (off, typ) = name_to_col(b, x);
                 let size = data_size(typ);
                 match data_kind(typ) {
-                    DataKind::String => dbox(cexp::ColumnString { off, size }),
-                    DataKind::Binary => dbox(cexp::ColumnBinary { off, size }),
+                    DataKind::String => DBox::new(cexp::ColumnString { off, size }),
+                    DataKind::Binary => DBox::new(cexp::ColumnBinary { off, size }),
                     _ => panic!(),
                 }
             }
-            ExprIs::Const(x) => dbox(cexp::Const((*x).clone())),
-            ExprIs::Local(x) => dbox(cexp::Local(*x)),
+            ExprIs::Const(x) => DBox::new(cexp::Const((*x).clone())),
+            ExprIs::Local(x) => DBox::new(cexp::Local(*x)),
             ExprIs::Binary(op, b1, b2) => {
                 let c1 = c_value(b, b1);
                 let c2 = c_value(b, b2);
                 match op {
                     Token::VBar => {
                         if data_kind(b1.data_type) == DataKind::Binary {
-                            dbox(cexp::BinConcat(c1, c2))
+                            DBox::new(cexp::BinConcat(c1, c2))
                         } else {
-                            dbox(cexp::Concat(c1, c2))
+                            DBox::new(cexp::Concat(c1, c2))
                         }
                     }
                     _ => panic!("invalid operator {:?}", op),
@@ -189,17 +189,17 @@ pub fn c_int(b: &Block, e: &mut Expr) -> CExpPtr<i64> {
             let (off, typ) = name_to_col(b, x);
             let size = data_size(typ);
             match size {
-                8 => dbox(cexp::ColumnI64 { off }),
-                1 => dbox(cexp::ColumnI8 { off }),
-                _ => dbox(cexp::ColumnI { off, size }),
+                8 => DBox::new(cexp::ColumnI64 { off }),
+                1 => DBox::new(cexp::ColumnI8 { off }),
+                _ => DBox::new(cexp::ColumnI { off, size }),
             }
         }
-        ExprIs::Const(Value::Int(b)) => dbox(cexp::Const::<i64>(*b)),
-        ExprIs::Local(num) => dbox(cexp::Local(*num)),
+        ExprIs::Const(Value::Int(b)) => DBox::new(cexp::Const::<i64>(*b)),
+        ExprIs::Local(num) => DBox::new(cexp::Local(*num)),
         ExprIs::Binary(op, b1, b2) => c_arithmetic(b, *op, b1, b2, c_int),
-        ExprIs::Minus(x) => dbox(cexp::Minus::<i64>(c_int(b, x))),
+        ExprIs::Minus(x) => DBox::new(cexp::Minus::<i64>(c_int(b, x))),
         ExprIs::Case(w, e) => c_case(b, w, e, c_int),
-        ExprIs::FuncCall(n, a) => dbox(cexp::ValToInt(c_call(b, n, a))),
+        ExprIs::FuncCall(n, a) => DBox::new(cexp::ValToInt(c_call(b, n, a))),
         ExprIs::BuiltinCall(n, a) => c_builtin_int(b, n, a),
         _ => panic!(),
     }
@@ -214,16 +214,16 @@ pub fn c_float(b: &Block, e: &mut Expr) -> CExpPtr<f64> {
         ExprIs::ColName(x) => {
             let (off, typ) = name_to_col(b, x);
             match data_size(typ) {
-                8 => dbox(cexp::ColumnF64 { off }),
-                4 => dbox(cexp::ColumnF32 { off }),
+                8 => DBox::new(cexp::ColumnF64 { off }),
+                4 => DBox::new(cexp::ColumnF32 { off }),
                 _ => panic!(),
             }
         }
-        ExprIs::Local(num) => dbox(cexp::Local(*num)),
+        ExprIs::Local(num) => DBox::new(cexp::Local(*num)),
         ExprIs::Binary(op, b1, b2) => c_arithmetic(b, *op, b1, b2, c_float),
-        ExprIs::Minus(x) => dbox(cexp::Minus::<f64>(c_float(b, x))),
+        ExprIs::Minus(x) => DBox::new(cexp::Minus::<f64>(c_float(b, x))),
         ExprIs::Case(w, e) => c_case(b, w, e, c_float),
-        ExprIs::FuncCall(n, a) => dbox(cexp::ValToFloat(c_call(b, n, a))),
+        ExprIs::FuncCall(n, a) => DBox::new(cexp::ValToFloat(c_call(b, n, a))),
         ExprIs::BuiltinCall(n, a) => c_builtin_float(b, n, a),
         _ => panic!(),
     }
@@ -237,17 +237,17 @@ pub fn c_bool(b: &Block, e: &mut Expr) -> CExpPtr<bool> {
     match &mut e.exp {
         ExprIs::ColName(x) => {
             let (off, _typ) = name_to_col(b, x);
-            dbox(cexp::ColumnBool { off })
+            DBox::new(cexp::ColumnBool { off })
         }
-        ExprIs::Const(Value::Bool(b)) => dbox(cexp::Const::<bool>(*b)),
-        ExprIs::Local(x) => dbox(cexp::Local(*x)),
+        ExprIs::Const(Value::Bool(b)) => DBox::new(cexp::Const::<bool>(*b)),
+        ExprIs::Local(x) => DBox::new(cexp::Local(*x)),
         ExprIs::Binary(op, b1, b2) => {
             if *op == Token::Or || *op == Token::And {
                 let c1 = c_bool(b, b1);
                 let c2 = c_bool(b, b2);
                 match op {
-                    Token::Or => dbox(cexp::Or(c1, c2)),
-                    Token::And => dbox(cexp::And(c1, c2)),
+                    Token::Or => DBox::new(cexp::Or(c1, c2)),
+                    Token::And => DBox::new(cexp::And(c1, c2)),
                     _ => panic!(),
                 }
             } else {
@@ -259,8 +259,8 @@ pub fn c_bool(b: &Block, e: &mut Expr) -> CExpPtr<bool> {
                 }
             }
         }
-        ExprIs::Not(x) => dbox(cexp::Not(c_bool(b, x))),
-        ExprIs::FuncCall(name, parms) => dbox(cexp::ValToBool(c_call(b, name, parms))),
+        ExprIs::Not(x) => DBox::new(cexp::Not(c_bool(b, x))),
+        ExprIs::FuncCall(name, parms) => DBox::new(cexp::ValToBool(c_call(b, name, parms))),
         ExprIs::Case(list, els) => c_case(b, list, els, c_bool),
         _ => panic!(),
     }
@@ -285,11 +285,11 @@ where
     let c1 = cexp(b, e1);
     let c2 = cexp(b, e2);
     match op {
-        Token::Plus => dbox(cexp::Add::<T>(c1, c2)),
-        Token::Minus => dbox(cexp::Sub::<T>(c1, c2)),
-        Token::Times => dbox(cexp::Mul::<T>(c1, c2)),
-        Token::Divide => dbox(cexp::Div::<T>(c1, c2)),
-        Token::Percent => dbox(cexp::Rem::<T>(c1, c2)),
+        Token::Plus => DBox::new(cexp::Add::<T>(c1, c2)),
+        Token::Minus => DBox::new(cexp::Sub::<T>(c1, c2)),
+        Token::Times => DBox::new(cexp::Mul::<T>(c1, c2)),
+        Token::Divide => DBox::new(cexp::Div::<T>(c1, c2)),
+        Token::Percent => DBox::new(cexp::Rem::<T>(c1, c2)),
         _ => panic!(),
     }
 }
@@ -308,12 +308,12 @@ where
     let c1 = cexp(b, e1);
     let c2 = cexp(b, e2);
     match op {
-        Token::Equal => dbox(cexp::Equal::<T>(c1, c2)),
-        Token::NotEqual => dbox(cexp::NotEqual::<T>(c1, c2)),
-        Token::Less => dbox(cexp::Less::<T>(c1, c2)),
-        Token::Greater => dbox(cexp::Greater::<T>(c1, c2)),
-        Token::LessEqual => dbox(cexp::LessEqual::<T>(c1, c2)),
-        Token::GreaterEqual => dbox(cexp::GreaterEqual::<T>(c1, c2)),
+        Token::Equal => DBox::new(cexp::Equal::<T>(c1, c2)),
+        Token::NotEqual => DBox::new(cexp::NotEqual::<T>(c1, c2)),
+        Token::Less => DBox::new(cexp::Less::<T>(c1, c2)),
+        Token::Greater => DBox::new(cexp::Greater::<T>(c1, c2)),
+        Token::LessEqual => DBox::new(cexp::LessEqual::<T>(c1, c2)),
+        Token::GreaterEqual => DBox::new(cexp::GreaterEqual::<T>(c1, c2)),
         _ => panic!(),
     }
 }
@@ -328,14 +328,14 @@ fn c_case<T>(
 where
     T: 'static,
 {
-    let mut whens = lvec_with_capacity(wes.len());
+    let mut whens = LVec::with_capacity(wes.len());
     for (be, ve) in wes {
         let cb = c_bool(b, be);
         let v = cexp(b, ve);
         whens.push((cb, v));
     }
     let els = cexp(b, els);
-    dbox(cexp::Case::<T> { whens, els })
+    DBox::new(cexp::Case::<T> { whens, els })
 }
 
 /// Compile a call to a builtin function that returns an integer.
@@ -364,7 +364,7 @@ pub fn c_update(
     let t = c_table(b, tname);
     let from = CTableExpression::Base(t.clone());
     let save = b.from.replace(from);
-    let mut se = lvec_with_capacity(assigns.len());
+    let mut se = LVec::with_capacity(assigns.len());
     for (name, exp) in assigns.iter_mut() {
         let name: &str = name;
         if let Some(cnum) = t.info.colmap.get(name) {
@@ -417,7 +417,7 @@ pub fn c_set(b: &mut Block, mut se: FromExpression) {
         }
     } else {
         let cte = c_select(b, se);
-        b.add(Set(lbox(cte)));
+        b.add(Set(LBox::new(cte)));
     }
 }
 
@@ -430,7 +430,7 @@ pub fn c_select(b: &mut Block, mut x: FromExpression) -> CFromExpression {
     };
     // Is the save necessary?
     let save = mem::replace(&mut b.from, from);
-    let mut exps = lvec_with_capacity(x.exps.len());
+    let mut exps = LVec::with_capacity(x.exps.len());
     for (i, e) in x.exps.iter_mut().enumerate() {
         exps.push(c_value(b, e));
         if !x.assigns.is_empty() {
@@ -444,8 +444,8 @@ pub fn c_select(b: &mut Block, mut x: FromExpression) -> CFromExpression {
         }
     }
     let (wher, index_from) = c_where(b, table, &mut x.wher);
-    let mut orderby = lvec_with_capacity(x.orderby.len());
-    let mut desc = lvec_with_capacity(x.orderby.len());
+    let mut orderby = LVec::with_capacity(x.orderby.len());
+    let mut desc = LVec::with_capacity(x.orderby.len());
     for (e, a) in &mut x.orderby {
         let e = c_value(b, e);
         orderby.push(e);
@@ -490,9 +490,9 @@ pub fn c_where(
 pub fn c_te(b: &Block, te: &mut TableExpression) -> CTableExpression {
     match te {
         TableExpression::Values(x) => {
-            let mut cm = lvec_with_capacity(x.len());
+            let mut cm = LVec::with_capacity(x.len());
             for r in x {
-                let mut cr = lvec_with_capacity(r.len());
+                let mut cr = LVec::with_capacity(r.len());
                 for e in r {
                     let ce = c_value(b, e);
                     cr.push(ce);
@@ -584,8 +584,8 @@ pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
 /// Compile ExprCall to `CExpPtr<Value>`, checking parameter types.
 pub fn c_call(b: &Block, name: &ObjRef, parms: &mut TVec<Expr>) -> CExpPtr<Value> {
     let fp = c_function(&b.db, name);
-    let mut pv = lvec_with_capacity(parms.len());
-    let mut pk = lvec_with_capacity(parms.len());
+    let mut pv = LVec::with_capacity(parms.len());
+    let mut pk = LVec::with_capacity(parms.len());
     for e in parms {
         pk.push(b.kind(e));
         let ce = c_value(b, e);
@@ -595,7 +595,7 @@ pub fn c_call(b: &Block, name: &ObjRef, parms: &mut TVec<Expr>) -> CExpPtr<Value
         panic!("function with no RETURN type cannot be used in expression");
     }
     b.check_types(&fp, &pk);
-    dbox(cexp::Call { fp, pv })
+    DBox::new(cexp::Call { fp, pv })
 }
 
 /// Generate code to evaluate expression and push the value onto the stack.
@@ -651,9 +651,9 @@ pub fn c_for(b: &mut Block, se: FromExpression, start_id: usize, break_id: usize
     let mut cse = c_select(b, se);
     let orderbylen = cse.orderby.len();
     if orderbylen == 0 {
-        b.add(ForInit(for_id, lbox(cse.from.unwrap())));
+        b.add(ForInit(for_id, LBox::new(cse.from.unwrap())));
         b.set_jump(start_id);
-        let info = lbox(ForNextInfo {
+        let info = LBox::new(ForNextInfo {
             for_id,
             assigns: cse.assigns,
             exps: cse.exps,
@@ -661,10 +661,10 @@ pub fn c_for(b: &mut Block, se: FromExpression, start_id: usize, break_id: usize
         });
         b.add(ForNext(break_id, info));
     } else {
-        let assigns = mem::replace(&mut cse.assigns, lvec());
-        b.add(ForSortInit(for_id, lbox(cse)));
+        let assigns = mem::replace(&mut cse.assigns, LVec::new());
+        b.add(ForSortInit(for_id, LBox::new(cse)));
         b.set_jump(start_id);
-        let info = lbox((for_id, orderbylen, assigns));
+        let info = LBox::new((for_id, orderbylen, assigns));
         b.add(ForSortNext(break_id, info));
     }
 }

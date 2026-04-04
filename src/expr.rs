@@ -1,4 +1,4 @@
-use crate::alloc::{LBox, LHashMap, LRc, LVec, TBox, TVec, lbox, lboxstr, lhashmap, lvec};
+use crate::alloc::{LBox, LHashMap, LRc, LVec, TBox, TVec, lhashmap};
 use crate::*;
 use Instruction::{DataOp, ForNext, ForSortNext, Jump, JumpIfFalse};
 
@@ -193,8 +193,8 @@ impl ObjRef {
     /// Construct from string references.
     pub fn new(s: &str, n: &str) -> Self {
         Self {
-            schema: lboxstr(s),
-            name: lboxstr(n),
+            schema: LBox::<str>::from_str(s),
+            name: LBox::<str>::from_str(n),
         }
     }
     /// Used for error messages.
@@ -286,12 +286,12 @@ impl<'a> Block<'a> {
     /// Construct a new block.
     pub fn new(db: DB) -> Self {
         Block {
-            ilist: lvec(),
-            jumps: lvec(),
+            ilist: LVec::new(),
+            jumps: LVec::new(),
             labels: lhashmap(),
             local_map: lhashmap(),
-            locals: lvec(),
-            local_typ: lvec(),
+            locals: LVec::new(),
+            local_typ: LVec::new(),
             break_id: 0,
             param_count: 0,
             return_type: NONE,
@@ -328,7 +328,7 @@ impl<'a> Block<'a> {
     /// Add a Data Operation (DO) to the instruction list.
     pub fn dop(&mut self, dop: DO) {
         if !self.parse_only {
-            self.add(DataOp(lbox(dop)));
+            self.add(DataOp(LBox::new(dop)));
         }
     }
 

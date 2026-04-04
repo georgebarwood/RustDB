@@ -1,4 +1,4 @@
-use crate::alloc::dbox;
+use crate::alloc::DBox;
 use crate::{
     Block, BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, EvalEnv, Expr, Rc, Value, c_int,
     c_value,
@@ -77,7 +77,7 @@ pub fn check_types(b: &Block, args: &mut [Expr], dk: &[DataKind]) {
 /// Compile call to EXCEPTION().
 fn c_exception(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[]);
-    dbox(Exception {})
+    DBox::new(Exception {})
 }
 struct Exception {}
 impl CExp<Value> for Exception {
@@ -91,7 +91,7 @@ impl CExp<Value> for Exception {
 fn c_len(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(b, args, &[DataKind::String]);
     let s = c_value(b, &mut args[0]);
-    dbox(Len { s })
+    DBox::new(Len { s })
 }
 struct Len {
     s: CExpPtr<Value>,
@@ -107,7 +107,7 @@ impl CExp<i64> for Len {
 fn c_bin_len(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(b, args, &[DataKind::Binary]);
     let bv = c_value(b, &mut args[0]);
-    dbox(BinLen { bv })
+    DBox::new(BinLen { bv })
 }
 struct BinLen {
     bv: CExpPtr<Value>,
@@ -122,7 +122,7 @@ impl CExp<i64> for BinLen {
 /// Compile call to LASTID.
 fn c_lastid(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(b, args, &[]);
-    dbox(LastId {})
+    DBox::new(LastId {})
 }
 struct LastId {}
 impl CExp<i64> for LastId {
@@ -134,7 +134,7 @@ impl CExp<i64> for LastId {
 /// Compile call to ALLOCPAGE.
 fn c_allocpage(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(b, args, &[]);
-    dbox(AllocPage {})
+    DBox::new(AllocPage {})
 }
 struct AllocPage {}
 impl CExp<i64> for AllocPage {
@@ -147,7 +147,7 @@ impl CExp<i64> for AllocPage {
 fn c_global(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(b, args, &[DataKind::Int]);
     let x = c_int(b, &mut args[0]);
-    dbox(Global { x })
+    DBox::new(Global { x })
 }
 struct Global {
     x: CExpPtr<i64>,
@@ -163,7 +163,7 @@ impl CExp<i64> for Global {
 fn c_parse_int(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(b, args, &[DataKind::String]);
     let s = c_value(b, &mut args[0]);
-    dbox(ParseInt { s })
+    DBox::new(ParseInt { s })
 }
 struct ParseInt {
     s: CExpPtr<Value>,
@@ -179,7 +179,7 @@ impl CExp<i64> for ParseInt {
 fn c_parse_float(b: &Block, args: &mut [Expr]) -> CExpPtr<f64> {
     check_types(b, args, &[DataKind::String]);
     let s = c_value(b, &mut args[0]);
-    dbox(ParseFloat { s })
+    DBox::new(ParseFloat { s })
 }
 struct ParseFloat {
     s: CExpPtr<Value>,
@@ -196,7 +196,7 @@ fn c_contains(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(b, args, &[DataKind::String, DataKind::String]);
     let s = c_value(b, &mut args[0]);
     let pat = c_value(b, &mut args[1]);
-    dbox(Contains { s, pat })
+    DBox::new(Contains { s, pat })
 }
 struct Contains {
     s: CExpPtr<Value>,
@@ -223,7 +223,7 @@ fn c_replace(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     let s = c_value(b, &mut args[0]);
     let pat = c_value(b, &mut args[1]);
     let sub = c_value(b, &mut args[2]);
-    dbox(Replace { s, pat, sub })
+    DBox::new(Replace { s, pat, sub })
 }
 struct Replace {
     s: CExpPtr<Value>,
@@ -246,7 +246,7 @@ fn c_substring(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     let s = c_value(b, &mut args[0]);
     let f = c_int(b, &mut args[1]);
     let n = c_int(b, &mut args[2]);
-    dbox(Substring { s, f, n })
+    DBox::new(Substring { s, f, n })
 }
 struct Substring {
     s: CExpPtr<Value>,
@@ -286,7 +286,7 @@ fn c_binsubstring(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     let s = c_value(b, &mut args[0]);
     let f = c_int(b, &mut args[1]);
     let n = c_int(b, &mut args[2]);
-    dbox(BinSubstring { s, f, n })
+    DBox::new(BinSubstring { s, f, n })
 }
 struct BinSubstring {
     s: CExpPtr<Value>,
@@ -313,7 +313,7 @@ fn c_arg(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[DataKind::Int, DataKind::String]);
     let k = c_int(b, &mut args[0]);
     let s = c_value(b, &mut args[1]);
-    dbox(Arg { k, s })
+    DBox::new(Arg { k, s })
 }
 struct Arg {
     k: CExpPtr<i64>,
@@ -334,7 +334,7 @@ fn c_header(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(b, args, &[DataKind::String, DataKind::String]);
     let n = c_value(b, &mut args[0]);
     let v = c_value(b, &mut args[1]);
-    dbox(Header { n, v })
+    DBox::new(Header { n, v })
 }
 struct Header {
     n: CExpPtr<Value>,
@@ -354,7 +354,7 @@ impl CExp<i64> for Header {
 fn c_status_code(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(b, args, &[DataKind::Int]);
     let code = c_int(b, &mut args[0]);
-    dbox(StatusCode { code })
+    DBox::new(StatusCode { code })
 }
 struct StatusCode {
     code: CExpPtr<i64>,
@@ -373,7 +373,7 @@ fn c_fileattr(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[DataKind::Int, DataKind::Int]);
     let k = c_int(b, &mut args[0]);
     let x = c_int(b, &mut args[1]);
-    dbox(FileAttr { k, x })
+    DBox::new(FileAttr { k, x })
 }
 struct FileAttr {
     k: CExpPtr<i64>,
@@ -393,7 +393,7 @@ impl CExp<Value> for FileAttr {
 fn c_filecontent(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[DataKind::Int]);
     let k = c_int(b, &mut args[0]);
-    dbox(FileContent { k })
+    DBox::new(FileContent { k })
 }
 struct FileContent {
     k: CExpPtr<i64>,
@@ -418,7 +418,7 @@ fn c_repackfile(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     let k = c_int(b, &mut args[0]);
     let s = c_value(b, &mut args[1]);
     let n = c_value(b, &mut args[2]);
-    dbox(RepackFile { k, s, n })
+    DBox::new(RepackFile { k, s, n })
 }
 #[cfg(feature = "pack")]
 struct RepackFile {
@@ -453,7 +453,7 @@ const LOADALLTABLES: &str = "
 /// Compile call to VERIFYDB.
 fn c_verifydb(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[]);
-    dbox(VerifyDb {})
+    DBox::new(VerifyDb {})
 }
 
 #[cfg(feature = "verify")]
@@ -473,7 +473,7 @@ impl CExp<Value> for VerifyDb {
 /// Compile call to RENUMBER.
 fn c_renumber(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
     check_types(b, args, &[]);
-    dbox(Renumber {})
+    DBox::new(Renumber {})
 }
 
 #[cfg(feature = "renumber")]
@@ -492,7 +492,7 @@ impl CExp<i64> for Renumber {
 fn c_bintostr(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
     check_types(b, args, &[DataKind::Binary]);
     let bytes = c_value(b, &mut args[0]);
-    dbox(Bintostr { bytes })
+    DBox::new(Bintostr { bytes })
 }
 /// Compiled call to BINTOSTR.
 struct Bintostr {

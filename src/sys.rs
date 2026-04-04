@@ -199,7 +199,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
             let ctype = a.int(2) as DataType;
             info.add(&cname, ctype);
         }
-        let table = Table::new(table_id, root as u64, id_gen, lrc(info));
+        let table = Table::new(table_id, root as u64, id_gen, LRc::new(info));
         // Get indexes. Columns are Root, Table, Name.
         let t = &db.sys_index;
         let key = Value::Int(table_id);
@@ -209,7 +209,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
             debug_assert!(a.int(1) == table_id);
             let index_id = a.id() as i64;
             let root = a.int(0) as u64;
-            let mut cols = lvec();
+            let mut cols = LVec::new();
             let t = &db.sys_index_col;
             // Columns are Index, ColIndex
             let key = Value::Int(index_id);
@@ -274,9 +274,9 @@ fn parse_function(db: &DB, source: Rc<String>) -> LRc<Function> {
     let mut p = Parser::new(&source1, db);
     p.b.parse_only = true;
     p.parse_function();
-    lrc(Function {
+    LRc::new(Function {
         compiled: Cell::new(false),
-        ilist: RefCell::new(lvec()),
+        ilist: RefCell::new(LVec::new()),
         local_typ: p.b.local_typ,
         return_type: p.b.return_type,
         param_count: p.b.param_count,
