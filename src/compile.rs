@@ -328,7 +328,7 @@ fn c_case<T>(
 where
     T: 'static,
 {
-    let mut whens = LVec::with_capacity(wes.len());
+    let mut whens = LVec::with_capacity_auto(wes.len());
     for (be, ve) in wes {
         let cb = c_bool(b, be);
         let v = cexp(b, ve);
@@ -364,7 +364,7 @@ pub fn c_update(
     let t = c_table(b, tname);
     let from = CTableExpression::Base(t.clone());
     let save = b.from.replace(from);
-    let mut se = LVec::with_capacity(assigns.len());
+    let mut se = LVec::with_capacity_auto(assigns.len());
     for (name, exp) in assigns.iter_mut() {
         let name: &str = name;
         if let Some(cnum) = t.info.colmap.get(name) {
@@ -417,7 +417,7 @@ pub fn c_set(b: &mut Block, mut se: FromExpression) {
         }
     } else {
         let cte = c_select(b, se);
-        b.add(Set(LBox::new(cte)));
+        b.add(Set(LBox::auto(cte)));
     }
 }
 
@@ -430,7 +430,7 @@ pub fn c_select(b: &mut Block, mut x: FromExpression) -> CFromExpression {
     };
     // Is the save necessary?
     let save = mem::replace(&mut b.from, from);
-    let mut exps = LVec::with_capacity(x.exps.len());
+    let mut exps = LVec::with_capacity_auto(x.exps.len());
     for (i, e) in x.exps.iter_mut().enumerate() {
         exps.push(c_value(b, e));
         if !x.assigns.is_empty() {
@@ -444,8 +444,8 @@ pub fn c_select(b: &mut Block, mut x: FromExpression) -> CFromExpression {
         }
     }
     let (wher, index_from) = c_where(b, table, &mut x.wher);
-    let mut orderby = LVec::with_capacity(x.orderby.len());
-    let mut desc = LVec::with_capacity(x.orderby.len());
+    let mut orderby = LVec::with_capacity_auto(x.orderby.len());
+    let mut desc = LVec::with_capacity_auto(x.orderby.len());
     for (e, a) in &mut x.orderby {
         let e = c_value(b, e);
         orderby.push(e);
@@ -490,9 +490,9 @@ pub fn c_where(
 pub fn c_te(b: &Block, te: &mut TableExpression) -> CTableExpression {
     match te {
         TableExpression::Values(x) => {
-            let mut cm = LVec::with_capacity(x.len());
+            let mut cm = LVec::with_capacity_auto(x.len());
             for r in x {
-                let mut cr = LVec::with_capacity(r.len());
+                let mut cr = LVec::with_capacity_auto(r.len());
                 for e in r {
                     let ce = c_value(b, e);
                     cr.push(ce);
@@ -584,8 +584,8 @@ pub fn name_to_colnum(b: &Block, name: &str) -> (usize, DataType) {
 /// Compile ExprCall to `CExpPtr<Value>`, checking parameter types.
 pub fn c_call(b: &Block, name: &ObjRef, parms: &mut TVec<Expr>) -> CExpPtr<Value> {
     let fp = c_function(&b.db, name);
-    let mut pv = LVec::with_capacity(parms.len());
-    let mut pk = LVec::with_capacity(parms.len());
+    let mut pv = LVec::with_capacity_auto(parms.len());
+    let mut pk = LVec::with_capacity_auto(parms.len());
     for e in parms {
         pk.push(b.kind(e));
         let ce = c_value(b, e);
@@ -651,9 +651,9 @@ pub fn c_for(b: &mut Block, se: FromExpression, start_id: usize, break_id: usize
     let mut cse = c_select(b, se);
     let orderbylen = cse.orderby.len();
     if orderbylen == 0 {
-        b.add(ForInit(for_id, LBox::new(cse.from.unwrap())));
+        b.add(ForInit(for_id, LBox::auto(cse.from.unwrap())));
         b.set_jump(start_id);
-        let info = LBox::new(ForNextInfo {
+        let info = LBox::auto(ForNextInfo {
             for_id,
             assigns: cse.assigns,
             exps: cse.exps,
@@ -661,10 +661,10 @@ pub fn c_for(b: &mut Block, se: FromExpression, start_id: usize, break_id: usize
         });
         b.add(ForNext(break_id, info));
     } else {
-        let assigns = mem::replace(&mut cse.assigns, LVec::new());
-        b.add(ForSortInit(for_id, LBox::new(cse)));
+        let assigns = mem::replace(&mut cse.assigns, LVec::auto());
+        b.add(ForSortInit(for_id, LBox::auto(cse)));
         b.set_jump(start_id);
-        let info = LBox::new((for_id, orderbylen, assigns));
+        let info = LBox::auto((for_id, orderbylen, assigns));
         b.add(ForSortNext(break_id, info));
     }
 }

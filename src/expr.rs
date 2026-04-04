@@ -286,12 +286,12 @@ impl<'a> Block<'a> {
     /// Construct a new block.
     pub fn new(db: DB) -> Self {
         Block {
-            ilist: LVec::new(),
-            jumps: LVec::new(),
+            ilist: LVec::auto(),
+            jumps: LVec::auto(),
             labels: lhashmap(),
             local_map: lhashmap(),
-            locals: LVec::new(),
-            local_typ: LVec::new(),
+            locals: LVec::auto(),
+            local_typ: LVec::auto(),
             break_id: 0,
             param_count: 0,
             return_type: NONE,
@@ -328,7 +328,7 @@ impl<'a> Block<'a> {
     /// Add a Data Operation (DO) to the instruction list.
     pub fn dop(&mut self, dop: DO) {
         if !self.parse_only {
-            self.add(DataOp(LBox::new(dop)));
+            self.add(DataOp(LBox::auto(dop)));
         }
     }
 

@@ -40,7 +40,7 @@ impl Table {
         let rec_size = info.total;
         let key_size = 8;
         let file = LRc::new(SortedFile::new(rec_size, key_size, root_page));
-        let ixlist = RefCell::new(LVec::new());
+        let ixlist = RefCell::new(LVec::auto());
         LRc::new(Table {
             id,
             file,
@@ -119,7 +119,7 @@ impl Table {
             }
             let mut kmap = BTreeMap::new();
             let cwe = get_keys(b, we, &mut cols, &mut kmap);
-            let mut keys = LVec::new();
+            let mut keys = LVec::auto();
             keys.extend(
                 clist
                     .iter()
@@ -184,7 +184,7 @@ impl Table {
 
     /// Get records with matching key.
     pub fn scan_key(this: &LRc<Table>, db: &DB, key: Value, index: usize) -> IndexScan {
-        let mut keys = LVec::new();
+        let mut keys = LVec::auto();
         keys.push(key);
         Table::scan_keys(this, db, keys, index)
     }
@@ -206,7 +206,7 @@ impl Table {
 
     /// Add the specified index to the table.
     pub fn add_index0(&self, root: u64, cols: &[usize], id: i64) {
-        let mut v = LVec::with_capacity(cols.len());
+        let mut v = LVec::with_capacity_auto(cols.len());
         v.extend_from_slice(cols);
         self.add_index(root, v, id);
     }
@@ -429,9 +429,9 @@ impl ColInfo {
         ColInfo {
             name,
             colmap: lhashmap(),
-            typ: LVec::new(),
-            colnames: LVec::new(),
-            off: LVec::new(),
+            typ: LVec::auto(),
+            colnames: LVec::auto(),
+            off: LVec::auto(),
             total: 8,
         }
     }

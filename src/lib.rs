@@ -388,7 +388,7 @@ impl Database {
 
         let bpf = bytes::bpf(apd.spd.psi.half_size_page());
 
-        let mut bs = LVec::with_capacity(bpf.len());
+        let mut bs = LVec::with_capacity_auto(bpf.len());
         for (ft, bpf) in bpf.iter().enumerate() {
             bs.push(ByteStorage::new(ft as u64, *bpf));
         }

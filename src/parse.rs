@@ -495,7 +495,7 @@ impl<'a> Parser<'a> {
         let name = self.id_ref();
         if self.test(Token::Dot) {
             let fname = self.id_ref();
-            let mut parms = TVec::new();
+            let mut parms = TVec::auto();
             self.read(Token::LBra);
             if self.token != Token::RBra {
                 loop {
@@ -509,7 +509,7 @@ impl<'a> Parser<'a> {
             let name = ObjRef::new(tos(name), tos(fname));
             Expr::new(ExprIs::FuncCall(name, parms))
         } else if self.test(Token::LBra) {
-            let mut parms = TVec::new();
+            let mut parms = TVec::auto();
             if self.token != Token::RBra {
                 loop {
                     parms.push(self.exp());
@@ -539,7 +539,7 @@ impl<'a> Parser<'a> {
                 self.exp_case()
             } else if self.test_id(b"NOT") {
                 let e = self.exp_p(10); // Not sure about precedence here.
-                Expr::new(ExprIs::Not(TBox::new(e)))
+                Expr::new(ExprIs::Not(TBox::auto(e)))
             } else {
                 self.exp_id()
             };
@@ -551,7 +551,7 @@ impl<'a> Parser<'a> {
                 if self.test(Token::Comma)
                 // Operand of IN e.g. X IN ( 1,2,3 )
                 {
-                    let mut list = TVec::new();
+                    let mut list = TVec::auto();
                     list.push(exp);
                     loop {
                         list.push(self.exp());
@@ -581,7 +581,7 @@ impl<'a> Parser<'a> {
             result = Expr::new(ExprIs::Const(Value::RcBinary(Rc::new(util::parse_hex(hb)))));
             self.read_token();
         } else if self.test(Token::Minus) {
-            result = Expr::new(ExprIs::Minus(TBox::new(self.exp_p(30))));
+            result = Expr::new(ExprIs::Minus(TBox::auto(self.exp_p(30))));
         } else {
             panic!("expression expected")
         }
@@ -618,14 +618,14 @@ impl<'a> Parser<'a> {
                 rhs = self.exp_lp(rhs, t.1);
                 t = self.operator();
             }
-            lhs = Expr::new(ExprIs::Binary(op.0, TBox::new(lhs), TBox::new(rhs)));
+            lhs = Expr::new(ExprIs::Binary(op.0, TBox::auto(lhs), TBox::auto(rhs)));
         }
         lhs
     }
 
     /// Parse a CASE expression.
     fn exp_case(&mut self) -> Expr {
-        let mut list = TVec::new();
+        let mut list = TVec::auto();
         while self.test_id(b"WHEN") {
             let test = self.exp();
             self.read_id(b"THEN");
@@ -634,7 +634,7 @@ impl<'a> Parser<'a> {
         }
         assert!(!list.is_empty(), "empty CASE expression");
         self.read_id(b"ELSE");
-        let els = TBox::new(self.exp());
+        let els = TBox::auto(self.exp());
         self.read_id(b"END");
         Expr::new(ExprIs::Case(list, els))
     }
@@ -642,7 +642,7 @@ impl<'a> Parser<'a> {
     fn exp_scalar_select(&mut self) -> Expr {
         let te = self.select_expression(false);
         // if ( te.ColumnCount != 1 ) Error ( "Scalar select must have one column" );
-        Expr::new(ExprIs::ScalarSelect(TBox::new(te)))
+        Expr::new(ExprIs::ScalarSelect(TBox::auto(te)))
     }
 
     // End Expression parsing
@@ -651,9 +651,9 @@ impl<'a> Parser<'a> {
 
     fn insert_expression(&mut self, expect: usize) -> TableExpression {
         self.read_id(b"VALUES");
-        let mut values = TVec::new();
+        let mut values = TVec::auto();
         while self.test(Token::LBra) {
-            let mut v = TVec::new();
+            let mut v = TVec::auto();
             loop {
                 v.push(self.exp());
                 if self.test(Token::RBra) {
@@ -697,9 +697,9 @@ impl<'a> Parser<'a> {
 
     /// Parse a SELECT / SET / FOR expression.
     fn select_expression(&mut self, set_or_for: bool) -> FromExpression {
-        let mut exps = TVec::new();
-        let mut colnames: LVec<LBox<str>> = LVec::new();
-        let mut assigns = LVec::new();
+        let mut exps = TVec::auto();
+        let mut colnames: LVec<LBox<str>> = LVec::auto();
+        let mut assigns = LVec::auto();
         loop {
             if set_or_for {
                 let local = self.local();
@@ -725,7 +725,7 @@ impl<'a> Parser<'a> {
             }
         }
         let from = if self.test_id(b"FROM") {
-            Some(TBox::new(self.primary_table_exp()))
+            Some(TBox::auto(self.primary_table_exp()))
         } else {
             None
         };
@@ -734,7 +734,7 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let mut orderby = TVec::new();
+        let mut orderby = TVec::auto();
         if self.test_id(b"ORDER") {
             self.read_id(b"BY");
             loop {
@@ -767,7 +767,7 @@ impl<'a> Parser<'a> {
         let se = self.select_expression(false);
         if !self.b.parse_only {
             let cte = c_select(&mut self.b, se);
-            self.b.add(Select(LBox::new(cte)));
+            self.b.add(Select(LBox::auto(cte)));
         }
     }
 
@@ -782,7 +782,7 @@ impl<'a> Parser<'a> {
         self.read_id(b"INTO");
         let tr = self.obj_ref();
         self.read(Token::LBra);
-        let mut cnames = LVec::new();
+        let mut cnames = LVec::auto();
         loop {
             let cname = self.id_ref();
             assert!(!cnames.contains(&cname), "duplicate column name");
@@ -795,7 +795,7 @@ impl<'a> Parser<'a> {
         let mut src = self.insert_expression(cnames.len());
         if !self.b.parse_only {
             let t = c_table(&self.b, &tr);
-            let mut cnums: LVec<usize> = LVec::new();
+            let mut cnums: LVec<usize> = LVec::auto();
             {
                 for cname in &cnames {
                     if let Some(cnum) = t.info.get(tos(cname)) {
@@ -813,7 +813,7 @@ impl<'a> Parser<'a> {
     fn s_update(&mut self) {
         let tname = self.obj_ref();
         self.read_id(b"SET");
-        let mut assigns = TVec::new();
+        let mut assigns = TVec::auto();
         loop {
             let name = self.idb();
             self.read(Token::Equal);
@@ -869,7 +869,7 @@ impl<'a> Parser<'a> {
             name: pname,
         };
         self.read(Token::LBra);
-        let mut pkinds = TVec::new();
+        let mut pkinds = TVec::auto();
         if !self.test(Token::RBra) {
             let mut e = self.exp();
             pkinds.push(push(&mut self.b, &mut e));
@@ -931,7 +931,7 @@ impl<'a> Parser<'a> {
         self.read_id(b"ON");
         let tname = self.obj_ref();
         self.read(Token::LBra);
-        let mut cnames = TVec::new();
+        let mut cnames = TVec::auto();
         loop {
             cnames.push(tos(self.id_ref()));
             if self.test(Token::RBra) {
@@ -944,7 +944,7 @@ impl<'a> Parser<'a> {
             self.read_token();
         }
         if !self.b.parse_only {
-            let mut cols = LVec::new();
+            let mut cols = LVec::auto();
             let table = c_table(&self.b, &tname);
             for cname in &cnames {
                 if let Some(cnum) = table.info.colmap.get(*cname) {
@@ -1023,7 +1023,7 @@ impl<'a> Parser<'a> {
 
     fn s_alter_table(&mut self) {
         let tr = self.obj_ref();
-        let mut list = LVec::new();
+        let mut list = LVec::auto();
         loop {
             if self.test_id(b"ADD") {
                 let col = self.idb();
