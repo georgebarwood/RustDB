@@ -142,13 +142,13 @@ impl SortedFile {
     }
 
     /// For iteration in ascending order from start.
-    pub fn asc(self: &LRc<Self>, db: &DB, start: Box<dyn Record>) -> Asc {
-        Asc::new(db, start, self)
+    pub fn asc(this: &LRc<Self>, db: &DB, start: Box<dyn Record>) -> Asc {
+        Asc::new(db, start, this)
     }
 
     /// For iteration in descending order from start.
-    pub fn dsc(self: &LRc<Self>, db: &DB, start: Box<dyn Record>) -> Dsc {
-        Dsc::new(db, start, self)
+    pub fn dsc(this: &LRc<Self>, db: &DB, start: Box<dyn Record>) -> Dsc {
+        Dsc::new(db, start, this)
     }
 
     /// Insert a record into a leaf page.

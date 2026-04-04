@@ -1,5 +1,4 @@
 use crate::*;
-use alloc::{LBox, LRc, LRcStr, LVec, Local, dbox, lrc, lrcstr, lvec};
 
 /// Table Index.
 pub struct Index {
@@ -93,14 +92,14 @@ impl Table {
 
     /// Look for indexed table expression based on supplied WHERE expression (we).
     pub fn index_from(
-        self: &LRc<Table>,
+        this: &LRc<Table>,
         b: &Block,
         we: &mut Expr,
     ) -> (Option<CExpPtr<bool>>, Option<CTableExpression>) {
         let mut kc = SmallSet::default(); // Set of known columns.
         get_known_cols(we, &mut kc);
 
-        let list = &*self.ixlist.borrow();
+        let list = &*this.ixlist.borrow();
 
         let mut best_match = 0;
         let mut best_index = 0;
@@ -129,7 +128,7 @@ impl Table {
             );
             return (
                 cwe,
-                Some(CTableExpression::IxGet(self.clone(), keys, best_index)),
+                Some(CTableExpression::IxGet(this.clone(), keys, best_index)),
             );
         }
 
@@ -143,7 +142,7 @@ impl Table {
         {
             return (
                 None,
-                Some(CTableExpression::IdGet(self.clone(), c_int(b, e2))),
+                Some(CTableExpression::IdGet(this.clone(), c_int(b, e2))),
             );
         }
         (Some(c_bool(b, we)), None)
@@ -170,13 +169,13 @@ impl Table {
 
     /// Scan all the records in the table.
     pub fn scan(&self, db: &DB) -> Asc {
-        self.file.asc(db, Box::new(Zero {}))
+        sortedfile::SortedFile::asc( &self.file, db, Box::new(Zero {}))
     }
 
     /// Get a single record with specified id.
-    pub fn scan_id(self: &LRc<Table>, db: &DB, id: i64) -> IdScan {
+    pub fn scan_id(this: &LRc<Table>, db: &DB, id: i64) -> IdScan {
         IdScan {
-            table: self.clone(),
+            table: this.clone(),
             db: db.clone(),
             id,
             done: false,
@@ -184,29 +183,29 @@ impl Table {
     }
 
     /// Get records with matching key.
-    pub fn scan_key(self: &LRc<Table>, db: &DB, key: Value, index: usize) -> IndexScan {
+    pub fn scan_key(this: &LRc<Table>, db: &DB, key: Value, index: usize) -> IndexScan {
         let keys = vec![key];
-        self.scan_keys(db, keys, index)
+        Table::scan_keys(this, db, keys, index)
     }
 
     /// Get records with matching keys.
-    pub fn scan_keys(self: &LRc<Table>, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan {
-        let ixlist = &*self.ixlist.borrow();
+    pub fn scan_keys(this: &LRc<Table>, db: &DB, keys: Vec<Value>, index: usize) -> IndexScan {
+        let ixlist = &*this.ixlist.borrow();
         let ix = &ixlist[index];
-        let ikey = IndexKey::new(self, ix.cols.clone(), keys.clone(), Ordering::Less);
-        let ixa = ix.file.asc(db, Box::new(ikey));
+        let ikey = IndexKey::new(this, ix.cols.clone(), keys.clone(), Ordering::Less);
+        let ixa = sortedfile::SortedFile::asc( &ix.file, db, Box::new(ikey));
         IndexScan {
             ixa,
             keys,
             cols: ix.cols.clone(),
-            table: self.clone(),
+            table: this.clone(),
             db: db.clone(),
         }
     }
 
     /// Add the specified index to the table.
     pub fn add_index0(&self, root: u64, cols: &[usize], id: i64) {
-        let mut v = LVec::with_capacity_in(cols.len(), Local::new());
+        let mut v = lvec_with_capacity(cols.len());
         v.extend_from_slice(cols);
         self.add_index(root, v, id);
     }

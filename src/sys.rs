@@ -1,5 +1,4 @@
 use crate::*;
-use alloc::{LRc, lrc, lvec};
 
 /// Create a schema in the database by writing to the system Schema table.
 pub fn create_schema(db: &DB, name: &str) {
@@ -171,7 +170,7 @@ pub fn get_index(db: &DB, tname: &ObjRef, iname: &str) -> (LRc<Table>, usize, u6
         // Loop through indexes. Columns are Root, Table, Name.
         let ixt = &db.sys_index;
         let key = Value::Int(t.id);
-        for (ix, (pp, off)) in ixt.scan_key(db, key, 0).enumerate() {
+        for (ix, (pp, off)) in table::Table::scan_key(&ixt, db, key, 0).enumerate() {
             let p = &pp.borrow();
             let a = ixt.access(p, off);
             if a.str(db, 2) == iname {
@@ -192,7 +191,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
         // Get columns. Columns are Table, Name, Type
         let t = &db.sys_column;
         let key = Value::Int(table_id);
-        for (pp, off) in t.scan_key(db, key, 0) {
+        for (pp, off) in Table::scan_key(&t, db, key, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);
             debug_assert!(a.int(0) == table_id);
@@ -204,7 +203,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
         // Get indexes. Columns are Root, Table, Name.
         let t = &db.sys_index;
         let key = Value::Int(table_id);
-        for (pp, off) in t.scan_key(db, key, 0) {
+        for (pp, off) in Table::scan_key(&t, db, key, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);
             debug_assert!(a.int(1) == table_id);
@@ -214,7 +213,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
             let t = &db.sys_index_col;
             // Columns are Index, ColIndex
             let key = Value::Int(index_id);
-            for (pp, off) in t.scan_key(db, key, 0) {
+            for (pp, off) in Table::scan_key(&t, db, key, 0) {
                 let p = &pp.borrow();
                 let a = t.access(p, off);
                 debug_assert!(a.int(0) == index_id);

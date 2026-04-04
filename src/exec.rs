@@ -1,6 +1,5 @@
 use crate::*;
 use Instruction::*;
-use alloc::{LVec, lrc};
 
 /// Evaluation environment - stack of Values, references to DB and Transaction.
 #[non_exhaustive]
@@ -343,14 +342,14 @@ impl<'r> EvalEnv<'r> {
             CTableExpression::Base(t) => Box::new(t.scan(&self.db)),
             CTableExpression::IdGet(t, idexp) => {
                 let id = idexp.eval(self, &[]);
-                Box::new(t.scan_id(&self.db, id))
+                Box::new(table::Table::scan_id(&t, &self.db, id))
             }
             CTableExpression::IxGet(t, val, index) => {
                 let mut keys = Vec::new();
                 for v in val {
                     keys.push(v.eval(self, &[]));
                 }
-                Box::new(t.scan_keys(&self.db, keys, *index))
+                Box::new(table::Table::scan_keys(&t, &self.db, keys, *index))
             }
             _ => panic!(),
         }

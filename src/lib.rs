@@ -94,7 +94,6 @@
     forbid(unsafe_code)
 )]
 #![deny(missing_docs)]
-#![feature(arbitrary_self_types)]
 
 pub use page_store::{
     AccessPagedData, BlockPageStg, HashMap, HashSet, Limits, PageStorage, PageStorageInfo, SaveOp,
@@ -130,7 +129,7 @@ use crate::{
 };
 
 use crate::{
-    alloc::{LHashMap, LRc, LVec, TVec, Temp, lhashmap, lrc, lvec_with_capacity},
+    alloc::*,
     bytes::ByteStorage,
     expr::*,
     page::{Page, PagePtr},
@@ -739,7 +738,7 @@ impl TableBuilder {
     fn new(n: usize) -> Self {
         Self {
             alloc: bytes::NFT,
-            list: TVec::with_capacity_in(n, Temp::new()),
+            list: TVec::with_capacity_in(n, temp()),
         }
     }
 

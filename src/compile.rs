@@ -1,6 +1,5 @@
 use crate::*;
 use Instruction::*;
-use alloc::{LBox, LRc, TVec, dbox, lbox, lvec, lvec_with_capacity};
 use std::{mem, ops};
 
 /// Calculate various attributes such as data_type, is_constant etc.
@@ -478,7 +477,7 @@ pub fn c_where(
             panic!("WHERE expression must be bool")
         }
         if let Some(table) = table {
-            table.index_from(b, we)
+            table::Table::index_from(&table, b, we)
         } else {
             (Some(c_bool(b, we)), None)
         }
