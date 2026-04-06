@@ -7,7 +7,7 @@
 //!
 //! Note that the left node is greater than the parent node.
 
-use crate::{Arc, DB, Data, MData, Ordering, Rc, Record, RefCell, util};
+use crate::{Arc, DB, Data, MData, Ordering, Rc, Record, RefCell, util, TVec};
 
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;
@@ -402,7 +402,7 @@ impl Page {
     pub fn compress(&mut self, db: &DB) {
         let saving = (self.alloc - self.count) * self.node_size;
         if saving != 0 && db.apd.compress(self.size(), saving) {
-            let mut flist = Vec::new();
+            let mut flist = TVec::auto();
             let mut f = self.free;
             while f != 0 {
                 if f <= self.count {
@@ -783,7 +783,7 @@ impl<'a> MutPage<'a> {
     }
 
     /// Relocate node x (or any child of x) if it is greater than page count ( for fn compress ).
-    fn relocate(&mut self, mut x: usize, flist: &mut Vec<usize>) -> usize {
+    fn relocate(&mut self, mut x: usize, flist: &mut TVec<usize>) -> usize {
         if x != 0 {
             if x > self.target {
                 let to = flist.pop().unwrap();

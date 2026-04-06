@@ -69,3 +69,15 @@ pub type DBox<T> = LBox<T>;
 /// `std::boxed::Box` or `LBox` depending on whether dynbox feature is selected.
 #[cfg(not(feature = "dynbox"))]
 pub type DBox<T> = std::boxed::Box<T>;
+
+/// Allocate a DBox and place t in it.
+#[cfg(feature = "dynbox")]
+pub fn dbox<T>(t: T) -> DBox<T> {
+    DBox::auto(t)
+}
+
+/// Allocate a DBox and place t in it.
+#[cfg(not(feature = "dynbox"))]
+pub fn dbox<T>(t: T) -> DBox<T> {
+    DBox::new(t)
+}

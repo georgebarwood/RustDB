@@ -39,9 +39,9 @@ impl Table {
     pub fn new(id: i64, root_page: u64, id_gen: i64, info: LRc<ColInfo>) -> LRc<Table> {
         let rec_size = info.total;
         let key_size = 8;
-        let file = LRc::new(SortedFile::new(rec_size, key_size, root_page));
+        let file = LRc::auto(SortedFile::new(rec_size, key_size, root_page));
         let ixlist = RefCell::new(LVec::auto());
-        LRc::new(Table {
+        LRc::auto(Table {
             id,
             file,
             info,
@@ -169,7 +169,7 @@ impl Table {
 
     /// Scan all the records in the table.
     pub fn scan(&self, db: &DB) -> Asc {
-        sortedfile::SortedFile::asc( &self.file, db, Box::new(Zero {}))
+        sortedfile::SortedFile::asc(&self.file, db, Box::new(Zero {}))
     }
 
     /// Get a single record with specified id.
@@ -194,7 +194,7 @@ impl Table {
         let ixlist = &*this.ixlist.borrow();
         let ix = &ixlist[index];
         let ikey = IndexKey::new(this, ix.cols.clone(), keys.clone(), Ordering::Less);
-        let ixa = sortedfile::SortedFile::asc( &ix.file, db, Box::new(ikey));
+        let ixa = sortedfile::SortedFile::asc(&ix.file, db, Box::new(ikey));
         IndexScan {
             ixa,
             keys,
@@ -214,11 +214,11 @@ impl Table {
     /// Add the specified index to the table.
     pub fn add_index(&self, root: u64, cols: LVec<usize>, id: i64) {
         let key_size = self.info.index_key_size(&cols) + 8;
-        let file = LRc::new(SortedFile::new(key_size, key_size, root));
+        let file = LRc::auto(SortedFile::new(key_size, key_size, root));
         let list = &mut self.ixlist.borrow_mut();
         list.push(Index {
             file,
-            cols: LRc::new(cols),
+            cols: LRc::auto(cols),
             id,
         });
     }
@@ -450,7 +450,7 @@ impl ColInfo {
         if self.colmap.contains_key(name) {
             return true;
         }
-        let name = LRcStr::new(name);
+        let name = LRcStr::auto(name);
         let cn = self.typ.len();
         self.typ.push(typ);
         let size = data_size(typ);
@@ -867,7 +867,7 @@ fn get_keys(
 
             return if let Some(c1) = x1 {
                 if let Some(c2) = x2 {
-                    Some(DBox::new(cexp::And(c1, c2)))
+                    Some(dbox(cexp::And(c1, c2)))
                 } else {
                     Some(c1)
                 }
