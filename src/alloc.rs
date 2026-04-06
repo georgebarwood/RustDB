@@ -1,5 +1,5 @@
 use pstd::{
-    Box, String, Vec,
+    BoxA, String, VecA,
     collections::btree_map::CustomTuning,
     collections::{BTreeMap, BTreeSet, DefaultHashBuilder, HashMap},
     rc::{Rc, RcStr},
@@ -18,13 +18,13 @@ pub fn temp() -> Temp {
 }
 
 /// `Box` allocated from `Temp`
-pub type TBox<T> = Box<T, Temp>;
+pub type TBox<T> = BoxA<T, Temp>;
 
 /// `Vec` allocated from `Temp`
-pub type TVec<T> = Vec<T, Temp>;
+pub type TVec<T> = VecA<T, Temp>;
 
 /// `Box` allocated from `Local`
-pub type LBox<T> = Box<T, Local>;
+pub type LBox<T> = BoxA<T, Local>;
 
 /// `Rc` allocated from `Local`
 pub type LRc<T> = Rc<T, Local>;
@@ -33,7 +33,7 @@ pub type LRc<T> = Rc<T, Local>;
 pub type LRcStr = RcStr<Local>;
 
 /// `Vec` allocated from `Local`
-pub type LVec<T> = Vec<T, Local>;
+pub type LVec<T> = VecA<T, Local>;
 
 /// `String` allocated from `Local`
 pub type LString = String<Local>;
@@ -71,13 +71,6 @@ pub type DBox<T> = LBox<T>;
 pub type DBox<T> = std::boxed::Box<T>;
 
 /// Allocate a DBox and place t in it.
-#[cfg(feature = "dynbox")]
-pub fn dbox<T>(t: T) -> DBox<T> {
-    DBox::auto(t)
-}
-
-/// Allocate a DBox and place t in it.
-#[cfg(not(feature = "dynbox"))]
 pub fn dbox<T>(t: T) -> DBox<T> {
     DBox::new(t)
 }

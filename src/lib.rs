@@ -388,7 +388,7 @@ impl Database {
 
         let bpf = bytes::bpf(apd.spd.psi.half_size_page());
 
-        let mut bs = LVec::with_capacity_auto(bpf.len());
+        let mut bs = LVec::with_capacity(bpf.len());
         for (ft, bpf) in bpf.iter().enumerate() {
             bs.push(ByteStorage::new(ft as u64, *bpf));
         }
@@ -747,7 +747,7 @@ impl TableBuilder {
         let id = 1 + (root - bytes::NFT as u64);
         let name = ObjRef::new("sys", name);
         let info = ColInfo::new(name, ct);
-        let table = Table::new(id as i64, root, 1, LRc::auto(info));
+        let table = Table::new(id as i64, root, 1, LRc::new(info));
         self.list.push(table.clone());
         table
     }

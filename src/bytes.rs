@@ -44,7 +44,7 @@ pub struct ByteStorage {
 impl ByteStorage {
     /// Construct new ByteStorage with specified root page and fragment type.
     pub fn new(root_page: u64, bpf: usize) -> Self {
-        let file = LRc::auto(SortedFile::new(9 + bpf, 8, root_page));
+        let file = LRc::new(SortedFile::new(9 + bpf, 8, root_page));
         ByteStorage {
             file,
             id_gen: Cell::new(u64::MAX),

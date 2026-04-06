@@ -402,7 +402,7 @@ impl Page {
     pub fn compress(&mut self, db: &DB) {
         let saving = (self.alloc - self.count) * self.node_size;
         if saving != 0 && db.apd.compress(self.size(), saving) {
-            let mut flist = TVec::auto();
+            let mut flist = TVec::new();
             let mut f = self.free;
             while f != 0 {
                 if f <= self.count {

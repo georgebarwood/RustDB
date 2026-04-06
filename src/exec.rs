@@ -268,7 +268,7 @@ impl<'r> EvalEnv<'r> {
 
     /// Get list of record ids for DELETE/UPDATE.
     fn get_id_list(&mut self, te: &CTableExpression, w: &Option<CExpPtr<bool>>) -> LVec<u64> {
-        let mut idlist = LVec::auto();
+        let mut idlist = LVec::new();
 
         for (pp, off) in self.data_source(te) {
             let p = pp.borrow();
@@ -345,7 +345,7 @@ impl<'r> EvalEnv<'r> {
                 Box::new(table::Table::scan_id(t, &self.db, id))
             }
             CTableExpression::IxGet(t, val, index) => {
-                let mut keys = LVec::auto();
+                let mut keys = LVec::new();
                 for v in val {
                     keys.push(v.eval(self, &[]));
                 }
@@ -359,12 +359,12 @@ impl<'r> EvalEnv<'r> {
     fn select(&mut self, cse: &CFromExpression) {
         if let Some(te) = &cse.from {
             let obl = cse.orderby.len();
-            let mut temp = LVec::auto(); // For sorting.
+            let mut temp = LVec::new(); // For sorting.
             for (pp, off) in self.data_source(te) {
                 let p = pp.borrow();
                 let data = &p.data[off..];
                 if self.ok(&cse.wher, data) {
-                    let mut values = LVec::auto();
+                    let mut values = LVec::new();
                     if obl > 0 {
                         // Push the sort keys.
                         for ce in &cse.orderby {
@@ -393,7 +393,7 @@ impl<'r> EvalEnv<'r> {
                 }
             }
         } else {
-            let mut values = LVec::auto();
+            let mut values = LVec::new();
             for ce in &cse.exps {
                 let val = ce.eval(self, &[]);
                 values.push(val);
@@ -464,13 +464,13 @@ impl<'r> EvalEnv<'r> {
     /// Get sorted temporary table.
     fn get_temp(&mut self, cse: &CFromExpression) -> LVec<LVec<Value>> {
         if let Some(te) = &cse.from {
-            let mut temp = LVec::auto(); // For sorting.
+            let mut temp = LVec::new(); // For sorting.
             let rlen = cse.orderby.len() + cse.exps.len();
             for (pp, off) in self.data_source(te) {
                 let p = pp.borrow();
                 let data = &p.data[off..];
                 if self.ok(&cse.wher, data) {
-                    let mut values = LVec::with_capacity_auto(rlen);
+                    let mut values = LVec::with_capacity(rlen);
                     for ce in &cse.orderby {
                         let val = ce.eval(self, data);
                         values.push(val);
@@ -565,7 +565,7 @@ impl<'r> EvalEnv<'r> {
             let mut nci = ColInfo::empty(name.clone());
             let ci = &t.info;
 
-            let mut colmap = LVec::auto(); // colmap is columns that need to be copied from old to new table.
+            let mut colmap = LVec::new(); // colmap is columns that need to be copied from old to new table.
             for i in 0..ci.colnames.len() {
                 if nci.add_altered(ci, i, actions) {
                     colmap.push(i);
@@ -579,7 +579,7 @@ impl<'r> EvalEnv<'r> {
                     panic!("duplicate column name {}", name);
                 }
             }
-            let nci = LRc::auto(nci);
+            let nci = LRc::new(nci);
 
             let root = db.alloc_page();
             let nt = Table::new(t.id, root, t.get_id_gen(db), nci);

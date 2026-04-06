@@ -193,8 +193,8 @@ impl ObjRef {
     /// Construct from string references.
     pub fn new(s: &str, n: &str) -> Self {
         Self {
-            schema: LBox::<str>::from_str_auto(s),
-            name: LBox::<str>::from_str_auto(n),
+            schema: LBox::<str>::from_str(s),
+            name: LBox::<str>::from_str(n),
         }
     }
     /// Used for error messages.
@@ -286,12 +286,12 @@ impl<'a> Block<'a> {
     /// Construct a new block.
     pub fn new(db: DB) -> Self {
         Block {
-            ilist: LVec::auto(),
-            jumps: LVec::auto(),
+            ilist: LVec::new(),
+            jumps: LVec::new(),
             labels: lhashmap(),
             local_map: lhashmap(),
-            locals: LVec::auto(),
-            local_typ: LVec::auto(),
+            locals: LVec::new(),
+            local_typ: LVec::new(),
             break_id: 0,
             param_count: 0,
             return_type: NONE,
@@ -328,7 +328,7 @@ impl<'a> Block<'a> {
     /// Add a Data Operation (DO) to the instruction list.
     pub fn dop(&mut self, dop: DO) {
         if !self.parse_only {
-            self.add(DataOp(LBox::auto(dop)));
+            self.add(DataOp(LBox::new(dop)));
         }
     }
 
