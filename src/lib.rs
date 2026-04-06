@@ -747,7 +747,7 @@ impl TableBuilder {
         let id = 1 + (root - bytes::NFT as u64);
         let name = ObjRef::new("sys", name);
         let info = ColInfo::new(name, ct);
-        let table = Table::new(id as i64, root, 1, LRc::new(info));
+        let table = Table::new(id as i64, root, 1, LRc::auto(info));
         self.list.push(table.clone());
         table
     }

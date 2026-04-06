@@ -44,7 +44,7 @@ pub struct ByteStorage {
 impl ByteStorage {
     /// Construct new ByteStorage with specified root page and fragment type.
     pub fn new(root_page: u64, bpf: usize) -> Self {
-        let file = LRc::new(SortedFile::new(9 + bpf, 8, root_page));
+        let file = LRc::auto(SortedFile::new(9 + bpf, 8, root_page));
         ByteStorage {
             file,
             id_gen: Cell::new(u64::MAX),
@@ -59,7 +59,7 @@ impl ByteStorage {
             result = 0;
             // Initialise id_gen to id of last record.
             let start = Fragment::new(u64::MAX, self.bpf);
-            if let Some((pp, off)) = SortedFile::dsc( &self.file, db, Box::new(start)).next() {
+            if let Some((pp, off)) = SortedFile::dsc(&self.file, db, Box::new(start)).next() {
                 let p = pp.borrow();
                 result = 1 + util::getu64(&p.data, off);
             }
@@ -109,7 +109,7 @@ impl ByteStorage {
     pub fn decode(&self, db: &DB, mut id: u64, inline: usize) -> Vec<u8> {
         let mut result = vec![0_u8; inline];
         let start = Fragment::new(id, self.bpf);
-        for (pp, off) in SortedFile::asc( &self.file, db, Box::new(start)) {
+        for (pp, off) in SortedFile::asc(&self.file, db, Box::new(start)) {
             let p = pp.borrow();
             let data = &p.data;
             debug_assert!(util::getu64(data, off) == id);
@@ -128,7 +128,7 @@ impl ByteStorage {
     pub fn delcode(&self, db: &DB, id: u64) {
         let start = Fragment::new(id, self.bpf);
         let mut n = 0;
-        for (pp, off) in SortedFile::asc( &self.file, db, Box::new(start)) {
+        for (pp, off) in SortedFile::asc(&self.file, db, Box::new(start)) {
             let p = pp.borrow();
             debug_assert!(util::getu64(&p.data, off) == id + n);
             n += 1;

@@ -193,8 +193,8 @@ impl ObjRef {
     /// Construct from string references.
     pub fn new(s: &str, n: &str) -> Self {
         Self {
-            schema: LBox::<str>::from_str(s),
-            name: LBox::<str>::from_str(n),
+            schema: LBox::<str>::from_str_auto(s),
+            name: LBox::<str>::from_str_auto(n),
         }
     }
     /// Used for error messages.

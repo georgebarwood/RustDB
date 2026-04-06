@@ -399,7 +399,7 @@ impl<'a> Parser<'a> {
     }
 
     fn idb(&mut self) -> LBox<str> {
-        LBox::<str>::from_str(tos(self.id_ref()))
+        LBox::<str>::from_str_auto(tos(self.id_ref()))
     }
 
     fn id_ref(&mut self) -> &'a [u8] {
@@ -519,7 +519,10 @@ impl<'a> Parser<'a> {
                 }
             }
             self.read(Token::RBra);
-            Expr::new(ExprIs::BuiltinCall(TBox::<str>::from_str(tos(name)), parms))
+            Expr::new(ExprIs::BuiltinCall(
+                TBox::<str>::from_str_auto(tos(name)),
+                parms,
+            ))
         } else if name == b"true" {
             Expr::new(ExprIs::Const(Value::Bool(true)))
         } else if name == b"false" {
@@ -527,7 +530,7 @@ impl<'a> Parser<'a> {
         } else if let Some(lnum) = self.b.get_local(name) {
             Expr::new(ExprIs::Local(*lnum))
         } else {
-            Expr::new(ExprIs::ColName(LBox::<str>::from_str(tos(name))))
+            Expr::new(ExprIs::ColName(LBox::<str>::from_str_auto(tos(name))))
         }
     }
 
@@ -689,9 +692,9 @@ impl<'a> Parser<'a> {
 
     fn exp_name(&self, exp: &Expr) -> LBox<str> {
         match &exp.exp {
-            ExprIs::Local(num) => LBox::<str>::from_str(tos(self.b.local_name(*num))),
-            ExprIs::ColName(name) => LBox::<str>::from_str(name),
-            _ => LBox::<str>::from_str(""),
+            ExprIs::Local(num) => LBox::<str>::from_str_auto(tos(self.b.local_name(*num))),
+            ExprIs::ColName(name) => LBox::<str>::from_str_auto(name),
+            _ => LBox::<str>::from_str_auto(""),
         }
     }
 
@@ -859,7 +862,7 @@ impl<'a> Parser<'a> {
 
     fn s_exec(&mut self) {
         let mut pname = self.idb();
-        let mut sname = LBox::<str>::from_str("");
+        let mut sname = LBox::<str>::from_str_auto("");
         if self.test(Token::Dot) {
             sname = pname;
             pname = self.idb();

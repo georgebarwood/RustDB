@@ -342,14 +342,14 @@ impl<'r> EvalEnv<'r> {
             CTableExpression::Base(t) => Box::new(t.scan(&self.db)),
             CTableExpression::IdGet(t, idexp) => {
                 let id = idexp.eval(self, &[]);
-                Box::new(table::Table::scan_id(&t, &self.db, id))
+                Box::new(table::Table::scan_id(t, &self.db, id))
             }
             CTableExpression::IxGet(t, val, index) => {
                 let mut keys = LVec::auto();
                 for v in val {
                     keys.push(v.eval(self, &[]));
                 }
-                Box::new(table::Table::scan_keys(&t, &self.db, keys, *index))
+                Box::new(table::Table::scan_keys(t, &self.db, keys, *index))
             }
             _ => panic!(),
         }
@@ -465,11 +465,12 @@ impl<'r> EvalEnv<'r> {
     fn get_temp(&mut self, cse: &CFromExpression) -> LVec<LVec<Value>> {
         if let Some(te) = &cse.from {
             let mut temp = LVec::auto(); // For sorting.
+            let rlen = cse.orderby.len() + cse.exps.len();
             for (pp, off) in self.data_source(te) {
                 let p = pp.borrow();
                 let data = &p.data[off..];
                 if self.ok(&cse.wher, data) {
-                    let mut values = LVec::auto();
+                    let mut values = LVec::with_capacity_auto(rlen);
                     for ce in &cse.orderby {
                         let val = ce.eval(self, data);
                         values.push(val);
@@ -578,7 +579,7 @@ impl<'r> EvalEnv<'r> {
                     panic!("duplicate column name {}", name);
                 }
             }
-            let nci = LRc::new(nci);
+            let nci = LRc::auto(nci);
 
             let root = db.alloc_page();
             let nt = Table::new(t.id, root, t.get_id_gen(db), nci);
