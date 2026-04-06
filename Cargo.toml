@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "7.0.38"
+version = "7.0.41"
 edition = "2024"
 authors = ["George Barwood"]
 description = "SQL database"
