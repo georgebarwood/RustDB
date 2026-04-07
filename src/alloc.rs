@@ -1,8 +1,7 @@
 use pstd::{
-    BoxA, String, VecA,
+    BoxA, StringA, VecA, RcA, RcStrA,
     collections::btree_map::CustomTuning,
     collections::{BTreeMap, BTreeSet, DefaultHashBuilder, HashMap},
-    rc::{Rc, RcStr},
 };
 
 pub use pstd::localalloc::{Local, Temp};
@@ -27,16 +26,16 @@ pub type TVec<T> = VecA<T, Temp>;
 pub type LBox<T> = BoxA<T, Local>;
 
 /// `Rc` allocated from `Local`
-pub type LRc<T> = Rc<T, Local>;
+pub type LRc<T> = RcA<T, Local>;
 
 /// `RcStr` allocated from `Local`
-pub type LRcStr = RcStr<Local>;
+pub type LRcStr = RcStrA<Local>;
 
 /// `Vec` allocated from `Local`
 pub type LVec<T> = VecA<T, Local>;
 
 /// `String` allocated from `Local`
-pub type LString = String<Local>;
+pub type LString = StringA<Local>;
 
 /// `BTreeMap` allocated from `Local`
 pub type LBTreeMap<K, V> = BTreeMap<K, V, CustomTuning<Local>>;
