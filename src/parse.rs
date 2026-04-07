@@ -1,4 +1,4 @@
-use crate::alloc::{LBox, LVec, TBox, TVec};
+use crate::{LBox, LVec, TBox, TVec};
 use crate::{
     AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
     ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, Rc, STRING, SqlError,

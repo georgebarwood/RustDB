@@ -211,7 +211,7 @@ impl<'r> EvalEnv<'r> {
 
     /// Execute ForSortInit instruction. Constructs sorted vector of rows.
     fn for_sort_init(&mut self, for_id: usize, cse: &CFromExpression) {
-        let rows = self.get_temp(cse);
+        let rows = self.get_sorted(cse);
         self.stack[self.bp + for_id] = Value::ForSort(util::new(ForSortState { ix: 0, rows }));
     }
 
@@ -462,7 +462,7 @@ impl<'r> EvalEnv<'r> {
     }
 
     /// Get sorted temporary table.
-    fn get_temp(&mut self, cse: &CFromExpression) -> LVec<LVec<Value>> {
+    fn get_sorted(&mut self, cse: &CFromExpression) -> LVec<LVec<Value>> {
         if let Some(te) = &cse.from {
             let mut temp = LVec::new(); // For sorting.
             let rlen = cse.orderby.len() + cse.exps.len();

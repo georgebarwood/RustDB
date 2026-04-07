@@ -1,4 +1,3 @@
-use crate::alloc::LRc;
 use crate::*;
 
 /// Sorted Record storage.
