@@ -31,9 +31,9 @@ pub enum Value {
     /// Bool.
     Bool(bool),
     /// For expression.
-    For(Rc<RefCell<run::ForState>>),
+    For(LRc<RefCell<run::ForState>>),
     /// For expression ( sorted case ).
-    ForSort(Rc<RefCell<run::ForSortState>>),
+    ForSort(LRc<RefCell<run::ForSortState>>),
 }
 
 impl Value {

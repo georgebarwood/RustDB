@@ -170,7 +170,7 @@ impl<'r> EvalEnv<'r> {
     /// Execute a ForInit instruction. Constructs For state and assigns it to local variable.
     fn for_init(&mut self, for_id: usize, cte: &CTableExpression) {
         let data_source = self.data_source(cte);
-        let fs = util::new(ForState { data_source });
+        let fs = LRc::new(RefCell::new(ForState { data_source }));
         self.stack[self.bp + for_id] = Value::For(fs);
     }
 
@@ -212,7 +212,7 @@ impl<'r> EvalEnv<'r> {
     /// Execute ForSortInit instruction. Constructs sorted vector of rows.
     fn for_sort_init(&mut self, for_id: usize, cse: &CFromExpression) {
         let rows = self.get_sorted(cse);
-        self.stack[self.bp + for_id] = Value::ForSort(util::new(ForSortState { ix: 0, rows }));
+        self.stack[self.bp + for_id] = Value::ForSort(LRc::new(RefCell::new(ForSortState { ix: 0, rows })));
     }
 
     /// Execute ForSortNext instruction. Assigns locals from current row, moves to next row.
