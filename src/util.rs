@@ -1,5 +1,5 @@
-use crate::alloc::LString;
-use crate::{BTreeSet, Data, HashMap, Rc, RefCell};
+use crate::alloc::{LString, LVec};
+use crate::{BTreeSet, Data, HashMap, LRc, RefCell};
 
 /// In debug mode or feature unsafe-optim not enabled, same as debug_assert! otherwise unsafe compiler hint.
 #[cfg(any(debug_assertions, not(feature = "unsafe-optim")))]
@@ -34,8 +34,8 @@ macro_rules! unsafe_panic {
 }
 
 /// Wrap a type in Rc + RefCell.
-pub fn new<T>(x: T) -> std::rc::Rc<std::cell::RefCell<T>> {
-    Rc::new(RefCell::new(x))
+pub fn new<T>(x: T) -> LRc<std::cell::RefCell<T>> {
+    LRc::new(RefCell::new(x))
 }
 
 /// New Data ( `Arc::new(Vec::new())` ).
@@ -148,9 +148,9 @@ pub fn hex(c: u8) -> u8 //
 }
 
 /// Convert hex literal to bytes.
-pub fn parse_hex(s: &[u8]) -> Vec<u8> {
+pub fn parse_hex(s: &[u8]) -> LVec<u8> {
     let n = s.len() / 2;
-    let mut result = Vec::<u8>::with_capacity(n);
+    let mut result = LVec::<u8>::with_capacity(n);
     for i in 0..n {
         result.push(hex(s[i * 2]) * 16 + hex(s[i * 2 + 1]));
     }

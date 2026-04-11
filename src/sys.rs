@@ -238,7 +238,7 @@ pub fn get_function(db: &DB, name: &ObjRef) -> Option<LRc<Function>> {
         if let Some((pp, off)) = t.ix_get(db, keys, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);
-            let source = Rc::new(a.str(db, 2));
+            let source = LRc::new(a.lstr(db, 2));
             let function = parse_function(db, source);
             db.functions
                 .borrow_mut()
@@ -266,7 +266,7 @@ pub fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64> {
 }
 
 /// Parse a function definition.
-fn parse_function(db: &DB, source: Rc<String>) -> LRc<Function> {
+fn parse_function(db: &DB, source: LRc<LString>) -> LRc<Function> {
     let source1 = source.clone();
     let mut p = Parser::new(&source1, db);
     p.b.parse_only = true;

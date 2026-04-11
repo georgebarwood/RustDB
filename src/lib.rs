@@ -593,9 +593,9 @@ GO
 
     /// Get code for value.
     fn encode(self: &DB, val: &Value, size: usize) -> Code {
-        let bytes = match val {
-            Value::RcBinary(x) => &**x,
-            Value::ArcBinary(x) => &**x,
+        let bytes: &[u8] = match val {
+            Value::RcBinary(x) => x,
+            Value::ArcBinary(x) => x,
             Value::String(x) => x.as_bytes(),
             _ => {
                 return Code {
@@ -617,7 +617,7 @@ GO
     }
 
     /// Decode u64 to bytes.
-    fn decode(self: &DB, code: Code, inline: usize) -> Vec<u8> {
+    fn decode(self: &DB, code: Code, inline: usize) -> LVec<u8> {
         self.bs[code.ft].decode(self, code.id, inline)
     }
 

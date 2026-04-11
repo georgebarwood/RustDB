@@ -212,7 +212,8 @@ impl<'r> EvalEnv<'r> {
     /// Execute ForSortInit instruction. Constructs sorted vector of rows.
     fn for_sort_init(&mut self, for_id: usize, cse: &CFromExpression) {
         let rows = self.get_sorted(cse);
-        self.stack[self.bp + for_id] = Value::ForSort(LRc::new(RefCell::new(ForSortState { ix: 0, rows })));
+        self.stack[self.bp + for_id] =
+            Value::ForSort(LRc::new(RefCell::new(ForSortState { ix: 0, rows })));
     }
 
     /// Execute ForSortNext instruction. Assigns locals from current row, moves to next row.
@@ -270,7 +271,7 @@ impl<'r> EvalEnv<'r> {
     fn get_id_list(&mut self, te: &CTableExpression, w: &Option<CExpPtr<bool>>) -> LVec<u64> {
         let mut idlist = LVec::new();
 
-        for (pp, off) in self.data_source(te) {
+        for (pp, off) in &mut *self.data_source(te) {
             let p = pp.borrow();
             let data = &p.data[off..];
             if self.ok(w, data) {
@@ -339,17 +340,17 @@ impl<'r> EvalEnv<'r> {
     /// Get DataSource from CTableExpression.
     fn data_source(&mut self, te: &CTableExpression) -> DataSource {
         match te {
-            CTableExpression::Base(t) => Box::new(t.scan(&self.db)),
+            CTableExpression::Base(t) => DBox::new(t.scan(&self.db)),
             CTableExpression::IdGet(t, idexp) => {
                 let id = idexp.eval(self, &[]);
-                Box::new(table::Table::scan_id(t, &self.db, id))
+                DBox::new(table::Table::scan_id(t, &self.db, id))
             }
             CTableExpression::IxGet(t, val, index) => {
                 let mut keys = LVec::new();
                 for v in val {
                     keys.push(v.eval(self, &[]));
                 }
-                Box::new(table::Table::scan_keys(t, &self.db, keys, *index))
+                DBox::new(table::Table::scan_keys(t, &self.db, keys, *index))
             }
             _ => panic!(),
         }
@@ -360,7 +361,7 @@ impl<'r> EvalEnv<'r> {
         if let Some(te) = &cse.from {
             let obl = cse.orderby.len();
             let mut temp = LVec::new(); // For sorting.
-            for (pp, off) in self.data_source(te) {
+            for (pp, off) in &mut *self.data_source(te) {
                 let p = pp.borrow();
                 let data = &p.data[off..];
                 if self.ok(&cse.wher, data) {
@@ -405,7 +406,7 @@ impl<'r> EvalEnv<'r> {
     /// Execute a SET operation.
     fn set(&mut self, cse: &CFromExpression) {
         if let Some(te) = &cse.from {
-            for (pp, off) in self.data_source(te) {
+            for (pp, off) in &mut *self.data_source(te) {
                 let p = pp.borrow();
                 let data = &p.data[off..];
                 if self.ok(&cse.wher, data) {
@@ -466,7 +467,7 @@ impl<'r> EvalEnv<'r> {
         if let Some(te) = &cse.from {
             let mut temp = LVec::new(); // For sorting.
             let rlen = cse.orderby.len() + cse.exps.len();
-            for (pp, off) in self.data_source(te) {
+            for (pp, off) in &mut *self.data_source(te) {
                 let p = pp.borrow();
                 let data = &p.data[off..];
                 if self.ok(&cse.wher, data) {

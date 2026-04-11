@@ -7,10 +7,10 @@
 //!
 //! Note that the left node is greater than the parent node.
 
-use crate::{Arc, DB, Data, MData, Ordering, Rc, Record, RefCell, TVec, util};
+use crate::{Arc, DB, Data, LRc, MData, Ordering, Record, RefCell, TVec, util};
 
-/// ```Rc<RefCell<Page>>```
-pub type PagePtr = Rc<RefCell<Page>>;
+/// ```LRc<RefCell<Page>>```
+pub type PagePtr = LRc<RefCell<Page>>;
 
 /* Note: the page size must be big enough that a good number of records fits into a page.
    A record with 20 fields of 16 bytes is 320 bytes.

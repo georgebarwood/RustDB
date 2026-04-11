@@ -1,5 +1,5 @@
 use crate::alloc::{LRc, LString, LVec};
-use crate::{CExp, CExpPtr, EvalEnv, Function, Rc, Value, get_bytes, util};
+use crate::{CExp, CExpPtr, EvalEnv, Function, Value, get_bytes, util};
 
 /// Function call.
 pub(crate) struct Call {
@@ -63,16 +63,16 @@ impl CExp<Value> for BinConcat {
         let b2 = self.1.eval(e, d).bin();
         // Append to existing bytes if not shared.
         if let Value::RcBinary(b) = &mut b1
-            && let Some(mb) = Rc::get_mut(b)
+            && let Some(mb) = LRc::get_mut(b)
         {
             mb.extend_from_slice(&b2);
             return b1;
         }
         let b1 = b1.bin();
-        let mut b = Vec::with_capacity(b1.len() + b2.len());
+        let mut b = LVec::with_capacity(b1.len() + b2.len());
         b.extend_from_slice(&b1);
         b.extend_from_slice(&b2);
-        Value::RcBinary(Rc::new(b))
+        Value::RcBinary(LRc::new(b))
     }
 }
 
@@ -315,7 +315,7 @@ pub(crate) struct ColumnBinary {
 impl CExp<Value> for ColumnBinary {
     fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> Value {
         let bytes = get_bytes(&ee.db, &data[self.off..], self.size).0;
-        Value::RcBinary(Rc::new(bytes))
+        Value::RcBinary(LRc::new(bytes))
     }
 }
 

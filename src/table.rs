@@ -346,16 +346,25 @@ impl<'d, 'i> Access<'d, 'i> {
     }
 
     /// Extract string from byte data for specified column.
+    pub fn lstr(&self, db: &DB, colnum: usize) -> LString {
+        debug_assert!(data_kind(self.info.typ[colnum]) == DataKind::String);
+        let off = self.info.off[colnum];
+        let size = self.info.siz(colnum);
+        let bytes = get_bytes(db, &self.data[off..], size).0;
+        LString::from_vec(bytes)
+    }
+
+    /// Extract string from byte data for specified column.
     pub fn str(&self, db: &DB, colnum: usize) -> String {
         debug_assert!(data_kind(self.info.typ[colnum]) == DataKind::String);
         let off = self.info.off[colnum];
         let size = self.info.siz(colnum);
         let bytes = get_bytes(db, &self.data[off..], size).0;
-        String::from_utf8(bytes).unwrap()
+        String::from_utf8(bytes.to_vec()).unwrap()
     }
 
     /// Extract binary from byte data for specified column.
-    pub fn bin(&self, db: &DB, colnum: usize) -> Vec<u8> {
+    pub fn bin(&self, db: &DB, colnum: usize) -> LVec<u8> {
         debug_assert!(data_kind(self.info.typ[colnum]) == DataKind::Binary);
         let off = self.info.off[colnum];
         let size = self.info.siz(colnum);

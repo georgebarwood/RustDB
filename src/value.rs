@@ -19,7 +19,7 @@ pub enum Value {
     /// No value.
     None,
     /// Binary.
-    RcBinary(Rc<Vec<u8>>),
+    RcBinary(LRc<LVec<u8>>),
     /// Arc Binary.
     ArcBinary(Arc<Vec<u8>>),
     /// String.
@@ -43,7 +43,7 @@ impl Value {
             DataKind::Bool => Value::Bool(false),
             DataKind::Float => Value::Float(0.0),
             DataKind::String => Value::String(LRc::new(LString::new())),
-            DataKind::Binary => Value::RcBinary(Rc::new(Vec::new())),
+            DataKind::Binary => Value::RcBinary(LRc::new(LVec::new())),
             _ => Value::Int(0),
         }
     }
@@ -59,7 +59,7 @@ impl Value {
             DataKind::Binary => {
                 let (bytes, u) = get_bytes(db, &data[off..], size);
                 code = u;
-                Value::RcBinary(Rc::new(bytes))
+                Value::RcBinary(LRc::new(bytes))
             }
             DataKind::String => {
                 let (bytes, u) = get_bytes(db, &data[off..], size);
@@ -181,13 +181,13 @@ impl Value {
     }
 
     /// Convert a Value to a Binary.
-    pub fn bin(&self) -> Rc<Vec<u8>> {
+    pub fn bin(&self) -> LRc<LVec<u8>> {
         match self {
-            Value::ArcBinary(x) => Rc::new(x.to_vec()),
+            Value::ArcBinary(x) => to_lvec(x),
             Value::RcBinary(x) => x.clone(),
-            Value::String(s) => Rc::new(s.as_bytes().to_vec()),
-            Value::Float(x) => Rc::new(x.to_le_bytes().to_vec()),
-            Value::Int(x) => Rc::new(x.to_le_bytes().to_vec()),
+            Value::String(s) => to_lvec(s.as_bytes()),
+            Value::Float(x) => to_lvec(&x.to_le_bytes()),
+            Value::Int(x) => to_lvec(&x.to_le_bytes()),
             _ => panic!("bin not implemented"),
         }
     }
@@ -200,6 +200,12 @@ impl Value {
             _ => panic!(),
         }
     }
+}
+
+fn to_lvec(b: &[u8]) -> LRc<LVec<u8>> {
+    let mut result = LVec::new();
+    result.extend_from_slice(b);
+    LRc::new(result)
 }
 
 /// Value comparison.
@@ -251,11 +257,11 @@ impl PartialEq for Value {
 impl Eq for Value {}
 
 /// Decode bytes. Result is bytes and code ( or u64::MAX if no code ).
-pub fn get_bytes(db: &DB, data: &[u8], size: usize) -> (Vec<u8>, Code) {
+pub fn get_bytes(db: &DB, data: &[u8], size: usize) -> (LVec<u8>, Code) {
     let n = data[0] as usize;
     if n < size {
-        let mut bytes = vec![0_u8; n];
-        bytes[0..n].copy_from_slice(&data[1..=n]);
+        let mut bytes = LVec::new();
+        bytes.extend_from_slice(&data[1..=n]);
         (
             bytes,
             Code {

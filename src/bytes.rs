@@ -1,4 +1,4 @@
-use crate::alloc::LRc;
+use crate::alloc::{LRc, LVec};
 use crate::{Cell, DB, Ordering, Record, SaveOp, SortedFile, util};
 
 /// Number of fragment types.
@@ -106,8 +106,9 @@ impl ByteStorage {
     }
 
     /// Decode bytes, inline bytes are reserved.
-    pub fn decode(&self, db: &DB, mut id: u64, inline: usize) -> Vec<u8> {
-        let mut result = vec![0_u8; inline];
+    pub fn decode(&self, db: &DB, mut id: u64, inline: usize) -> LVec<u8> {
+        let mut result = LVec::new();
+        result.resize(inline, 0);
         let start = Fragment::new(id, self.bpf);
         for (pp, off) in SortedFile::asc(&self.file, db, Box::new(start)) {
             let p = pp.borrow();

@@ -1,7 +1,6 @@
-use crate::alloc::{LRc, LString, dbox};
+use crate::alloc::{LRc, LString, LVec, dbox};
 use crate::{
-    Block, BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, EvalEnv, Expr, Rc, Value, c_int,
-    c_value,
+    Block, BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, EvalEnv, Expr, Value, c_int, c_value,
 };
 
 /// Add builtin functions to specified [BuiltinMap].
@@ -302,8 +301,9 @@ impl CExp<Value> for BinSubstring {
         if lim > f + n {
             lim = f + n;
         }
-        let result = s[f..lim].to_vec();
-        Value::RcBinary(Rc::new(result))
+        let mut result = LVec::new();
+        result.extend_from_slice(&s[f..lim]);
+        Value::RcBinary(LRc::new(result))
     }
 }
 

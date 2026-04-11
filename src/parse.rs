@@ -1,7 +1,7 @@
 use crate::alloc::{LBox, LRc, LString, LVec, TBox, TVec};
 use crate::{
     AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
-    ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, Rc, STRING, SqlError,
+    ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, STRING, SqlError,
     TableExpression, Token, Transaction, Value, c_bool, compile, data_kind, panic, util,
 };
 use Instruction::{Call, Execute, Jump, JumpIfFalse, PopToLocal, Return, Select, Throw};
@@ -578,7 +578,9 @@ impl<'a> Parser<'a> {
                 "hex literal must have even number of characters"
             );
             let hb = &self.source[self.token_start + 2..self.source_ix - 1];
-            result = Expr::new(ExprIs::Const(Value::RcBinary(Rc::new(util::parse_hex(hb)))));
+            result = Expr::new(ExprIs::Const(Value::RcBinary(LRc::new(util::parse_hex(
+                hb,
+            )))));
             self.read_token();
         } else if self.test(Token::Minus) {
             result = Expr::new(ExprIs::Minus(TBox::new(self.exp_p(30))));

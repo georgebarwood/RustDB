@@ -1,7 +1,7 @@
 use crate::alloc::{DBox, LBox, LRc, LString, LVec};
 use crate::{
-    Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, Rc,
-    RefCell, Table, Value, panic,
+    Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, RefCell,
+    Table, Value, panic,
 };
 
 /// Instruction.
@@ -69,7 +69,7 @@ pub struct Function {
     /// Types of local parameters/variables.
     pub local_typ: LVec<DataType>,
     /// Source SQL.
-    pub source: Rc<String>,
+    pub source: LRc<LString>,
     /// List of instructions.
     pub ilist: RefCell<LVec<Instruction>>, // Valid when compiled is true.
     /// Has function been compiled.
@@ -98,7 +98,7 @@ pub enum CompileFunc {
 }
 
 /// Iterator that yields references to page data.
-pub type DataSource = Box<dyn Iterator<Item = (PagePtr, usize)>>;
+pub type DataSource = DBox<dyn Iterator<Item = (PagePtr, usize)>>;
 
 /// State for FOR loop (non-sorted case).
 #[non_exhaustive]
