@@ -1,4 +1,4 @@
-use crate::alloc::dbox;
+use crate::alloc::{LRc, LString, dbox};
 use crate::{
     Block, BuiltinMap, CExp, CExpPtr, CompileFunc, DataKind, EvalEnv, Expr, Rc, Value, c_int,
     c_value,
@@ -83,7 +83,7 @@ struct Exception {}
 impl CExp<Value> for Exception {
     fn eval(&self, e: &mut EvalEnv, _d: &[u8]) -> Value {
         let err = e.tr.get_error();
-        Value::String(Rc::new(err))
+        Value::String(LRc::new(LString::from_str(&err)))
     }
 }
 /////////////////////////////
@@ -232,11 +232,11 @@ struct Replace {
 }
 impl CExp<Value> for Replace {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> Value {
-        let s = self.s.eval(e, d).str().to_string();
-        let pat = self.pat.eval(e, d).str().to_string();
+        let s = self.s.eval(e, d).str();
+        let pat = self.pat.eval(e, d).str();
         let sub = self.sub.eval(e, d).str();
         let result = s.replace(&pat, &sub);
-        Value::String(Rc::new(result))
+        Value::String(LRc::new(result))
     }
 }
 /////////////////////////////
@@ -274,8 +274,8 @@ impl CExp<Value> for Substring {
                 break;
             }
         }
-        let result = s[0..end].to_string();
-        Value::String(Rc::new(result))
+        let result = &s[0..end];
+        Value::String(LRc::new(LString::from_str(result)))
     }
 }
 
@@ -324,7 +324,7 @@ impl CExp<Value> for Arg {
         let k = self.k.eval(ee, d);
         let s = self.s.eval(ee, d).str();
         let result = ee.tr.arg(k, &s);
-        Value::String(result)
+        Value::String(LRc::new(LString::from_str(&result)))
     }
 }
 
@@ -384,7 +384,7 @@ impl CExp<Value> for FileAttr {
         let k = self.k.eval(ee, d);
         let x = self.x.eval(ee, d);
         let result = ee.tr.file_attr(k, x);
-        Value::String(result)
+        Value::String(LRc::new(LString::from_str(&result)))
     }
 }
 
@@ -464,7 +464,7 @@ impl CExp<Value> for VerifyDb {
     fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> Value {
         ee.db.run(LOADALLTABLES, ee.tr);
         let s = ee.db.verify();
-        Value::String(Rc::new(s))
+        Value::String(LRc::new(s))
     }
 }
 
@@ -501,6 +501,7 @@ struct Bintostr {
 impl CExp<Value> for Bintostr {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
         let bytes = self.bytes.eval(ee, d);
-        Value::String(Rc::new(String::from_utf8(bytes.bina().to_vec()).unwrap()))
+        let s: &str = str::from_utf8(bytes.bina()).unwrap();
+        Value::String(LRc::new(LString::from_str(s)))
     }
 }

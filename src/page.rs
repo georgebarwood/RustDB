@@ -7,7 +7,7 @@
 //!
 //! Note that the left node is greater than the parent node.
 
-use crate::{Arc, DB, Data, MData, Ordering, Rc, Record, RefCell, util, TVec};
+use crate::{Arc, DB, Data, MData, Ordering, Rc, Record, RefCell, TVec, util};
 
 /// ```Rc<RefCell<Page>>```
 pub type PagePtr = Rc<RefCell<Page>>;

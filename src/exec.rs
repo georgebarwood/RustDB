@@ -5,7 +5,7 @@ use Instruction::*;
 #[non_exhaustive]
 pub struct EvalEnv<'r> {
     /// Stack of values, holds function parameters and local variables.
-    pub stack: Vec<Value>,
+    pub stack: LVec<Value>,
     /// "Base Pointer" - stack index of current parameters and local variables.
     pub bp: usize,
     /// Pointer to Database.
@@ -20,7 +20,7 @@ impl<'r> EvalEnv<'r> {
     /// Construct a new EvalEnv.
     pub fn new(db: DB, tr: &'r mut dyn Transaction) -> Self {
         EvalEnv {
-            stack: Vec::with_capacity(64),
+            stack: LVec::with_capacity(64),
             bp: 0,
             db,
             tr,

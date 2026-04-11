@@ -23,7 +23,7 @@ pub enum Value {
     /// Arc Binary.
     ArcBinary(Arc<Vec<u8>>),
     /// String.
-    String(Rc<String>),
+    String(LRc<LString>),
     /// Integer.
     Int(i64),
     /// Float.
@@ -42,7 +42,7 @@ impl Value {
         match data_kind(t) {
             DataKind::Bool => Value::Bool(false),
             DataKind::Float => Value::Float(0.0),
-            DataKind::String => Value::String(Rc::new(String::new())),
+            DataKind::String => Value::String(LRc::new(LString::new())),
             DataKind::Binary => Value::RcBinary(Rc::new(Vec::new())),
             _ => Value::Int(0),
         }
@@ -64,8 +64,8 @@ impl Value {
             DataKind::String => {
                 let (bytes, u) = get_bytes(db, &data[off..], size);
                 code = u;
-                let str = String::from_utf8(bytes).unwrap();
-                Value::String(Rc::new(str))
+                let s = str::from_utf8(&bytes).unwrap();
+                Value::String(LRc::new(LString::from_str(s)))
             }
             DataKind::Bool => Value::Bool(data[off] != 0),
             DataKind::Float => {
@@ -113,17 +113,20 @@ impl Value {
         }
     }
 
-    /// Convert a Value to a String.
-    pub fn str(&self) -> Rc<String> {
+    /// Convert a Value to a `LRc<LString>`.
+    pub fn str(&self) -> LRc<LString> {
+        use std::fmt::Write;
+        let mut result = LString::new();
         match self {
-            Value::String(s) => s.clone(),
-            Value::Int(x) => Rc::new(x.to_string()),
-            Value::Bool(x) => Rc::new(x.to_string()),
-            Value::Float(x) => Rc::new(x.to_string()),
-            Value::RcBinary(x) => Rc::new(util::to_hex(x)),
-            Value::ArcBinary(x) => Rc::new(util::to_hex(x)),
+            Value::String(s) => result.push_str(s),
+            Value::Int(x) => write!(result, "{}", x).unwrap(),
+            Value::Bool(x) => write!(result, "{}", x).unwrap(),
+            Value::Float(x) => write!(result, "{}", x).unwrap(),
+            Value::RcBinary(x) => util::to_hex(&mut result, x),
+            Value::ArcBinary(x) => util::to_hex(&mut result, x),
             _ => panic!("str not implemented"),
         }
+        LRc::new(result)
     }
 
     /// Get integer value.
@@ -146,13 +149,13 @@ impl Value {
     pub fn append(&mut self, val: &Value) {
         if let Value::String(s) = self {
             let val = val.str();
-            if let Some(ms) = Rc::get_mut(s) {
+            if let Some(ms) = LRc::get_mut(s) {
                 ms.push_str(&val);
             } else {
-                let mut ns = String::with_capacity(s.len() + val.len());
+                let mut ns = LString::with_capacity(s.len() + val.len());
                 ns.push_str(s);
                 ns.push_str(&val);
-                *self = Value::String(Rc::new(ns));
+                *self = Value::String(LRc::new(ns));
             }
         } else {
             panic!()

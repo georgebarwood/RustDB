@@ -663,7 +663,7 @@ GO
 
     #[cfg(feature = "verify")]
     /// Verify the page structure of the database.
-    pub fn verify(self: &DB) -> String {
+    pub fn verify(self: &DB) -> LString {
         let (mut pages, total) = self.apd.spd.ps.write().unwrap().get_free();
         let total = total as usize;
 
@@ -679,12 +679,17 @@ GO
 
         assert_eq!(pages.len(), total);
 
-        format!(
+        let mut result = LString::new();
+        use std::fmt::Write;
+        write!(
+            result,
             "Logical page summary: free={} used={} total={}",
             free,
             total - free,
             total
         )
+        .unwrap();
+        result
     }
 
     /// Renumber pages.

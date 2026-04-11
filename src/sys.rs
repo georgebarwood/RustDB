@@ -8,7 +8,7 @@ pub fn create_schema(db: &DB, name: &str) {
     let t = &db.sys_schema;
     let mut row = t.row();
     row.id = t.alloc_id(db);
-    row.values[0] = Value::String(Rc::new(name.to_string()));
+    row.values[0] = Value::String(LRc::new(LString::from_str(name)));
     t.insert(db, &mut row);
 }
 
@@ -27,7 +27,7 @@ pub fn create_table(db: &DB, info: &ColInfo) {
             row.id = t.alloc_id(db);
             row.values[0] = Value::Int(root as i64);
             row.values[1] = Value::Int(schema_id);
-            row.values[2] = Value::String(Rc::new(info.name.name.to_string()));
+            row.values[2] = Value::String(LRc::new(LString::from_str(&info.name.name)));
             row.values[3] = Value::Int(1);
             t.insert(db, &mut row);
             row.id
@@ -43,7 +43,7 @@ pub fn create_table(db: &DB, info: &ColInfo) {
         for (num, typ) in info.typ.iter().enumerate() {
             // Columns are Table, Name, Type
             row.id = t.alloc_id(db);
-            row.values[1] = Value::String(Rc::new(cnames[num].to_string()));
+            row.values[1] = Value::String(LRc::new(LString::from_str(&cnames[num])));
             row.values[2] = Value::Int(*typ as i64);
             t.insert(db, &mut row);
         }
@@ -61,7 +61,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
             row.id = t.alloc_id(db);
             row.values[0] = Value::Int(root as i64);
             row.values[1] = Value::Int(table.id);
-            row.values[2] = Value::String(Rc::new(info.iname.to_string()));
+            row.values[2] = Value::String(LRc::new(LString::from_str(&info.iname)));
             t.insert(db, &mut row);
             row.id
         };
@@ -86,14 +86,14 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
 }
 
 /// Create or alter a function in the database by saving the source into the Function system table.
-pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool) {
+pub fn create_function(db: &DB, name: &ObjRef, source: LRc<LString>, alter: bool) {
     if let Some(schema_id) = get_schema(db, &name.schema) {
         let t = &db.sys_function;
         if alter {
             // Columns are Schema(0), Name(1), Definition(2).
             let mut keys = LVec::with_capacity(2);
             keys.push(Value::Int(schema_id));
-            keys.push(Value::String(Rc::new(name.name.to_string())));
+            keys.push(Value::String(LRc::new(LString::from_str(&name.name))));
             if let Some((pp, off)) = t.ix_get(db, keys, 0) {
                 let p = &mut *pp.borrow_mut();
                 let off = off + t.info.off[2];
@@ -118,7 +118,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: Rc<String>, alter: bool) 
             // Columns are Schema, Name, Definition
             row.id = t.alloc_id(db);
             row.values[0] = Value::Int(schema_id);
-            row.values[1] = Value::String(Rc::new(name.name.to_string()));
+            row.values[1] = Value::String(LRc::new(LString::from_str(&name.name)));
             row.values[2] = Value::String(source);
             t.insert(db, &mut row);
         }
@@ -134,7 +134,7 @@ pub fn get_schema(db: &DB, sname: &str) -> Option<i64> {
     }
     let t = &db.sys_schema;
     let mut keys = LVec::with_capacity(1);
-    keys.push(Value::String(Rc::new(sname.to_string())));
+    keys.push(Value::String(LRc::new(LString::from_str(sname))));
     if let Some((pp, off)) = t.ix_get(db, keys, 0) {
         let p = &pp.borrow();
         let a = t.access(p, off);
@@ -153,7 +153,7 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)> {
         // Columns are root, schema, name, id_gen
         let mut keys = LVec::with_capacity(2);
         keys.push(Value::Int(schema_id));
-        keys.push(Value::String(Rc::new(name.name.to_string())));
+        keys.push(Value::String(LRc::new(LString::from_str(&name.name))));
         if let Some((pp, off)) = t.ix_get(db, keys, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);
@@ -234,7 +234,7 @@ pub fn get_function(db: &DB, name: &ObjRef) -> Option<LRc<Function>> {
         let t = &db.sys_function;
         let mut keys = LVec::with_capacity(2);
         keys.push(Value::Int(schema_id));
-        keys.push(Value::String(Rc::new(name.name.to_string())));
+        keys.push(Value::String(LRc::new(LString::from_str(&name.name))));
         if let Some((pp, off)) = t.ix_get(db, keys, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);
@@ -255,7 +255,7 @@ pub fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64> {
         let t = &db.sys_function;
         let mut keys = LVec::with_capacity(2);
         keys.push(Value::Int(schema_id));
-        keys.push(Value::String(Rc::new(name.name.to_string())));
+        keys.push(Value::String(LRc::new(LString::from_str(&name.name))));
         if let Some((pp, off)) = t.ix_get(db, keys, 0) {
             let p = &pp.borrow();
             let a = t.access(p, off);

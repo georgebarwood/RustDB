@@ -1,10 +1,10 @@
 use pstd::{
-    BoxA, StringA, VecA, RcA, RcStrA,
+    BoxA, RcA, RcStrA, StringA, VecA,
     collections::btree_map::CustomTuning,
     collections::{BTreeMap, BTreeSet, DefaultHashBuilder, HashMap},
 };
 
-pub use pstd::localalloc::{Local, Temp, Perm};
+pub use pstd::localalloc::{Local, Perm, Temp};
 
 /// `Local::new()`
 pub fn local() -> Local {

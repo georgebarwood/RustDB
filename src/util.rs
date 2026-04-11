@@ -1,3 +1,4 @@
+use crate::alloc::LString;
 use crate::{BTreeSet, Data, HashMap, Rc, RefCell};
 
 /// In debug mode or feature unsafe-optim not enabled, same as debug_assert! otherwise unsafe compiler hint.
@@ -157,15 +158,13 @@ pub fn parse_hex(s: &[u8]) -> Vec<u8> {
 }
 
 /// Convert bytes to hex string.
-pub fn to_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut s = vec![b'0', b'x'];
+pub fn to_hex(out: &mut LString, bytes: &[u8]) {
+    use std::fmt::Write;
+    write!(out, "0x").unwrap();
     for b in bytes {
         let b = *b as usize;
-        s.push(HEX[b / 16]);
-        s.push(HEX[b % 16]);
+        write!(out, "{:x}", b).unwrap();
     }
-    String::from_utf8(s).unwrap()
 }
 
 /// Set of usize, optimised for elements < 64. default() is empty set.

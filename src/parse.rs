@@ -1,4 +1,4 @@
-use crate::{LBox, LVec, TBox, TVec};
+use crate::alloc::{LBox, LRc, LString, LVec, TBox, TVec};
 use crate::{
     AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
     ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, Rc, STRING, SqlError,
@@ -35,7 +35,7 @@ pub struct Parser<'a> {
     /// source slice for current token ( but string literals are in ts )
     cs: &'a [u8],
     /// String literal.
-    ts: String,
+    ts: LString,
     source_column: usize,
     source_line: usize,
     decimal_int: i64,
@@ -57,7 +57,7 @@ impl<'a> Parser<'a> {
             token_space_start: 0,
             token: Token::EndOfFile,
             cs: source,
-            ts: String::new(),
+            ts: LString::new(),
             source_column: 1,
             source_line: 1,
             prev_source_column: 1,
@@ -240,7 +240,7 @@ impl<'a> Parser<'a> {
                 b'\'' => {
                     token = Token::String;
                     let mut start = self.source_ix - 1;
-                    self.ts = String::new();
+                    self.ts = LString::new();
                     loop {
                         assert!(cc != 0, "missing closing quote for string literal");
                         if cc == b'\'' {
@@ -248,9 +248,8 @@ impl<'a> Parser<'a> {
                             if cc != b'\'' {
                                 break;
                             }
-                            self.ts.push_str(
-                                str::from_utf8(&self.source[start..self.source_ix - 1]).unwrap(),
-                            );
+                            self.ts
+                                .push_str(tos(&self.source[start..self.source_ix - 1]));
                             start = self.source_ix;
                         }
                         cc = self.read_char();
@@ -344,8 +343,8 @@ impl<'a> Parser<'a> {
 
     // ****************** Helper functions for parsing.
 
-    fn source_from(&self, start: usize, end: usize) -> String {
-        to_s(&self.source[start..end])
+    fn source_from(&self, start: usize, end: usize) -> LString {
+        LString::from_str(tos(&self.source[start..end]))
     }
 
     fn read_data_type(&mut self) -> DataType {
@@ -519,10 +518,7 @@ impl<'a> Parser<'a> {
                 }
             }
             self.read(Token::RBra);
-            Expr::new(ExprIs::BuiltinCall(
-                TBox::<str>::from_str(tos(name)),
-                parms,
-            ))
+            Expr::new(ExprIs::BuiltinCall(TBox::<str>::from_str(tos(name)), parms))
         } else if name == b"true" {
             Expr::new(ExprIs::Const(Value::Bool(true)))
         } else if name == b"false" {
@@ -569,7 +565,8 @@ impl<'a> Parser<'a> {
             }
             self.read(Token::RBra);
         } else if self.token == Token::String {
-            result = Expr::new(ExprIs::Const(Value::String(Rc::new(self.ts.clone()))));
+            let s = LRc::new(mem::take(&mut self.ts));
+            result = Expr::new(ExprIs::Const(Value::String(s)));
             self.read_token();
         } else if self.token == Token::Number {
             let value = self.decimal_int;
@@ -972,8 +969,9 @@ impl<'a> Parser<'a> {
         let _cb: Block = mem::replace(&mut self.b, save);
         self.b.parse_only = save2;
         if !self.b.parse_only {
-            let source: String = self.source_from(source_start, self.token_space_start);
-            self.b.dop(DO::CreateFunction(rref, Rc::new(source), alter));
+            let source: LString = self.source_from(source_start, self.token_space_start);
+            self.b
+                .dop(DO::CreateFunction(rref, LRc::new(source), alter));
         }
     }
 

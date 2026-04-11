@@ -1,4 +1,4 @@
-use crate::alloc::{LRc, LVec};
+use crate::alloc::{LRc, LString, LVec};
 use crate::{CExp, CExpPtr, EvalEnv, Function, Rc, Value, get_bytes, util};
 
 /// Function call.
@@ -39,19 +39,19 @@ pub(crate) struct Concat(pub CExpPtr<Value>, pub CExpPtr<Value>);
 impl CExp<Value> for Concat {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> Value {
         let mut s1: Value = self.0.eval(e, d);
-        let s2: Rc<String> = self.1.eval(e, d).str();
+        let s2: LRc<LString> = self.1.eval(e, d).str();
         // Append to existing string if not shared.
         if let Value::String(s) = &mut s1
-            && let Some(ms) = Rc::get_mut(s)
+            && let Some(ms) = LRc::get_mut(s)
         {
             ms.push_str(&s2);
             return s1;
         }
         let s1 = s1.str();
-        let mut s = String::with_capacity(s1.len() + s2.len());
+        let mut s = LString::with_capacity(s1.len() + s2.len());
         s.push_str(&s1);
         s.push_str(&s2);
-        Value::String(Rc::new(s))
+        Value::String(LRc::new(s))
     }
 }
 
@@ -301,8 +301,9 @@ pub(crate) struct ColumnString {
 impl CExp<Value> for ColumnString {
     fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> Value {
         let bytes = get_bytes(&ee.db, &data[self.off..], self.size).0;
-        let str = String::from_utf8(bytes).unwrap();
-        Value::String(Rc::new(str))
+        let str = str::from_utf8(&bytes).unwrap();
+        let str = LString::from_str(str);
+        Value::String(LRc::new(str))
     }
 }
 

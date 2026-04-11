@@ -1,4 +1,4 @@
-use crate::alloc::{DBox, LBox, LRc, LVec};
+use crate::alloc::{DBox, LBox, LRc, LString, LVec};
 use crate::{
     Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, Rc,
     RefCell, Table, Value, panic,
@@ -193,7 +193,7 @@ pub enum DO {
     /// Create Index.
     CreateIndex(IndexInfo),
     /// Create Function.
-    CreateFunction(ObjRef, Rc<String>, bool),
+    CreateFunction(ObjRef, LRc<LString>, bool),
     /// Alter Table.
     AlterTable(ObjRef, LVec<AlterCol>),
     /// Drop Schema.
