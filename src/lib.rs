@@ -137,7 +137,7 @@ use crate::{
     run::*,
     sortedfile::{Asc, Id, Record, SortedFile},
     table::{ColInfo, IndexInfo, Row, Table},
-    util::{SmallSet, nd, newmap},
+    util::{SmallSet, nd},
     value::*,
 };
 
@@ -299,6 +299,8 @@ impl std::ops::DerefMut for MData {
 }
 
 /// ```Rc<Database>```
+///
+/// Note: should be LRc, but that causes issues with arbitrary_self_types <https://github.com/rust-lang/rust/issues/44874>
 pub type DB = Rc<Database>;
 
 /// Map that defines SQL pre-defined functions.

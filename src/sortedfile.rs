@@ -7,7 +7,7 @@ use crate::*;
 /// Each page is either a parent page with links to child pages, or a leaf page.
 pub struct SortedFile {
     /// Map of pages that have not been saved..
-    pub dirty_pages: RefCell<HashMap<u64, PagePtr>>,
+    pub dirty_pages: RefCell<LHashMap<u64, PagePtr>>,
     /// Size of a record.
     pub rec_size: usize,
     /// Size of a key.
@@ -22,7 +22,7 @@ impl SortedFile {
     /// Create File with specified record size, key size, root page.
     pub fn new(rec_size: usize, key_size: usize, root_page: u64) -> Self {
         SortedFile {
-            dirty_pages: newmap(),
+            dirty_pages: RefCell::new(lhashmap()),
             rec_size,
             key_size,
             root_page: Cell::new(root_page),

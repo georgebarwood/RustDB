@@ -1,5 +1,5 @@
-use crate::alloc::{LString, LVec};
-use crate::{BTreeSet, Data, HashMap, LRc, RefCell};
+use crate::alloc::{LString, LVec, LRc};
+use crate::{BTreeSet, Data, RefCell};
 
 /// In debug mode or feature unsafe-optim not enabled, same as debug_assert! otherwise unsafe compiler hint.
 #[cfg(any(debug_assertions, not(feature = "unsafe-optim")))]
@@ -33,7 +33,7 @@ macro_rules! unsafe_panic {
     () => {{ unsafe { std::hint::unreachable_unchecked() } }};
 }
 
-/// Wrap a type in Rc + RefCell.
+/// Wrap a type in LRc + RefCell.
 pub fn new<T>(x: T) -> LRc<std::cell::RefCell<T>> {
     LRc::new(RefCell::new(x))
 }
@@ -41,11 +41,6 @@ pub fn new<T>(x: T) -> LRc<std::cell::RefCell<T>> {
 /// New Data ( `Arc::new(Vec::new())` ).
 pub fn nd() -> Data {
     Data::default()
-}
-
-/// Construct a new map wrapped in a RefCell.
-pub fn newmap<K, T>() -> RefCell<HashMap<K, T>> {
-    RefCell::new(HashMap::default())
 }
 
 /// Extract u64 from byte data.
