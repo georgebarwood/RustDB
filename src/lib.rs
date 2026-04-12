@@ -624,6 +624,7 @@ impl Database {
     /// Construct a new DB, based on the specified file.
     /// initsql is used to initialise a new database.
     /// builtins specifies the functions callable in SQL code such as SUBSTR, REPLACE etc.
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(apd: AccessPagedData, initsql: &str, builtins: Arc<BuiltinMap>) -> DB {
         let is_new = apd.is_new();
         let mut tb = TableBuilder::new(5);
