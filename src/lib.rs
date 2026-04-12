@@ -300,7 +300,7 @@ impl std::ops::DerefMut for MData {
 
 /// [LRc]`<`[Database]`>`
 #[derive(Clone)]
-pub struct DB( pub LRc<Database> );
+pub struct DB(pub LRc<Database>);
 
 impl DB {
     /// Run a batch of SQL.
@@ -360,6 +360,16 @@ impl DB {
             }
         }
         false
+    }
+
+    /// Set the stash memory limit to specified number of bytes.
+    pub fn set_stash_mem_limit(&self, to: usize) {
+        self.0.apd.spd.stash.lock().unwrap().mem_limit = to;
+    }
+
+    /// Check if any functions have been updated.
+    pub fn function_update(&self) -> bool {
+        self.0.function_reset.get()
     }
 
     #[cfg(not(feature = "table"))]

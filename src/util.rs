@@ -1,4 +1,4 @@
-use crate::alloc::{LString, LVec, LRc};
+use crate::alloc::{LRc, LString, LVec};
 use crate::{BTreeSet, Data, RefCell};
 
 /// In debug mode or feature unsafe-optim not enabled, same as debug_assert! otherwise unsafe compiler hint.
