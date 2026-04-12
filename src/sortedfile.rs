@@ -48,7 +48,7 @@ impl SortedFile {
             p.compress(db);
             p.write_header();
             debug_assert!(p.pnum == pnum);
-            db.apd.set_data(pnum, p.data.to_data());
+            db.0.apd.set_data(pnum, p.data.to_data());
         }
     }
 
@@ -158,7 +158,7 @@ impl SortedFile {
             let p = &mut *pp.borrow_mut();
             if p.level != 0 {
                 p.find_child(db, r)
-            } else if !p.full(db.page_size_max) {
+            } else if !p.full(db.0.page_size_max) {
                 self.set_dirty(p, &pp);
                 p.insert(db, r);
                 return true;
@@ -196,7 +196,7 @@ impl SortedFile {
         let pp = self.load_page(db, pnum);
         let p = &mut *pp.borrow_mut();
         // Need to check if page is full.
-        if !p.full(db.page_size_max) {
+        if !p.full(db.0.page_size_max) {
             self.set_dirty(p, &pp);
             p.insert_page(db, r, cpnum);
         } else {
@@ -280,7 +280,7 @@ impl SortedFile {
         if let Some(p) = self.dirty_pages.borrow().get(&pnum) {
             return p.clone();
         }
-        let data = db.apd.get_data(pnum);
+        let data = db.0.apd.get_data(pnum);
         let level = if data.is_empty() { 0 } else { data[0] };
         util::new(Page::new(
             if level != 0 {
@@ -343,7 +343,7 @@ impl SortedFile {
             return;
         }
         let total = y + db.lp_size(p.first_page);
-        let full = (n * db.page_size_max) as u64;
+        let full = (n * db.0.page_size_max) as u64;
         let space = full - total;
 
         let div = std::cmp::min(5, n as u64);
@@ -453,7 +453,7 @@ impl SortedFile {
     #[cfg(feature = "renumber")]
     /// Renumber, adjusting cache.
     pub fn ren(&self, from: u64, db: &DB) -> u64 {
-        let to = db.apd.renumber_page(from);
+        let to = db.0.apd.renumber_page(from);
         let mut dp = self.dirty_pages.borrow_mut();
         if let Some(p) = dp.remove(&from) {
             {
@@ -531,7 +531,7 @@ struct Split {
 impl Split {
     /// Split the records of p into two new pages.
     fn new(p: &mut Page, db: &DB) -> Self {
-        let half_page_size = db.apd.spd.psi.half_size_page();
+        let half_page_size = db.0.apd.spd.psi.half_size_page();
         let mut result = Split {
             count: 0,
             split_node: 0,
@@ -899,7 +899,7 @@ impl PageList {
         self.packed_record_count += 1;
         let cur = self.list.len() - 1;
         let mut ap = &mut self.list[cur].0;
-        if ap.full(db.page_size_max) {
+        if ap.full(db.0.page_size_max) {
             // Start a new page.
             let key = if ap.level == 0 {
                 PKey::Dyn(p.get_key(db, x, r))

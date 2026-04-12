@@ -11,7 +11,7 @@
 
 //!# Interface
 //!
-//! The method [Database::run] is called to execute an SQL query.
+//! The method [DB::run] is called to execute an SQL query.
 //! This takes a [Transaction] parameter which accumulates SELECT results and which also has methods
 //! for accessing input parameters and controlling output. Custom builtin functions implement [CExp]
 //! and have access to the transaction via an EvalEnv parameter, which can be downcast if necessary.
@@ -298,10 +298,276 @@ impl std::ops::DerefMut for MData {
     }
 }
 
-/// ```Rc<Database>```
-///
-/// Note: should be LRc, but that causes issues with arbitrary_self_types <https://github.com/rust-lang/rust/issues/44874>
-pub type DB = Rc<Database>;
+/// [LRc]`<`[Database]`>`
+#[derive(Clone)]
+pub struct DB( pub LRc<Database> );
+
+impl DB {
+    /// Run a batch of SQL.
+    pub fn run(&self, source: &str, tr: &mut dyn Transaction) {
+        if let Some(e) = self.go(source, tr) {
+            let err = format!(
+                "{} in {} at line {} column {}.",
+                e.msg, e.rname, e.line, e.column
+            );
+            tr.set_error(err);
+            self.0.err.set(true);
+        }
+    }
+
+    /// Run a batch of SQL.
+    fn go(&self, source: &str, tr: &mut dyn Transaction) -> Option<SqlError> {
+        let mut p = Parser::new(source, self);
+        let result = std::panic::catch_unwind(panic::AssertUnwindSafe(|| {
+            p.batch(tr);
+        }));
+        if let Err(x) = result {
+            Some(if let Some(e) = x.downcast_ref::<SqlError>() {
+                SqlError {
+                    msg: e.msg.clone(),
+                    line: e.line,
+                    column: e.column,
+                    rname: e.rname.clone(),
+                }
+            } else if let Some(s) = x.downcast_ref::<&str>() {
+                p.make_error((*s).to_string())
+            } else if let Some(s) = x.downcast_ref::<String>() {
+                p.make_error(s.to_string())
+            } else {
+                p.make_error("unrecognised/unexpected error".to_string())
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Test whether there are unsaved changes.
+    pub fn changed(&self) -> bool {
+        if self.0.err.get() {
+            return false;
+        }
+        for bs in &self.0.bs {
+            if bs.changed() {
+                return true;
+            }
+        }
+        for t in self.0.tables.borrow().values() {
+            if t.id_gen_dirty.get() {
+                return true;
+            }
+            if t.file.changed() {
+                return true;
+            }
+        }
+        false
+    }
+
+    #[cfg(not(feature = "table"))]
+    /// Get the named table.
+    fn get_table(&self, name: &ObjRef) -> Option<LRc<Table>> {
+        if let Some(t) = self.0.tables.borrow().get(name) {
+            return Some(t.clone());
+        }
+        sys::get_table(self, name)
+    }
+
+    #[cfg(feature = "table")]
+    /// Get the named table.
+    pub fn get_table(&self, name: &ObjRef) -> Option<LRc<Table>> {
+        if let Some(t) = self.0.tables.borrow().get(name) {
+            return Some(t.clone());
+        }
+        sys::get_table(self, name)
+    }
+
+    #[cfg(feature = "table")]
+    /// Get the named table ( panics if it does not exist ).
+    pub fn table(&self, schema: &str, name: &str) -> LRc<Table> {
+        self.get_table(&ObjRef::new(schema, name)).unwrap()
+    }
+
+    /// Get the named function.
+    fn get_function(&self, name: &ObjRef) -> Option<LRc<Function>> {
+        if let Some(f) = self.0.functions.borrow().get(name) {
+            return Some(f.clone());
+        }
+        sys::get_function(self, name)
+    }
+
+    /// Insert the table into the map of tables.
+    fn publish_table(&self, table: LRc<Table>) {
+        let name = table.info.name.clone();
+        self.0.tables.borrow_mut().insert(name, table);
+    }
+
+    /// Get code for value.
+    fn encode(&self, val: &Value, size: usize) -> Code {
+        let bytes: &[u8] = match val {
+            Value::RcBinary(x) => x,
+            Value::ArcBinary(x) => x,
+            Value::String(x) => x.as_bytes(),
+            _ => {
+                return Code {
+                    id: u64::MAX,
+                    ft: 0,
+                };
+            }
+        };
+        if bytes.len() < size {
+            return Code {
+                id: u64::MAX,
+                ft: 0,
+            };
+        }
+        let tbe = &bytes[size - 9..];
+        let ft = bytes::fragment_type(tbe.len(), &self.0.bpf);
+        let id = self.0.bs[ft].encode(self, &bytes[size - 9..]);
+        Code { id, ft }
+    }
+
+    /// Decode u64 to bytes.
+    fn decode(&self, code: Code, inline: usize) -> LVec<u8> {
+        self.0.bs[code.ft].decode(self, code.id, inline)
+    }
+
+    /// Delete encoding.
+    fn delcode(&self, code: Code) {
+        if code.id != u64::MAX {
+            self.0.bs[code.ft].delcode(self, code.id);
+        }
+    }
+
+    /// Allocate a page of underlying file storage.
+    fn alloc_page(&self) -> u64 {
+        self.0.apd.alloc_page()
+    }
+
+    /// Free a page of underlying file storage.
+    fn free_page(&self, lpnum: u64) {
+        self.0.apd.free_page(lpnum);
+    }
+
+    #[cfg(feature = "pack")]
+    /// Get size of logical page.
+    fn lp_size(&self, pnum: u64) -> u64 {
+        self.0.apd.spd.ps.read().unwrap().size(pnum) as u64
+    }
+
+    /// Save updated tables to underlying file ( or rollback if there was an error ).
+    /// Returns the number of logical pages that were updated.
+    pub fn save(&self) -> usize {
+        let op = if self.0.err.get() {
+            self.0.err.set(false);
+            SaveOp::RollBack
+        } else {
+            SaveOp::Save
+        };
+        for bs in &self.0.bs {
+            bs.save(self, op);
+        }
+        let tm = &*self.0.tables.borrow();
+        for t in tm.values() {
+            if t.id_gen_dirty.get() {
+                if op == SaveOp::Save {
+                    sys::save_id_gen(self, t.id as u64, t.id_gen.get().unwrap());
+                } else {
+                    t.id_gen.set(None);
+                }
+                t.id_gen_dirty.set(false);
+            }
+        }
+        for t in tm.values() {
+            t.save(self, op);
+        }
+        if self.0.function_reset.get() {
+            for function in self.0.functions.borrow().values() {
+                function.ilist.borrow_mut().clear();
+            }
+            self.0.functions.borrow_mut().clear();
+            self.0.function_reset.set(false);
+        }
+        self.0.apd.save(op)
+    }
+
+    #[cfg(feature = "pack")]
+    /// Repack the specified sortedfile.
+    fn repack_file(&self, k: i64, schema: &str, tname: &str) -> i64 {
+        if k >= 0 {
+            let name = ObjRef::new(schema, tname);
+            if let Some(t) = self.get_table(&name) {
+                return t.repack(self, k as usize);
+            }
+        } else {
+            let k = (-k - 1) as usize;
+            if k < 4 {
+                return self.0.bs[k].repack_file(self);
+            }
+        }
+        -1
+    }
+
+    /// Renumber pages.
+    #[cfg(feature = "renumber")]
+    pub fn renumber(&self) {
+        let target = self.0.apd.spd.ps.write().unwrap().load_free_pages();
+        if let Some(target) = target {
+            for bs in &self.0.bs {
+                bs.file.renumber(self, target);
+            }
+            for t in self.0.tables.borrow().values() {
+                let tf = &t.file;
+                let mut root_page = tf.root_page.get();
+                if root_page >= target {
+                    root_page = tf.ren(root_page, self);
+                    tf.root_page.set(root_page);
+                    sys::set_root(self, t.id, root_page);
+                }
+                tf.renumber(self, target);
+                for ix in &mut *t.ixlist.borrow_mut() {
+                    let mut root_page = ix.file.root_page.get();
+                    if root_page >= target {
+                        root_page = ix.file.ren(root_page, self);
+                        ix.file.root_page.set(root_page);
+                        sys::set_ix_root(self, ix.id, root_page);
+                    }
+                    ix.file.renumber(self, target);
+                }
+            }
+            self.0.apd.spd.ps.write().unwrap().set_alloc_pn(target);
+        }
+    }
+
+    #[cfg(feature = "verify")]
+    /// Verify the page structure of the database.
+    pub fn verify(&self) -> LString {
+        let (mut pages, total) = self.0.apd.spd.ps.write().unwrap().get_free();
+        let total = total as usize;
+
+        let free = pages.len();
+
+        for bs in &self.0.bs {
+            bs.file.get_used(self, &mut pages);
+        }
+
+        for t in self.0.tables.borrow().values() {
+            t.get_used(self, &mut pages);
+        }
+
+        assert_eq!(pages.len(), total);
+
+        let mut result = LString::new();
+        use std::fmt::Write;
+        write!(
+            result,
+            "Logical page summary: free={} used={} total={}",
+            free,
+            total - free,
+            total
+        )
+        .unwrap();
+        result
+    }
+} // impl DB
 
 /// Map that defines SQL pre-defined functions.
 pub type BuiltinMap = HashMap<Box<str>, (DataKind, CompileFunc)>;
@@ -395,7 +661,7 @@ impl Database {
             bs.push(ByteStorage::new(ft as u64, *bpf));
         }
 
-        let db = Rc::new(Database {
+        let db = DB(LRc::new(Database {
             apd,
             sys_schema,
             sys_table,
@@ -414,7 +680,7 @@ impl Database {
             is_new,
             page_size_max,
             bpf,
-        });
+        }));
 
         assert!(tb.alloc as u64 - 1 == SYS_ROOT_LAST);
 
@@ -458,271 +724,6 @@ GO
         }
 
         db
-    }
-
-    /// Run a batch of SQL.
-    pub fn run(self: &DB, source: &str, tr: &mut dyn Transaction) {
-        if let Some(e) = self.go(source, tr) {
-            let err = format!(
-                "{} in {} at line {} column {}.",
-                e.msg, e.rname, e.line, e.column
-            );
-            tr.set_error(err);
-            self.err.set(true);
-        }
-    }
-
-    /// Run a batch of SQL.
-    fn go(self: &DB, source: &str, tr: &mut dyn Transaction) -> Option<SqlError> {
-        let mut p = Parser::new(source, self);
-        let result = std::panic::catch_unwind(panic::AssertUnwindSafe(|| {
-            p.batch(tr);
-        }));
-        if let Err(x) = result {
-            Some(if let Some(e) = x.downcast_ref::<SqlError>() {
-                SqlError {
-                    msg: e.msg.clone(),
-                    line: e.line,
-                    column: e.column,
-                    rname: e.rname.clone(),
-                }
-            } else if let Some(s) = x.downcast_ref::<&str>() {
-                p.make_error((*s).to_string())
-            } else if let Some(s) = x.downcast_ref::<String>() {
-                p.make_error(s.to_string())
-            } else {
-                p.make_error("unrecognised/unexpected error".to_string())
-            })
-        } else {
-            None
-        }
-    }
-
-    /// Test whether there are unsaved changes.
-    pub fn changed(self: &DB) -> bool {
-        if self.err.get() {
-            return false;
-        }
-        for bs in &self.bs {
-            if bs.changed() {
-                return true;
-            }
-        }
-        for t in self.tables.borrow().values() {
-            if t.id_gen_dirty.get() {
-                return true;
-            }
-            if t.file.changed() {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Save updated tables to underlying file ( or rollback if there was an error ).
-    /// Returns the number of logical pages that were updated.
-    pub fn save(self: &DB) -> usize {
-        let op = if self.err.get() {
-            self.err.set(false);
-            SaveOp::RollBack
-        } else {
-            SaveOp::Save
-        };
-        for bs in &self.bs {
-            bs.save(self, op);
-        }
-        let tm = &*self.tables.borrow();
-        for t in tm.values() {
-            if t.id_gen_dirty.get() {
-                if op == SaveOp::Save {
-                    sys::save_id_gen(self, t.id as u64, t.id_gen.get().unwrap());
-                } else {
-                    t.id_gen.set(None);
-                }
-                t.id_gen_dirty.set(false);
-            }
-        }
-        for t in tm.values() {
-            t.save(self, op);
-        }
-        if self.function_reset.get() {
-            for function in self.functions.borrow().values() {
-                function.ilist.borrow_mut().clear();
-            }
-            self.functions.borrow_mut().clear();
-            self.function_reset.set(false);
-        }
-        self.apd.save(op)
-    }
-
-    #[cfg(not(feature = "table"))]
-    /// Get the named table.
-    fn get_table(self: &DB, name: &ObjRef) -> Option<LRc<Table>> {
-        if let Some(t) = self.tables.borrow().get(name) {
-            return Some(t.clone());
-        }
-        sys::get_table(self, name)
-    }
-
-    #[cfg(feature = "table")]
-    /// Get the named table.
-    pub fn get_table(self: &DB, name: &ObjRef) -> Option<LRc<Table>> {
-        if let Some(t) = self.tables.borrow().get(name) {
-            return Some(t.clone());
-        }
-        sys::get_table(self, name)
-    }
-
-    #[cfg(feature = "table")]
-    /// Get the named table ( panics if it does not exist ).
-    pub fn table(self: &DB, schema: &str, name: &str) -> LRc<Table> {
-        self.get_table(&ObjRef::new(schema, name)).unwrap()
-    }
-
-    /// Get the named function.
-    fn get_function(self: &DB, name: &ObjRef) -> Option<LRc<Function>> {
-        if let Some(f) = self.functions.borrow().get(name) {
-            return Some(f.clone());
-        }
-        sys::get_function(self, name)
-    }
-
-    /// Insert the table into the map of tables.
-    fn publish_table(&self, table: LRc<Table>) {
-        let name = table.info.name.clone();
-        self.tables.borrow_mut().insert(name, table);
-    }
-
-    /// Get code for value.
-    fn encode(self: &DB, val: &Value, size: usize) -> Code {
-        let bytes: &[u8] = match val {
-            Value::RcBinary(x) => x,
-            Value::ArcBinary(x) => x,
-            Value::String(x) => x.as_bytes(),
-            _ => {
-                return Code {
-                    id: u64::MAX,
-                    ft: 0,
-                };
-            }
-        };
-        if bytes.len() < size {
-            return Code {
-                id: u64::MAX,
-                ft: 0,
-            };
-        }
-        let tbe = &bytes[size - 9..];
-        let ft = bytes::fragment_type(tbe.len(), &self.bpf);
-        let id = self.bs[ft].encode(self, &bytes[size - 9..]);
-        Code { id, ft }
-    }
-
-    /// Decode u64 to bytes.
-    fn decode(self: &DB, code: Code, inline: usize) -> LVec<u8> {
-        self.bs[code.ft].decode(self, code.id, inline)
-    }
-
-    /// Delete encoding.
-    fn delcode(self: &DB, code: Code) {
-        if code.id != u64::MAX {
-            self.bs[code.ft].delcode(self, code.id);
-        }
-    }
-
-    /// Allocate a page of underlying file storage.
-    fn alloc_page(self: &DB) -> u64 {
-        self.apd.alloc_page()
-    }
-
-    /// Free a page of underlying file storage.
-    fn free_page(self: &DB, lpnum: u64) {
-        self.apd.free_page(lpnum);
-    }
-
-    #[cfg(feature = "pack")]
-    /// Get size of logical page.
-    fn lp_size(&self, pnum: u64) -> u64 {
-        self.apd.spd.ps.read().unwrap().size(pnum) as u64
-    }
-
-    #[cfg(feature = "pack")]
-    /// Repack the specified sortedfile.
-    fn repack_file(self: &DB, k: i64, schema: &str, tname: &str) -> i64 {
-        if k >= 0 {
-            let name = ObjRef::new(schema, tname);
-            if let Some(t) = self.get_table(&name) {
-                return t.repack(self, k as usize);
-            }
-        } else {
-            let k = (-k - 1) as usize;
-            if k < 4 {
-                return self.bs[k].repack_file(self);
-            }
-        }
-        -1
-    }
-
-    #[cfg(feature = "verify")]
-    /// Verify the page structure of the database.
-    pub fn verify(self: &DB) -> LString {
-        let (mut pages, total) = self.apd.spd.ps.write().unwrap().get_free();
-        let total = total as usize;
-
-        let free = pages.len();
-
-        for bs in &self.bs {
-            bs.file.get_used(self, &mut pages);
-        }
-
-        for t in self.tables.borrow().values() {
-            t.get_used(self, &mut pages);
-        }
-
-        assert_eq!(pages.len(), total);
-
-        let mut result = LString::new();
-        use std::fmt::Write;
-        write!(
-            result,
-            "Logical page summary: free={} used={} total={}",
-            free,
-            total - free,
-            total
-        )
-        .unwrap();
-        result
-    }
-
-    /// Renumber pages.
-    #[cfg(feature = "renumber")]
-    pub fn renumber(self: &DB) {
-        let target = self.apd.spd.ps.write().unwrap().load_free_pages();
-        if let Some(target) = target {
-            for bs in &self.bs {
-                bs.file.renumber(self, target);
-            }
-            for t in self.tables.borrow().values() {
-                let tf = &t.file;
-                let mut root_page = tf.root_page.get();
-                if root_page >= target {
-                    root_page = tf.ren(root_page, self);
-                    tf.root_page.set(root_page);
-                    sys::set_root(self, t.id, root_page);
-                }
-                tf.renumber(self, target);
-                for ix in &mut *t.ixlist.borrow_mut() {
-                    let mut root_page = ix.file.root_page.get();
-                    if root_page >= target {
-                        root_page = ix.file.ren(root_page, self);
-                        ix.file.root_page.set(root_page);
-                        sys::set_ix_root(self, ix.id, root_page);
-                    }
-                    ix.file.renumber(self, target);
-                }
-            }
-            self.apd.spd.ps.write().unwrap().set_alloc_pn(target);
-        }
     }
 } // end impl Database
 

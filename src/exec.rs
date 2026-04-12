@@ -457,7 +457,7 @@ impl<'r> EvalEnv<'r> {
             } else {
                 table.id_allocated(&self.db, row.id);
             }
-            self.db.lastid.set(row.id);
+            self.db.0.lastid.set(row.id);
             table.insert(&self.db, &mut row);
         }
     }
@@ -495,8 +495,8 @@ impl<'r> EvalEnv<'r> {
         if let Some(sid) = sys::get_schema(&self.db, name) {
             let sql = format!("EXEC sys.DropSchema({})", sid);
             self.db.run(&sql, self.tr);
-            self.db.schemas.borrow_mut().remove(name);
-            self.db.function_reset.set(true);
+            self.db.0.schemas.borrow_mut().remove(name);
+            self.db.0.function_reset.set(true);
         } else {
             panic!("Drop Schema not found {}", name);
         }
@@ -506,8 +506,8 @@ impl<'r> EvalEnv<'r> {
         if let Some(t) = sys::get_table(&self.db, name) {
             let sql = format!("EXEC sys.DropTable({})", t.id);
             self.db.run(&sql, self.tr);
-            self.db.tables.borrow_mut().remove(name);
-            self.db.function_reset.set(true);
+            self.db.0.tables.borrow_mut().remove(name);
+            self.db.0.function_reset.set(true);
             t.free_pages(&self.db);
         } else {
             panic!("Drop Table not found {}", name.str());
@@ -518,7 +518,7 @@ impl<'r> EvalEnv<'r> {
         if let Some(fid) = sys::get_function_id(&self.db, name) {
             let sql = format!("DELETE FROM sys.Function WHERE Id = {}", fid);
             self.db.run(&sql, self.tr);
-            self.db.function_reset.set(true);
+            self.db.0.function_reset.set(true);
         } else {
             panic!("Drop Function not found {}", name.str());
         }
@@ -528,8 +528,8 @@ impl<'r> EvalEnv<'r> {
         let (t, ix, id) = sys::get_index(&self.db, tname, iname);
         let sql = format!("EXEC sys.DropIndex({})", id);
         self.db.run(&sql, self.tr);
-        self.db.tables.borrow_mut().remove(tname);
-        self.db.function_reset.set(true);
+        self.db.0.tables.borrow_mut().remove(tname);
+        self.db.0.function_reset.set(true);
         t.delete_index(&self.db, ix);
     }
 
@@ -602,9 +602,9 @@ impl<'r> EvalEnv<'r> {
             t.free_pages(db);
             sys::set_root(db, nt.id, root);
 
-            db.tables.borrow_mut().remove(name);
-            db.tables.borrow_mut().insert(name.clone(), nt);
-            db.function_reset.set(true);
+            db.0.tables.borrow_mut().remove(name);
+            db.0.tables.borrow_mut().insert(name.clone(), nt);
+            db.0.function_reset.set(true);
         } else {
             panic!("ALTER TABLE not found {}", name.str());
         }

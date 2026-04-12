@@ -126,7 +126,7 @@ fn c_lastid(b: &Block, args: &mut [Expr]) -> CExpPtr<i64> {
 struct LastId {}
 impl CExp<i64> for LastId {
     fn eval(&self, ee: &mut EvalEnv, _d: &[u8]) -> i64 {
-        ee.db.lastid.get()
+        ee.db.0.lastid.get()
     }
 }
 /////////////////////////////

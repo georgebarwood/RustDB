@@ -401,7 +401,7 @@ impl Page {
     /// Reduce page size using free nodes.
     pub fn compress(&mut self, db: &DB) {
         let saving = (self.alloc - self.count) * self.node_size;
-        if saving != 0 && db.apd.compress(self.size(), saving) {
+        if saving != 0 && db.0.apd.compress(self.size(), saving) {
             let mut flist = TVec::new();
             let mut f = self.free;
             while f != 0 {

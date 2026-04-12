@@ -5,7 +5,7 @@ pub fn create_schema(db: &DB, name: &str) {
     if let Some(_id) = get_schema(db, name) {
         panic!("schema '{}' already exists", name);
     }
-    let t = &db.sys_schema;
+    let t = &db.0.sys_schema;
     let mut row = t.row();
     row.id = t.alloc_id(db);
     row.values[0] = Value::String(LRc::new(LString::from_str(name)));
@@ -21,7 +21,7 @@ pub fn create_table(db: &DB, info: &ColInfo) {
         let schema = &info.name.schema;
         if let Some(schema_id) = get_schema(db, schema) {
             let root = db.alloc_page();
-            let t = &db.sys_table;
+            let t = &db.0.sys_table;
             let mut row = t.row();
             // Columns are root, schema, name, id_gen
             row.id = t.alloc_id(db);
@@ -37,7 +37,7 @@ pub fn create_table(db: &DB, info: &ColInfo) {
     };
     {
         let cnames = &info.colnames;
-        let t = &db.sys_column;
+        let t = &db.0.sys_column;
         let mut row = t.row();
         row.values[0] = Value::Int(tid);
         for (num, typ) in info.typ.iter().enumerate() {
@@ -55,7 +55,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
     if let Some(table) = db.get_table(&info.tname) {
         let root = db.alloc_page();
         let index_id = {
-            let t = &db.sys_index;
+            let t = &db.0.sys_index;
             let mut row = t.row();
             // Columns are Root, Table, Name
             row.id = t.alloc_id(db);
@@ -66,7 +66,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
             row.id
         };
         {
-            let t = &db.sys_index_col;
+            let t = &db.0.sys_index_col;
             let mut row = t.row();
             for cnum in &info.cols {
                 // Columns are Index, ColIndex
@@ -88,7 +88,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
 /// Create or alter a function in the database by saving the source into the Function system table.
 pub fn create_function(db: &DB, name: &ObjRef, source: LRc<LString>, alter: bool) {
     if let Some(schema_id) = get_schema(db, &name.schema) {
-        let t = &db.sys_function;
+        let t = &db.0.sys_function;
         if alter {
             // Columns are Schema(0), Name(1), Definition(2).
             let mut keys = LVec::with_capacity(2);
@@ -104,7 +104,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: LRc<LString>, alter: bool
                     let newcode = db.encode(&val, data_size(BIGSTR));
                     val.save(BIGSTR, &mut p.data, off, newcode);
                     t.file.set_dirty(p, &pp);
-                    db.function_reset.set(true);
+                    db.0.function_reset.set(true);
                 }
                 return;
             }
@@ -129,10 +129,10 @@ pub fn create_function(db: &DB, name: &ObjRef, source: LRc<LString>, alter: bool
 
 /// Get the id of a schema from a name.
 pub fn get_schema(db: &DB, sname: &str) -> Option<i64> {
-    if let Some(&id) = db.schemas.borrow().get(sname) {
+    if let Some(&id) = db.0.schemas.borrow().get(sname) {
         return Some(id);
     }
-    let t = &db.sys_schema;
+    let t = &db.0.sys_schema;
     let mut keys = LVec::with_capacity(1);
     keys.push(Value::String(LRc::new(LString::from_str(sname))));
     if let Some((pp, off)) = t.ix_get(db, keys, 0) {
@@ -140,7 +140,7 @@ pub fn get_schema(db: &DB, sname: &str) -> Option<i64> {
         let a = t.access(p, off);
         debug_assert!(a.str(db, 0) == sname);
         let id = a.id() as i64;
-        db.schemas.borrow_mut().insert(sname.to_string(), id);
+        db.0.schemas.borrow_mut().insert(sname.to_string(), id);
         return Some(id);
     }
     None
@@ -149,7 +149,7 @@ pub fn get_schema(db: &DB, sname: &str) -> Option<i64> {
 /// Get the id, root, id_gen for specified table.
 fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)> {
     if let Some(schema_id) = get_schema(db, &name.schema) {
-        let t = &db.sys_table;
+        let t = &db.0.sys_table;
         // Columns are root, schema, name, id_gen
         let mut keys = LVec::with_capacity(2);
         keys.push(Value::Int(schema_id));
@@ -167,7 +167,7 @@ fn get_table0(db: &DB, name: &ObjRef) -> Option<(i64, i64, i64)> {
 pub fn get_index(db: &DB, tname: &ObjRef, iname: &str) -> (LRc<Table>, usize, u64) {
     if let Some(t) = get_table(db, tname) {
         // Loop through indexes. Columns are Root, Table, Name.
-        let ixt = &db.sys_index;
+        let ixt = &db.0.sys_index;
         let key = Value::Int(t.id);
         for (ix, (pp, off)) in table::Table::scan_key(ixt, db, key, 0).enumerate() {
             let p = &pp.borrow();
@@ -188,7 +188,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
     if let Some((table_id, root, id_gen)) = get_table0(db, name) {
         let mut info = ColInfo::empty(name.clone());
         // Get columns. Columns are Table, Name, Type
-        let t = &db.sys_column;
+        let t = &db.0.sys_column;
         let key = Value::Int(table_id);
         for (pp, off) in Table::scan_key(t, db, key, 0) {
             let p = &pp.borrow();
@@ -200,7 +200,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
         }
         let table = Table::new(table_id, root as u64, id_gen, LRc::new(info));
         // Get indexes. Columns are Root, Table, Name.
-        let t = &db.sys_index;
+        let t = &db.0.sys_index;
         let key = Value::Int(table_id);
         for (pp, off) in Table::scan_key(t, db, key, 0) {
             let p = &pp.borrow();
@@ -209,7 +209,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
             let index_id = a.id() as i64;
             let root = a.int(0) as u64;
             let mut cols = LVec::new();
-            let t = &db.sys_index_col;
+            let t = &db.0.sys_index_col;
             // Columns are Index, ColIndex
             let key = Value::Int(index_id);
             for (pp, off) in Table::scan_key(t, db, key, 0) {
@@ -231,7 +231,7 @@ pub fn get_table(db: &DB, name: &ObjRef) -> Option<LRc<Table>> {
 /// Get then parse a function from the database.
 pub fn get_function(db: &DB, name: &ObjRef) -> Option<LRc<Function>> {
     if let Some(schema_id) = get_schema(db, &name.schema) {
-        let t = &db.sys_function;
+        let t = &db.0.sys_function;
         let mut keys = LVec::with_capacity(2);
         keys.push(Value::Int(schema_id));
         keys.push(Value::String(LRc::new(LString::from_str(&name.name))));
@@ -240,7 +240,7 @@ pub fn get_function(db: &DB, name: &ObjRef) -> Option<LRc<Function>> {
             let a = t.access(p, off);
             let source = LRc::new(a.lstr(db, 2));
             let function = parse_function(db, source);
-            db.functions
+            db.0.functions
                 .borrow_mut()
                 .insert(name.clone(), function.clone());
             return Some(function);
@@ -252,7 +252,7 @@ pub fn get_function(db: &DB, name: &ObjRef) -> Option<LRc<Function>> {
 /// Get the id of a function.
 pub fn get_function_id(db: &DB, name: &ObjRef) -> Option<i64> {
     if let Some(schema_id) = get_schema(db, &name.schema) {
-        let t = &db.sys_function;
+        let t = &db.0.sys_function;
         let mut keys = LVec::with_capacity(2);
         keys.push(Value::Int(schema_id));
         keys.push(Value::String(LRc::new(LString::from_str(&name.name))));
@@ -283,7 +283,7 @@ fn parse_function(db: &DB, source: LRc<LString>) -> LRc<Function> {
 
 /// Get the IdGen field for a table. This is only needed to initialise system tables.
 pub fn get_id_gen(db: &DB, id: u64) -> i64 {
-    let t = &db.sys_table;
+    let t = &db.0.sys_table;
     let (pp, off) = t.id_get(db, id).unwrap();
     let p = &pp.borrow();
     let a = t.access(p, off);
@@ -293,7 +293,7 @@ pub fn get_id_gen(db: &DB, id: u64) -> i64 {
 
 /// Update IdGen field for a table.
 pub fn save_id_gen(db: &DB, id: u64, val: i64) {
-    let t = &db.sys_table;
+    let t = &db.0.sys_table;
     let (pp, off) = t.id_get(db, id).unwrap();
     let p = &mut pp.borrow_mut();
     let mut wa = t.write_access(p, off);
@@ -305,7 +305,7 @@ pub fn save_id_gen(db: &DB, id: u64, val: i64) {
 /// Update root page for table ( for ALTER TABLE ).
 pub fn set_root(db: &DB, id: i64, new_root: u64) {
     let id = id as u64;
-    let t = &db.sys_table;
+    let t = &db.0.sys_table;
     let (pp, off) = t.id_get(db, id).unwrap();
     let p = &mut pp.borrow_mut();
     let mut wa = t.write_access(p, off);
@@ -318,7 +318,7 @@ pub fn set_root(db: &DB, id: i64, new_root: u64) {
 #[cfg(feature = "renumber")]
 pub fn set_ix_root(db: &DB, id: i64, new_root: u64) {
     let id = id as u64;
-    let t = &db.sys_index;
+    let t = &db.0.sys_index;
     let (pp, off) = t.id_get(db, id).unwrap();
     let p = &mut pp.borrow_mut();
     let mut wa = t.write_access(p, off);
