@@ -36,7 +36,6 @@
 //! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
 //! - `unsafe-optim` : Enable unsafe optimisations in release mode.
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
-//! - `dynbox` : Enable bump allocation of CExpPtr, requires nightly toolchain.
 //!
 //! By default, all features except serde, unsafe-optim, log and compact are enabled.
 //!

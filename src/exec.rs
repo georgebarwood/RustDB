@@ -340,17 +340,17 @@ impl<'r> EvalEnv<'r> {
     /// Get DataSource from CTableExpression.
     fn data_source(&mut self, te: &CTableExpression) -> DataSource {
         match te {
-            CTableExpression::Base(t) => DBox::new(t.scan(&self.db)),
+            CTableExpression::Base(t) => lbox!(t.scan(&self.db)),
             CTableExpression::IdGet(t, idexp) => {
                 let id = idexp.eval(self, &[]);
-                DBox::new(table::Table::scan_id(t, &self.db, id))
+                lbox!(table::Table::scan_id(t, &self.db, id))
             }
             CTableExpression::IxGet(t, val, index) => {
                 let mut keys = LVec::new();
                 for v in val {
                     keys.push(v.eval(self, &[]));
                 }
-                DBox::new(table::Table::scan_keys(t, &self.db, keys, *index))
+                lbox!(table::Table::scan_keys(t, &self.db, keys, *index))
             }
             _ => panic!(),
         }

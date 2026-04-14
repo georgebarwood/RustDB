@@ -61,15 +61,10 @@ pub fn lhashmap<K, V>() -> LHashMap<K, V> {
     LHashMap::new_in(local())
 }
 
-/// `std::boxed::Box` or `LBox` depending on whether dynbox feature is selected.
-#[cfg(feature = "dynbox")]
-pub type DBox<T> = LBox<T>;
-
-/// `std::boxed::Box` or `LBox` depending on whether dynbox feature is selected.
-#[cfg(not(feature = "dynbox"))]
-pub type DBox<T> = std::boxed::Box<T>;
-
-/// Allocate a DBox and place t in it.
-pub fn dbox<T>(t: T) -> DBox<T> {
-    DBox::new(t)
+/// Macro to make a new LBox, place value into it, and unsize it.
+#[macro_export]
+macro_rules! lbox {
+    ($val:expr) => {
+        pstd::unsize_box!(LBox::new($val))
+    };
 }

@@ -1,4 +1,4 @@
-use crate::alloc::{DBox, LBox, LRc, LString, LVec};
+use crate::alloc::{LBox, LRc, LString, LVec};
 use crate::{
     Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, RefCell,
     Table, Value, panic,
@@ -83,7 +83,7 @@ pub trait CExp<T> {
 }
 
 /// Pointer to [CExp].
-pub type CExpPtr<T> = DBox<dyn CExp<T>>;
+pub type CExpPtr<T> = LBox<dyn CExp<T>>;
 
 /// Function that compiles a builtin function call.
 #[derive(Clone, Copy)]
@@ -98,7 +98,7 @@ pub enum CompileFunc {
 }
 
 /// Iterator that yields references to page data.
-pub type DataSource = DBox<dyn Iterator<Item = (PagePtr, usize)>>;
+pub type DataSource = LBox<dyn Iterator<Item = (PagePtr, usize)>>;
 
 /// State for FOR loop (non-sorted case).
 #[non_exhaustive]
