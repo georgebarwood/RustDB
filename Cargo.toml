@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "7.0.46"
+version = "7.0.50"
 edition = "2024"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -16,8 +16,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 atom-file = { version ="1.0.0" }
-page-store = { version = "1.0.0" }
+
 #page-store = { path = "../page-store" }
+page-store = { version = "1.0.0" }
 serde = { version = "1.0.131", features = ["derive","rc"], optional=true }
 pstd = { version = "1.0.0" }
 #pstd = { path = "../pstd" }
@@ -35,9 +36,8 @@ verify = ["page-store/verify"]
 unsafe-optim = ["pstd/unsafe-optim","atom-file/unsafe-optim"]
 log = ["page-store/log"]
 log-execute= []
-log-bump = ["pstd/log-bump"]
+log-alloc = ["pstd/log-alloc"]
 pstd = ["atom-file/pstd","page-store/pstd"]
-dynbox = ["pstd/dynbox"]
 
 [dev-dependencies]
 rand = "0.8.4"
