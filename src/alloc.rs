@@ -1,10 +1,10 @@
 use pstd::{
     BoxA, RcA, RcStrA, StringA, VecA,
     collections::btree_map::CustomTuning,
-    collections::{BTreeMap, BTreeSet, DefaultHashBuilder, HashMap},
+    collections::{BTreeMapA, BTreeSetA, DefaultHashBuilder, HashMap},
 };
 
-pub use pstd::localalloc::{Local, Perm, Temp};
+pub use pstd::localalloc::{Local, Perm, Temp, GTemp};
 
 /// `Local::new()`
 pub fn local() -> Local {
@@ -14,6 +14,11 @@ pub fn local() -> Local {
 /// `Temp::new()`
 pub fn temp() -> Temp {
     Temp::new()
+}
+
+/// `GTemp::new()`
+pub fn gtemp() -> GTemp {
+    GTemp::new()
 }
 
 /// `Box` allocated from `Temp`
@@ -37,21 +42,26 @@ pub type LVec<T> = VecA<T, Local>;
 /// `String` allocated from `Local`
 pub type LString = StringA<Local>;
 
-/// `BTreeMap` allocated from `Local`
-pub type LBTreeMap<K, V> = BTreeMap<K, V, CustomTuning<Local>>;
+/// `Box` allocated from `GTemp`
+pub type GBox<T> = BoxA<T, GTemp>;
 
-/// Create a `LBTreeMap`.
-pub fn lbtreemap<K, V>() -> LBTreeMap<K, V> {
-    LBTreeMap::new_in(local())
-}
+/// `Rc` allocated from `GTemp`
+pub type GRc<T> = RcA<T, GTemp>;
+
+/// `String` allocated from `GTemp`
+pub type GString = StringA<GTemp>;
+
+/// `Vec` allocated from `GTemp`
+pub type GVec<T> = VecA<T, GTemp>;
+
+/// `BTreeMap` allocated from `GTemp`
+pub type GBTreeMap<K, V> = BTreeMapA<K, V, CustomTuning<GTemp>>;
+
+/// `BTreeMap` allocated from `Local`
+pub type LBTreeMap<K, V> = BTreeMapA<K, V, CustomTuning<Local>>;
 
 /// `BTreeSet` allocated from `Local`
-pub type LBTreeSet<T> = BTreeSet<T, CustomTuning<Local>>;
-
-/// Create a `LBTreeSet`.
-pub fn lbtreeset<T>() -> LBTreeSet<T> {
-    LBTreeSet::new_in(local())
-}
+pub type LBTreeSet<T> = BTreeSetA<T, CustomTuning<Local>>;
 
 /// `HashMap` allocated from `Local`
 pub type LHashMap<K, V> = HashMap<K, V, DefaultHashBuilder, Local>;
@@ -66,5 +76,13 @@ pub fn lhashmap<K, V>() -> LHashMap<K, V> {
 macro_rules! lbox {
     ($val:expr) => {
         pstd::unsize_box!(LBox::new($val))
+    };
+}
+
+/// Macro to make a new GBox, place value into it, and unsize it.
+#[macro_export]
+macro_rules! gbox {
+    ($val:expr) => {
+        pstd::unsize_box!(GBox::new($val))
     };
 }

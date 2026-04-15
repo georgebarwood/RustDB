@@ -36,6 +36,7 @@
 //! - `renumber` : Allows database pages to be renumbered using builtin function RENUMBER, eliminating free pages.
 //! - `unsafe-optim` : Enable unsafe optimisations in release mode.
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
+//! - `log-alloc` : Log memory allocation.
 //!
 //! By default, all features except serde, unsafe-optim, log and compact are enabled.
 //!
@@ -309,7 +310,7 @@ impl DB {
                 "{} in {} at line {} column {}.",
                 e.msg, e.rname, e.line, e.column
             );
-            tr.set_error(err);
+            tr.set_error(&err);
             self.0.err.set(true);
         }
     }
@@ -794,8 +795,8 @@ pub trait Transaction: Any {
     }
 
     /// ARG builtin function. Get path, query parameter, form value or cookie.
-    fn arg(&mut self, _kind: i64, _name: &str) -> Rc<String> {
-        Rc::new(String::new())
+    fn arg(&mut self, _kind: i64, _name: &str) -> LRc<LString> {
+        LRc::new(LString::new())
     }
 
     /// Get file attribute ( One of name, content_type, file_name )
@@ -809,7 +810,7 @@ pub trait Transaction: Any {
     }
 
     /// Set the error string.
-    fn set_error(&mut self, err: String);
+    fn set_error(&mut self, err: &str);
 
     /// Get the error string.
     fn get_error(&mut self) -> String {
@@ -830,7 +831,7 @@ struct DummyTransaction {}
 impl Transaction for DummyTransaction {
     fn selected(&mut self, _values: &[Value]) {}
     /// Called if a panic ( error ) occurs.
-    fn set_error(&mut self, err: String) {
+    fn set_error(&mut self, err: &str) {
         println!("Error: {}", err);
     }
 }

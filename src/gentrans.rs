@@ -1,4 +1,4 @@
-use crate::{Any, Arc, BTreeMap, Data, Rc, Transaction, Value, panic};
+use crate::{Any, Arc, Data, Rc, Transaction, Value, panic, LString, LRc, GString, GVec, GBTreeMap};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -10,15 +10,15 @@ pub struct GenQuery {
     /// The SQL query string.
     pub sql: Arc<String>,
     /// The path argument for the query.
-    pub path: String,
+    pub path: GString,
     /// Query parameters.
-    pub params: BTreeMap<String, String>,
+    pub params: GBTreeMap<GString, GString>,
     /// Query form.
-    pub form: BTreeMap<String, String>,
+    pub form: GBTreeMap<GString, GString>,
     /// Query cookies.
-    pub cookies: BTreeMap<String, String>,
+    pub cookies: GBTreeMap<GString, GString>,
     /// Query parts ( files ).
-    pub parts: Vec<Part>,
+    pub parts: GVec<Part>,
     /// Micro-seconds since January 1, 1970 0:00:00 UTC
     pub now: i64,
 }
@@ -27,11 +27,11 @@ pub struct GenQuery {
 #[non_exhaustive]
 pub struct GenResponse {
     /// Error string.
-    pub err: String,
+    pub err: GString,
     /// Response status code.
     pub status_code: u16,
     /// Response headers.
-    pub headers: Vec<(String, String)>,
+    pub headers: GVec<(GString, GString)>,
     /// Reponse body.
     pub output: Vec<u8>,
 }
@@ -53,13 +53,13 @@ pub struct GenTransaction {
 #[non_exhaustive]
 pub struct Part {
     /// Part name.
-    pub name: String,
+    pub name: GString,
     /// Part filename.
-    pub file_name: String,
+    pub file_name: GString,
     /// Part contenttype.
-    pub content_type: String,
+    pub content_type: GString,
     /// Text.
-    pub text: String,
+    pub text: GString,
     /// Data.
     pub data: Data,
 }
@@ -72,22 +72,21 @@ impl GenTransaction {
             .unwrap();
         let now = now.as_micros() as i64;
         let output = Vec::with_capacity(64 * 1024);
-        let headers = Vec::new();
-        let status_code = 200;
+        let headers = GVec::new();
         Self {
             qy: GenQuery {
                 sql: Arc::new("EXEC web.Main()".to_string()),
-                path: String::new(),
-                params: BTreeMap::new(),
-                form: BTreeMap::new(),
-                cookies: BTreeMap::new(),
-                parts: Vec::new(),
+                path: GString::new(),
+                params: GBTreeMap::new(),
+                form: GBTreeMap::new(),
+                cookies: GBTreeMap::new(),
+                parts: GVec::new(),
                 now,
             },
             rp: GenResponse {
-                err: String::new(),
+                err: GString::new(),
                 output,
-                status_code,
+                status_code : 200,
                 headers,
             },
             ext: Box::new(()),
@@ -101,16 +100,16 @@ impl GenTransaction {
 }
 
 impl Transaction for GenTransaction {
-    fn arg(&mut self, kind: i64, s: &str) -> Rc<String> {
-        let s = match kind {
+    fn arg(&mut self, kind: i64, s: &str) -> LRc<LString> {
+        let s : Option<&str> = match kind {
             0 => Some(&self.qy.path),
-            1 => self.qy.params.get(s),
-            2 => self.qy.form.get(s),
-            3 => self.qy.cookies.get(s),
+            1 => self.qy.params.get(s).as_ref().map(|x| x.as_str()),
+            2 => self.qy.form.get(s).as_ref().map(|x| x.as_str()),
+            3 => self.qy.cookies.get(s).as_ref().map(|x| x.as_str()),
             _ => None,
         };
         let s = if let Some(s) = s { s } else { "" };
-        Rc::new(s.to_string())
+        LRc::new(LString::from_str(s))
     }
 
     fn status_code(&mut self, code: i64) {
@@ -118,7 +117,7 @@ impl Transaction for GenTransaction {
     }
 
     fn header(&mut self, name: &str, value: &str) {
-        self.rp.headers.push((name.to_string(), value.to_string()));
+        self.rp.headers.push((GString::from_str(name), GString::from_str(value)));
     }
 
     fn global(&self, kind: i64) -> i64 {
@@ -144,13 +143,13 @@ impl Transaction for GenTransaction {
         }
     }
 
-    fn set_error(&mut self, err: String) {
-        self.rp.err = err;
+    fn set_error(&mut self, err: &str) {
+        self.rp.err = GString::from_str(err);
     }
 
     fn get_error(&mut self) -> String {
         let result = self.rp.err.to_string();
-        self.rp.err = String::new();
+        self.rp.err = GString::new();
         result
     }
 
