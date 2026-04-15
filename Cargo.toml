@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "7.0.50"
+version = "7.0.51"
 edition = "2024"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -17,11 +17,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 atom-file = { version ="1.0.0" }
 
-#page-store = { path = "../page-store" }
 page-store = { version = "1.0.0" }
+#page-store = { path = "../page-store" }
+
+pstd = { version = "1.0.0", features = ["serde"] }
+#pstd = { path = "../pstd", features = ["serde"] }
+
 serde = { version = "1.0.131", features = ["derive","rc"], optional=true }
-pstd = { version = "1.0.0" }
-#pstd = { path = "../pstd" }
 
 [features]
 default = ["builtin","pack","verify","table","max","renumber","gentrans"]
