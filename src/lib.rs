@@ -153,7 +153,6 @@ use std::{
     cmp::Ordering,
     collections::BTreeSet,
     panic,
-    rc::Rc,
     sync::Arc,
 };
 
@@ -800,8 +799,8 @@ pub trait Transaction: Any {
     }
 
     /// Get file attribute ( One of name, content_type, file_name )
-    fn file_attr(&mut self, _fnum: i64, _atx: i64) -> Rc<String> {
-        Rc::new(String::new())
+    fn file_attr(&mut self, _fnum: i64, _atx: i64) -> LRc<LString> {
+        LRc::new(LString::new())
     }
 
     /// Get file content.

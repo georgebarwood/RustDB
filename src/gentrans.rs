@@ -1,4 +1,4 @@
-use crate::{Any, Arc, Rc, Transaction, Value, panic, LString, LRc, GString, GVec, GBTreeMap};
+use crate::{Any, Arc, Transaction, Value, panic, LString, LRc, GString, GVec, GBTreeMap};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -153,7 +153,7 @@ impl Transaction for GenTransaction {
         result
     }
 
-    fn file_attr(&mut self, k: i64, x: i64) -> Rc<String> {
+    fn file_attr(&mut self, k: i64, x: i64) -> LRc<LString> {
         let k = k as usize;
         let result: &str = {
             if k >= self.qy.parts.len() {
@@ -169,7 +169,7 @@ impl Transaction for GenTransaction {
                 }
             }
         };
-        Rc::new(result.to_string())
+        LRc::new(LString::from_str(result))
     }
 
     fn file_content(&mut self, k: i64) -> Arc<GVec<u8>> {
