@@ -206,8 +206,7 @@ impl Table {
 
     /// Add the specified index to the table.
     pub fn add_index0(&self, root: u64, cols: &[usize], id: i64) {
-        let mut v = LVec::with_capacity(cols.len());
-        v.extend_from_slice(cols);
+        let v = LVec::from(cols);
         self.add_index(root, v, id);
     }
 

@@ -302,8 +302,7 @@ impl CExp<Value> for BinSubstring {
         if lim > f + n {
             lim = f + n;
         }
-        let mut result = LVec::new();
-        result.extend_from_slice(&s[f..lim]);
+        let result = LVec::from(&s[f..lim]);
         Value::RcBinary(LRc::new(result))
     }
 }

@@ -203,9 +203,7 @@ impl Value {
 }
 
 fn to_lvec(b: &[u8]) -> LRc<LVec<u8>> {
-    let mut result = LVec::new();
-    result.extend_from_slice(b);
-    LRc::new(result)
+    LRc::new(LVec::from(b))
 }
 
 /// Value comparison.
@@ -260,8 +258,7 @@ impl Eq for Value {}
 pub fn get_bytes(db: &DB, data: &[u8], size: usize) -> (LVec<u8>, Code) {
     let n = data[0] as usize;
     if n < size {
-        let mut bytes = LVec::new();
-        bytes.extend_from_slice(&data[1..=n]);
+        let bytes = LVec::from(&data[1..=n]);
         (
             bytes,
             Code {

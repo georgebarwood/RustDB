@@ -1,4 +1,4 @@
-use crate::{Any, Arc, Transaction, Value, panic, LString, LRc, GString, GVec, GBTreeMap};
+use crate::{Any, Arc, GBTreeMap, GString, GVec, LRc, LString, Transaction, Value, panic};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -86,7 +86,7 @@ impl GenTransaction {
             rp: GenResponse {
                 err: GString::new(),
                 output,
-                status_code : 200,
+                status_code: 200,
                 headers,
             },
             ext: Box::new(()),
@@ -101,7 +101,7 @@ impl GenTransaction {
 
 impl Transaction for GenTransaction {
     fn arg(&mut self, kind: i64, s: &str) -> LRc<LString> {
-        let s : Option<&str> = match kind {
+        let s: Option<&str> = match kind {
             0 => Some(&self.qy.path),
             1 => self.qy.params.get(s).as_ref().map(|x| x.as_str()),
             2 => self.qy.form.get(s).as_ref().map(|x| x.as_str()),
@@ -117,7 +117,9 @@ impl Transaction for GenTransaction {
     }
 
     fn header(&mut self, name: &str, value: &str) {
-        self.rp.headers.push((GString::from_str(name), GString::from_str(value)));
+        self.rp
+            .headers
+            .push((GString::from_str(name), GString::from_str(value)));
     }
 
     fn global(&self, kind: i64) -> i64 {
