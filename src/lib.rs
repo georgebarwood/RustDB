@@ -805,8 +805,8 @@ pub trait Transaction: Any {
     }
 
     /// Get file content.
-    fn file_content(&mut self, _fnum: i64) -> Arc<Vec<u8>> {
-        nd()
+    fn file_content(&mut self, _fnum: i64) -> Arc<GVec<u8>> {
+        Arc::new(GVec::new())
     }
 
     /// Set the error string.

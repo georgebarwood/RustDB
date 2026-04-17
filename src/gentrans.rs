@@ -1,4 +1,4 @@
-use crate::{Any, Arc, Data, Rc, Transaction, Value, panic, LString, LRc, GString, GVec, GBTreeMap};
+use crate::{Any, Arc, Rc, Transaction, Value, panic, LString, LRc, GString, GVec, GBTreeMap};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -61,7 +61,7 @@ pub struct Part {
     /// Text.
     pub text: GString,
     /// Data.
-    pub data: Data,
+    pub data: Arc<GVec<u8>>,
 }
 
 impl GenTransaction {
@@ -108,7 +108,7 @@ impl Transaction for GenTransaction {
             3 => self.qy.cookies.get(s).as_ref().map(|x| x.as_str()),
             _ => None,
         };
-        let s = if let Some(s) = s { s } else { "" };
+        let s = s.unwrap_or_default();
         LRc::new(LString::from_str(s))
     }
 
@@ -172,7 +172,7 @@ impl Transaction for GenTransaction {
         Rc::new(result.to_string())
     }
 
-    fn file_content(&mut self, k: i64) -> Data {
+    fn file_content(&mut self, k: i64) -> Arc<GVec<u8>> {
         self.qy.parts[k as usize].data.clone()
     }
 

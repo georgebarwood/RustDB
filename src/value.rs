@@ -21,7 +21,7 @@ pub enum Value {
     /// Binary.
     RcBinary(LRc<LVec<u8>>),
     /// Arc Binary.
-    ArcBinary(Arc<Vec<u8>>),
+    ArcBinary(Arc<GVec<u8>>),
     /// String.
     String(LRc<LString>),
     /// Integer.

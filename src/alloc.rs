@@ -4,7 +4,7 @@ use pstd::{
     collections::{BTreeMapA, BTreeSetA, DefaultHashBuilder, HashMap},
 };
 
-pub use pstd::localalloc::{Local, Perm, Temp, GTemp};
+pub use pstd::localalloc::{GTemp, Local, Perm, Temp};
 
 /// `Local::new()`
 pub fn local() -> Local {
