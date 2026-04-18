@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 /// General Query.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
+#[derive(Default)]
 pub struct GenQuery {
     /// The SQL query string.
     pub sql: Arc<String>,
@@ -25,6 +26,7 @@ pub struct GenQuery {
 
 /// General Response.
 #[non_exhaustive]
+#[derive(Default)]
 pub struct GenResponse {
     /// Error string.
     pub err: GString,
@@ -70,24 +72,17 @@ impl GenTransaction {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .unwrap();
-        let now = now.as_micros() as i64;
-        let output = Vec::with_capacity(64 * 1024);
-        let headers = GVec::new();
         Self {
             qy: GenQuery {
                 sql: Arc::new("EXEC web.Main()".to_string()),
-                path: GString::new(),
-                params: GBTreeMap::new(),
-                form: GBTreeMap::new(),
-                cookies: GBTreeMap::new(),
-                parts: GVec::new(),
-                now,
+                now: now.as_micros() as i64,
+                ..Default::default()
+
             },
             rp: GenResponse {
-                err: GString::new(),
-                output,
+                output: Vec::with_capacity(64 * 1024),
                 status_code: 200,
-                headers,
+                ..Default::default()
             },
             ext: Box::new(()),
         }
@@ -149,10 +144,10 @@ impl Transaction for GenTransaction {
         self.rp.err = GString::from(err);
     }
 
-    fn get_error(&mut self) -> String {
-        let result = self.rp.err.to_string();
+    fn get_error(&mut self) -> LRc<LString> {
+        let result = LString::from(&*self.rp.err);
         self.rp.err = GString::new();
-        result
+        LRc::new(result)
     }
 
     fn file_attr(&mut self, k: i64, x: i64) -> LRc<LString> {

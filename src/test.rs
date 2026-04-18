@@ -234,7 +234,7 @@ GO
         if s.len() > 0 {
             // println!("output={}", s);
         }
-        assert_eq!(tr.get_error(), "");
+        assert_eq!(*tr.get_error(), "");
     }
 }
 
@@ -297,7 +297,7 @@ fn insert_delete() {
     db.run(&sql, &mut tr);
     db.save();
     spd.wait_complete();
-    assert_eq!(tr.get_error(), "");
+    assert_eq!(*tr.get_error(), "");
 }
 
 //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
@@ -408,7 +408,7 @@ END
         let sql = "EXEC date.test()";
         db.run(&sql, &mut tr);
         results.push(start.elapsed().as_micros() as u64);
-        assert_eq!(tr.get_error(), "");
+        assert_eq!(*tr.get_error(), "");
     }
     crate::bench::print_results("date calc test", results);
 }

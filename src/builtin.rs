@@ -82,8 +82,7 @@ fn c_exception(b: &Block, args: &mut [Expr]) -> CExpPtr<Value> {
 struct Exception {}
 impl CExp<Value> for Exception {
     fn eval(&self, e: &mut EvalEnv, _d: &[u8]) -> Value {
-        let err = e.tr.get_error();
-        Value::String(LRc::new(LString::from(&*err)))
+        Value::String(e.tr.get_error())
     }
 }
 /////////////////////////////
@@ -323,8 +322,7 @@ impl CExp<Value> for Arg {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
         let k = self.k.eval(ee, d);
         let s = self.s.eval(ee, d).str();
-        let result = ee.tr.arg(k, &s);
-        Value::String(LRc::new(LString::from(&**result)))
+        Value::String(ee.tr.arg(k, &s))
     }
 }
 
@@ -383,8 +381,7 @@ impl CExp<Value> for FileAttr {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
         let k = self.k.eval(ee, d);
         let x = self.x.eval(ee, d);
-        let result = ee.tr.file_attr(k, x);
-        Value::String(LRc::new(LString::from(&**result)))
+        Value::String(ee.tr.file_attr(k, x))
     }
 }
 

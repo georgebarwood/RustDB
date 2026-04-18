@@ -756,7 +756,7 @@ impl TableBuilder {
     fn new(n: usize) -> Self {
         Self {
             alloc: bytes::NFT,
-            list: TVec::with_capacity_in(n, temp()),
+            list: TVec::with_capacity(n),
         }
     }
 
@@ -812,8 +812,8 @@ pub trait Transaction: Any {
     fn set_error(&mut self, err: &str);
 
     /// Get the error string.
-    fn get_error(&mut self) -> String {
-        String::new()
+    fn get_error(&mut self) -> LRc<LString> {
+        LRc::new(LString::new())
     }
 
     /// Set the extension.

@@ -6,21 +6,6 @@ use pstd::{
 
 pub use pstd::localalloc::{GTemp, Local, Perm, Temp};
 
-/// `Local::new()`
-pub fn local() -> Local {
-    Local::new()
-}
-
-/// `Temp::new()`
-pub fn temp() -> Temp {
-    Temp::new()
-}
-
-/// `GTemp::new()`
-pub fn gtemp() -> GTemp {
-    GTemp::new()
-}
-
 /// `Box` allocated from `Temp`
 pub type TBox<T> = BoxA<T, Temp>;
 
@@ -68,7 +53,7 @@ pub type LHashMap<K, V> = HashMap<K, V, DefaultHashBuilder, Local>;
 
 /// Create a `LHashMap`.
 pub fn lhashmap<K, V>() -> LHashMap<K, V> {
-    LHashMap::new_in(local())
+    LHashMap::new_in(Local::new())
 }
 
 /// Macro to make a new LBox, place value into it, and unsize it.
