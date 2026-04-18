@@ -109,7 +109,7 @@ impl Transaction for GenTransaction {
             _ => None,
         };
         let s = s.unwrap_or_default();
-        LRc::new(LString::from_str(s))
+        LRc::new(LString::from(s))
     }
 
     fn status_code(&mut self, code: i64) {
@@ -119,7 +119,7 @@ impl Transaction for GenTransaction {
     fn header(&mut self, name: &str, value: &str) {
         self.rp
             .headers
-            .push((GString::from_str(name), GString::from_str(value)));
+            .push((GString::from(name), GString::from(value)));
     }
 
     fn global(&self, kind: i64) -> i64 {
@@ -146,7 +146,7 @@ impl Transaction for GenTransaction {
     }
 
     fn set_error(&mut self, err: &str) {
-        self.rp.err = GString::from_str(err);
+        self.rp.err = GString::from(err);
     }
 
     fn get_error(&mut self) -> String {
@@ -171,7 +171,7 @@ impl Transaction for GenTransaction {
                 }
             }
         };
-        LRc::new(LString::from_str(result))
+        LRc::new(LString::from(result))
     }
 
     fn file_content(&mut self, k: i64) -> Arc<GVec<u8>> {

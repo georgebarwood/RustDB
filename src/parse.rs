@@ -344,7 +344,7 @@ impl<'a> Parser<'a> {
     // ****************** Helper functions for parsing.
 
     fn source_from(&self, start: usize, end: usize) -> LString {
-        LString::from_str(tos(&self.source[start..end]))
+        LString::from(tos(&self.source[start..end]))
     }
 
     fn read_data_type(&mut self) -> DataType {

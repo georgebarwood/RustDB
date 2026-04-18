@@ -65,7 +65,7 @@ impl Value {
                 let (bytes, u) = get_bytes(db, &data[off..], size);
                 code = u;
                 let s = str::from_utf8(&bytes).unwrap();
-                Value::String(LRc::new(LString::from_str(s)))
+                Value::String(LRc::new(LString::from(s)))
             }
             DataKind::Bool => Value::Bool(data[off] != 0),
             DataKind::Float => {

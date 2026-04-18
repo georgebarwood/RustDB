@@ -83,7 +83,7 @@ struct Exception {}
 impl CExp<Value> for Exception {
     fn eval(&self, e: &mut EvalEnv, _d: &[u8]) -> Value {
         let err = e.tr.get_error();
-        Value::String(LRc::new(LString::from_str(&err)))
+        Value::String(LRc::new(LString::from(&*err)))
     }
 }
 /////////////////////////////
@@ -275,7 +275,7 @@ impl CExp<Value> for Substring {
             }
         }
         let result = &s[0..end];
-        Value::String(LRc::new(LString::from_str(result)))
+        Value::String(LRc::new(LString::from(result)))
     }
 }
 
@@ -324,7 +324,7 @@ impl CExp<Value> for Arg {
         let k = self.k.eval(ee, d);
         let s = self.s.eval(ee, d).str();
         let result = ee.tr.arg(k, &s);
-        Value::String(LRc::new(LString::from_str(&result)))
+        Value::String(LRc::new(LString::from(&**result)))
     }
 }
 
@@ -384,7 +384,7 @@ impl CExp<Value> for FileAttr {
         let k = self.k.eval(ee, d);
         let x = self.x.eval(ee, d);
         let result = ee.tr.file_attr(k, x);
-        Value::String(LRc::new(LString::from_str(&result)))
+        Value::String(LRc::new(LString::from(&**result)))
     }
 }
 
@@ -502,6 +502,6 @@ impl CExp<Value> for Bintostr {
     fn eval(&self, ee: &mut EvalEnv, d: &[u8]) -> Value {
         let bytes = self.bytes.eval(ee, d);
         let s: &str = str::from_utf8(bytes.bina()).unwrap();
-        Value::String(LRc::new(LString::from_str(s)))
+        Value::String(LRc::new(LString::from(s)))
     }
 }

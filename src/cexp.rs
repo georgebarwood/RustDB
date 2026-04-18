@@ -302,7 +302,7 @@ impl CExp<Value> for ColumnString {
     fn eval(&self, ee: &mut EvalEnv, data: &[u8]) -> Value {
         let bytes = get_bytes(&ee.db, &data[self.off..], self.size).0;
         let str = str::from_utf8(&bytes).unwrap();
-        let str = LString::from_str(str);
+        let str = LString::from(str);
         Value::String(LRc::new(str))
     }
 }
