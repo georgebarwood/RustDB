@@ -1,11 +1,6 @@
-use crate::alloc::{LBox, LRc, LString, LVec, TBox, TVec};
-use crate::{
-    AlterCol, AssignOp, BINARY, BOOL, Block, ColInfo, DB, DO, DOUBLE, DataType, EvalEnv, Expr,
-    ExprIs, FLOAT, FromExpression, INT, IndexInfo, Instruction, NONE, ObjRef, STRING, SqlError,
-    TableExpression, Token, Transaction, Value, c_bool, compile, data_kind, panic, util,
-};
-use Instruction::{Call, Execute, Jump, JumpIfFalse, PopToLocal, Return, Select, Throw};
-use compile::{c_delete, c_for, c_function, c_select, c_set, c_table, c_te, c_update, push};
+use crate::*;
+use Instruction::*;
+use compile::*;
 use std::{mem, str};
 
 /// SQL parser.
@@ -218,7 +213,7 @@ impl<'a> Parser<'a> {
                             cc = self.read_char();
                         }
                         let part1 = self.source_ix - 1;
-                        let s = str::from_utf8(&self.source[self.token_start..part1]).unwrap();
+                        let s = tos(&self.source[self.token_start..part1]);
                         self.decimal_int = s.parse().unwrap();
                     }
                     self.cs = &self.source[self.token_start..self.source_ix - 1];
@@ -255,7 +250,7 @@ impl<'a> Parser<'a> {
                         cc = self.read_char();
                     }
                     self.ts
-                        .push_str(str::from_utf8(&self.source[start..self.source_ix - 2]).unwrap());
+                        .push_str(tos(&self.source[start..self.source_ix - 2]));
                     break;
                 }
                 b'/' => {
@@ -1139,9 +1134,4 @@ impl<'a> Parser<'a> {
 /// Convert byte ref to &str.
 pub fn tos(s: &[u8]) -> &str {
     str::from_utf8(s).unwrap()
-}
-
-/// Convert byte ref to String.
-pub fn to_s(s: &[u8]) -> String {
-    str::from_utf8(s).unwrap().to_string()
 }

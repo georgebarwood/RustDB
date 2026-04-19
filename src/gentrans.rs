@@ -77,7 +77,6 @@ impl GenTransaction {
                 sql: Arc::new("EXEC web.Main()".to_string()),
                 now: now.as_micros() as i64,
                 ..Default::default()
-
             },
             rp: GenResponse {
                 output: Vec::with_capacity(64 * 1024),

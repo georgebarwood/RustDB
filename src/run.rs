@@ -1,8 +1,4 @@
-use crate::alloc::{LBox, LRc, LString, LVec};
-use crate::{
-    Assigns, Block, Cell, ColInfo, DataType, EvalEnv, Expr, IndexInfo, ObjRef, PagePtr, RefCell,
-    Table, Value, panic,
-};
+use crate::*;
 
 /// Instruction.
 #[non_exhaustive]

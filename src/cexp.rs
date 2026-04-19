@@ -1,5 +1,5 @@
-use crate::alloc::{LRc, LString, LVec};
-use crate::{CExp, CExpPtr, EvalEnv, Function, Value, get_bytes, util};
+use crate::*;
+use std::ops;
 
 /// Function call.
 pub(crate) struct Call {
@@ -96,7 +96,7 @@ pub(crate) struct Minus<T>(pub CExpPtr<T>);
 
 impl<T> CExp<T> for Minus<T>
 where
-    T: std::ops::Neg<Output = T>,
+    T: ops::Neg<Output = T>,
 {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T {
         -self.0.eval(e, d)
@@ -115,7 +115,7 @@ pub(crate) struct Add<T>(pub CExpPtr<T>, pub CExpPtr<T>);
 
 impl<T> CExp<T> for Add<T>
 where
-    T: std::ops::Add<Output = T>,
+    T: ops::Add<Output = T>,
 {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T {
         self.0.eval(e, d) + self.1.eval(e, d)
@@ -126,7 +126,7 @@ pub(crate) struct Sub<T>(pub CExpPtr<T>, pub CExpPtr<T>);
 
 impl<T> CExp<T> for Sub<T>
 where
-    T: std::ops::Sub<Output = T>,
+    T: ops::Sub<Output = T>,
 {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T {
         self.0.eval(e, d) - self.1.eval(e, d)
@@ -137,7 +137,7 @@ pub(crate) struct Mul<T>(pub CExpPtr<T>, pub CExpPtr<T>);
 
 impl<T> CExp<T> for Mul<T>
 where
-    T: std::ops::Mul<Output = T>,
+    T: ops::Mul<Output = T>,
 {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T {
         self.0.eval(e, d) * self.1.eval(e, d)
@@ -148,7 +148,7 @@ pub(crate) struct Div<T>(pub CExpPtr<T>, pub CExpPtr<T>);
 
 impl<T> CExp<T> for Div<T>
 where
-    T: std::ops::Div<Output = T>,
+    T: ops::Div<Output = T>,
 {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T {
         self.0.eval(e, d) / self.1.eval(e, d)
@@ -159,7 +159,7 @@ pub(crate) struct Rem<T>(pub CExpPtr<T>, pub CExpPtr<T>);
 
 impl<T> CExp<T> for Rem<T>
 where
-    T: std::ops::Rem<Output = T>,
+    T: ops::Rem<Output = T>,
 {
     fn eval(&self, e: &mut EvalEnv, d: &[u8]) -> T {
         self.0.eval(e, d) % self.1.eval(e, d)

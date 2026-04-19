@@ -124,7 +124,7 @@ impl Value {
             Value::Float(x) => write!(result, "{}", x).unwrap(),
             Value::RcBinary(x) => util::to_hex(&mut result, x),
             Value::ArcBinary(x) => util::to_hex(&mut result, x),
-            _ => panic!("str not implemented"),
+            _ => panic!(),
         }
         LRc::new(result)
     }
