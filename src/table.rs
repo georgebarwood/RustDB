@@ -350,7 +350,7 @@ impl<'d, 'i> Access<'d, 'i> {
         let off = self.info.off[colnum];
         let size = self.info.siz(colnum);
         let bytes = get_bytes(db, &self.data[off..], size).0;
-        LString::from_vec(bytes)
+        LString::from(str::from_utf8(&bytes).unwrap())
     }
 
     /// Extract string from byte data for specified column.
