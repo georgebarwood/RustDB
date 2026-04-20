@@ -4,6 +4,7 @@ use pstd::{
     collections::{BTreeMapA, BTreeSetA, DefaultHashBuilder, HashMap},
 };
 
+pub use pstd::veca;
 pub use pstd::localalloc::{GTemp, Local, Perm, Temp};
 
 /// `Box` allocated from `Temp`
