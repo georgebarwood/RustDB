@@ -37,6 +37,7 @@
 //! - `unsafe-optim` : Enable unsafe optimisations in release mode.
 //! - `log` : Log "interesting" information about database operation (helps give an idea what is happening).
 //! - `log-alloc` : Log memory allocation.
+//! - `pstd` : Maximal use of pstd crate.
 //!
 //! By default, all features except serde, unsafe-optim, log and compact are enabled.
 //!

@@ -158,7 +158,7 @@ struct Fragment {
     id: u64,
     len: usize,
     last: bool,
-    bytes: Vec<u8>,
+    bytes: TVec<u8>,
 }
 
 impl Fragment {
@@ -167,7 +167,7 @@ impl Fragment {
             id,
             len: 0,
             last: false,
-            bytes: vec![0; bpf],
+            bytes: veca![0; bpf],
         }
     }
 }
