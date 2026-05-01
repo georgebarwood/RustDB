@@ -158,7 +158,7 @@ pub fn to_hex(out: &mut LString, bytes: &[u8]) {
     write!(out, "0x").unwrap();
     for b in bytes {
         let b = *b as usize;
-        write!(out, "{:x}", b).unwrap();
+        write!(out, "{:02x}", b).unwrap();
     }
 }
 
