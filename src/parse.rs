@@ -570,7 +570,7 @@ impl<'a> Parser<'a> {
         } else if self.token == Token::Hex {
             assert!(
                 self.cs.len().is_multiple_of(2),
-                "hex literal must have even number of characters line"
+                "hex literal must have even number of characters"
             );
             let hb = &self.source[self.token_start + 2..self.source_ix - 1];
             result = Expr::new(ExprIs::Const(Value::RcBinary(LRc::new(util::parse_hex(
