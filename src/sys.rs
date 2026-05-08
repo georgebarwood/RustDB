@@ -32,7 +32,7 @@ pub fn create_table(db: &DB, info: &ColInfo) {
             t.insert(db, &mut row);
             row.id
         } else {
-            panic!("schema not found [{}]", &schema);
+            panic!("schema not found [{}]", schema);
         }
     };
     {
@@ -81,7 +81,7 @@ pub fn create_index(db: &DB, info: &IndexInfo) {
             table.init_index(db);
         }
     } else {
-        panic!("table not found: {}", &info.tname.str());
+        panic!("table not found: {}", info.tname.str());
     }
 }
 
@@ -109,7 +109,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: LRc<LString>, alter: bool
                 }
                 return;
             }
-            panic!("function {} not found", &name.str());
+            panic!("function {} not found", name.str());
         } else {
             if get_function_id(db, name).is_some() {
                 panic!("function already exists");
@@ -124,7 +124,7 @@ pub fn create_function(db: &DB, name: &ObjRef, source: LRc<LString>, alter: bool
             t.insert(db, &mut row);
         }
     } else {
-        panic!("schema [{}] not found", &name.schema);
+        panic!("schema [{}] not found", name.schema);
     }
 }
 

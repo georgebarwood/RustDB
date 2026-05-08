@@ -198,7 +198,7 @@ impl ObjRef {
     }
     /// Used for error messages.
     pub fn str(&self) -> String {
-        format!("[{}].[{}]", &self.schema, &self.name)
+        format!("[{}].[{}]", self.schema, self.name)
     }
 }
 
