@@ -238,6 +238,10 @@ impl PageStorage for CompactFile {
         self.stg.wait_complete();
     }
 
+    fn shutdown(&mut self) {
+        self.stg.shutdown();
+    }
+
     #[cfg(feature = "verify")]
     fn get_free(&mut self) -> (crate::HashSet<u64>, u64) {
         let mut free = crate::HashSet::default();
