@@ -1,6 +1,6 @@
 [package]
 name = "rustdb"
-version = "7.0.51"
+version = "7.0.62"
 edition = "2024"
 authors = ["George Barwood"]
 description = "SQL database"
@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 atom-file = { version ="1.0.0" }
+#atom-file = { path = "../atom-file" }
 
 page-store = { version = "1.0.0" }
 #page-store = { path = "../page-store" }
