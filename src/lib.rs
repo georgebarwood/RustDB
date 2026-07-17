@@ -104,7 +104,7 @@ pub use page_store::{
 pub use crate::builtin::standard_builtins;
 pub use atom_file::{
     AtomicFile, BasicAtomicFile, BasicStorage, DummyFile, FastFileStorage, MemFile,
-    MultiFileStorage, SimpleFileStorage, Storage,
+    MultiFileStorage, SimpleFileStorage, Storage, Data, PVec, pvec
 };
 
 #[cfg(feature = "gentrans")]
@@ -268,9 +268,6 @@ mod bytes;
 
 // End of modules.
 
-/// ```Arc<Vec<u8>>```
-pub type Data = Arc<Vec<u8>>;
-
 /// Mutable Data, copied on write.
 pub struct MData(Data);
 
@@ -286,7 +283,7 @@ impl MData {
 }
 
 impl std::ops::Deref for MData {
-    type Target = Vec<u8>;
+    type Target = PVec<u8>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }

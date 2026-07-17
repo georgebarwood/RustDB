@@ -1,4 +1,4 @@
-use crate::{Arc, Data, PageStorage, PageStorageInfo, Storage, nd, util};
+use crate::{Arc, Data, PageStorage, PageStorageInfo, Storage, nd, util, pvec};
 use std::cmp::min;
 use std::collections::BTreeSet;
 
@@ -92,7 +92,7 @@ impl PageStorage for CompactFile {
         let old_size = self.read_u16(foff);
         let mut old_ext = self.ext(old_size);
 
-        let mut info = vec![0_u8; 2 + old_ext * 8];
+        let mut info = pvec![0_u8; 2 + old_ext * 8];
         self.stg.read(foff, &mut info);
 
         util::set(&mut info, 0, size as u64, 2);
@@ -146,7 +146,7 @@ impl PageStorage for CompactFile {
         let mut starter = vec![0_u8; self.sp_size];
         self.stg.read(foff, &mut starter);
         let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
-        let mut data = vec![0u8; size];
+        let mut data = pvec![0u8; size];
         let ext = self.ext(size); // Number of extension pages.
 
         // Read the extension pages.
@@ -284,7 +284,7 @@ impl PageStorage for CompactFile {
         let lpnum2 = self.new_page();
         let foff = self.lp_off(lpnum);
         if foff != 0 {
-            let mut starter = vec![0_u8; self.sp_size];
+            let mut starter = pvec![0_u8; self.sp_size];
             self.stg.read(foff, &mut starter);
             let size = util::get(&starter, 0, 2) as usize; // Number of bytes in logical page.
             let ext = self.ext(size); // Number of extension pages.
@@ -666,7 +666,7 @@ fn test() {
         let p: u64 = rng.r#gen::<u64>() % 100;
         let b: u8 = rng.r#gen::<u8>();
 
-        let d = vec![b; n];
+        let d = pvec![b; n];
         let d = Arc::new(d);
         cf0.set_page(p, d.clone());
         cf1.set_page(p, d.clone());

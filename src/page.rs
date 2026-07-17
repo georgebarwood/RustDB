@@ -7,7 +7,7 @@
 //!
 //! Note that the left node is greater than the parent node.
 
-use crate::{Arc, DB, Data, LRc, MData, Ordering, Record, RefCell, TVec, util};
+use crate::{Arc, DB, Data, PVec, LRc, MData, Ordering, Record, RefCell, TVec, util};
 
 /// ```LRc<RefCell<Page>>```
 pub type PagePtr = LRc<RefCell<Page>>;
@@ -143,7 +143,7 @@ impl Page {
         Page::new(
             self.rec_size(),
             self.level,
-            Arc::new(Vec::with_capacity(capacity)),
+            Arc::new(PVec::with_capacity(capacity)),
             u64::MAX,
         )
     }
@@ -438,7 +438,7 @@ use Balance::*;
 /// To reduce the number of calls to Arc::make_mut.
 struct MutPage<'a> {
     /// Data.
-    data: &'a mut Vec<u8>,
+    data: &'a mut PVec<u8>,
     /// Node size for page.
     node_size: usize,
     /// Page level.
